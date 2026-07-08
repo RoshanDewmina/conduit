@@ -3,12 +3,14 @@ import SwiftUI
 import DesignSystem
 
 /// Visual clone of Cursor's mobile Workspaces list: an "All Repos" entry plus
-/// one row per repo. Static seed data only — no daemon/network wiring.
+/// one row per repo. Live shell rows come from `CursorShellLiveBridge`; seeded
+/// rows are restricted to the no-bridge DEBUG/mock shell.
 public struct CursorWorkspacesView: View {
     @Environment(\.cursorScheme) private var cursorScheme
     @Environment(\.cursorShellLiveBridge) private var liveBridge
 
     private let onSelectWorkspace: (String) -> Void
+    private let onShowWorkspaceDetail: (String) -> Void
     private let onOpenComposer: () -> Void
     private let onOpenProfile: () -> Void
     private let onOpenSearch: () -> Void
@@ -16,12 +18,14 @@ public struct CursorWorkspacesView: View {
 
     public init(
         onSelectWorkspace: @escaping (String) -> Void = { _ in },
+        onShowWorkspaceDetail: @escaping (String) -> Void = { _ in },
         onOpenComposer: @escaping () -> Void = {},
         onOpenProfile: @escaping () -> Void = {},
         onOpenSearch: @escaping () -> Void = {},
         onRequestPairing: @escaping () -> Void = {}
     ) {
         self.onSelectWorkspace = onSelectWorkspace
+        self.onShowWorkspaceDetail = onShowWorkspaceDetail
         self.onOpenComposer = onOpenComposer
         self.onOpenProfile = onOpenProfile
         self.onOpenSearch = onOpenSearch
@@ -59,35 +63,22 @@ public struct CursorWorkspacesView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    if let liveBridge, !liveBridge.workspaces.isEmpty {
-                        let total = liveBridge.workspaces.reduce(0) { $0 + $1.threadCount }
-                        Button(action: { onSelectWorkspace("All Repos") }) {
-                            CursorListRow(
-                                iconSystemName: "square.stack.3d.up",
-                                title: "All Repos",
-                                trailingCount: total,
-                                showChevron: true
-                            )
-                        }
-                        .buttonStyle(.plain)
-
-                        ForEach(liveBridge.workspaces) { workspace in
-                            Button(action: { onSelectWorkspace(workspace.name) }) {
-                                workspaceRow(workspace)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("workspace-row")
+                    if let liveBridge {
+                        if liveBridge.workspaces.isEmpty {
+                            liveEmptyState
+                        } else {
+                            liveWorkspaceRows(liveBridge)
                         }
                     } else {
                         seedWorkspaceRows
-                    }
 
-                    CursorListRow(
-                        iconSystemName: "folder.badge.plus",
-                        title: "Add Repo",
-                        trailingCount: nil,
-                        showChevron: false
-                    )
+                        CursorListRow(
+                            iconSystemName: "folder.badge.plus",
+                            title: "Add Repo",
+                            trailingCount: nil,
+                            showChevron: false
+                        )
+                    }
                 }
             }
         }
@@ -95,6 +86,46 @@ public struct CursorWorkspacesView: View {
         .safeAreaInset(edge: .bottom) {
             CursorBottomComposer(onTap: onOpenComposer)
         }
+    }
+
+    @ViewBuilder
+    private func liveWorkspaceRows(_ liveBridge: CursorShellLiveBridge) -> some View {
+        let total = liveBridge.workspaces.reduce(0) { $0 + $1.threadCount }
+        Button(action: { onSelectWorkspace("All Repos") }) {
+            CursorListRow(
+                iconSystemName: "square.stack.3d.up",
+                title: "All Repos",
+                trailingCount: total,
+                showChevron: true
+            )
+        }
+        .buttonStyle(.plain)
+
+        ForEach(liveBridge.workspaces) { workspace in
+            Button(action: { onSelectWorkspace(workspace.name) }) {
+                workspaceRow(workspace)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("workspace-row")
+            .highPriorityGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                onShowWorkspaceDetail(workspace.name)
+            })
+        }
+    }
+
+    private var liveEmptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("No conversations yet")
+                .font(CursorType.rowTitle)
+                .foregroundColor(colors.primaryText)
+            Text("Pair a machine or send a prompt from the composer to create the first workspace.")
+                .font(CursorType.rowSecondary)
+                .foregroundColor(colors.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -183,6 +214,9 @@ public struct CursorWorkspacesView: View {
             )
         }
         .buttonStyle(.plain)
+        .highPriorityGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+            onShowWorkspaceDetail("lancer-ios")
+        })
 
         Button(action: { onSelectWorkspace("push-backend") }) {
             CursorListRow(
@@ -193,6 +227,9 @@ public struct CursorWorkspacesView: View {
             )
         }
         .buttonStyle(.plain)
+        .highPriorityGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+            onShowWorkspaceDetail("push-backend")
+        })
 
         Button(action: { onSelectWorkspace("lancer-mac") }) {
             CursorListRow(
@@ -203,6 +240,9 @@ public struct CursorWorkspacesView: View {
             )
         }
         .buttonStyle(.plain)
+        .highPriorityGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+            onShowWorkspaceDetail("lancer-mac")
+        })
     }
 }
 #endif

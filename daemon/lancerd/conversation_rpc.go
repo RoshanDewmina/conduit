@@ -218,6 +218,7 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 		BudgetUSD:       req.BudgetUSD,
 		VendorSessionID: vendorSessionID,
 		IsNew:           isNew,
+		Contract:        req.Contract,
 	}
 	if wt.Path != "" {
 		// Set on the run record inside launchConversationTurn() itself,

@@ -782,6 +782,7 @@ func TestMethodToRelayType(t *testing.T) {
 	}{
 		{"agent.run.output", "agentRunOutput"},
 		{"agent.run.status", "agentRunStatus"},
+		{"agent.run.receipt", "runReceipt"},
 		{"agent.approval.pending", ""},
 		{"", ""},
 	}
@@ -841,5 +842,58 @@ func TestResidentRelayWiring(t *testing.T) {
 	}
 	if r.core.e2e.client == nil {
 		t.Fatal("expected e2e client to be created")
+	}
+}
+
+// Regression (2026-07-07 silent approval loss): an approval escalated while
+// relay delivery was broken (phone disconnected, or the relay holding an
+// orphaned connection) was sent exactly once and never again. The router must
+// re-send every still-pending approval on each (re)pair; the phone upserts by
+// approval ID so duplicates are harmless.
+func TestE2ERouterResendsPendingApprovalsOnPair(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	// No pending approvals → no sends.
+	router.resendPendingApprovals()
+	if n := len(client.messages); n != 0 {
+		t.Fatalf("expected 0 sends with no pending approvals, got %d", n)
+	}
+
+	srv.approvals.add(ApprovalEvent{ApprovalID: "ap-1", Agent: "claudeCode", Kind: "fileWrite", Command: "/tmp/a"})
+	srv.approvals.add(ApprovalEvent{ApprovalID: "ap-2", Agent: "claudeCode", Kind: "command", Command: "rm x"})
+
+	router.resendPendingApprovals()
+	if n := len(client.messages); n != 2 {
+		t.Fatalf("expected 2 approval re-sends, got %d", n)
+	}
+	msgType, data := client.lastMessage()
+	if msgType != "approval" {
+		t.Fatalf("expected approval message type, got %q", msgType)
+	}
+	var env struct {
+		Type    string `json:"type"`
+		Payload struct {
+			ApprovalID string `json:"approvalID"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Type != "approvalPending" || env.Payload.ApprovalID == "" {
+		t.Fatalf("re-sent envelope = %+v, want approvalPending with an approvalID", env)
+	}
+
+	// Resolved approvals must NOT be re-sent.
+	srv.approvals.resolve("ap-1", "approve", "", "")
+	client.messages = nil
+	router.resendPendingApprovals()
+	if n := len(client.messages); n != 1 {
+		t.Fatalf("expected 1 re-send after resolving one of two, got %d", n)
 	}
 }

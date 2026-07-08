@@ -182,15 +182,23 @@ func conversationNow() string {
 // must match the conversation's current last_seq or the append is rejected as a
 // conflict.
 type conversationAppendRequest struct {
-	ConversationID string  `json:"conversationId,omitempty"`
-	BaseSeq        int64   `json:"baseSeq"`
-	ClientTurnID   string  `json:"clientTurnId"`
-	Agent          string  `json:"agent,omitempty"`
-	CWD            string  `json:"cwd,omitempty"`
-	Prompt         string  `json:"prompt"`
-	Model          string  `json:"model,omitempty"`
-	BudgetUSD      float64 `json:"budgetUSD,omitempty"`
-	UseWorktree    bool    `json:"useWorktree,omitempty"`
+	ConversationID string       `json:"conversationId,omitempty"`
+	BaseSeq        int64        `json:"baseSeq"`
+	ClientTurnID   string       `json:"clientTurnId"`
+	Agent          string       `json:"agent,omitempty"`
+	CWD            string       `json:"cwd,omitempty"`
+	Prompt         string       `json:"prompt"`
+	Model          string       `json:"model,omitempty"`
+	BudgetUSD      float64      `json:"budgetUSD,omitempty"`
+	UseWorktree    bool         `json:"useWorktree,omitempty"`
+	// Contract mirrors dispatchParams.Contract (dispatch.go) — the iOS
+	// composer sends the same `contract` key on agent.conversations.append
+	// as it does on a plain agent.dispatch (see ConversationAppendRequest.contract,
+	// LancerDProtocol.swift), so a live-composer-started or -continued turn's
+	// goal/doneCriteria/validationCommands reach the terminal receipt the same
+	// way a direct dispatch's do. Validated/cloned by launchConversationTurn
+	// via the SAME contractTooLarge/cloneRunContract helpers dispatch() uses.
+	Contract *runContract `json:"contract,omitempty"`
 }
 
 // conversationAppendResult mirrors the subset of the agent.conversations.append
@@ -876,6 +884,37 @@ func (s *conversationStore) appendRunStatus(runID, status string, exitCode *int)
 		(conversation_id, seq, turn_id, run_id, kind, payload_json, created_at)
 		VALUES (?, ?, ?, ?, 'status', ?, ?)`,
 		convID, newSeq, turnID, runID, string(payloadJSON), now); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// appendRunReceipt records the finalized lancer.proof/v0 payload for a
+// terminal run so agent.conversations.fetch can replay it after reconnect.
+func (s *conversationStore) appendRunReceipt(runID, receiptJSON string) error {
+	convID, turnID, err := s.turnByRunID(runID)
+	if err != nil {
+		return err
+	}
+	now := conversationNow()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var newSeq int64
+	if err := tx.QueryRow(`UPDATE conversations SET last_seq = last_seq + 1, updated_at = ?, last_activity_at = ?
+		WHERE id = ? RETURNING last_seq`, now, now, convID).Scan(&newSeq); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`INSERT INTO conversation_events
+		(conversation_id, seq, turn_id, run_id, kind, payload_json, created_at)
+		VALUES (?, ?, ?, ?, 'receipt', ?, ?)`,
+		convID, newSeq, turnID, runID, receiptJSON, now); err != nil {
 		return err
 	}
 

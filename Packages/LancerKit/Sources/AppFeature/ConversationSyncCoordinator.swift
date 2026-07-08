@@ -96,13 +96,15 @@ public actor ConversationSyncCoordinator {
     /// without waiting for a separate fetch.
     public func startConversation(
         agent: String, cwd: String, prompt: String, model: String?, budgetUSD: Double?,
+        contract: ProofReceipt.Contract? = nil,
         hostName: String, hostID: String?, clientTurnID: String,
         transport: ConversationTransport
     ) async -> TurnOutcome {
         await append(
             ConversationAppendRequest(
                 conversationId: nil, baseSeq: 0, clientTurnId: clientTurnID,
-                agent: agent, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD
+                agent: agent, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
+                contract: contract
             ),
             hostName: hostName, hostID: hostID, transport: transport
         )
@@ -115,13 +117,15 @@ public actor ConversationSyncCoordinator {
     public func continueConversation(
         conversationID: String, baseSeq: Int, prompt: String, clientTurnID: String,
         agent: String? = nil, model: String? = nil, budgetUSD: Double? = nil,
+        contract: ProofReceipt.Contract? = nil,
         hostName: String, hostID: String?,
         transport: ConversationTransport
     ) async -> TurnOutcome {
         await append(
             ConversationAppendRequest(
                 conversationId: conversationID, baseSeq: baseSeq, clientTurnId: clientTurnID,
-                agent: agent, cwd: nil, prompt: prompt, model: model, budgetUSD: budgetUSD
+                agent: agent, cwd: nil, prompt: prompt, model: model, budgetUSD: budgetUSD,
+                contract: contract
             ),
             hostName: hostName, hostID: hostID, transport: transport
         )
@@ -280,6 +284,42 @@ public actor ConversationSyncCoordinator {
             turn.assistantText = Self.assistantText(from: eventsByTurn[turn.id] ?? [])
             _ = try await chatRepo.upsertTurnMirror(
                 turn, vendorSessionID: turnEnvelope.vendorSessionId, hostSeqStart: nil, hostSeqEnd: nil
+            )
+        }
+
+        // A terminal `lancer.proof/v0` receipt is stored on the host ONLY as a
+        // `conversation_events` row (kind "receipt" — see appendRunReceipt in
+        // conversation_store.go); it is never itself a conversation_artifacts
+        // row there. Live delivery (AppRoot's lancerE2ERunReceipt notification
+        // handler) materializes it into a `chat_artifacts` row via
+        // `upsertReceipt` the moment it arrives — but a receipt that lands
+        // while this device is disconnected only ever reaches it as one of
+        // `response.events` here, and ReceiptCardView reads exclusively from
+        // `chat_artifacts`. Without this, a reconnect-and-refresh would mirror
+        // the event into `chat_events` (above) but the receipt card would
+        // never appear. Mirror the live path: materialize any receipt-kind
+        // event into the SAME `chat_artifacts` row `upsertReceipt` would have
+        // written live. Runs after the turns loop above so the `chat_turns`
+        // row `upsertReceipt` keys off of (by run_id) already exists.
+        // `upsertReceipt` upserts by the stable id `"receipt:\(runID)"`, so
+        // re-running this merge for the same receipt (e.g. a re-fetch that
+        // re-delivers already-seen events) is idempotent — no duplicate rows.
+        var materializedReceipt = false
+        for event in response.events where event.kind == "receipt" {
+            guard let runID = event.runId, let payloadJSON = event.payloadJson else { continue }
+            if (try? await chatRepo.upsertReceipt(runID: runID, payloadJSON: payloadJSON)) != nil {
+                materializedReceipt = true
+            }
+        }
+        // Same notification the live path posts after `upsertReceipt`
+        // (AppRoot's lancerE2ERunReceipt handler) — lets an already-open
+        // thread's artifact list pick up a receipt that arrived while this
+        // device was disconnected, without requiring a manual re-open.
+        if materializedReceipt {
+            NotificationCenter.default.post(
+                name: .lancerChatArtifactPersisted,
+                object: nil,
+                userInfo: ["conversationID": response.conversation.id]
             )
         }
     }

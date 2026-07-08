@@ -138,6 +138,19 @@ public actor ChatConversationRepository {
             if let turn = try Row.fetchOne(db, sql: "SELECT conversation_id FROM chat_turns WHERE run_id = ?", arguments: [runID]),
                let convID: String = turn["conversation_id"] {
                 try Self.syncFTS(db, conversationID: convID)
+                // The conversation itself is created with status=active and,
+                // before this, nothing ever moved it out of that state — every
+                // conversation showed a perpetual "Working" attention badge
+                // forever, even ones from days earlier, because nothing wrote
+                // back here once its run actually finished. Mirror the turn's
+                // terminal status onto the parent conversation in the same
+                // transaction so CursorThreadAttention reflects reality.
+                if status == .completed || status == .failed {
+                    let conversationStatus: ChatConversation.Status = status == .completed ? .completed : .failed
+                    try db.execute(sql: """
+                        UPDATE chat_conversations SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+                    """, arguments: [conversationStatus.rawValue, convID])
+                }
             }
         }
     }
@@ -260,6 +273,48 @@ public actor ChatConversationRepository {
                 artifact.createdAt, artifact.updatedAt,
             ])
             try Self.syncFTS(db, conversationID: convID)
+        }
+    }
+
+    /// Persists the terminal run proof (`lancer.proof/v0`) as a done receipt
+    /// artifact on the turn that owns `runID`. Idempotent by stable artifact id.
+    @discardableResult
+    public func upsertReceipt(runID: String, payloadJSON: String) async throws -> String? {
+        try await db.dbWriter.write { db in
+            guard let turn = try Row.fetchOne(db, sql: "SELECT * FROM chat_turns WHERE run_id = ?", arguments: [runID]) else {
+                return nil
+            }
+            let convID: String = turn["conversation_id"]
+            let turnID: String = turn["id"]
+            let cappedPayload = String(payloadJSON.prefix(64 * 1024))
+            let payload = Self.redactionEnabled ? Redactor.shared.redact(cappedPayload).redacted : cappedPayload
+            let artifact = ChatArtifact(
+                id: "receipt:\(runID)",
+                conversationID: convID,
+                turnID: turnID,
+                runID: runID,
+                kind: .receipt,
+                title: "Run proof",
+                payloadJSON: payload,
+                status: .done
+            )
+            try db.execute(sql: """
+                INSERT INTO chat_artifacts
+                    (id, conversation_id, turn_id, run_id, kind, title, summary,
+                     payload_json, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    status = excluded.status,
+                    updated_at = CURRENT_TIMESTAMP
+            """, arguments: [
+                artifact.id, artifact.conversationID, artifact.turnID,
+                artifact.runID, artifact.kind.rawValue, artifact.title,
+                artifact.summary, payload, artifact.status.rawValue,
+                artifact.createdAt, artifact.updatedAt,
+            ])
+            try Self.syncFTS(db, conversationID: convID)
+            return convID
         }
     }
 
@@ -616,10 +671,15 @@ public actor ChatConversationRepository {
     }
 
     private static func decodeArtifact(_ row: Row) -> ChatArtifact? {
-        ChatArtifact(
+        guard let kindRaw: String = row["kind"],
+              let kind = ChatArtifact.Kind(rawValue: kindRaw) else {
+            // Unknown artifact kinds are skipped (not thrown) for forward compat.
+            return nil
+        }
+        return ChatArtifact(
             id: row["id"] ?? "", conversationID: row["conversation_id"] ?? "",
             turnID: row["turn_id"] ?? "", runID: row["run_id"] ?? "",
-            kind: ChatArtifact.Kind(rawValue: row["kind"] ?? "tool") ?? .tool,
+            kind: kind,
             title: row["title"] ?? "", summary: row["summary"],
             payloadJSON: row["payload_json"] ?? "{}",
             status: ChatArtifact.Status(rawValue: row["status"] ?? "running") ?? .running,

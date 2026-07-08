@@ -218,9 +218,11 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 			// otherwise a restarted daemon is locked out until the dead TCP
 			// connection times out (minutes).
 			if role == "daemon" && pair.DaemonConn != nil {
+				log.Printf("relay: daemon reconnect on code %s replaces existing connection", code)
 				_ = pair.DaemonConn.Close()
 				pair.DaemonConn = nil
 			} else if role == "phone" && pair.PhoneConn != nil {
+				log.Printf("relay: phone reconnect on code %s replaces existing connection", code)
 				_ = pair.PhoneConn.Close()
 				pair.PhoneConn = nil
 			}
@@ -277,9 +279,26 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 					"role":          "daemon",
 					"peerPublicKey": daemonKey,
 				})
-				// Flush any buffered messages to the peer that just joined.
+				// Flush buffered messages now that both sides are present. Each
+				// buffered message must go to ITS target (the buffer can hold
+				// traffic for either direction), re-wrapped in the same
+				// {type, from, payload} shape a live forward uses — flushing the
+				// raw client frame (which carries "target", not "from") handed
+				// the recipient a differently-shaped frame than every other
+				// path.
 				for _, msg := range buffered {
-					sendJSON(conn, msg)
+					target, from := phoneConn, "daemon"
+					if msg.Target == "daemon" {
+						target, from = daemonConn, "phone"
+					}
+					sendJSON(target, map[string]interface{}{
+						"type":    "message",
+						"from":    from,
+						"payload": msg.Payload,
+					})
+				}
+				if len(buffered) > 0 {
+					log.Printf("relay: flushed %d buffered message(s) on code %s after %s rejoin", len(buffered), code, role)
 				}
 			} else {
 				log.Printf("relay: %s connected with code %s (waiting for peer)", role, code)
@@ -323,10 +342,15 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 						"from":    role,
 						"payload": msg.Payload,
 					})
+				} else if len(pair.Buffer) < 100 {
+					// The target role has no live connection. Buffer for its
+					// next rejoin — and say so: a silently absent recipient is
+					// how approval escalations vanished without a trace on any
+					// side (2026-07-07 investigation).
+					pair.Buffer = append(pair.Buffer, msg)
+					log.Printf("relay: buffered message from %s on code %s (%s not connected, %d queued)", role, code, msg.Target, len(pair.Buffer))
 				} else {
-					if len(pair.Buffer) < 100 {
-						pair.Buffer = append(pair.Buffer, msg)
-					}
+					log.Printf("relay: DROPPED message from %s on code %s (%s not connected, buffer full)", role, code, msg.Target)
 				}
 
 			case "close":
@@ -340,9 +364,16 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 
 		hub.mu.Lock()
 		pair.mu.Lock()
-		if role == "daemon" {
+		// Only release the slot if it still belongs to THIS connection. When a
+		// reconnect replaces us (newest-wins close above), our read loop exits
+		// and lands here AFTER the replacement has already registered — an
+		// unconditional nil here clobbered the successor's registration, leaving
+		// a client that believes it is connected while the relay sees nobody.
+		// That was the root cause of silently lost approval escalations
+		// (2026-07-07): messages for the orphaned role buffered forever.
+		if role == "daemon" && pair.DaemonConn == conn {
 			pair.DaemonConn = nil
-		} else {
+		} else if role == "phone" && pair.PhoneConn == conn {
 			pair.PhoneConn = nil
 		}
 		if pair.DaemonConn == nil && pair.PhoneConn == nil && time.Since(pair.LastUsed) > 24*time.Hour {
@@ -373,6 +404,12 @@ func sendJSON(conn *websocket.Conn, v interface{}) {
 	if err != nil {
 		return
 	}
+	// Callers hold pair.mu (and, on the reconnect path, hub.mu) across this
+	// send. Without a deadline, one peer with a jammed TCP connection blocks
+	// every forward for its pair — and via hub.mu, every new connection to the
+	// relay. Bound the stall; a timed-out peer will be replaced on its next
+	// reconnect.
+	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	if err := websocket.Message.Send(conn, string(data)); err != nil {
 		log.Printf("relay: send error: %v", err)
 	}

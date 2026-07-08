@@ -2,12 +2,16 @@
 import SwiftUI
 import DesignSystem
 import LancerCore
+import os
 
-/// Visual clone of a Cursor-style "Approval Review" screen: a single reusable
-/// anatomy (request, scope, risk, evidence, decision, audit) for a governed
-/// approval. Static seed data only — no daemon/network wiring; decision
-/// buttons flip a local `@State` to show a confirmation state rather than
-/// sending anything.
+/// A governed-approval review screen: request, scope, risk, evidence,
+/// decision, audit — bound to the REAL pending `Approval` behind
+/// `liveBridge.pendingApprovalID` via `liveBridge.lookupApproval`. Previously
+/// every field here (command, risk, scope, changed files) was hardcoded to
+/// one fake "terraform apply" example regardless of what was actually
+/// pending — a live test on 2026-07-07 showed a real fileWrite request
+/// rendered as that fake example, meaning the user had no way to see what
+/// they were actually approving.
 public struct CursorReviewDiffView: View {
     @Environment(\.cursorShellLiveBridge) private var liveBridge
 
@@ -24,6 +28,16 @@ public struct CursorReviewDiffView: View {
 
     public init(onBack: @escaping () -> Void = {}) {
         self.onBack = onBack
+    }
+
+    private var approval: Approval? {
+        guard let id = liveBridge?.pendingApprovalID else { return nil }
+        // Prefer the Observable-tracked object (re-renders when set); the
+        // lookup closure reads untracked AppRoot @State and is fallback only.
+        if let resolved = liveBridge?.pendingApproval, resolved.id == id {
+            return resolved
+        }
+        return liveBridge?.lookupApproval?(id)
     }
 
     public var body: some View {
@@ -50,6 +64,10 @@ public struct CursorReviewDiffView: View {
         .environment(\.cursorScheme, .light)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("review-diff-screen")
+        .onAppear {
+            Logger(subsystem: "dev.lancer.mobile", category: "CursorReviewDiffView")
+                .info("review onAppear: bridge=\(liveBridge != nil, privacy: .public) pendingID=\(liveBridge?.pendingApprovalID?.uuidString ?? "nil", privacy: .public) bound=\(approval != nil, privacy: .public)")
+        }
     }
 
     // MARK: Header
@@ -73,11 +91,19 @@ public struct CursorReviewDiffView: View {
 
     // MARK: Request
 
+    private var requestTitle: String {
+        guard let approval else { return "No pending approval" }
+        if approval.kind == .askQuestion, let question = approval.question, !question.isEmpty {
+            return question
+        }
+        return approval.command ?? approval.patch ?? "\(approval.kind.rawValue) request"
+    }
+
     private var requestCard: some View {
         CursorArtifactCard {
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel("Request")
-                Text("Run terraform apply on the push-backend production workspace")
+                Text(requestTitle)
                     .font(CursorType.bodyEmphasis)
                     .foregroundColor(CursorColors.light.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -93,12 +119,14 @@ public struct CursorReviewDiffView: View {
                 sectionLabel("Scope")
                     .padding(.bottom, 10)
 
-                scopeRow("Machine", "mac-mini-studio")
-                scopeRow("Repo", "push-backend")
-                scopeRow("Branch", "master")
-                scopeRow("Files", "infra/production.tfvars")
-                scopeRow("Command", "terraform apply -var-file=infra/production.tfvars")
-                scopeRow("Environment", "production", isLast: true)
+                let a = approval
+                scopeRow("Agent", a?.agent.rawValue ?? "—")
+                scopeRow("Kind", a?.kind.rawValue ?? "—")
+                scopeRow("Directory", a?.cwd.isEmpty == false ? a!.cwd : "—")
+                if let toolName = a?.toolName, !toolName.isEmpty {
+                    scopeRow("Tool", toolName)
+                }
+                scopeRow("Command", a?.command ?? "—", isLast: true)
             }
         }
     }
@@ -128,22 +156,37 @@ public struct CursorReviewDiffView: View {
 
     // MARK: Risk
 
+    private var riskLevel: CursorStatusBadge.RiskLevel {
+        switch approval?.risk {
+        case .critical: return .critical
+        case .high: return .high
+        case .medium: return .medium
+        case .low, .none: return .low
+        }
+    }
+
+    private var riskLabel: String {
+        switch approval?.risk {
+        case .critical: return "Critical risk"
+        case .high: return "High risk"
+        case .medium: return "Medium risk"
+        case .low, .none: return "Low risk"
+        }
+    }
+
     private var riskCard: some View {
         CursorArtifactCard {
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel("Risk")
 
-                CursorStatusBadge(kind: .risk(level: .high), label: "High risk")
+                CursorStatusBadge(kind: .risk(level: riskLevel), label: riskLabel)
 
-                Text("This applies infrastructure changes directly to the production workspace.")
-                    .font(CursorType.bodyText)
-                    .foregroundColor(CursorColors.light.primaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Terraform can recreate or destroy live cloud resources; there is no rollback once the apply starts.")
-                    .font(CursorType.bodyText)
-                    .foregroundColor(CursorColors.light.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let blastRadius = approval?.blastRadius, let summary = blastRadiusSummary(blastRadius) {
+                    Text(summary)
+                        .font(CursorType.bodyText)
+                        .foregroundColor(CursorColors.light.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -154,28 +197,18 @@ public struct CursorReviewDiffView: View {
         CursorArtifactCard {
             VStack(alignment: .leading, spacing: 12) {
                 sectionLabel("Evidence")
-
                 commandBlock
-
-                HStack(spacing: 8) {
-                    Text("Changes")
-                        .font(CursorType.bodyEmphasis)
-                        .foregroundColor(CursorColors.light.primaryText)
-                    CursorDiffStatText(added: 12, removed: 3, font: CursorType.statusPill)
+                if let hash = approval?.contentHash, !hash.isEmpty {
+                    Text("content hash \(hash.prefix(12))…")
+                        .font(CursorType.logLine)
+                        .foregroundColor(CursorColors.light.mutedText)
                 }
-
-                VStack(spacing: 0) {
-                    changedFileRow("infra/production.tfvars", added: 9, removed: 2)
-                    changedFileRow("modules/vpc/main.tf", added: 3, removed: 1, isLast: true)
-                }
-
-                viewFullDiffRow
             }
         }
     }
 
     private var commandBlock: some View {
-        Text("terraform apply -var-file=infra/production.tfvars")
+        Text(approval?.command ?? approval?.toolInput ?? approval?.patch ?? "(no command recorded)")
             .font(CursorType.diffCode)
             .foregroundColor(CursorColors.light.primaryText)
             .fixedSize(horizontal: false, vertical: true)
@@ -186,44 +219,16 @@ public struct CursorReviewDiffView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    private func changedFileRow(_ filename: String, added: Int, removed: Int, isLast: Bool = false) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "doc")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(CursorColors.light.secondaryText)
-                Text(filename)
-                    .font(CursorType.bodyText)
-                    .foregroundColor(CursorColors.light.primaryText)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 8)
-                CursorDiffStatText(added: added, removed: removed, font: CursorType.statusPill)
-            }
-            .padding(.vertical, 8)
-
-            if !isLast {
-                Rectangle()
-                    .fill(CursorColors.light.hairline)
-                    .frame(height: CursorMetrics.cardHairlineHeight)
-            }
+    private func blastRadiusSummary(_ blastRadius: ApprovalBlastRadius) -> String? {
+        var parts: [String] = []
+        if let files = blastRadius.files, !files.isEmpty {
+            parts.append("Touches \(files.count) file\(files.count == 1 ? "" : "s")")
         }
-    }
-
-    private var viewFullDiffRow: some View {
-        Button(action: {}) {
-            HStack(spacing: 8) {
-                Text("View full diff")
-                    .font(CursorType.bodyText)
-                    .foregroundColor(CursorColors.light.statusDotActive)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(CursorColors.light.mutedText)
-            }
-            .padding(.top, 4)
-        }
-        .buttonStyle(.plain)
+        if blastRadius.touchesGit == true { parts.append("touches git") }
+        if blastRadius.touchesNetwork == true { parts.append("touches network") }
+        if let rule = blastRadius.matchedRule, !rule.isEmpty { parts.append("matched rule \(rule)") }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " \u{00b7} ")
     }
 
     // MARK: Decision
@@ -261,9 +266,14 @@ public struct CursorReviewDiffView: View {
     }
 
     private func applyDecision(_ local: Decision, relay: Approval.Decision?) {
-        decision = local
-        guard let relay, let liveBridge, let approvalID = liveBridge.pendingApprovalID else { return }
-        Task { await liveBridge.onDecide?(approvalID, relay) }
+        guard let relay, let liveBridge, let approvalID = liveBridge.pendingApprovalID else {
+            decision = local
+            return
+        }
+        Task {
+            await liveBridge.onDecide?(approvalID, relay)
+            decision = local
+        }
     }
 
     private var decisionStatusLine: some View {

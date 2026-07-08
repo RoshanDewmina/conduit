@@ -2,7 +2,6 @@
 import Foundation
 import Observation
 import LancerCore
-import SecurityKit
 import DesignSystem
 
 @MainActor @Observable
@@ -23,33 +22,16 @@ open class InboxViewModel {
         self.approvals = approvals
     }
 
-    /// Local-auth hook run before a high/critical-risk decision commits
-    /// (`ApprovalDecisionAuth.requiresUnlock` tiers). Injectable so tests can
-    /// assert the blocked/allowed behaviour without real LocalAuthentication.
-    public var decisionAuthorizer: (Approval.Risk?) async -> Bool = {
-        await ApprovalDecisionAuth.authorize(risk: $0)
-    }
-
     open func decide(
         _ id: ApprovalID,
         decision: Approval.Decision,
         choiceIndex: Int? = nil,
         editedToolInput: String? = nil
     ) {
-        guard let idx = approvals.firstIndex(where: { $0.id == id }) else { return }
-        let risk = approvals[idx].risk
-        if ApprovalDecisionAuth.requiresUnlock(risk: risk) {
-            Task {
-                guard await decisionAuthorizer(risk) else { return }
-                applyDecision(id, decision: decision, choiceIndex: choiceIndex, editedToolInput: editedToolInput)
-            }
-        } else {
-            applyDecision(id, decision: decision, choiceIndex: choiceIndex, editedToolInput: editedToolInput)
-        }
+        guard approvals.contains(where: { $0.id == id }) else { return }
+        applyDecision(id, decision: decision, choiceIndex: choiceIndex, editedToolInput: editedToolInput)
     }
 
-    /// Applies a decision that has already passed the local-auth gate. Never
-    /// call directly from a user-action path — `decide` is the gated entry.
     func applyDecision(
         _ id: ApprovalID,
         decision: Approval.Decision,

@@ -1,8 +1,8 @@
 @preconcurrency import XCTest
 
 /// Tier-0 integration: live `AppRoot` + seeded pending approval → Review → Approve.
-/// Uses `LANCER_UITEST_RESEED` + biometric bypass and the `LANCER_DESTINATION=review`
-/// DEBUG seam (same live `CursorReviewDiffView` + bridge `onDecide` path as production).
+/// Uses `LANCER_UITEST_RESEED` and the `LANCER_DESTINATION=review` DEBUG seam
+/// (same live `CursorReviewDiffView` + bridge `onDecide` path as production).
 /// Work-thread banner visibility is covered by `CursorAppShellExhaustiveTests` (mock shell)
 /// and `scripts/relay-approval-e2e.sh` (live shell, synthetic tap).
 @MainActor

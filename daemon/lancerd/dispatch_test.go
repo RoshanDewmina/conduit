@@ -478,3 +478,100 @@ func TestEmergencyStopBlocksSessionLaunches(t *testing.T) {
 		t.Fatalf("conversation launch after emergency stop = %q, want emergencyStopped", res.Status)
 	}
 }
+
+func TestDispatchContract(t *testing.T) {
+	valid := &runContract{
+		Goal:               "add receipt contract",
+		DoneCriteria:       []string{"contract echoes in receipt"},
+		ValidationCommands: []string{"go test ./..."},
+	}
+
+	t.Run("echoes in receipt and run record", func(t *testing.T) {
+		d := newDispatcher()
+		d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+			go emit("agent.run.status", map[string]any{"runId": runID, "status": "exited", "exitCode": 0})
+			return &procHandle{kill: func() {}}, nil
+		}
+		res := d.dispatch(dispatchParams{
+			Agent: "claudeCode", CWD: "/tmp", Prompt: "hi", Model: "sonnet", Contract: valid,
+		}, allowEval, noAudit)
+		if res.Status != "started" {
+			t.Fatalf("dispatch status = %q, want started", res.Status)
+		}
+		run := d.runs[res.RunID]
+		if run == nil || run.Contract == nil {
+			t.Fatal("expected contract on run record")
+		}
+		if run.Contract.Goal != valid.Goal {
+			t.Fatalf("run contract goal = %q, want %q", run.Contract.Goal, valid.Goal)
+		}
+		if !reflect.DeepEqual(run.Contract.DoneCriteria, valid.DoneCriteria) {
+			t.Fatalf("run doneCriteria = %v, want %v", run.Contract.DoneCriteria, valid.DoneCriteria)
+		}
+
+		deadline := time.After(2 * time.Second)
+		var receipt *runReceipt
+		for receipt == nil {
+			select {
+			case <-deadline:
+				t.Fatal("timed out waiting for receipt")
+			default:
+				receipt = d.getReceipt(res.RunID)
+				if receipt == nil {
+					time.Sleep(10 * time.Millisecond)
+				}
+			}
+		}
+		if receipt.Contract == nil {
+			t.Fatal("expected contract on receipt")
+		}
+		if receipt.Contract.Goal != valid.Goal {
+			t.Fatalf("receipt goal = %q, want %q", receipt.Contract.Goal, valid.Goal)
+		}
+		if !reflect.DeepEqual(receipt.Contract.DoneCriteria, valid.DoneCriteria) {
+			t.Fatalf("receipt doneCriteria = %v, want %v", receipt.Contract.DoneCriteria, valid.DoneCriteria)
+		}
+		if !reflect.DeepEqual(receipt.Contract.ValidationCommands, valid.ValidationCommands) {
+			t.Fatalf("receipt validationCommands = %v, want %v", receipt.Contract.ValidationCommands, valid.ValidationCommands)
+		}
+	})
+
+	t.Run("too many done criteria", func(t *testing.T) {
+		d := newDispatcher()
+		criteria := make([]string, contractMaxDoneCriteria+1)
+		for i := range criteria {
+			criteria[i] = "ok"
+		}
+		res := d.dispatch(dispatchParams{
+			Agent: "claudeCode", CWD: "/tmp", Prompt: "hi", Contract: &runContract{Goal: "x", DoneCriteria: criteria},
+		}, allowEval, noAudit)
+		if res.Status != "error" || res.Message != "contract too large" {
+			t.Fatalf("dispatch = %+v, want error contract too large", res)
+		}
+	})
+
+	t.Run("done criterion too long", func(t *testing.T) {
+		d := newDispatcher()
+		long := strings.Repeat("a", contractMaxDoneCriterionChars+1)
+		res := d.dispatch(dispatchParams{
+			Agent: "claudeCode", CWD: "/tmp", Prompt: "hi", Contract: &runContract{Goal: "x", DoneCriteria: []string{long}},
+		}, allowEval, noAudit)
+		if res.Status != "error" || res.Message != "contract too large" {
+			t.Fatalf("dispatch = %+v, want error contract too large", res)
+		}
+	})
+
+	t.Run("too many validation commands", func(t *testing.T) {
+		d := newDispatcher()
+		cmds := make([]string, contractMaxValidationCommands+1)
+		for i := range cmds {
+			cmds[i] = "go test ./..."
+		}
+		res := d.dispatch(dispatchParams{
+			Agent: "claudeCode", CWD: "/tmp", Prompt: "hi", Contract: &runContract{Goal: "x", ValidationCommands: cmds},
+		}, allowEval, noAudit)
+		if res.Status != "error" || res.Message != "contract too large" {
+			t.Fatalf("dispatch = %+v, want error contract too large", res)
+		}
+	})
+}

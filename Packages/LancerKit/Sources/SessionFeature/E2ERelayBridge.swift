@@ -174,13 +174,16 @@ public final class E2ERelayBridge: ObservableObject {
 
     /// Dispatch an agent run through the E2E relay.
     /// Returns the dispatch result, or nil if the relay is not active.
-    public func sendDispatch(agent: String, cwd: String, prompt: String, budgetUSD: Double?, model: String?) async throws -> DispatchResult {
+    public func sendDispatch(
+        agent: String, cwd: String, prompt: String, budgetUSD: Double?, model: String?,
+        contract: ProofReceipt.Contract? = nil
+    ) async throws -> DispatchResult {
         guard isActive else {
             throw E2EError.notPaired
         }
         let params = E2ERelayMessage.DispatchParams(
             agent: agent, cwd: cwd, prompt: prompt,
-            model: model, budgetUSD: budgetUSD ?? 0
+            model: model, budgetUSD: budgetUSD ?? 0, contract: contract
         )
         try await relayClient.send(type: "agentDispatch", payload: params)
         // The dispatch reached the daemon, but if its `dispatchResult` reply never
@@ -739,6 +742,19 @@ public final class E2ERelayBridge: ObservableObject {
                 name: Notification.Name("lancerE2EArtifact"),
                 object: nil,
                 userInfo: ["params": env.payload, "machineID": self.machineID]
+            )
+
+        case "runReceipt":
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<ProofReceipt>.self, from: message.payload
+            ) else {
+                Self.logger.error("handleRelayMessage: runReceipt decode failed for machine=\(self.machineID.uuidString, privacy: .public)")
+                return
+            }
+            NotificationCenter.default.post(
+                name: Notification.Name("lancerE2ERunReceipt"),
+                object: nil,
+                userInfo: ["receipt": env.payload, "machineID": self.machineID]
             )
 
         case "agentConversationsListResult":

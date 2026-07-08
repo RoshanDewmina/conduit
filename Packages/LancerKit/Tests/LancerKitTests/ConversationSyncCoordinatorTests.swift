@@ -252,6 +252,112 @@ struct ConversationSyncCoordinatorTests {
         #expect(events.map(\.seq) == [1, 2])
     }
 
+    // --- receipt materialization on reconnect (PR #34 review finding P2) ---
+    //
+    // The host stores a terminal `lancer.proof/v0` receipt ONLY as a
+    // `conversation_events` row (kind "receipt" — see appendRunReceipt in
+    // conversation_store.go). Live delivery turns it into a `chat_artifacts`
+    // row via `upsertReceipt` (AppRoot's lancerE2ERunReceipt handler), but
+    // before this fix, `mergeFetchResponse` only mirrored fetched events into
+    // `chat_events` — never converting a `kind == "receipt"` event into an
+    // artifact — so a receipt that arrived while the phone was disconnected
+    // never appeared in ReceiptCardView (which reads exclusively from
+    // `chat_artifacts`) even after a refresh.
+
+    @Test("refreshConversation materializes a receipt-kind event into a chat_artifacts .receipt row")
+    func refreshConversationMaterializesReceiptArtifact() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .syncing)
+
+        let receiptPayload = """
+        {"schema":"lancer.proof/v0","runId":"run-remote-1","conversationId":"conv-1","agent":"claudeCode","status":"completed","exitCode":0}
+        """
+        let transport = makeTransport(fetch: { _ in
+            ConversationFetchResponse(
+                conversation: ConversationSummary(
+                    id: "conv-1", title: "T", provider: "claudeCode", agentID: "claudeCode",
+                    hostName: "h", cwd: "/proj", state: "active", source: "app",
+                    createdAt: "2026-07-08T00:00:00Z", updatedAt: "2026-07-08T00:01:00Z",
+                    lastActivityAt: "2026-07-08T00:01:00Z", lastSeq: 3
+                ),
+                turns: [
+                    ConversationTurnEnvelope(
+                        id: "turn-1", conversationId: "conv-1", ordinal: 0, clientTurnId: "device-2:1",
+                        prompt: "hi while phone was offline", runId: "run-remote-1", provider: "claudeCode",
+                        status: "completed", startedAt: "2026-07-08T00:00:00Z", completedAt: "2026-07-08T00:01:00Z"
+                    ),
+                ],
+                events: [
+                    ConversationEvent(conversationId: "conv-1", seq: 1, turnId: "turn-1", runId: "run-remote-1", kind: "prompt", role: "user", text: "hi while phone was offline", createdAt: "2026-07-08T00:00:00Z"),
+                    ConversationEvent(conversationId: "conv-1", seq: 2, turnId: "turn-1", runId: "run-remote-1", kind: "output", role: "assistant", text: "done!", createdAt: "2026-07-08T00:00:30Z"),
+                    ConversationEvent(conversationId: "conv-1", seq: 3, turnId: "turn-1", runId: "run-remote-1", kind: "receipt", payloadJson: receiptPayload, createdAt: "2026-07-08T00:01:00Z"),
+                ],
+                nextSeq: 3
+            )
+        })
+
+        let nextSeq = try await coordinator.refreshConversation(conversationID: "conv-1", transport: transport)
+        #expect(nextSeq == 3)
+
+        let artifacts = try await repo.artifacts(runID: "run-remote-1")
+        #expect(artifacts.count == 1, "expected exactly one artifact materialized from the fetched receipt event")
+        #expect(artifacts.first?.kind == .receipt)
+        #expect(artifacts.first?.status == .done)
+        #expect(artifacts.first?.id == "receipt:run-remote-1")
+        #expect(artifacts.first?.payloadJSON.contains("lancer.proof/v0") == true)
+
+        // The receipt event itself must still be mirrored into chat_events
+        // like any other fetched event — materializing the artifact is
+        // additive, not a replacement for the existing event mirror.
+        let events = try await repo.events(conversationID: "conv-1")
+        #expect(events.map(\.seq) == [1, 2, 3])
+        #expect(events.first(where: { $0.kind == "receipt" })?.runID == "run-remote-1")
+    }
+
+    @Test("refetching the same receipt event does not duplicate the materialized artifact")
+    func refreshConversationReceiptMaterializationIsIdempotent() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .syncing)
+
+        let receiptPayload = """
+        {"schema":"lancer.proof/v0","runId":"run-remote-2","conversationId":"conv-1","agent":"claudeCode","status":"completed","exitCode":0}
+        """
+        @Sendable func fetchResponse() -> ConversationFetchResponse {
+            ConversationFetchResponse(
+                conversation: ConversationSummary(
+                    id: "conv-1", title: "T", provider: "claudeCode", agentID: "claudeCode",
+                    hostName: "h", cwd: "/proj", state: "active", source: "app",
+                    createdAt: "2026-07-08T00:00:00Z", updatedAt: "2026-07-08T00:01:00Z",
+                    lastActivityAt: "2026-07-08T00:01:00Z", lastSeq: 1
+                ),
+                turns: [
+                    ConversationTurnEnvelope(
+                        id: "turn-1", conversationId: "conv-1", ordinal: 0, clientTurnId: "device-2:1",
+                        prompt: "hi", runId: "run-remote-2", provider: "claudeCode",
+                        status: "completed", startedAt: "2026-07-08T00:00:00Z", completedAt: "2026-07-08T00:01:00Z"
+                    ),
+                ],
+                events: [
+                    ConversationEvent(conversationId: "conv-1", seq: 1, turnId: "turn-1", runId: "run-remote-2", kind: "receipt", payloadJson: receiptPayload, createdAt: "2026-07-08T00:01:00Z"),
+                ],
+                nextSeq: 1
+            )
+        }
+        let transport = makeTransport(fetch: { _ in fetchResponse() })
+
+        _ = try await coordinator.refreshConversation(conversationID: "conv-1", transport: transport)
+        _ = try await coordinator.refreshConversation(conversationID: "conv-1", transport: transport)
+
+        let artifacts = try await repo.artifacts(runID: "run-remote-2")
+        #expect(artifacts.count == 1, "re-fetching the same receipt event twice must not duplicate the artifact row")
+    }
+
     @Test("observeSyncState immediately yields the current state, then updates on transitions")
     func observeSyncStateStream() async throws {
         let db = try AppDatabase.inMemory()

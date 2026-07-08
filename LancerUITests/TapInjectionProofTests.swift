@@ -100,8 +100,11 @@ final class TapInjectionProofTests: XCTestCase {
         let repoRow = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@", "lancer-ios", "command-center", "All Repos")
         ).firstMatch
-        XCTAssertTrue(repoRow.waitForExistence(timeout: 10),
-                      "Workspaces should list a repo row (seed or live-hydrated)")
+        let emptyState = app.staticTexts["No conversations yet"].firstMatch
+        XCTAssertTrue(
+            repoRow.waitForExistence(timeout: 3) || emptyState.waitForExistence(timeout: 10),
+            "Workspaces should show real repos when live-hydrated or the honest empty state when no conversations exist"
+        )
     }
 
     /// Live relay approval proof (opt-in). See `scripts/validation/relay-approval-e2e.sh`.
@@ -133,6 +136,22 @@ final class TapInjectionProofTests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Review"].waitForExistence(timeout: 120),
                       "A relay-delivered escalation should surface Cursor Review")
+
+        // LANCER_DESTINATION=inbox force-opens the Review sheet at launch via a DEBUG
+        // seam, before the real relay escalation has necessarily arrived — "Review" and
+        // the Approve button both exist immediately in that empty state too, so waiting
+        // only for them is a false-positive gap: it lets this test tap Approve on an
+        // unbound sheet and pass without the real round-trip ever completing (root-caused
+        // 2026-07-08 via os_log instrumentation — zero onPendingApprovalsChanged/
+        // lancerE2EApprovalReceived events fired before the premature tap in 4/4 repro
+        // runs). CursorReviewDiffView.requestTitle renders the literal string
+        // "No pending approval" until `approval` is real, so wait for that to clear
+        // before trusting the screen is bound to the actual escalation.
+        let noPendingApproval = app.staticTexts["No pending approval"]
+        if noPendingApproval.exists {
+            XCTAssertTrue(noPendingApproval.waitForNonExistence(timeout: 120),
+                          "Review sheet should bind to the real relay-delivered approval, not stay on the empty DEBUG-seam placeholder")
+        }
 
         let approve = app.buttons["cursor.review.approve"].firstMatch
         XCTAssertTrue(approve.waitForExistence(timeout: 15),

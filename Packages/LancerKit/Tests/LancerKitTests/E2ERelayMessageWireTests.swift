@@ -413,6 +413,57 @@ import Foundation
         #expect(obj?["budgetUSD"] == nil)
     }
 
+    @Test("DispatchParams encodes optional contract for agentDispatch relay wire")
+    func dispatchParamsEncodesContract() throws {
+        let params = E2ERelayMessage.DispatchParams(
+            agent: "claudeCode",
+            cwd: "~/command-center",
+            prompt: "Add proof receipt decode plumbing",
+            model: "sonnet",
+            budgetUSD: 0,
+            contract: ProofReceipt.Contract(
+                goal: "Add proof receipt decode plumbing",
+                doneCriteria: ["Swift types decode C1 fixture", "Relay runReceipt reaches phone"],
+                validationCommands: ["cd Packages/LancerKit && swift test --filter ProofReceiptTests"]
+            )
+        )
+        let data = try JSONEncoder().encode(params)
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        #expect(obj?["agent"] as? String == "claudeCode")
+        let contract = obj?["contract"] as? [String: Any]
+        #expect(contract?["goal"] as? String == "Add proof receipt decode plumbing")
+        #expect((contract?["doneCriteria"] as? [String])?.count == 2)
+        #expect((contract?["validationCommands"] as? [String])?.first?.contains("ProofReceiptTests") == true)
+    }
+
+    @Test("DispatchParams omits contract key when nil")
+    func dispatchParamsOmitsNilContract() throws {
+        let params = E2ERelayMessage.DispatchParams(
+            agent: "claudeCode", cwd: "~", prompt: "hello"
+        )
+        let data = try JSONEncoder().encode(params)
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        #expect(obj?["contract"] == nil)
+    }
+
+    @Test("ConversationAppendRequest encodes contract on live-bridge append wire")
+    func conversationAppendRequestEncodesContract() throws {
+        let request = ConversationAppendRequest(
+            baseSeq: 0, clientTurnId: "ios-device-uuid:1", agent: "claudeCode", cwd: "~",
+            prompt: "Fix the failing auth test",
+            contract: ProofReceipt.Contract(
+                goal: "Fix the failing auth test",
+                doneCriteria: ["Auth test passes"],
+                validationCommands: ["swift test --filter AuthTests"]
+            )
+        )
+        let data = try JSONEncoder().encode(request)
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let contract = obj?["contract"] as? [String: Any]
+        #expect(contract?["goal"] as? String == "Fix the failing auth test")
+        #expect((contract?["doneCriteria"] as? [String])?.first == "Auth test passes")
+    }
+
     // MARK: - Conversation relay envelopes ({"type":"...Result","payload":{...}})
 
     @Test("agentConversationsListResult envelope decodes the daemon's shape")

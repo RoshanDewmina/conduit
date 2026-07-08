@@ -33,6 +33,7 @@ let package = Package(
         .library(name: "DiffKit",          targets: ["DiffKit"]),
         .library(name: "SyncKit",          targets: ["SyncKit"]),
         .library(name: "HostControlKit",   targets: ["HostControlKit"]),
+        .library(name: "IntentsKit",       targets: ["IntentsKit"]),
 
         // ── UI-bearing modules ───────────────────────────────────────────
         .library(name: "DesignSystem",      targets: ["DesignSystem"]),
@@ -135,6 +136,11 @@ let package = Package(
             dependencies: ["LancerCore"],
             swiftSettings: swiftSettings
         ),
+        .target(
+            name: "IntentsKit",
+            dependencies: ["LancerCore", "PersistenceKit"],
+            swiftSettings: swiftSettings
+        ),
 
         // ── UI-bearing ───────────────────────────────────────────────────
         .target(
@@ -163,6 +169,7 @@ let package = Package(
         .target(
             name: "SessionFeature",
             dependencies: [
+                "LancerCore",
                 "DesignSystem", "TerminalEngine", "SSHTransport",
                 "AgentKit", "PersistenceKit", "SecurityKit", "NotificationsKit",
             ],
@@ -257,6 +264,11 @@ let package = Package(
         .testTarget(
             name: "HostControlKitTests",
             dependencies: ["HostControlKit", "LancerCore"],
+            swiftSettings: swiftSettings
+        ),
+        .testTarget(
+            name: "IntentsKitTests",
+            dependencies: ["IntentsKit", "LancerCore", "PersistenceKit"],
             swiftSettings: swiftSettings
         ),
     ]

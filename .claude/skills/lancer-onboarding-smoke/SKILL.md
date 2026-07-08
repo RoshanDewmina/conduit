@@ -36,8 +36,9 @@ Run top to bottom; do not advance past a failing step.
 
 ## Hard rules
 
-- **Security stays fail-closed:** the TOFU prompt and `BiometricGate` are part of the test, not
-  obstacles to route around. Never log secrets or the relay key.
+- **Security stays fail-closed:** the TOFU prompt is part of the test, not an obstacle to route
+  around. Never log secrets or the relay key. (Biometric/Face ID gating was removed from the app
+  entirely, 2026-07-07, permanent — do not test for it or treat its absence as a gap.)
 - **Distinguish observed vs assumed.** Mark each step PASS only if you actually saw it on the
   device; "should work" is not a pass (see `$lancer-verification-gate`).
 - **A UX gap is a finding.** Missing prerequisite steps, dead-end screens, or unclear copy in the

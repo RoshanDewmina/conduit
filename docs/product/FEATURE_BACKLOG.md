@@ -18,7 +18,7 @@ Freeze Tier 2 until these pass.
 | E2E relay pairing from live shell | T0 | Partial live | `019f3763` | `01-onboarding.html` | `CursorShellLiveBridge` → `E2ERelayPairingView` | E2E verify |
 | Workspaces / thread list hydration | T0 | Partial live | `019f3763` | `03-workspaces.html` | `ChatConversationRepository` via bridge | Sim verify |
 | Composer → `performDispatch` | T0 | Partial live | `019f3763` | `04-launch-setup.html` | Live callback wired | E2E verify |
-| Approval → `decide()` | T0 | Partial live | `019f3763` | `06-review-diff.html` | `InboxViewModel` + bridge | E2E + biometric |
+| Approval → `decide()` | T0 | Partial live | `019f3763` | `06-review-diff.html` | `InboxViewModel` + bridge (no biometric gate — removed 2026-07-07) | E2E verify |
 | Follow-up / `performContinueConversation` | T0 | Partial live | `019f3763` | `05-work-thread.html` | Live callback | E2E verify |
 | Settings / policy handoff | T0 | Live | `019f3763` | `10-settings.html` | `SettingsWithLibraryView` sheet | — |
 | Relay E2E harness (Cursor nav) | T0 | **PASS** | `019f3763` | — | `relay-approval-e2e.sh` through live Cursor shell — [`test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md`](../test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md) | — |
@@ -64,7 +64,7 @@ Freeze Tier 2 until these pass.
 | Light Automations (4 variants) | V1 | Partial wireframe | `019f2ebf` | `05-work-thread.html` | 2 of 4 drawn | — |
 | Provider Capability Badges | V1 | Wireframed | `019f2ebf` | `03-workspaces.html` | Time permitting | — |
 | Governance: policy engine + audit + drift | V1 | **Shipped** | `019f2f6d` | `10-settings.html` | `lancerd` + Settings | — |
-| Governance: risk-tiered biometric gate | V1 | **Shipped** (P0 fix on branch) | `019f2f6d` | `06-review-diff.html` | `695d2440`; fail-closed on branch | Device matrix |
+| Governance: risk-tiered biometric gate | V1 | **Removed 2026-07-07** (permanent — not V1 scope) | `019f2f6d` | `06-review-diff.html` | `BiometricGate`/`ApprovalDecisionAuth` deleted, commit `9e18d679` | — |
 | Workspaces (repo-first IA) | V1 | Partial | master §5 | `03-workspaces.html` | Decided repo-first: [ADR](../architecture/2026-07-06-repo-first-workspaces-adr.md); `CursorWorkspaceDetailSheet` shipped (`7c5c0b0d`) | — |
 | Onboarding / Pairing | V1 | Shipped + mock shell | `019f2ebf` | `01-onboarding.html` | Resequence D1–D3 pending | — |
 | Settings (native grouped list) | V1 | Shipped | `019f2ebf` | `10-settings.html` | Real Settings wired in live shell; relay clear-invalid-pairings action added (`7c5c0b0d`) | — |
@@ -120,7 +120,7 @@ Ship **Cross-Vendor Second-Agent Review** first after MVP.
 
 | Gap | Severity | Status | Source | Evidence | Owner? |
 |-----|----------|--------|--------|----------|--------|
-| BiometricGate fail-open (no passcode) | P0 | Fixed on branch | `019f2f6d` | `531685b6` on `codex/tier-0-live-cursor-shell` | Device verify |
+| BiometricGate fail-open (no passcode) | P0 | **Moot — removed 2026-07-07** | `019f2f6d` | `BiometricGate` deleted entirely, commit `9e18d679`; nothing left to validate | — |
 | Emergency stop non-atomic | P0 | Fixed on branch | `019f2f6d` | Daemon latch + RPC same branch | — |
 | JWT HS256-only | P1 | Open | `019f2f6d` | `push-backend/auth.go` | — |
 | Dormant StoreKit vs Stripe entitlement | P1 | Open | `019f2f6d` | Two billing mechanisms | **Decision** |

@@ -50,7 +50,12 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 - [ ] **B8 — Empty/error/loading + a11y sweep.** Every surface: empty/loading/error states, Dynamic Type, VoiceOver, light+dark.
 - [x] **B9 — Cross-device conversation sync: add `CKDatabaseSubscription` for background pull.** ✅ DONE 2026-07-03. `CloudSync.ensureDatabaseSubscriptionExists` registers a `CKDatabaseSubscription` (idempotent, `shouldSendContentAvailable`); `ConversationSyncEngine.start()` registers it after the first sync (best-effort — entitlement issues fall back to the pre-existing foreground-only behavior); `AppDelegate.didReceiveRemoteNotification` now distinguishes a CloudKit push from an APNs approval push and routes to `ConversationSyncEngine.handleRemoteNotification(subscriptionID:)`. Registration + routing are code-complete and unit-tested; actual silent-push delivery is still unverified on hardware — see C7.
 - [ ] **B10 — Prove Tier 0 through the live Cursor shell.** `LANCER_CURSOR_SHELL_LIVE=1` must complete pair → dispatch → approve/deny → follow-up against the real daemon/relay path. The shell is merged and partially wired; seeded `LANCER_CURSOR_SHELL=1` coverage is not sufficient for external beta.
-- [ ] **B11 — Close P0 beta blockers.** External beta is blocked until `BiometricGate` fails closed on real no-passcode devices and Emergency Stop is implemented as a daemon-side atomic primitive, or the owner explicitly signs off on a release-blocking exception.
+- [x] **B11a — `BiometricGate` no-passcode fail-open.** ✅ Moot as of 2026-07-07 — Face ID/biometric
+  gating was removed from the app entirely (permanent product decision), so there is no gate left to
+  fail open. See `docs/legal/SECURITY_ARCHITECTURE.md` §5.1.
+- [ ] **B11b — Close remaining P0 beta blockers.** External beta is blocked until Emergency Stop is
+  implemented as a daemon-side atomic primitive, or the owner explicitly signs off on a
+  release-blocking exception.
 
 ---
 

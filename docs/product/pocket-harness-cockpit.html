@@ -1,0 +1,3500 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lancer Pocket Harness Cockpit</title>
+  <style>
+    :root {
+      --bg: #10100f;
+      --panel: #191917;
+      --panel-2: #20201d;
+      --line: #35342f;
+      --line-strong: #514f47;
+      --text: #f4f0e7;
+      --muted: #b9b1a3;
+      --soft: #837b6f;
+      --green: #80d39b;
+      --green-2: #1f3a2a;
+      --cyan: #83cfe1;
+      --cyan-2: #1c3440;
+      --coral: #ff9d83;
+      --coral-2: #43261f;
+      --amber: #e4c86a;
+      --amber-2: #3e351b;
+      --pink: #e8a0c8;
+      --pink-2: #402436;
+      --white: #ffffff;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.36);
+      --radius: 8px;
+      --max: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 280px),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    a { color: inherit; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(244, 240, 231, 0.1);
+      background: rgba(16, 16, 15, 0.92);
+      backdrop-filter: blur(16px);
+    }
+
+    .topbar-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      background: #1d1d1a;
+      color: var(--green);
+      font-weight: 800;
+      font-size: 15px;
+    }
+
+    .brand strong {
+      font-size: 15px;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .nav {
+      display: flex;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 13px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .nav a {
+      text-decoration: none;
+    }
+
+    main {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 34px 22px 70px;
+    }
+
+    .intro {
+      min-height: calc(100svh - 64px);
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+      align-items: center;
+      gap: 38px;
+      padding-bottom: 46px;
+    }
+
+    .eyebrow {
+      color: var(--green);
+      font-weight: 750;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 850px;
+      font-size: clamp(48px, 7vw, 86px);
+      line-height: 0.96;
+      letter-spacing: 0;
+      font-weight: 820;
+    }
+
+    .lede {
+      margin: 22px 0 0;
+      max-width: 680px;
+      color: var(--muted);
+      font-size: clamp(19px, 2.1vw, 26px);
+      line-height: 1.28;
+    }
+
+    .thesis {
+      margin-top: 28px;
+      border-left: 3px solid var(--green);
+      padding: 2px 0 2px 18px;
+      color: var(--text);
+      font-size: 18px;
+      max-width: 650px;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 28px;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 0 16px;
+      border-radius: 8px;
+      border: 1px solid var(--line-strong);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 720;
+      background: var(--panel);
+    }
+
+    .button.primary {
+      background: var(--green);
+      color: #102015;
+      border-color: var(--green);
+    }
+
+    .cockpit-wrap {
+      display: grid;
+      place-items: center;
+    }
+
+    .phone {
+      width: min(100%, 430px);
+      aspect-ratio: 0.53;
+      background: #080807;
+      border: 1px solid #3b3933;
+      border-radius: 38px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+
+    .phone::before {
+      content: "";
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 88px;
+      height: 8px;
+      border-radius: 100px;
+      background: #272621;
+    }
+
+    .screen {
+      height: 100%;
+      border-radius: 28px;
+      overflow: hidden;
+      background: #151512;
+      border: 1px solid #2e2d28;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen-header {
+      padding: 30px 18px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .screen-header small {
+      color: var(--soft);
+      display: block;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .screen-header strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1.05;
+      max-width: 280px;
+    }
+
+    .proof-score {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: 74px 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .ring {
+      width: 74px;
+      height: 74px;
+      border-radius: 50%;
+      background:
+        conic-gradient(var(--green) 0 76%, #33312b 76% 100%);
+      display: grid;
+      place-items: center;
+    }
+
+    .ring span {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #151512;
+      display: grid;
+      place-items: center;
+      font-weight: 820;
+      color: var(--green);
+    }
+
+    .score-copy {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tab {
+      min-height: 42px;
+      display: grid;
+      place-items: center;
+      color: var(--soft);
+      font-size: 11px;
+      border-right: 1px solid var(--line);
+    }
+
+    .tab:last-child { border-right: 0; }
+    .tab.active {
+      color: var(--text);
+      background: #1f1f1b;
+    }
+
+    .screen-body {
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .mobile-row {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px;
+      background: #1c1b18;
+      display: grid;
+      grid-template-columns: 18px 1fr auto;
+      gap: 9px;
+      align-items: start;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-top: 5px;
+      background: var(--green);
+    }
+
+    .status-dot.warn { background: var(--amber); }
+    .status-dot.info { background: var(--cyan); }
+    .mobile-row strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.18;
+    }
+
+    .mobile-row span {
+      display: block;
+      color: var(--soft);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .badge {
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 10px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .section {
+      padding: 64px 0;
+      border-top: 1px solid rgba(244, 240, 231, 0.11);
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.85fr) minmax(260px, 0.65fr);
+      gap: 28px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(34px, 4vw, 54px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .section-head p,
+    .section-copy {
+      color: var(--muted);
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .workflow {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(110px, 1fr));
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .stage {
+      min-height: 172px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .stage .num {
+      color: var(--soft);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .stage h3 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.08;
+    }
+
+    .stage p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.32;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .feature {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 17px;
+      min-height: 210px;
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .feature h3,
+    .matrix-card h3,
+    .beta-step h3 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.05;
+    }
+
+    .feature p,
+    .matrix-card p,
+    .beta-step p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .priority {
+      align-self: flex-start;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text);
+      border: 1px solid var(--line-strong);
+    }
+
+    .p0 { background: var(--green-2); color: var(--green); }
+    .p1 { background: var(--cyan-2); color: var(--cyan); }
+    .p2 { background: var(--amber-2); color: var(--amber); }
+
+    .harness-table {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    .harness-row {
+      display: grid;
+      grid-template-columns: 0.72fr 1.2fr 1.18fr;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .harness-row:last-child { border-bottom: 0; }
+
+    .harness-cell {
+      padding: 14px 16px;
+      border-right: 1px solid var(--line);
+      min-width: 0;
+    }
+
+    .harness-cell:last-child { border-right: 0; }
+    .harness-cell strong { display: block; font-size: 16px; }
+    .harness-cell span { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; }
+    .harness-row.header {
+      background: #22211d;
+      color: var(--soft);
+      font-size: 12px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .matrix-layout {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .matrix-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+    }
+
+    .proof-matrix {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    .proof-row {
+      display: grid;
+      grid-template-columns: 1fr 96px 112px;
+      min-height: 56px;
+      border-bottom: 1px solid var(--line);
+      align-items: center;
+    }
+
+    .proof-row:last-child { border-bottom: 0; }
+    .proof-row > div { padding: 12px 14px; }
+    .proof-title strong { display: block; font-size: 15px; }
+    .proof-title span { display: block; font-size: 12px; color: var(--soft); margin-top: 2px; }
+    .state {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--green);
+    }
+    .state.warn { color: var(--amber); }
+    .state.info { color: var(--cyan); }
+
+    .beta-flow {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      counter-reset: beta;
+    }
+
+    .beta-step {
+      position: relative;
+      min-height: 168px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+      counter-increment: beta;
+    }
+
+    .beta-step::before {
+      content: counter(beta);
+      display: grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      background: #26251f;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 850;
+      margin-bottom: 12px;
+    }
+
+    .sources {
+      color: var(--soft);
+      font-size: 12px;
+      display: grid;
+      gap: 6px;
+      max-width: 880px;
+    }
+
+    .sources a {
+      color: var(--muted);
+    }
+
+    @media (max-width: 980px) {
+      .intro,
+      .section-head,
+      .matrix-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .intro {
+        min-height: 0;
+        padding-top: 34px;
+      }
+
+      .cockpit-wrap {
+        justify-items: start;
+      }
+
+      .feature-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .beta-flow {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    /* ── Feature wireframes ── */
+    .feature-detail {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      padding: 28px;
+      margin-bottom: 28px;
+    }
+
+    .feature-detail-head {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 16px;
+      align-items: start;
+      margin-bottom: 24px;
+      max-width: 720px;
+    }
+
+    .feature-detail-head .priority { grid-row: span 2; margin-top: 4px; }
+    .feature-detail-head h3 { margin: 0; font-size: 28px; line-height: 1.05; grid-column: 2; }
+    .feature-detail-head p { margin: 0; color: var(--muted); font-size: 15px; grid-column: 2; }
+
+    .wireframe-gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+
+    .wireframe-item {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .wireframe-item figcaption {
+      color: var(--soft);
+      font-size: 12px;
+      line-height: 1.35;
+      padding: 0 4px;
+    }
+
+    .phone-sm {
+      width: 100%;
+      max-width: 240px;
+      aspect-ratio: 0.52;
+      border-radius: 28px;
+      padding: 10px;
+    }
+
+    .phone-sm::before {
+      width: 56px;
+      height: 5px;
+      top: 7px;
+    }
+
+    .phone-sm .screen { border-radius: 20px; }
+
+    .wf-light { background: #f5f4f0; color: #1a1a18; }
+    .wf-dark { background: #131313; color: #f4f0e7; }
+
+    .wf-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 22px 10px 8px;
+      font-size: 9px;
+      color: #837b6f;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      flex-shrink: 0;
+    }
+
+    .wf-dark .wf-bar { border-color: #2e2d28; color: #837b6f; }
+
+    .wf-bar strong {
+      font-size: 11px;
+      color: inherit;
+      font-weight: 700;
+    }
+
+    .wf-back {
+      width: 18px;
+      height: 18px;
+      border: 1px solid #d4d0c8;
+      border-radius: 5px;
+      display: grid;
+      place-items: center;
+      font-size: 8px;
+      color: #837b6f;
+    }
+
+    .wf-dark .wf-back { border-color: #3b3933; }
+
+    .wf-body {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .wf-card {
+      background: #fff;
+      border: 1px solid #e8e4dc;
+      border-radius: 7px;
+      padding: 7px;
+      font-size: 8px;
+      line-height: 1.3;
+    }
+
+    .wf-dark .wf-card {
+      background: #1c1b18;
+      border-color: #2e2d28;
+    }
+
+    .wf-label {
+      font-size: 7px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #837b6f;
+      margin-bottom: 4px;
+    }
+
+    .wf-tabs {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      border-bottom: 1px solid #e8e4dc;
+      flex-shrink: 0;
+    }
+
+    .wf-dark .wf-tabs { border-color: #2e2d28; }
+
+    .wf-tab {
+      text-align: center;
+      padding: 5px 2px;
+      font-size: 7px;
+      color: #837b6f;
+    }
+
+    .wf-tab.on {
+      color: #1a1a18;
+      background: #ebe8e2;
+      font-weight: 700;
+    }
+
+    .wf-dark .wf-tab.on {
+      color: #f4f0e7;
+      background: #1f1f1b;
+    }
+
+    .wf-row {
+      display: grid;
+      grid-template-columns: 8px 1fr auto;
+      gap: 5px;
+      align-items: start;
+      padding: 5px;
+      border: 1px solid #e8e4dc;
+      border-radius: 6px;
+      background: #faf9f6;
+      font-size: 7.5px;
+    }
+
+    .wf-dark .wf-row {
+      border-color: #2e2d28;
+      background: #1c1b18;
+    }
+
+    .wf-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-top: 2px;
+      background: var(--green);
+    }
+
+    .wf-dot.warn { background: var(--amber); }
+    .wf-dot.fail { background: var(--coral); }
+    .wf-dot.info { background: var(--cyan); }
+
+    .wf-pill {
+      font-size: 6px;
+      padding: 2px 5px;
+      border-radius: 99px;
+      border: 1px solid #d4d0c8;
+      color: #837b6f;
+      white-space: nowrap;
+    }
+
+    .wf-ring {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: conic-gradient(var(--green) 0 76%, #ddd 76%);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .wf-ring span {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #f5f4f0;
+      display: grid;
+      place-items: center;
+      font-size: 9px;
+      font-weight: 800;
+      color: var(--green);
+    }
+
+    .wf-dark .wf-ring span { background: #151512; }
+
+    .wf-score-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 4px 0;
+    }
+
+    .wf-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      position: relative;
+      padding-left: 12px;
+    }
+
+    .wf-timeline::before {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: 4px;
+      bottom: 4px;
+      width: 1px;
+      background: #d4d0c8;
+    }
+
+    .wf-step {
+      position: relative;
+      padding: 4px 0 4px 8px;
+      font-size: 7px;
+    }
+
+    .wf-step::before {
+      content: "";
+      position: absolute;
+      left: -9px;
+      top: 7px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #d4d0c8;
+      border: 1px solid #fff;
+    }
+
+    .wf-step.fail::before { background: var(--coral); }
+    .wf-step.pass::before { background: var(--green); }
+    .wf-step.active::before { background: var(--cyan); box-shadow: 0 0 0 2px rgba(131,207,225,0.3); }
+
+    .wf-shot {
+      height: 48px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, #e8e4dc 0%, #d4d0c8 100%);
+      border: 1px solid #d4d0c8;
+      display: grid;
+      place-items: center;
+      font-size: 7px;
+      color: #837b6f;
+      margin: 4px 0;
+    }
+
+    .wf-diff-pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+    }
+
+    .wf-diff-pane {
+      height: 40px;
+      border-radius: 4px;
+      border: 1px solid #d4d0c8;
+      font-size: 6px;
+      display: grid;
+      place-items: end start;
+      padding: 4px;
+      color: #837b6f;
+    }
+
+    .wf-diff-pane.before { background: #faf9f6; }
+    .wf-diff-pane.after { background: #f0faf3; border-color: #80d39b; }
+
+    .wf-actions {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .wf-btn {
+      font-size: 6.5px;
+      padding: 4px 7px;
+      border-radius: 99px;
+      border: 1px solid #d4d0c8;
+      background: #fff;
+      font-weight: 700;
+    }
+
+    .wf-btn.primary { background: var(--green); color: #102015; border-color: var(--green); }
+    .wf-btn.danger { background: var(--coral-2); color: var(--coral); border-color: var(--coral); }
+
+    .wf-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 6px;
+      background: #f0eeea;
+      border-radius: 4px;
+      padding: 4px;
+      color: #514f47;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .wf-dark .wf-code { background: #0f0f0d; color: #b9b1a3; }
+
+    .wf-kv {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 2px 6px;
+      font-size: 7px;
+      margin-top: 3px;
+    }
+
+    .wf-kv dt { color: #837b6f; }
+    .wf-kv dd { margin: 0; font-weight: 600; }
+
+    .wf-banner {
+      background: #3e351b;
+      border: 1px solid #514f47;
+      border-radius: 6px;
+      padding: 5px 7px;
+      font-size: 7px;
+      color: var(--amber);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .wf-chart {
+      height: 32px;
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      padding: 4px 0;
+    }
+
+    .wf-bar-col {
+      flex: 1;
+      background: #d4d0c8;
+      border-radius: 2px 2px 0 0;
+      min-height: 4px;
+    }
+
+    .wf-bar-col.ok { background: var(--green); }
+    .wf-bar-col.warn { background: var(--amber); }
+
+    .wf-list-item {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding: 5px;
+      border-bottom: 1px solid #e8e4dc;
+      font-size: 7.5px;
+    }
+
+    .wf-dark .wf-list-item { border-color: #2e2d28; }
+
+    .wf-list-item:last-child { border-bottom: 0; }
+
+    .wf-icon {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      background: #ebe8e2;
+      display: grid;
+      place-items: center;
+      font-size: 8px;
+      flex-shrink: 0;
+    }
+
+    .feature-spec {
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .feature-spec h4 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .feature-spec ul {
+      margin: 0;
+      padding-left: 16px;
+      color: var(--soft);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .feature-intro-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .feature-intro-grid .feature {
+      min-height: 0;
+    }
+
+    .feature-intro-grid .feature {
+      min-height: 0;
+    }
+
+    /* ── Desktop harness wireframes (explain borrowed tools) ── */
+    .harness-explainer {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-2);
+      padding: 28px;
+      margin-bottom: 28px;
+    }
+
+    .harness-explainer h3 {
+      margin: 0 0 6px;
+      font-size: 22px;
+    }
+
+    .harness-explainer .what-is {
+      color: var(--muted);
+      font-size: 15px;
+      margin: 0 0 20px;
+      max-width: 780px;
+    }
+
+    .desktop-wf {
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: #1a1a18;
+      overflow: hidden;
+      font-size: 8px;
+      color: #d4d0c8;
+    }
+
+    .desk-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #2a2a26;
+      border-bottom: 1px solid var(--line);
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .desk-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #514f47;
+    }
+
+    .desk-dot.r { background: #ff6b5a; }
+    .desk-dot.y { background: #e4c86a; }
+    .desk-dot.g { background: #80d39b; }
+
+    .desk-split {
+      display: grid;
+      grid-template-columns: 0.38fr 0.62fr;
+      min-height: 140px;
+    }
+
+    .desk-split-3 {
+      display: grid;
+      grid-template-columns: 0.28fr 0.44fr 0.28fr;
+      min-height: 140px;
+    }
+
+    .desk-pane {
+      border-right: 1px solid var(--line);
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .desk-pane:last-child { border-right: 0; }
+
+    .desk-pane-label {
+      font-size: 7px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--soft);
+      margin-bottom: 4px;
+      font-weight: 800;
+    }
+
+    .desk-cmd {
+      padding: 3px 5px;
+      border-radius: 3px;
+      font-family: ui-monospace, monospace;
+      font-size: 7px;
+      color: #b9b1a3;
+      border-left: 2px solid transparent;
+    }
+
+    .desk-cmd.on {
+      background: #2e3a4a;
+      border-left-color: var(--cyan);
+      color: #f4f0e7;
+    }
+
+    .desk-cmd.fail {
+      background: var(--coral-2);
+      border-left-color: var(--coral);
+      color: var(--coral);
+    }
+
+    .desk-cmd.pass { border-left-color: var(--green); }
+
+    .desk-preview {
+      flex: 1;
+      border-radius: 4px;
+      background: linear-gradient(160deg, #2a2a26, #1f1f1b);
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      color: var(--soft);
+      font-size: 7px;
+      min-height: 80px;
+    }
+
+    .desk-preview.checkout {
+      background: linear-gradient(160deg, #f5f4f0 0%, #e8e4dc 100%);
+      color: #514f47;
+    }
+
+    .desk-timeline {
+      display: flex;
+      gap: 2px;
+      padding: 4px 8px;
+      background: #22211d;
+      border-bottom: 1px solid var(--line);
+      overflow: hidden;
+    }
+
+    .desk-tick {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: #35342f;
+    }
+
+    .desk-tick.on { background: var(--cyan); }
+    .desk-tick.fail { background: var(--coral); }
+
+    .desk-diff-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      padding: 8px;
+    }
+
+    .desk-diff-img {
+      aspect-ratio: 0.6;
+      border-radius: 4px;
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: end start;
+      padding: 4px;
+      font-size: 6px;
+      color: var(--soft);
+    }
+
+    .desk-diff-img.base { background: #faf9f6; color: #514f47; }
+    .desk-diff-img.new { background: #f0faf3; color: #1f3a2a; }
+    .desk-diff-img.diff {
+      background: repeating-linear-gradient(45deg, #402436, #402436 3px, #2a1a24 3px, #2a1a24 6px);
+      color: var(--pink);
+    }
+
+    .desk-postman {
+      display: grid;
+      grid-template-columns: 0.3fr 0.7fr;
+      min-height: 130px;
+    }
+
+    .desk-tree-item {
+      padding: 3px 5px;
+      font-size: 7px;
+      color: #b9b1a3;
+    }
+
+    .desk-tree-item.on { background: #2e3a4a; color: #f4f0e7; }
+
+    .desk-req-res {
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      gap: 0;
+    }
+
+    .desk-req, .desk-res {
+      padding: 6px;
+      border-bottom: 1px solid var(--line);
+      font-family: ui-monospace, monospace;
+      font-size: 6.5px;
+      color: #b9b1a3;
+    }
+
+    .desk-res { border-bottom: 0; background: #151512; }
+
+    .borrow-compare {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: center;
+      margin: 20px 0;
+    }
+
+    .borrow-arrow {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      line-height: 1.3;
+      max-width: 72px;
+    }
+
+    .borrow-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--soft);
+      margin-bottom: 6px;
+    }
+
+    .borrow-compare .wireframe-item { max-width: none; }
+    .borrow-compare .phone-sm { max-width: 200px; margin: 0 auto; }
+
+    .harness-visual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .plain-callout {
+      background: #22211d;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 22px;
+      max-width: 820px;
+    }
+
+    .plain-callout strong { color: var(--text); }
+
+    /* ── iOS-native surface wireframes ── */
+    .ios-surface {
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: #0a0a09;
+      overflow: hidden;
+      font-size: 8px;
+      color: #d4d0c8;
+    }
+
+    .ios-lock {
+      background: linear-gradient(160deg, #1a1a2e 0%, #0f0f1a 100%);
+      padding: 14px 12px 12px;
+      min-height: 100px;
+    }
+
+    .ios-time {
+      font-size: 28px;
+      font-weight: 300;
+      color: #f4f0e7;
+      text-align: center;
+      margin-bottom: 10px;
+      letter-spacing: -0.02em;
+    }
+
+    .ios-notif {
+      background: rgba(30, 30, 28, 0.92);
+      border-radius: 14px;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .ios-notif-head {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .ios-notif-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+      background: var(--green-2);
+      color: var(--green);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 10px;
+    }
+
+    .ios-notif-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .ios-notif-btn {
+      flex: 1;
+      text-align: center;
+      padding: 6px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.12);
+      font-size: 7px;
+      font-weight: 700;
+    }
+
+    .ios-notif-btn.primary { background: var(--green); color: #102015; }
+
+    .ios-island {
+      width: 120px;
+      height: 28px;
+      background: #000;
+      border-radius: 20px;
+      margin: 0 auto 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      font-size: 7px;
+      color: var(--green);
+    }
+
+    .ios-island-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--amber);
+    }
+
+    .ios-widget {
+      background: rgba(30, 30, 28, 0.95);
+      border-radius: 16px;
+      padding: 12px;
+      border: 1px solid var(--line);
+    }
+
+    .ios-share-sheet {
+      background: #2a2a26;
+      border-radius: 12px 12px 0 0;
+      padding: 10px;
+      margin-top: auto;
+    }
+
+    .ios-share-row {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 6px 0;
+    }
+
+    .ios-share-app {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      font-size: 6px;
+      min-width: 48px;
+    }
+
+    .ios-share-app span {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--green-2);
+      color: var(--green);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    .ios-share-app.on span {
+      outline: 2px solid var(--green);
+    }
+
+    .ios-tap-target {
+      position: relative;
+      height: 56px;
+      border-radius: 6px;
+      background: linear-gradient(160deg, #f5f4f0, #e8e4dc);
+      border: 1px solid #d4d0c8;
+    }
+
+    .ios-tap-ring {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      border: 2px dashed var(--cyan);
+      border-radius: 50%;
+      top: 50%;
+      left: 55%;
+      transform: translate(-50%, -50%);
+      background: rgba(131, 207, 225, 0.15);
+    }
+
+    .ios-cc-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 12px;
+      background: rgba(20, 20, 18, 0.95);
+    }
+
+    .ios-cc-btn {
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: var(--coral-2);
+      border: 1px solid var(--coral);
+      display: grid;
+      place-items: center;
+      font-size: 6px;
+      color: var(--coral);
+      font-weight: 800;
+      text-align: center;
+      padding: 4px;
+    }
+
+    .verdict-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .verdict-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+      background: var(--panel);
+      font-size: 13px;
+    }
+
+    .verdict-card strong { display: block; font-size: 14px; margin-bottom: 4px; }
+    .verdict-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .verdict-card.keep { border-left: 3px solid var(--green); }
+    .verdict-card.cut { border-left: 3px solid var(--coral); }
+    .verdict-card.defer { border-left: 3px solid var(--amber); }
+    .verdict-card.add { border-left: 3px solid var(--cyan); }
+
+    .priority-stack {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .priority-col {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: var(--panel);
+    }
+
+    .priority-col h4 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .priority-col.p0 h4 { color: var(--green); }
+    .priority-col.p1 h4 { color: var(--cyan); }
+    .priority-col.p2 h4 { color: var(--amber); }
+
+    .priority-col ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* ── In-chat artifact visuals (Work Thread) ── */
+    .phone-thread {
+      width: 100%;
+      max-width: 280px;
+      aspect-ratio: 0.48;
+      border-radius: 28px;
+      padding: 10px;
+    }
+
+    .wf-thread {
+      background: #111112;
+      color: #e9e9ea;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .wf-thread .wf-bar {
+      border-color: #29292b;
+      color: #a2a2a6;
+    }
+
+    .wf-thread .wf-bar strong { color: #e9e9ea; }
+
+    .wf-thread-scroll {
+      flex: 1;
+      overflow: hidden;
+      padding: 8px 10px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .wf-user-bubble {
+      align-self: flex-end;
+      max-width: 75%;
+      padding: 7px 10px;
+      border-radius: 14px;
+      background: linear-gradient(#2b2b2d, #222224);
+      font-size: 8px;
+      line-height: 1.35;
+      color: #e9e9ea;
+    }
+
+    .wf-narration {
+      font-size: 7.5px;
+      color: #a2a2a6;
+      line-height: 1.4;
+    }
+
+    .wf-artifact {
+      border: 1px solid #2c2c2f;
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(26, 26, 27, 0.95);
+    }
+
+    .wf-artifact.proof { border-color: rgba(128, 211, 155, 0.35); background: rgba(31, 58, 42, 0.2); }
+    .wf-artifact.fail { border-color: rgba(255, 157, 131, 0.4); background: rgba(67, 38, 31, 0.25); }
+    .wf-artifact.warn { border-color: rgba(228, 200, 106, 0.4); background: rgba(62, 53, 27, 0.2); }
+    .wf-artifact.tool { border-color: #333336; }
+
+    .wf-artifact-head {
+      padding: 6px 8px;
+      border-bottom: 1px solid #29292b;
+      font-size: 7.5px;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .wf-artifact-head .badge-sm {
+      font-size: 6px;
+      padding: 2px 5px;
+      border-radius: 99px;
+      background: #2a2a26;
+      color: var(--soft);
+      font-weight: 600;
+    }
+
+    .wf-artifact-body { padding: 7px 8px; font-size: 7px; line-height: 1.4; }
+
+    .wf-scrubber {
+      position: relative;
+      height: 24px;
+      margin: 6px 0 4px;
+      background: #1a1a1c;
+      border-radius: 6px;
+      border: 1px solid #29292b;
+      overflow: hidden;
+    }
+
+    .wf-scrubber-track {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: flex-end;
+      gap: 1px;
+      padding: 0 2px 2px;
+    }
+
+    .wf-scrub-tick {
+      flex: 1;
+      background: #35342f;
+      border-radius: 1px 1px 0 0;
+      min-height: 4px;
+    }
+
+    .wf-scrub-tick.pass { background: var(--green); opacity: 0.6; }
+    .wf-scrub-tick.fail { background: var(--coral); }
+    .wf-scrub-tick.on { background: var(--cyan); min-height: 14px; }
+
+    .wf-scrubber-playhead {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      width: 2px;
+      background: #fff;
+      left: 62%;
+      border-radius: 1px;
+      box-shadow: 0 0 4px rgba(255,255,255,0.5);
+    }
+
+    .wf-scrubber-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 6px;
+      color: #77777b;
+      margin-top: 2px;
+    }
+
+    .wf-reel-frame {
+      height: 52px;
+      border-radius: 6px;
+      background: linear-gradient(160deg, #2a2a26 0%, #1f1f1b 100%);
+      border: 1px solid #333336;
+      display: grid;
+      place-items: center;
+      font-size: 7px;
+      color: #77777b;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .wf-reel-frame::after {
+      content: "▶";
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.5);
+      display: grid;
+      place-items: center;
+      font-size: 8px;
+      color: #fff;
+    }
+
+    .wf-reel-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      font-size: 7px;
+      color: #a2a2a6;
+    }
+
+    .wf-reel-controls .play-btn {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--green);
+      color: #102015;
+      display: grid;
+      place-items: center;
+      font-size: 7px;
+      font-weight: 800;
+    }
+
+    .wf-tool-row {
+      display: grid;
+      grid-template-columns: 14px 1fr auto;
+      gap: 5px;
+      padding: 5px 8px;
+      border-bottom: 1px solid #29292b;
+      font-size: 7px;
+      align-items: center;
+    }
+
+    .wf-tool-row:last-child { border-bottom: 0; }
+    .wf-tool-icon { color: var(--cyan); font-size: 8px; }
+    .wf-tool-row.done .wf-tool-icon { color: var(--green); }
+    .wf-tool-row.running .wf-tool-icon { color: var(--amber); }
+
+    .wf-matrix-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .wf-matrix-tile {
+      aspect-ratio: 0.7;
+      border-radius: 4px;
+      border: 1px solid #333336;
+      background: #1a1a1c;
+      font-size: 5.5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 3px;
+      color: #77777b;
+    }
+
+    .wf-matrix-tile.ok { border-color: var(--green); color: var(--green); }
+    .wf-matrix-tile.bad { border-color: var(--coral); color: var(--coral); }
+
+    .wf-check-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
+      border-bottom: 1px solid #29292b;
+      font-size: 7px;
+    }
+
+    .wf-check-row:last-child { border-bottom: 0; }
+
+    .wf-check-icon {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 7px;
+      flex-shrink: 0;
+    }
+
+    .wf-check-icon.ok { background: var(--green-2); color: var(--green); }
+    .wf-check-icon.warn { background: var(--amber-2); color: var(--amber); }
+    .wf-check-icon.fail { background: var(--coral-2); color: var(--coral); }
+
+    .artifact-gallery-wide {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
+      margin: 24px 0;
+    }
+
+    @media (max-width: 980px) {
+      .priority-stack { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 980px) {
+      .borrow-compare {
+        grid-template-columns: 1fr;
+      }
+
+      .borrow-arrow {
+        max-width: none;
+        padding: 8px 0;
+      }
+
+      .desk-split, .desk-split-3, .desk-postman {
+        grid-template-columns: 1fr;
+      }
+
+      .desk-pane { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+
+    @media (max-width: 700px) {
+      .topbar-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      main {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .phone {
+        width: 100%;
+        border-radius: 30px;
+        padding: 12px;
+      }
+
+      .screen { border-radius: 22px; }
+
+      .feature-grid,
+      .feature-intro-grid,
+      .beta-flow {
+        grid-template-columns: 1fr;
+      }
+
+      .harness-row {
+        grid-template-columns: 1fr;
+      }
+
+      .harness-cell {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .harness-cell:last-child { border-bottom: 0; }
+
+      .harness-row.header {
+        display: none;
+      }
+
+      .proof-row {
+        grid-template-columns: 1fr;
+      }
+
+      .proof-row > div {
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="mark">L</div>
+        <strong>Pocket Harness Cockpit</strong>
+      </div>
+      <nav class="nav" aria-label="Page sections">
+        <a href="#workflow">Workflow</a>
+        <a href="#chat-artifacts">Chat artifacts</a>
+        <a href="#desktop-tools">Tool visuals</a>
+        <a href="#mobile-ios">iOS native</a>
+        <a href="#features">Features</a>
+        <a href="#wf-proof-matrix">Proof Matrix</a>
+        <a href="#harnesses">Harnesses</a>
+        <a href="#beta">Beta slice</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="intro" id="top">
+      <div>
+        <div class="eyebrow">Recommended product direction</div>
+        <h1>Make desktop proof usable from a phone.</h1>
+        <p class="lede">Lancer should not replace Playwright, Cypress, Maestro, Appium, Postman, k6, Storybook, or Sentry. It should turn their outputs into mobile-native engineering decisions.</p>
+        <p class="thesis">The killer feature is a cockpit for Repro, Trace, Proof, Risk, and Memory. Agents run harnesses on the desktop. Lancer shows the evidence that lets a developer decide from mobile without compromise.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#features">See what to add</a>
+          <a class="button" href="#beta">Jump to beta slice</a>
+        </div>
+      </div>
+
+      <div class="cockpit-wrap" aria-label="Mock phone cockpit">
+        <div class="phone">
+          <div class="screen">
+            <div class="screen-header">
+              <small>Checkout crash case file</small>
+              <strong>Proof is ready for review</strong>
+              <div class="proof-score">
+                <div class="ring"><span>76</span></div>
+                <div class="score-copy">Repro passes after fix. Visual diff needs review before shipping.</div>
+              </div>
+            </div>
+            <div class="tabs">
+              <div class="tab active">Proof</div>
+              <div class="tab">Trace</div>
+              <div class="tab">Risk</div>
+              <div class="tab">API</div>
+              <div class="tab">Save</div>
+            </div>
+            <div class="screen-body">
+              <div class="mobile-row">
+                <div class="status-dot"></div>
+                <div><strong>Repro failed before fix</strong><span>Playwright captured the checkout crash.</span></div>
+                <div class="badge">Trace</div>
+              </div>
+              <div class="mobile-row">
+                <div class="status-dot"></div>
+                <div><strong>Repro passes after fix</strong><span>Same flow now completes on WebKit and Chromium.</span></div>
+                <div class="badge">Pass</div>
+              </div>
+              <div class="mobile-row">
+                <div class="status-dot warn"></div>
+                <div><strong>Visual diff needs review</strong><span>Mobile checkout spacing changed at 390px width.</span></div>
+                <div class="badge">Review</div>
+              </div>
+              <div class="mobile-row">
+                <div class="status-dot info"></div>
+                <div><strong>Save as regression guard</strong><span>Run this proof whenever checkout files change.</span></div>
+                <div class="badge">Memory</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="workflow">
+      <div class="section-head">
+        <h2>One case file across the whole engineering flow.</h2>
+        <p>Each stage adds evidence. Lancer's job is to compress that evidence into a phone-sized decision, not to expose another raw terminal or desktop dashboard.</p>
+      </div>
+      <div class="workflow" aria-label="Engineering workflow map">
+        <article class="stage"><div class="num">01</div><h3>Intake</h3><p>Screenshot, Clip, Sentry replay, failed CI, API example, or customer report becomes an Evidence Inbox item.</p></article>
+        <article class="stage"><div class="num">02</div><h3>Repro</h3><p>Agent creates the smallest runnable repro: Playwright, Maestro, Appium, API request, or manual steps.</p></article>
+        <article class="stage"><div class="num">03</div><h3>Scope</h3><p>Harness Plan defines required proof, affected areas, forbidden files, devices, browsers, and thresholds.</p></article>
+        <article class="stage"><div class="num">04</div><h3>Build</h3><p>Work Thread becomes harness-aware: hypotheses, attempts, failed runs, screenshots, retries, and final fix.</p></article>
+        <article class="stage"><div class="num">05</div><h3>Validate</h3><p>Proof Matrix shows whether the contract was actually met before the user trusts the result.</p></article>
+        <article class="stage"><div class="num">06</div><h3>Review</h3><p>Review claims with evidence first. Open the diff only when a proof card needs deeper inspection.</p></article>
+        <article class="stage"><div class="num">07</div><h3>Ship</h3><p>PR Proof Packet attaches traces, visual diffs, API results, performance status, and unresolved risks.</p></article>
+        <article class="stage"><div class="num">08</div><h3>Watch</h3><p>Post-ship window checks whether the original error or performance issue returns in production.</p></article>
+        <article class="stage"><div class="num">09</div><h3>Memory</h3><p>Regression Vault stores the repro, proof, and baseline so future agents rerun it when related files change.</p></article>
+      </div>
+    </section>
+
+    <section class="section" id="desktop-tools">
+      <div class="section-head">
+        <h2>What the desktop tools actually look like.</h2>
+        <p>Lancer borrows patterns from tools you may not use daily. Each block below shows the <strong>real desktop UI</strong> on the left, then how Lancer compresses it for phone on the right. No jargon required.</p>
+      </div>
+
+      <div class="plain-callout">
+        <strong>You don't run these on your phone.</strong> Your Mac runs Playwright, Cypress, Postman, etc. Lancer reads their output files (traces, screenshots, API results) and shows you a phone-friendly version so you can approve or reject without opening a laptop.
+      </div>
+
+      <!-- Cypress -->
+      <div class="harness-explainer" id="explainer-cypress">
+        <h3>Cypress — "Time Travel" command log</h3>
+        <p class="what-is"><strong>What it is:</strong> A browser testing app for websites. Its killer feature is a <em>command log</em> on the left — every action the test took (visit page, click button, check text) — and a live preview of the website on the right. Click any line in the log and the preview rewinds to exactly what the page looked like at that moment. That's "Time Travel."</p>
+        <div class="borrow-compare">
+          <div>
+            <div class="borrow-label">Desktop — Cypress Test Runner</div>
+            <div class="desktop-wf">
+              <div class="desk-titlebar"><span class="desk-dot r"></span><span class="desk-dot y"></span><span class="desk-dot g"></span> Cypress · checkout.cy.js</div>
+              <div class="desk-split">
+                <div class="desk-pane">
+                  <div class="desk-pane-label">Command log (click to rewind)</div>
+                  <div class="desk-cmd pass">visit /checkout</div>
+                  <div class="desk-cmd pass">get [data-test=address]</div>
+                  <div class="desk-cmd pass">type "123 Main St"</div>
+                  <div class="desk-cmd pass">get [data-test=continue]</div>
+                  <div class="desk-cmd pass">click</div>
+                  <div class="desk-cmd on fail">get #payment-btn</div>
+                  <div class="desk-cmd fail">click — FAILED</div>
+                  <div style="font-size:6px;color:var(--coral);margin-top:4px">AssertionError: element not found</div>
+                </div>
+                <div class="desk-pane">
+                  <div class="desk-pane-label">App preview at selected step</div>
+                  <div class="desk-preview checkout">Checkout page<br><span style="font-size:6px;color:var(--coral)">Pay button missing</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="borrow-arrow">Lancer<br>adapts →</div>
+          <figure class="wireframe-item">
+            <div class="borrow-label">Phone — Pocket Trace Review</div>
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Trace</strong><span>step 6</span></div>
+                <div class="wf-body">
+                  <div class="wf-timeline">
+                    <div class="wf-step pass">visit /checkout</div>
+                    <div class="wf-step pass">fill address</div>
+                    <div class="wf-step fail active"><strong>click #payment-btn</strong><br>Element not found</div>
+                  </div>
+                  <div class="wf-shot" style="height:40px">Screenshot at this step</div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Same idea: tap a step → see screenshot + error. Vertical timeline instead of side-by-side panes.</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Playwright -->
+      <div class="harness-explainer" id="explainer-playwright">
+        <h3>Playwright — Trace Viewer</h3>
+        <p class="what-is"><strong>What it is:</strong> Another browser testing tool (very popular with AI agents). When a test fails it saves a <em>trace file</em> — a recording with a timeline at the top, action list on the left, screenshot in the center, and console/network errors on the right. You scrub through time to find exactly where things broke.</p>
+        <div class="borrow-compare">
+          <div>
+            <div class="borrow-label">Desktop — Playwright Trace Viewer</div>
+            <div class="desktop-wf">
+              <div class="desk-titlebar"><span class="desk-dot r"></span><span class="desk-dot y"></span><span class="desk-dot g"></span> trace.zip · checkout.spec.ts</div>
+              <div class="desk-timeline">
+                <div class="desk-tick"></div><div class="desk-tick"></div><div class="desk-tick"></div>
+                <div class="desk-tick on"></div><div class="desk-tick fail"></div><div class="desk-tick"></div>
+              </div>
+              <div class="desk-split-3">
+                <div class="desk-pane">
+                  <div class="desk-pane-label">Actions</div>
+                  <div class="desk-cmd pass">page.goto</div>
+                  <div class="desk-cmd pass">fill address</div>
+                  <div class="desk-cmd on fail">click #pay</div>
+                </div>
+                <div class="desk-pane">
+                  <div class="desk-pane-label">Screenshot</div>
+                  <div class="desk-preview checkout">Frozen frame<br>at failure</div>
+                </div>
+                <div class="desk-pane">
+                  <div class="desk-pane-label">Errors</div>
+                  <div style="font-size:6px;color:var(--coral)">Console: TypeError</div>
+                  <div style="font-size:6px;color:var(--coral)">Network: POST 500</div>
+                  <div style="font-size:6px;color:var(--green)">+ suggested fix</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="borrow-arrow">Lancer<br>adapts →</div>
+          <figure class="wireframe-item">
+            <div class="borrow-label">Phone — step detail + errors</div>
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Step 4</strong><span>›</span></div>
+                <div class="wf-body">
+                  <div class="wf-shot" style="height:44px">Screenshot</div>
+                  <div class="wf-tabs"><div class="wf-tab on">Console</div><div class="wf-tab">Network</div></div>
+                  <div class="wf-code" style="color:var(--coral)">TypeError: null.click()</div>
+                  <div class="wf-code">POST /api/pay → 500</div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Three desktop panes become stacked phone cards with tabs.</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Chromatic / Percy -->
+      <div class="harness-explainer" id="explainer-visual">
+        <h3>Chromatic / Percy — Visual diff review</h3>
+        <p class="what-is"><strong>What it is:</strong> Tools that take screenshots of your website at different screen sizes, compare them to a saved "baseline" image, and highlight every pixel that changed in pink/red. A designer or developer then clicks Approve (change was intentional) or Reject (it's a bug).</p>
+        <div class="borrow-compare">
+          <div>
+            <div class="borrow-label">Desktop — Chromatic / Percy</div>
+            <div class="desktop-wf">
+              <div class="desk-titlebar"><span class="desk-dot r"></span><span class="desk-dot y"></span><span class="desk-dot g"></span> Chromatic · Checkout @ 390px</div>
+              <div class="desk-diff-row">
+                <div class="desk-diff-img base">Baseline<br>(before)</div>
+                <div class="desk-diff-img new">Current<br>(after)</div>
+                <div class="desk-diff-img diff">Diff<br>2.1% pixels</div>
+              </div>
+              <div style="padding:6px 8px;display:flex;gap:6px">
+                <span style="font-size:7px;padding:4px 8px;border-radius:99px;background:var(--green);color:#102015;font-weight:700">Approve</span>
+                <span style="font-size:7px;padding:4px 8px;border-radius:99px;border:1px solid var(--coral);color:var(--coral)">Reject</span>
+              </div>
+            </div>
+          </div>
+          <div class="borrow-arrow">Lancer<br>adapts →</div>
+          <figure class="wireframe-item">
+            <div class="borrow-label">Phone — Visual Diff Approval</div>
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>390px</strong><span>1/3</span></div>
+                <div class="wf-body">
+                  <div class="wf-diff-pair">
+                    <div class="wf-diff-pane before">Before</div>
+                    <div class="wf-diff-pane after">After</div>
+                  </div>
+                  <div class="wf-actions"><span class="wf-btn primary">Approve</span><span class="wf-btn danger">Reject</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Same before/after/diff pattern, thumb-friendly approve buttons.</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Postman -->
+      <div class="harness-explainer" id="explainer-postman">
+        <h3>Postman / Bruno — API collection runner</h3>
+        <p class="what-is"><strong>What it is:</strong> Apps for testing backend APIs. You save a list of HTTP requests (GET user, POST payment, etc.) as a "collection", run them all, and see which returned the wrong status code or response body. Bruno is a similar open-source alternative that stores collections in Git.</p>
+        <div class="borrow-compare">
+          <div>
+            <div class="borrow-label">Desktop — Postman</div>
+            <div class="desktop-wf">
+              <div class="desk-titlebar"><span class="desk-dot r"></span><span class="desk-dot y"></span><span class="desk-dot g"></span> Postman · Payment API collection</div>
+              <div class="desk-postman">
+                <div class="desk-pane">
+                  <div class="desk-pane-label">Collection</div>
+                  <div class="desk-tree-item pass">POST /checkout ✓</div>
+                  <div class="desk-tree-item pass">POST /pay ✓</div>
+                  <div class="desk-tree-item on fail">GET /receipt ✗</div>
+                  <div class="desk-tree-item fail">POST /refund 401</div>
+                </div>
+                <div class="desk-req-res">
+                  <div class="desk-req">GET /api/receipt<br>Authorization: Bearer …</div>
+                  <div class="desk-res">{ "total": 42, "tax": 3.36 } ← new field added</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="borrow-arrow">Lancer<br>adapts →</div>
+          <figure class="wireframe-item">
+            <div class="borrow-label">Phone — API Contract Proof</div>
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>API Proof</strong><span>6/7</span></div>
+                <div class="wf-body">
+                  <div class="wf-row"><div class="wf-dot warn"></div><div><strong>GET /receipt</strong><br>Schema drift</div></div>
+                  <div class="wf-row"><div class="wf-dot fail"></div><div><strong>POST /refund</strong><br>401 Unauthorized</div></div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Collection tree becomes a pass/fail list with response diffs on tap.</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Sentry -->
+      <div class="harness-explainer" id="explainer-sentry">
+        <h3>Sentry — Error tracking + session replay</h3>
+        <p class="what-is"><strong>What it is:</strong> A production monitoring service. When your live app crashes, Sentry captures the error message, stack trace, and often a <em>session replay</em> — a video-like recording of what the user clicked before the crash. This is how you turn a real user bug into a reproducible test.</p>
+        <div class="borrow-compare">
+          <div>
+            <div class="borrow-label">Desktop — Sentry issue page</div>
+            <div class="desktop-wf">
+              <div class="desk-titlebar"><span class="desk-dot r"></span><span class="desk-dot y"></span><span class="desk-dot g"></span> Sentry · Issue #4821</div>
+              <div class="desk-split">
+                <div class="desk-pane">
+                  <div class="desk-pane-label">Error</div>
+                  <div style="font-size:7px;color:var(--coral)">TypeError: Cannot read 'click' of null</div>
+                  <div style="font-size:6px;color:var(--soft);margin-top:4px">47 events · /checkout</div>
+                  <div class="desk-pane-label" style="margin-top:8px">Breadcrumbs</div>
+                  <div class="desk-cmd pass">navigate /checkout</div>
+                  <div class="desk-cmd pass">click Continue</div>
+                  <div class="desk-cmd fail">click #payment-btn</div>
+                </div>
+                <div class="desk-pane">
+                  <div class="desk-pane-label">Session replay</div>
+                  <div class="desk-preview checkout">User session<br>recording</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="borrow-arrow">Lancer<br>adapts →</div>
+          <figure class="wireframe-item">
+            <div class="borrow-label">Phone — Evidence Inbox + Watch</div>
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Evidence</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-list-item"><div class="wf-icon">⚡</div><div><strong>Sentry #4821</strong><br>Null ref · 47 events</div></div>
+                  <div class="wf-card"><div class="wf-label">Suggested repro</div>Playwright: visit /checkout → skip address → click Pay</div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Sentry issue becomes an inbox item that kicks off Auto-Repro Builder.</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- k6 -->
+      <div class="harness-explainer" id="explainer-k6">
+        <h3>k6 — Load / performance testing</h3>
+        <p class="what-is"><strong>What it is:</strong> A tool that simulates many users hitting your API at once and measures response times (p95, p99 latency), error rates, and whether you exceeded a "budget" (e.g. checkout must stay under 350ms). You set thresholds — if p95 goes over the limit, the test fails.</p>
+        <div class="borrow-compare">
+          <div>
+            <div class="borrow-label">Desktop — k6 dashboard</div>
+            <div class="desktop-wf">
+              <div class="desk-titlebar"><span class="desk-dot r"></span><span class="desk-dot y"></span><span class="desk-dot g"></span> k6 · checkout smoke test</div>
+              <div style="padding:10px">
+                <div class="desk-pane-label">Checkout p95 latency (ms) · 50 virtual users</div>
+                <div class="wf-chart" style="height:48px">
+                  <div class="wf-bar-col ok" style="height:55%"></div>
+                  <div class="wf-bar-col ok" style="height:58%"></div>
+                  <div class="wf-bar-col warn" style="height:82%"></div>
+                  <div class="wf-bar-col warn" style="height:78%"></div>
+                  <div class="wf-bar-col ok" style="height:60%"></div>
+                </div>
+                <div style="font-size:7px;margin-top:6px"><span style="color:var(--green)">●</span> p95: 312ms &nbsp; threshold: 350ms &nbsp; <span style="color:var(--amber)">+18ms vs baseline</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="borrow-arrow">Lancer<br>adapts →</div>
+          <figure class="wireframe-item">
+            <div class="borrow-label">Phone — Watch Window</div>
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Watch</strong><span>28m</span></div>
+                <div class="wf-body">
+                  <div class="wf-row"><div class="wf-dot warn"></div><div><strong>Checkout p95</strong><br>312ms (+18ms)</div><div class="wf-pill">Watch</div></div>
+                  <div class="wf-chart" style="height:28px">
+                    <div class="wf-bar-col ok" style="height:60%"></div>
+                    <div class="wf-bar-col warn" style="height:78%"></div>
+                    <div class="wf-bar-col ok" style="height:62%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Performance charts become a simple bar summary with pass/warn status.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="section-head">
+        <h2>Features to add from the harness list.</h2>
+        <p>Each feature below shows multiple phone wireframes — the actual screens a developer would see inside Lancer's Cursor shell. Start with proof and trace review; add broader harnesses once the paid beta workflow proves users trust the output.</p>
+      </div>
+
+      <div class="feature-intro-grid" aria-label="Feature priority overview">
+        <article class="feature"><div><h3>Proof Matrix</h3><p>One mobile panel for repro, tests, visual diffs, API checks, accessibility, performance, forbidden files, and remaining risk.</p></div><div class="priority p0">P0</div></article>
+        <article class="feature"><div><h3>Pocket Trace Review</h3><p>Step-by-step test replay on phone — like Cypress's command log or Playwright's trace viewer, but vertical and thumb-friendly. See screenshot + error per step.</p></div><div class="priority p0">P0</div></article>
+        <article class="feature"><div><h3>Auto-Repro Builder</h3><p>Turn messy evidence into a runnable repro. Require fails-before and passes-after whenever possible.</p></div><div class="priority p0">P0</div></article>
+        <article class="feature"><div><h3>Visual Diff Approval</h3><p>Side-by-side screenshot comparison with approve/reject — like Chromatic or Percy, but on your phone.</p></div><div class="priority p1">P1</div></article>
+        <article class="feature"><div><h3>API Contract Proof</h3><p>API test results on phone — like Postman's collection runner, showing which endpoints broke and how responses changed.</p></div><div class="priority p1">P1</div></article>
+        <article class="feature"><div><h3>Failure Replay Card</h3><p>One card showing the exact moment a test failed — screenshot, error, and what to do next. Like clicking a red line in Cypress.</p></div><div class="priority p1">P1</div></article>
+        <article class="feature"><div><h3>Watch Window</h3><p>After merge or deploy, watch the original error signature, route, latency, and recurrence for a fixed period.</p></div><div class="priority p1">P1</div></article>
+        <article class="feature"><div><h3>Regression Vault</h3><p>Save useful case files forever and warn future agents to rerun proof when related code changes.</p></div><div class="priority p2">P2</div></article>
+      </div>
+
+      <!-- ── P0: Proof Matrix ── -->
+      <article class="feature-detail" id="wf-proof-matrix">
+        <div class="feature-detail-head">
+          <div class="priority p0">P0</div>
+          <h3>Proof Matrix</h3>
+          <p>The center of the Pocket Harness Cockpit. Compresses every harness output into one scored decision panel with five tabs: Repro, Trace, Proof, Risk, Memory.</p>
+        </div>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Case File</strong><span>···</span></div>
+                <div class="wf-body">
+                  <div style="font-size:9px;font-weight:800;margin-bottom:2px">Checkout crash</div>
+                  <div class="wf-score-row">
+                    <div class="wf-ring"><span>76</span></div>
+                    <div style="font-size:7px;color:#837b6f">Repro passes after fix. Visual diff needs review before shipping.</div>
+                  </div>
+                  <div class="wf-tabs"><div class="wf-tab">Repro</div><div class="wf-tab">Trace</div><div class="wf-tab on">Proof</div><div class="wf-tab">Risk</div><div class="wf-tab">Save</div></div>
+                  <div class="wf-row"><div class="wf-dot"></div><div><strong>Repro fails before</strong><br>Playwright trace captured crash</div><div class="wf-pill">Pass</div></div>
+                  <div class="wf-row"><div class="wf-dot"></div><div><strong>Repro passes after</strong><br>WebKit + Chromium complete</div><div class="wf-pill">Pass</div></div>
+                  <div class="wf-row"><div class="wf-dot warn"></div><div><strong>Visual diff</strong><br>390px spacing changed</div><div class="wf-pill">Review</div></div>
+                  <div class="wf-row"><div class="wf-dot info"></div><div><strong>Save regression</strong><br>Guard checkout changes</div><div class="wf-pill">Suggest</div></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>1 — Proof tab.</strong> Scored cockpit with pass/warn rows. Maps to CursorReviewDiffView's evidence-first pattern but for harness artifacts.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Proof detail</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-card"><div class="wf-label">Claim</div>Checkout no longer crashes on missing address</div>
+                  <div class="wf-card"><div class="wf-label">Evidence</div>
+                    <div class="wf-shot">Screenshot · step 4</div>
+                    <div class="wf-code">expect(page.locator('#pay')).toBeVisible()</div>
+                  </div>
+                  <div class="wf-card"><div class="wf-label">Harness</div>
+                    <div class="wf-kv"><dt>Tool</dt><dd>Playwright</dd><dt>Run</dt><dd>checkout.spec.ts</dd><dt>Status</dt><dd style="color:var(--green)">Passed</dd></div>
+                  </div>
+                  <div class="wf-actions"><span class="wf-btn">Open trace</span><span class="wf-btn">Rerun</span><span class="wf-btn primary">Accept</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>2 — Proof row drill-down.</strong> Artifact card stack: claim, screenshot, assertion, harness metadata. Same card pattern as governed approval review.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Decide</strong><span></span></div>
+                <div class="wf-body" style="justify-content:flex-end;gap:8px">
+                  <div class="wf-card"><div class="wf-label">Proof score 76 / 100</div>2 of 3 required proofs passed. 1 needs review.</div>
+                  <div class="wf-actions" style="flex-direction:column">
+                    <span class="wf-btn primary" style="text-align:center">Approve proof</span>
+                    <span class="wf-btn" style="text-align:center">Ask another pass</span>
+                    <span class="wf-btn" style="text-align:center">Rerun one harness</span>
+                    <span class="wf-btn" style="text-align:center">Mark flaky</span>
+                    <span class="wf-btn" style="text-align:center">Open on desktop</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>3 — Decision sheet.</strong> Bottom actions: approve, rerun, mark flaky, escalate to desktop. Mirrors CursorPillButton primary/secondary pattern.</figcaption>
+          </figure>
+        </div>
+        <div class="feature-spec">
+          <div><h4>UI elements</h4><ul><li>Proof score ring (0–100)</li><li>5-tab cockpit nav</li><li>Status-dot proof rows</li><li>Artifact cards per claim</li><li>Decision action sheet</li></ul></div>
+          <div><h4>Data sources</h4><ul><li>Playwright traces</li><li>CI artifact digest</li><li>Visual diff baselines</li><li>API collection results</li><li>Agent mission contract</li></ul></div>
+          <div><h4>Lancer fit</h4><ul><li>Extends CursorReviewDiffView evidence cards</li><li>Entry from Work Thread approval banner</li><li>Light scheme like workspace screens</li></ul></div>
+        </div>
+      </article>
+
+      <!-- ── P0: Pocket Trace Review ── -->
+      <article class="feature-detail" id="wf-trace-review">
+        <div class="feature-detail-head">
+          <div class="priority p0">P0</div>
+          <h3>Pocket Trace Review</h3>
+          <p>Replay a failed browser test step-by-step on your phone. Each step shows a screenshot, what action ran, and any errors. See <a href="#explainer-cypress">Cypress</a> and <a href="#explainer-playwright">Playwright</a> visuals above for the desktop originals.</p>
+        </div>
+
+        <div class="borrow-compare" style="margin-bottom:24px">
+          <div>
+            <div class="borrow-label">Desktop — what you're used to seeing</div>
+            <div class="desktop-wf">
+              <div class="desk-titlebar"><span class="desk-dot r"></span><span class="desk-dot y"></span><span class="desk-dot g"></span> Cypress or Playwright trace</div>
+              <div class="desk-split">
+                <div class="desk-pane">
+                  <div class="desk-pane-label">Step list (click to rewind)</div>
+                  <div class="desk-cmd pass">1. visit /checkout</div>
+                  <div class="desk-cmd pass">2. fill address</div>
+                  <div class="desk-cmd pass">3. click Continue</div>
+                  <div class="desk-cmd on fail">4. click #payment-btn ✗</div>
+                </div>
+                <div class="desk-pane">
+                  <div class="desk-pane-label">Screenshot at step 4</div>
+                  <div class="desk-preview checkout">Page frozen<br>at crash</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="borrow-arrow">becomes →</div>
+          <div>
+            <div class="borrow-label">Phone — Pocket Trace Review</div>
+            <div class="phone phone-sm" style="max-width:200px;margin:0 auto">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Step 4</strong><span>›</span></div>
+                <div class="wf-body">
+                  <div class="wf-shot" style="height:50px">Screenshot</div>
+                  <div class="wf-card"><div class="wf-label">Failed action</div>click('#payment-btn')</div>
+                  <div class="wf-code" style="color:var(--coral)">Element not found</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Trace</strong><span>2.4s</span></div>
+                <div class="wf-body">
+                  <div class="wf-card"><div class="wf-label">checkout.spec.ts · 12 steps</div>
+                    <div class="wf-timeline">
+                      <div class="wf-step pass">Navigate /checkout</div>
+                      <div class="wf-step pass">Fill address form</div>
+                      <div class="wf-step pass">Click Continue</div>
+                      <div class="wf-step fail active"><strong>Click Pay — CRASH</strong><br>Null ref at #payment-btn</div>
+                      <div class="wf-step">Assert receipt visible</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>1 — Step timeline.</strong> Vertical step list with pass/fail/active states. Failing step highlighted in coral with agent diagnosis inline.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Step 4 of 12</strong><span>›</span></div>
+                <div class="wf-body">
+                  <div class="wf-shot" style="height:72px">App screenshot at failure</div>
+                  <div class="wf-card"><div class="wf-label">Action</div>click('#payment-btn')</div>
+                  <div class="wf-card"><div class="wf-label">Assertion failed</div>
+                    <div class="wf-code">Expected element visible, got null</div>
+                  </div>
+                  <div class="wf-card"><div class="wf-label">Agent diagnosis</div>Payment button not rendered when address incomplete. Missing guard in CheckoutView.swift:142.</div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>2 — Step detail.</strong> Full screenshot frame, action/selector, failed assertion, and agent explanation with file:line reference.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Errors</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-tabs"><div class="wf-tab on">Console</div><div class="wf-tab">Network</div><div class="wf-tab">Diff</div></div>
+                  <div class="wf-card" style="border-color:var(--coral)"><div class="wf-label" style="color:var(--coral)">Console error</div>
+                    <div class="wf-code">TypeError: Cannot read 'click' of null</div>
+                  </div>
+                  <div class="wf-card"><div class="wf-label">Network · failed</div>
+                    <div class="wf-kv"><dt>POST</dt><dd>/api/pay</dd><dt>Status</dt><dd style="color:var(--coral)">500</dd><dt>Time</dt><dd>1.2s</dd></div>
+                  </div>
+                  <div class="wf-card"><div class="wf-label">Related diff</div>
+                    <div class="wf-code" style="color:var(--green)">+ guard address.isComplete else { return }</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>3 — Console / network / diff.</strong> Tabbed error panel linking console output, failed request, and the code hunk that fixes it.</figcaption>
+          </figure>
+        </div>
+        <div class="feature-spec">
+          <div><h4>UI elements</h4><ul><li>Vertical step timeline</li><li>Screenshot per step</li><li>Assertion monospace block</li><li>Console/network tabs</li><li>Step prev/next navigation</li></ul></div>
+          <div><h4>Borrowed from</h4><ul><li><a href="#explainer-playwright">Playwright Trace Viewer</a> — timeline + screenshot + errors</li><li><a href="#explainer-cypress">Cypress Time Travel</a> — click a step, see the page at that moment</li><li>Playwright UI Mode — per-step screenshots during test runs</li></ul></div>
+          <div><h4>Lancer fit</h4><ul><li>Opened from Proof Matrix Trace tab</li><li>Or from Failure Replay Card</li><li>Monospace blocks match CursorDiffView style</li></ul></div>
+        </div>
+      </article>
+
+      <!-- ── P0: Auto-Repro Builder ── -->
+      <article class="feature-detail" id="wf-auto-repro">
+        <div class="feature-detail-head">
+          <div class="priority p0">P0</div>
+          <h3>Auto-Repro Builder</h3>
+          <p>Turn Sentry replays, screenshots, CI failures, or customer reports into the smallest runnable repro. Requires fails-before whenever possible.</p>
+        </div>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Evidence Inbox</strong><span>+</span></div>
+                <div class="wf-body">
+                  <div class="wf-list-item"><div class="wf-icon">📷</div><div><strong>Screenshot from user</strong><br>Checkout button missing</div></div>
+                  <div class="wf-list-item"><div class="wf-icon">⚡</div><div><strong>Sentry issue #4821</strong><br>Null ref · 47 events</div></div>
+                  <div class="wf-list-item"><div class="wf-icon">🔗</div><div><strong>Failed CI check</strong><br>checkout.spec.ts · main</div></div>
+                  <div class="wf-card" style="margin-top:4px"><div class="wf-label">Suggested mission</div>Reproduce checkout crash, fix null guard, prove with Playwright</div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>1 — Evidence intake.</strong> Inbox of screenshots, Sentry issues, CI failures. Lancer suggests a mission contract from combined evidence.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-dark">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Building repro</strong><span></span></div>
+                <div class="wf-body">
+                  <div style="font-size:8px;color:#b9b1a3;margin-bottom:4px">Agent is generating Playwright repro from Sentry breadcrumbs…</div>
+                  <div class="wf-card"><div class="wf-label">Progress</div>
+                    <div class="wf-timeline">
+                      <div class="wf-step pass">Parsed user journey</div>
+                      <div class="wf-step pass">Identified failing route</div>
+                      <div class="wf-step active">Writing checkout.spec.ts</div>
+                      <div class="wf-step">Run fails-before proof</div>
+                    </div>
+                  </div>
+                  <div class="wf-code">test('checkout crash on missing address', async …)</div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>2 — Repro generation.</strong> Dark Work Thread style while agent builds. Live progress timeline and streaming code preview.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Repro found</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-banner" style="background:var(--coral-2);color:var(--coral);border-color:var(--coral)">Fails before fix — confidence High</div>
+                  <div class="wf-card"><div class="wf-label">Steps</div>1. Go to /checkout<br>2. Skip address<br>3. Click Pay → crash</div>
+                  <div class="wf-shot">Video · 4.2s repro</div>
+                  <div class="wf-card"><div class="wf-label">Harness</div><div class="wf-kv"><dt>Type</dt><dd>Playwright</dd><dt>File</dt><dd>checkout.spec.ts</dd><dt>Assertion</dt><dd>expect crash</dd></div></div>
+                  <div class="wf-actions"><span class="wf-btn primary">Start fix mission</span><span class="wf-btn">Edit repro</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>3 — Repro result.</strong> Coral banner confirms fails-before. Exact steps, video, harness metadata. User approves mission start.</figcaption>
+          </figure>
+        </div>
+        <div class="feature-spec">
+          <div><h4>UI elements</h4><ul><li>Evidence Inbox list</li><li>Mission contract suggestion</li><li>Generation progress timeline</li><li>Fails-before confidence banner</li><li>Step list + video preview</li></ul></div>
+          <div><h4>Input types</h4><ul><li>Sentry/Datadog replay</li><li>Screenshot / Clip URL</li><li>GitHub failed check</li><li>Postman collection</li><li>Customer message</li></ul></div>
+          <div><h4>Lancer fit</h4><ul><li>Composer sheet → mission start</li><li>Work Thread shows build progress</li><li>Output feeds Proof Matrix Repro tab</li></ul></div>
+        </div>
+      </article>
+
+      <!-- ── P1: Visual Diff Approval ── -->
+      <article class="feature-detail" id="wf-visual-diff">
+        <div class="feature-detail-head">
+          <div class="priority p1">P1</div>
+          <h3>Visual Diff Approval</h3>
+          <p>Review screenshot changes on your phone before shipping. See <a href="#explainer-visual">Chromatic / Percy</a> above for the desktop side-by-side diff pattern.</p>
+        </div>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Visual diffs · 3</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-row"><div class="wf-dot warn"></div><div><strong>Checkout mobile 390px</strong><br>Spacing changed · 2.1% pixels</div><div class="wf-pill">Review</div></div>
+                  <div class="wf-row"><div class="wf-dot"></div><div><strong>Nav bar desktop</strong><br>No change detected</div><div class="wf-pill">Pass</div></div>
+                  <div class="wf-row"><div class="wf-dot warn"></div><div><strong>Receipt page</strong><br>Font weight changed</div><div class="wf-pill">Review</div></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>1 — Diff queue.</strong> List of responsive screenshot comparisons with pixel-change percentage and review status.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>390px · Checkout</strong><span>1/3</span></div>
+                <div class="wf-body">
+                  <div class="wf-diff-pair">
+                    <div class="wf-diff-pane before">Before</div>
+                    <div class="wf-diff-pane after">After</div>
+                  </div>
+                  <div class="wf-shot" style="height:36px;background:repeating-linear-gradient(45deg,#f0faf3,#e8f5ec 4px)">Diff overlay · 2.1%</div>
+                  <div class="wf-card"><div class="wf-label">Changed region</div>Pay button margin-top: 24px → 32px</div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>2 — Side-by-side + overlay.</strong> Before/after panes with diff highlight overlay and CSS property annotation.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Approve?</strong><span></span></div>
+                <div class="wf-body" style="justify-content:flex-end">
+                  <div class="wf-card">Is this visual change intended?</div>
+                  <div class="wf-actions" style="flex-direction:column">
+                    <span class="wf-btn primary">Approve — intended change</span>
+                    <span class="wf-btn danger">Reject — bug</span>
+                    <span class="wf-btn">Ask agent to fix</span>
+                    <span class="wf-btn">Update baseline</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>3 — Approval actions.</strong> Intended / bug / ask agent / update baseline. Same decision pattern as Chromatic review workflow.</figcaption>
+          </figure>
+        </div>
+        <div class="feature-spec">
+          <div><h4>UI elements</h4><ul><li>Diff queue with pixel %</li><li>Before/after screenshot pair</li><li>Diff overlay view</li><li>Region annotation</li><li>Approve/reject sheet</li></ul></div>
+          <div><h4>Borrowed from</h4><ul><li><a href="#explainer-visual">Chromatic</a> — baseline vs current vs diff overlay</li><li><a href="#explainer-visual">Percy</a> — responsive widths (390px, 768px, etc.)</li><li>Playwright screenshot comparison</li></ul></div>
+        </div>
+      </article>
+
+      <!-- ── P1: API Contract Proof ── -->
+      <article class="feature-detail" id="wf-api-proof">
+        <div class="feature-detail-head">
+          <div class="priority p1">P1</div>
+          <h3>API Contract Proof</h3>
+          <p>See which API endpoints pass or fail after a change. See <a href="#explainer-postman">Postman / Bruno</a> above for the desktop collection runner.</p>
+        </div>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>API Proof</strong><span>6/7</span></div>
+                <div class="wf-body">
+                  <div class="wf-row"><div class="wf-dot"></div><div><strong>POST /api/checkout</strong><br>200 · 142ms · schema OK</div><div class="wf-pill">Pass</div></div>
+                  <div class="wf-row"><div class="wf-dot"></div><div><strong>POST /api/pay</strong><br>200 · 89ms · unchanged</div><div class="wf-pill">Pass</div></div>
+                  <div class="wf-row"><div class="wf-dot warn"></div><div><strong>GET /api/receipt</strong><br>Schema drift detected</div><div class="wf-pill">Review</div></div>
+                  <div class="wf-row"><div class="wf-dot fail"></div><div><strong>POST /api/refund</strong><br>401 Unauthorized</div><div class="wf-pill">Fail</div></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>1 — Collection summary.</strong> Endpoint list with status, latency, and schema/auth result per request.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>GET /api/receipt</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-tabs"><div class="wf-tab on">Response</div><div class="wf-tab">Request</div><div class="wf-tab">Diff</div></div>
+                  <div class="wf-card"><div class="wf-label">Before</div>
+                    <div class="wf-code">{ "total": 42.00, "items": [...] }</div>
+                  </div>
+                  <div class="wf-card" style="border-color:var(--amber)"><div class="wf-label" style="color:var(--amber)">After — schema drift</div>
+                    <div class="wf-code">{ "total": 42.00, "tax": 3.36, "items": [...] }</div>
+                  </div>
+                  <div class="wf-card"><div class="wf-label">Impact</div>New field <code>tax</code> added. Clients expecting old schema may break.</div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>2 — Response diff.</strong> Before/after JSON with schema drift highlight and impact explanation.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>POST /api/refund</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-banner" style="background:var(--coral-2);color:var(--coral)">401 Unauthorized</div>
+                  <div class="wf-card"><div class="wf-label">Request</div>
+                    <div class="wf-kv"><dt>Auth</dt><dd>Bearer expired_token</dd><dt>Body</dt><dd>{ orderId: "x1" }</dd></div>
+                  </div>
+                  <div class="wf-card"><div class="wf-label">Agent diagnosis</div>Refund endpoint requires service-account token. Test env credential rotated yesterday.</div>
+                  <div class="wf-actions"><span class="wf-btn primary">Ask agent to fix auth</span><span class="wf-btn">Rerun</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>3 — Auth failure detail.</strong> Failed request with auth context, agent diagnosis, and rerun/fix actions.</figcaption>
+          </figure>
+        </div>
+        <div class="feature-spec">
+          <div><h4>UI elements</h4><ul><li>Collection pass/fail summary</li><li>Per-endpoint latency</li><li>JSON before/after diff</li><li>Schema drift warnings</li><li>Auth failure cards</li></ul></div>
+          <div><h4>Borrowed from</h4><ul><li><a href="#explainer-postman">Postman collection runner</a> — run all endpoints, see pass/fail</li><li>Bruno — Git-native API collections</li><li>OpenAPI schema validation</li></ul></div>
+        </div>
+      </article>
+
+      <!-- ── P1: Failure Replay Card ── -->
+      <article class="feature-detail" id="wf-failure-replay">
+        <div class="feature-detail-head">
+          <div class="priority p1">P1</div>
+          <h3>Failure Replay Card</h3>
+          <p>One card per failed harness run: failing step, screenshot, selector/assertion, console error, related diff, and suggested next action.</p>
+        </div>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-dark">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Work Thread</strong><span>···</span></div>
+                <div class="wf-body">
+                  <div style="font-size:7px;color:#b9b1a3;padding:4px 0">Fix checkout null guard…</div>
+                  <div class="wf-card" style="border-color:var(--coral);border-width:2px">
+                    <div class="wf-label" style="color:var(--coral)">Harness failed · step 4</div>
+                    <div class="wf-shot" style="height:40px">Screenshot at failure</div>
+                    <div style="font-size:7px;margin-top:4px"><strong>click('#payment-btn')</strong><br>Element not found · checkout.spec.ts:28</div>
+                  </div>
+                  <div class="wf-actions"><span class="wf-btn">Retry</span><span class="wf-btn primary">Ask agent</span><span class="wf-btn">Mark flaky</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>1 — Inline in Work Thread.</strong> Failure card embedded in dark transcript. Coral border, screenshot, failing selector, quick actions.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Failure detail</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-shot" style="height:56px">Full-frame screenshot</div>
+                  <div class="wf-card"><div class="wf-label">Failing assertion</div><div class="wf-code">await page.click('#payment-btn')</div></div>
+                  <div class="wf-card"><div class="wf-label">Console</div><div class="wf-code" style="color:var(--coral)">TypeError: Cannot read 'click' of null</div></div>
+                  <div class="wf-card"><div class="wf-label">Related diff</div><div class="wf-code" style="color:var(--green)">+ if !address.isComplete { return }</div></div>
+                  <div class="wf-card"><div class="wf-label">Agent diagnosis</div>Button not rendered when address incomplete. Guard missing in view model.</div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>2 — Expanded failure.</strong> Full evidence stack: screenshot, assertion, console, related diff hunk, agent diagnosis.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Next action</strong><span></span></div>
+                <div class="wf-body" style="justify-content:flex-end">
+                  <div class="wf-actions" style="flex-direction:column">
+                    <span class="wf-btn primary">Ask agent to fix selector</span>
+                    <span class="wf-btn">Retry harness</span>
+                    <span class="wf-btn">Accept as unrelated</span>
+                    <span class="wf-btn">Mark flaky</span>
+                    <span class="wf-btn">Open trace on desktop</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>3 — Action sheet.</strong> Retry, ask agent, accept unrelated, mark flaky, escalate. Same as clicking a failed red line in the <a href="#explainer-cypress">Cypress command log</a>.</figcaption>
+          </figure>
+        </div>
+        <div class="feature-spec">
+          <div><h4>UI elements</h4><ul><li>Inline failure card in thread</li><li>Screenshot at failure moment</li><li>Selector/assertion block</li><li>Console error excerpt</li><li>Related diff link</li></ul></div>
+          <div><h4>Borrowed from</h4><ul><li><a href="#explainer-playwright">Playwright Trace Viewer</a> — failure screenshot + errors</li><li><a href="#explainer-cypress">Cypress command log</a> — red failed command with readable error</li><li>Appium Inspector — native app screenshot at failure</li></ul></div>
+        </div>
+      </article>
+
+      <!-- ── P1: Watch Window ── -->
+      <article class="feature-detail" id="wf-watch-window">
+        <div class="feature-detail-head">
+          <div class="priority p1">P1</div>
+          <h3>Watch Window</h3>
+          <p>Post-ship monitoring from phone. Watch original error signature, affected route/API, latency budgets, and recurrence for 15/30/60 minutes.</p>
+        </div>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Watch Window</strong><span>28m</span></div>
+                <div class="wf-body">
+                  <div class="wf-card"><div class="wf-label">Watching · checkout crash fix</div>
+                    <div class="wf-kv"><dt>Deployed</dt><dd>32 min ago</dd><dt>Window</dt><dd>60 min remaining</dd><dt>PR</dt><dd>#847</dd></div>
+                  </div>
+                  <div class="wf-row"><div class="wf-dot"></div><div><strong>Error signature</strong><br>Null ref #payment-btn · 0 events</div><div class="wf-pill">Clear</div></div>
+                  <div class="wf-row"><div class="wf-dot"></div><div><strong>Route /checkout</strong><br>Error rate 0.02% (was 4.1%)</div><div class="wf-pill">OK</div></div>
+                  <div class="wf-row"><div class="wf-dot warn"></div><div><strong>Checkout p95</strong><br>312ms (+18ms vs baseline)</div><div class="wf-pill">Watch</div></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>1 — Watch dashboard.</strong> Active watch with timer, error signature status, route health, and latency budget.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Latency · 30m</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-card"><div class="wf-label">Checkout p95 (ms)</div>
+                    <div class="wf-chart">
+                      <div class="wf-bar-col ok" style="height:60%"></div>
+                      <div class="wf-bar-col ok" style="height:55%"></div>
+                      <div class="wf-bar-col ok" style="height:58%"></div>
+                      <div class="wf-bar-col warn" style="height:78%"></div>
+                      <div class="wf-bar-col warn" style="height:72%"></div>
+                      <div class="wf-bar-col ok" style="height:62%"></div>
+                    </div>
+                    <div style="font-size:6px;color:#837b6f">Baseline 294ms · current 312ms · threshold 350ms</div>
+                  </div>
+                  <div class="wf-card"><div class="wf-label">Sentry events</div>
+                    <div class="wf-chart">
+                      <div class="wf-bar-col" style="height:80%"></div>
+                      <div class="wf-bar-col" style="height:20%"></div>
+                      <div class="wf-bar-col" style="height:4%"></div>
+                      <div class="wf-bar-col" style="height:4%"></div>
+                      <div class="wf-bar-col" style="height:4%"></div>
+                      <div class="wf-bar-col" style="height:4%"></div>
+                    </div>
+                    <div style="font-size:6px;color:#837b6f">47 events pre-fix → 0 post-deploy</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>2 — Metrics charts.</strong> p95 latency bars and Sentry event count over watch window. k6/Sentry borrow pattern.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>30m report</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-card" style="border-color:var(--green)"><div class="wf-label" style="color:var(--green)">Watch complete</div>
+                    Fix has been live 30m. Original error has not recurred. Checkout p95 +18ms (within budget). One unrelated warning on /settings.</div>
+                  <div class="wf-actions"><span class="wf-btn primary">Mark resolved</span><span class="wf-btn">Extend watch</span><span class="wf-btn">Save to vault</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>3 — Watch report.</strong> Plain-language summary after watch window. Resolve, extend, or save to Regression Vault.</figcaption>
+          </figure>
+        </div>
+        <div class="feature-spec">
+          <div><h4>UI elements</h4><ul><li>Watch timer + PR link</li><li>Error signature status</li><li>Route/API health rows</li><li>Latency bar charts</li><li>Plain-language report</li></ul></div>
+          <div><h4>Borrowed from</h4><ul><li><a href="#explainer-sentry">Sentry issue tracking</a> — error signature + recurrence</li><li>Datadog RUM dashboards</li><li><a href="#explainer-k6">k6 threshold alerts</a> — p95 latency budgets</li></ul></div>
+        </div>
+      </article>
+
+      <!-- ── P2: Regression Vault ── -->
+      <article class="feature-detail" id="wf-regression-vault">
+        <div class="feature-detail-head">
+          <div class="priority p2">P2</div>
+          <h3>Regression Vault</h3>
+          <p>Long-term memory for finished case files. Saved repro, proof matrix, visual baselines, and warnings when future agents touch related code.</p>
+        </div>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Regression Vault</strong><span>12</span></div>
+                <div class="wf-body">
+                  <div class="wf-list-item"><div class="wf-icon" style="background:var(--green-2);color:var(--green)">✓</div><div><strong>Checkout crash</strong><br>Playwright · saved 3d ago</div></div>
+                  <div class="wf-list-item"><div class="wf-icon" style="background:var(--green-2);color:var(--green)">✓</div><div><strong>Payment API 500</strong><br>Bruno · saved 1w ago</div></div>
+                  <div class="wf-list-item"><div class="wf-icon" style="background:var(--amber-2);color:var(--amber)">!</div><div><strong>Nav mobile layout</strong><br>Percy · saved 2w ago</div></div>
+                  <div class="wf-list-item"><div class="wf-icon" style="background:var(--green-2);color:var(--green)">✓</div><div><strong>Login OAuth redirect</strong><br>Maestro · saved 1mo ago</div></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>1 — Vault list.</strong> Saved case files with harness type and age. Warning icon on cases with stale baselines.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Checkout crash</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-card"><div class="wf-label">Case file</div>
+                    <div class="wf-kv"><dt>Repro</dt><dd>checkout.spec.ts</dd><dt>Proof</dt><dd>76/100</dd><dt>Files</dt><dd>CheckoutView, PayAPI</dd><dt>Signature</dt><dd>Null ref #payment-btn</dd></div>
+                  </div>
+                  <div class="wf-card"><div class="wf-label">Stored artifacts</div>Trace · video · visual baseline · API collection</div>
+                  <div class="wf-actions"><span class="wf-btn">Rerun proof</span><span class="wf-btn">View trace</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>2 — Case file detail.</strong> Full case metadata, affected files, error signature, and stored artifacts with rerun actions.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-dark">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Work Thread</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-banner">⚠ Saved checkout crash repro exists for CheckoutView.swift</div>
+                  <div style="font-size:7px;color:#b9b1a3">Agent is editing checkout files. Run saved proof before marking ready.</div>
+                  <div class="wf-card"><div class="wf-label">Regression guard</div>checkout.spec.ts · fails-before required · last passed 3d ago</div>
+                  <div class="wf-actions"><span class="wf-btn primary">Run regression now</span><span class="wf-btn">Dismiss</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>3 — Agent warning.</strong> Amber banner in Work Thread when agent touches files with saved repros. Proactive regression guard.</figcaption>
+          </figure>
+        </div>
+        <div class="feature-spec">
+          <div><h4>UI elements</h4><ul><li>Vault list with harness badges</li><li>Case file detail view</li><li>Stored artifact links</li><li>Proactive agent warning banner</li><li>Rerun proof action</li></ul></div>
+          <div><h4>Stored per case</h4><ul><li>Original evidence + repro</li><li>Proof matrix snapshot</li><li>Visual baseline</li><li>API request examples</li><li>Error signature + affected files</li></ul></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="section" id="chat-artifacts">
+      <div class="section-head">
+        <h2>In-chat artifacts — the Work Thread is the product.</h2>
+        <p>Not a chat app with a terminal pasted in. A dark, artifact-rich transcript where every harness output renders as a <strong>beautiful native component</strong> — proof reel with scrubber, trace steps, visual diffs, tool calls, and rollup cards inline. Today <code>CursorWorkThreadView</code> is prompt + plain text; this is the target.</p>
+      </div>
+
+      <div class="plain-callout">
+        <strong>Design source:</strong> <a href="../design-audit/lancer-workflows-2026-07-05/artifacts/05-work-thread.html">05-work-thread.html</a> wireframes + <code>CursorArtifactCard</code> container (shipped). <strong>Not</strong> raw log dumps — structured playback per competitor report's "Agent Work Playback": 30-second skimmable replay, jump from event → diff/log/proof.
+      </div>
+
+      <!-- Full thread composition -->
+      <div class="harness-explainer" id="artifact-full-thread">
+        <h3>Annotated Work Thread — all artifact types in one scroll</h3>
+        <p class="what-is">User prompt bubble → agent narration (short prose) → inline artifact cards. Terminal output collapsed by default. Each card is tappable for full-screen drill-down.</p>
+        <div class="artifact-gallery-wide">
+          <figure class="wireframe-item" style="max-width:300px">
+            <div class="phone phone-thread">
+              <div class="screen wf-thread">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Fix checkout crash</strong><span>···</span></div>
+                <div class="wf-thread-scroll">
+                  <div class="wf-user-bubble">Pay button missing when address incomplete</div>
+                  <div class="wf-narration">Reproduced with Playwright, patched guard, ran proof suite.</div>
+
+                  <div class="wf-artifact tool">
+                    <div class="wf-artifact-head">Ran checkout.spec.ts <span class="badge-sm">Playwright</span></div>
+                    <div class="wf-artifact-body">
+                      <div class="wf-tool-row done"><span class="wf-tool-icon">✓</span><span>visit /checkout</span><span>0.8s</span></div>
+                      <div class="wf-tool-row done"><span class="wf-tool-icon">✓</span><span>fill address (skip)</span><span>0.3s</span></div>
+                      <div class="wf-tool-row" style="color:var(--coral)"><span class="wf-tool-icon">✗</span><span>click #payment-btn</span><span>fail</span></div>
+                    </div>
+                  </div>
+
+                  <div class="wf-artifact fail">
+                    <div class="wf-artifact-head" style="color:var(--coral)">Failure replay <span class="badge-sm">step 4</span></div>
+                    <div class="wf-artifact-body">
+                      <div class="wf-reel-frame" style="height:36px">Screenshot at crash</div>
+                      <div style="margin-top:4px;color:var(--coral)">Element not found · TypeError</div>
+                    </div>
+                  </div>
+
+                  <div class="wf-artifact proof">
+                    <div class="wf-artifact-head" style="color:var(--green)">Proof ready · 3 of 4 <span class="badge-sm">tap to expand</span></div>
+                    <div class="wf-artifact-body">
+                      <div class="wf-check-row"><span class="wf-check-icon ok">✓</span>Repro passes after fix</div>
+                      <div class="wf-check-row"><span class="wf-check-icon ok">✓</span>Trace attached</div>
+                      <div class="wf-check-row"><span class="wf-check-icon warn">!</span>Visual diff needs review</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Dark transcript (#111112). Cards tinted by status: tool (neutral), failure (coral), proof (green).</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Proof Reel scrubber -->
+      <div class="harness-explainer" id="artifact-proof-reel">
+        <h3>Proof Reel — scrubbable playback <span class="priority p0" style="display:inline-block;vertical-align:middle;margin-left:8px;font-size:10px">P0 visual</span></h3>
+        <p class="what-is">Short video or frame sequence tied to validation — not a Loom clone. Scrubber maps to trace steps: failing frame → fix applied → passing rerun. 30 seconds max, skimmable from the thread. Builds on <code>RunOutputStore</code> + trace frames.</p>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-thread">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Proof Reel</strong><span>0:12</span></div>
+                <div class="wf-body">
+                  <div class="wf-artifact proof">
+                    <div class="wf-artifact-head">Checkout fix · fails → passes</div>
+                    <div class="wf-artifact-body">
+                      <div class="wf-reel-frame">Frame: click Pay — crash</div>
+                      <div class="wf-scrubber">
+                        <div class="wf-scrubber-track">
+                          <div class="wf-scrub-tick pass" style="height:8px"></div>
+                          <div class="wf-scrub-tick pass" style="height:10px"></div>
+                          <div class="wf-scrub-tick fail" style="height:16px"></div>
+                          <div class="wf-scrub-tick pass" style="height:12px"></div>
+                          <div class="wf-scrub-tick pass" style="height:14px"></div>
+                          <div class="wf-scrub-tick on" style="height:18px"></div>
+                        </div>
+                        <div class="wf-scrubber-playhead"></div>
+                      </div>
+                      <div class="wf-scrubber-labels"><span>0:00 fail</span><span>0:08 fix</span><span>0:12 pass</span></div>
+                      <div class="wf-reel-controls"><span class="play-btn">▶</span><span>Step 4/6 · Repro passes</span></div>
+                    </div>
+                  </div>
+                  <div style="font-size:7px;color:#a2a2a6">Swipe scrubber or tap step markers to jump</div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>Collapsed in thread.</strong> Scrubber ticks = trace steps. Red tick = failure, cyan = current frame.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-thread">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Full screen</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-reel-frame" style="height:100px;flex:1">Large preview frame</div>
+                  <div class="wf-scrubber" style="height:32px">
+                    <div class="wf-scrubber-track">
+                      <div class="wf-scrub-tick pass" style="height:12px"></div>
+                      <div class="wf-scrub-tick fail" style="height:20px"></div>
+                      <div class="wf-scrub-tick on" style="height:24px"></div>
+                      <div class="wf-scrub-tick pass" style="height:16px"></div>
+                    </div>
+                    <div class="wf-scrubber-playhead" style="left:55%"></div>
+                  </div>
+                  <div class="wf-card" style="background:#1c1b18;border-color:#333"><div class="wf-label">At this step</div>click('#payment-btn') — Element not found</div>
+                  <div class="wf-actions"><span class="wf-btn">← Prev</span><span class="wf-btn primary">Next →</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>Expanded reel.</strong> Large frame + step caption + prev/next. Pinch to zoom screenshot.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-thread">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Before / after</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-tabs"><div class="wf-tab on">Before fix</div><div class="wf-tab">After fix</div></div>
+                  <div class="wf-reel-frame" style="height:72px;background:var(--coral-2);border-color:var(--coral)">Crash at Pay</div>
+                  <div class="wf-scrubber">
+                    <div class="wf-scrubber-track">
+                      <div class="wf-scrub-tick fail" style="height:18px"></div>
+                      <div class="wf-scrub-tick fail" style="height:14px"></div>
+                    </div>
+                    <div class="wf-scrubber-playhead" style="left:30%"></div>
+                  </div>
+                  <div class="wf-actions"><span class="wf-btn primary">Flip to after</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>Fails-before / passes-after.</strong> Tab or flip between two reel segments — the killer proof pattern.</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Trace + tool cards -->
+      <div class="harness-explainer" id="artifact-trace-tools">
+        <h3>Trace timeline + tool call cards</h3>
+        <p class="what-is">Playwright trace as an inline card, not a zip file. Tool calls from <code>RunOutputStore.ToolBlock</code> render as collapsible rows with status, duration, and expandable JSON result.</p>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-thread">
+                <div class="wf-body" style="padding-top:28px">
+                  <div class="wf-artifact tool">
+                    <div class="wf-artifact-head">Trace · 12 steps <span class="badge-sm">2.4s</span></div>
+                    <div class="wf-artifact-body" style="padding:0">
+                      <div class="wf-tool-row done"><span class="wf-tool-icon">1</span><span>Navigate /checkout</span><span>✓</span></div>
+                      <div class="wf-tool-row done"><span class="wf-tool-icon">2</span><span>Fill address</span><span>✓</span></div>
+                      <div class="wf-tool-row" style="background:rgba(255,157,131,0.1)"><span class="wf-tool-icon" style="color:var(--coral)">4</span><span><strong>Click Pay — CRASH</strong></span><span>✗</span></div>
+                      <div class="wf-tool-row" style="opacity:0.4"><span class="wf-tool-icon">5</span><span>Assert receipt</span><span>—</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Trace steps as numbered rows — tap row opens screenshot + errors</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-thread">
+                <div class="wf-body" style="padding-top:28px">
+                  <div class="wf-artifact tool">
+                    <div class="wf-artifact-head"><span class="wf-tool-icon">⚙</span> shell <span class="badge-sm running">running</span></div>
+                    <div class="wf-artifact-body">
+                      <div class="wf-code" style="background:#0f0f0d">npx playwright test checkout.spec.ts</div>
+                      <div style="margin-top:4px;color:var(--amber)">● streaming output…</div>
+                    </div>
+                  </div>
+                  <div class="wf-artifact tool">
+                    <div class="wf-artifact-head"><span class="wf-tool-icon" style="color:var(--green)">✓</span> edit_file <span class="badge-sm">done · 42ms</span></div>
+                    <div class="wf-artifact-body">
+                      <div class="wf-code" style="color:var(--green)">+ guard address.isComplete</div>
+                      <div style="margin-top:3px;font-size:6px;color:#777">CheckoutView.swift:142</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Live tool blocks: running spinner → done with diff hunk preview</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Visual diff + device matrix inline -->
+      <div class="harness-explainer" id="artifact-visual-proof">
+        <h3>Visual diff + device matrix cards</h3>
+        <p class="what-is">Chromatic-style before/after and Airtable-style device grid — rendered inline, not on a separate screen. Tap tile to expand diff overlay.</p>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-thread">
+                <div class="wf-body" style="padding-top:28px">
+                  <div class="wf-artifact warn">
+                    <div class="wf-artifact-head" style="color:var(--amber)">Visual diff · 390px <span class="badge-sm">review</span></div>
+                    <div class="wf-artifact-body">
+                      <div class="wf-diff-pair">
+                        <div class="wf-diff-pane before" style="height:36px">Before</div>
+                        <div class="wf-diff-pane after" style="height:36px">After</div>
+                      </div>
+                      <div style="margin-top:4px">Pay margin 24→32px · 2.1% pixels</div>
+                      <div class="wf-actions"><span class="wf-btn primary">Approve</span><span class="wf-btn">Reject</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Side-by-side diff inline — actions on the card itself</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-thread">
+                <div class="wf-body" style="padding-top:28px">
+                  <div class="wf-artifact fail">
+                    <div class="wf-artifact-head">Device matrix <span class="badge-sm">3/4 pass</span></div>
+                    <div class="wf-artifact-body">
+                      <div class="wf-matrix-grid">
+                        <div class="wf-matrix-tile ok">iPhone<br>✓</div>
+                        <div class="wf-matrix-tile ok">iPad<br>✓</div>
+                        <div class="wf-matrix-tile bad">Large<br>✗</div>
+                        <div class="wf-matrix-tile ok">Dark<br>✓</div>
+                      </div>
+                      <div style="margin-top:4px;color:var(--coral)">Large-text clips primary action</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>4-tile grid with pass/fail badges per device state</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-thread">
+                <div class="wf-body" style="padding-top:28px">
+                  <div class="wf-artifact tool">
+                    <div class="wf-artifact-head">API proof <span class="badge-sm">6/7</span></div>
+                    <div class="wf-artifact-body" style="padding:0">
+                      <div class="wf-check-row" style="padding:4px 8px"><span class="wf-check-icon ok">✓</span>POST /checkout 200</div>
+                      <div class="wf-check-row" style="padding:4px 8px"><span class="wf-check-icon warn">!</span>GET /receipt schema drift</div>
+                      <div class="wf-check-row" style="padding:4px 8px"><span class="wf-check-icon fail">✗</span>POST /refund 401</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>API collection as check rows — tap for JSON diff</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Agent work playback -->
+      <div class="harness-explainer" id="artifact-playback">
+        <h3>Agent Work Playback — structured timeline</h3>
+        <p class="what-is">Flight Recorder inside the thread: phases, commands, file changes, test results, decisions — jump from any event to its artifact. Consolidates with Ship & History per master plan D11.</p>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-thread">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Playback</strong><span>4m 12s</span></div>
+                <div class="wf-body">
+                  <div class="wf-scrubber" style="height:20px;margin-bottom:8px">
+                    <div class="wf-scrubber-track">
+                      <div class="wf-scrub-tick pass" style="height:6px"></div>
+                      <div class="wf-scrub-tick pass" style="height:8px"></div>
+                      <div class="wf-scrub-tick fail" style="height:12px"></div>
+                      <div class="wf-scrub-tick pass" style="height:10px"></div>
+                      <div class="wf-scrub-tick on" style="height:14px"></div>
+                    </div>
+                    <div class="wf-scrubber-playhead"></div>
+                  </div>
+                  <div class="wf-timeline">
+                    <div class="wf-step pass">Intake · screenshot shared</div>
+                    <div class="wf-step pass">Repro written · fails before</div>
+                    <div class="wf-step fail">First test run · failed</div>
+                    <div class="wf-step pass">Patch applied · 2 files</div>
+                    <div class="wf-step active">Proof passed · awaiting you</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Top scrubber = mission phases. Tap phase → jump to that artifact card in thread.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-thread">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Changed files</strong><span>+2 -0</span></div>
+                <div class="wf-body">
+                  <div class="wf-artifact tool">
+                    <div class="wf-artifact-body" style="padding:0">
+                      <div class="wf-tool-row done"><span>📄</span><span>CheckoutView.swift</span><span style="color:var(--green)">+4</span></div>
+                      <div class="wf-tool-row done"><span>📄</span><span>checkout.spec.ts</span><span style="color:var(--green)">+28</span></div>
+                    </div>
+                  </div>
+                  <div class="wf-code" style="margin-top:4px;color:var(--green)">+ if !address.isComplete { return }</div>
+                  <div class="wf-actions"><span class="wf-btn">View full diff</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Changed-files card with inline hunk preview — full diff on tap</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <h3 style="margin-top:28px;font-size:20px">Artifact component library (build order)</h3>
+      <div class="harness-table" role="table">
+        <div class="harness-row header"><div class="harness-cell">Component</div><div class="harness-cell">Renders in thread</div><div class="harness-cell">Data source / status</div></div>
+        <div class="harness-row"><div class="harness-cell"><strong>ToolCallCard</strong></div><div class="harness-cell"><span>shell, edit_file, playwright — status + expandable result</span></div><div class="harness-cell"><span><code>RunOutputStore.ToolBlock</code> — shipped, needs UI</span></div></div>
+        <div class="harness-row"><div class="harness-cell"><strong>TraceStepCard</strong></div><div class="harness-cell"><span>Numbered steps, fail highlight, tap → screenshot</span></div><div class="harness-cell"><span>Playwright trace parser — not built</span></div></div>
+        <div class="harness-row"><div class="harness-cell"><strong>ProofReelCard</strong></div><div class="harness-cell"><span>Scrubbable frames + before/after flip</span></div><div class="harness-cell"><span>Trace frames / short video — wireframed</span></div></div>
+        <div class="harness-row"><div class="harness-cell"><strong>FailureReplayCard</strong></div><div class="harness-cell"><span>Screenshot + error + actions inline</span></div><div class="harness-cell"><span>Failed trace step — not built</span></div></div>
+        <div class="harness-row"><div class="harness-cell"><strong>ProofRollupCard</strong></div><div class="harness-cell"><span>"3 of 4 checks" with expandable rows</span></div><div class="harness-cell"><span>Proof Matrix rows — not built</span></div></div>
+        <div class="harness-row"><div class="harness-cell"><strong>VisualDiffCard</strong></div><div class="harness-cell"><span>Before/after pair + approve inline</span></div><div class="harness-cell"><span>Screenshot pair — wireframed</span></div></div>
+        <div class="harness-row"><div class="harness-cell"><strong>DeviceMatrixCard</strong></div><div class="harness-cell"><span>4-tile grid with pass/fail badges</span></div><div class="harness-cell"><span>Harness output — wireframed</span></div></div>
+        <div class="harness-row"><div class="harness-cell"><strong>AgentPlaybackScrubber</strong></div><div class="harness-cell"><span>Mission-phase timeline, jump to event</span></div><div class="harness-cell"><span>Run event log — partial via RunOutputStore</span></div></div>
+      </div>
+
+      <div class="plain-callout" style="margin-top:20px">
+        <strong>Implementation note:</strong> Reuse <code>CursorArtifactCard</code> as the container; each row above is composed content inside it. Work Thread stays dark (<code>#131313</code>); cards use tinted borders (green proof, coral failure, amber warn). Terminal raw output stays collapsed behind a "Show log" disclosure — never the primary voice.
+      </div>
+    </section>
+
+    <section class="section" id="harnesses">
+      <div class="section-head">
+        <h2>Harness borrow matrix.</h2>
+        <p>The desktop owns execution. Lancer owns the mobile artifact, decision, and long-term memory.</p>
+      </div>
+      <div class="harness-table" role="table" aria-label="Harness borrow matrix">
+        <div class="harness-row header" role="row">
+          <div class="harness-cell" role="columnheader">Harness</div>
+          <div class="harness-cell" role="columnheader">Most useful desktop feature</div>
+          <div class="harness-cell" role="columnheader">Lancer mobile feature</div>
+        </div>
+        <div class="harness-row" role="row"><div class="harness-cell"><strong>Playwright</strong><span>Browser E2E · <a href="#explainer-playwright" style="color:var(--cyan)">see visual</a></span></div><div class="harness-cell"><span>Trace Viewer, UI Mode, codegen, screenshots, videos, network logs.</span></div><div class="harness-cell"><span>Pocket Trace Review and fails-before/passes-after proof.</span></div></div>
+        <div class="harness-row" role="row"><div class="harness-cell"><strong>Cypress</strong><span>Frontend E2E · <a href="#explainer-cypress" style="color:var(--cyan)">see visual</a></span></div><div class="harness-cell"><span>Time Travel command log, DOM snapshots, readable failures.</span></div><div class="harness-cell"><span>Command-level failure replay on the phone.</span></div></div>
+        <div class="harness-row" role="row"><div class="harness-cell"><strong>Maestro</strong><span>Mobile flows</span></div><div class="harness-cell"><span>Readable YAML flows, Studio, video recording, cloud reports.</span></div><div class="harness-cell"><span>Flow-as-Proof for mobile bug repros.</span></div></div>
+        <div class="harness-row" role="row"><div class="harness-cell"><strong>Appium</strong><span>Native automation</span></div><div class="harness-cell"><span>Inspector, UI hierarchy, screenshots, element search, driver actions.</span></div><div class="harness-cell"><span>Mobile UI Inspector Card for native failures.</span></div></div>
+        <div class="harness-row" role="row"><div class="harness-cell"><strong>Postman / Bruno</strong><span>API checks · <a href="#explainer-postman" style="color:var(--cyan)">see visual</a></span></div><div class="harness-cell"><span>Collections, environments, mock servers, Git-native API specs.</span></div><div class="harness-cell"><span>API Contract Proof with request and response diffs.</span></div></div>
+        <div class="harness-row" role="row"><div class="harness-cell"><strong>k6 / JMeter</strong><span>Performance · <a href="#explainer-k6" style="color:var(--cyan)">see visual</a></span></div><div class="harness-cell"><span>Thresholds, p95/p99, virtual users, ramp-up, error rates.</span></div><div class="harness-cell"><span>Performance Budget Card before approval.</span></div></div>
+        <div class="harness-row" role="row"><div class="harness-cell"><strong>Storybook</strong><span>Components</span></div><div class="harness-cell"><span>Isolated stories, interaction tests, component states.</span></div><div class="harness-cell"><span>Affected Component State Grid.</span></div></div>
+        <div class="harness-row" role="row"><div class="harness-cell"><strong>Chromatic / Percy</strong><span>Visual regression · <a href="#explainer-visual" style="color:var(--cyan)">see visual</a></span></div><div class="harness-cell"><span>Baselines, responsive screenshots, image diffs, approval workflow.</span></div><div class="harness-cell"><span>Visual Diff Approval for mobile review.</span></div></div>
+        <div class="harness-row" role="row"><div class="harness-cell"><strong>axe-core</strong><span>Accessibility</span></div><div class="harness-cell"><span>Labels, contrast, duplicate IDs, actionable issue reports.</span></div><div class="harness-cell"><span>A11y Gate Card showing only new violations.</span></div></div>
+        <div class="harness-row" role="row"><div class="harness-cell"><strong>Sentry / Datadog</strong><span>Production replay · <a href="#explainer-sentry" style="color:var(--cyan)">see visual</a></span></div><div class="harness-cell"><span>Session replay, breadcrumbs, errors, user actions, RUM correlation.</span></div><div class="harness-cell"><span>Production Repro Capsule and Watch Window.</span></div></div>
+      </div>
+    </section>
+
+    <section class="section" id="matrix">
+      <div class="section-head">
+        <h2>The Proof Matrix is the center of the product.</h2>
+        <p>It turns scattered harness output into a single decision: accept, ask another pass, rerun, mark flaky, save as regression, or open on desktop.</p>
+      </div>
+      <div class="matrix-layout">
+        <div class="matrix-card">
+          <h3>What the phone should answer</h3>
+          <p>Did the agent reproduce the bug? Did the same repro pass after the fix? What changed? What is still risky? Which proof artifact backs every claim?</p>
+        </div>
+        <div class="proof-matrix" aria-label="Proof matrix example">
+          <div class="proof-row"><div class="proof-title"><strong>Repro fails before fix</strong><span>Playwright trace captured checkout crash.</span></div><div class="state">Passed</div><div class="badge">Trace</div></div>
+          <div class="proof-row"><div class="proof-title"><strong>Repro passes after fix</strong><span>Same journey completes on WebKit and Chromium.</span></div><div class="state">Passed</div><div class="badge">Video</div></div>
+          <div class="proof-row"><div class="proof-title"><strong>Visual diff reviewed</strong><span>Mobile checkout spacing changed.</span></div><div class="state warn">Needs review</div><div class="badge">Image diff</div></div>
+          <div class="proof-row"><div class="proof-title"><strong>API behavior stable</strong><span>Payment collection responses unchanged.</span></div><div class="state">Passed</div><div class="badge">API</div></div>
+          <div class="proof-row"><div class="proof-title"><strong>Performance budget</strong><span>Checkout p95 unchanged under smoke load.</span></div><div class="state info">Optional</div><div class="badge">k6</div></div>
+          <div class="proof-row"><div class="proof-title"><strong>Regression guard</strong><span>Save this proof for future checkout changes.</span></div><div class="state info">Suggested</div><div class="badge">Memory</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="beta">
+      <div class="section-head">
+        <h2>First paid beta slice.</h2>
+        <p>Keep this narrow. One proof loop is enough to validate whether the harness cockpit makes users trust mobile away-work.</p>
+      </div>
+      <div class="beta-flow">
+        <article class="beta-step"><h3>Intake</h3><p>User shares a screenshot, video, Clip URL, or failed check.</p></article>
+        <article class="beta-step"><h3>Repro</h3><p>Agent creates Playwright or Maestro repro and proves it fails first.</p></article>
+        <article class="beta-step"><h3>Fix</h3><p>Agent patches the issue inside the mission contract scope.</p></article>
+        <article class="beta-step"><h3>Proof</h3><p>Repro passes after fix with trace, screenshot, and changed-file summary.</p></article>
+        <article class="beta-step"><h3>Decide</h3><p>User approves, asks another pass, reruns a harness, or opens desktop.</p></article>
+        <article class="beta-step"><h3>Remember</h3><p>Saved case becomes a regression guard for future agent work.</p></article>
+      </div>
+
+      <div class="wireframe-gallery" style="margin-top:32px">
+        <figure class="wireframe-item">
+          <div class="phone phone-sm">
+            <div class="screen wf-light">
+              <div class="wf-bar"><span class="wf-back">‹</span><strong>Share evidence</strong><span></span></div>
+              <div class="wf-body">
+                <div class="wf-shot" style="height:64px">Pasted screenshot</div>
+                <div class="wf-card"><div class="wf-label">From</div>Camera roll · checkout bug</div>
+                <div class="wf-actions"><span class="wf-btn primary">Start case file</span></div>
+              </div>
+            </div>
+          </div>
+          <figcaption><strong>Step 1 — Intake.</strong> User shares screenshot from composer or evidence inbox.</figcaption>
+        </figure>
+        <figure class="wireframe-item">
+          <div class="phone phone-sm">
+            <div class="screen wf-dark">
+              <div class="wf-bar"><span class="wf-back">‹</span><strong>Repro mission</strong><span></span></div>
+              <div class="wf-body">
+                <div class="wf-banner" style="background:var(--coral-2);color:var(--coral)">Repro fails — ready to fix</div>
+                <div class="wf-card"><div class="wf-label">checkout.spec.ts</div>3 steps · Playwright · High confidence</div>
+                <div style="font-size:7px;color:#b9b1a3">Agent patching CheckoutView.swift…</div>
+              </div>
+            </div>
+          </div>
+          <figcaption><strong>Steps 2–3 — Repro + Fix.</strong> Fails-before confirmed, agent works in scoped thread.</figcaption>
+        </figure>
+        <figure class="wireframe-item">
+          <div class="phone phone-sm">
+            <div class="screen wf-light">
+              <div class="wf-bar"><span class="wf-back">‹</span><strong>Proof Matrix</strong><span></span></div>
+              <div class="wf-body">
+                <div class="wf-score-row"><div class="wf-ring"><span>92</span></div><div style="font-size:7px;color:#837b6f">All required proofs passed</div></div>
+                <div class="wf-row"><div class="wf-dot"></div><div><strong>Repro passes</strong></div><div class="wf-pill">Pass</div></div>
+                <div class="wf-row"><div class="wf-dot"></div><div><strong>Trace attached</strong></div><div class="wf-pill">Pass</div></div>
+                <div class="wf-actions"><span class="wf-btn primary">Approve</span><span class="wf-btn">Save to vault</span></div>
+              </div>
+            </div>
+          </div>
+          <figcaption><strong>Steps 4–6 — Proof + Decide + Remember.</strong> Scored proof, approve, save regression guard.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="mobile-ios">
+      <div class="section-head">
+        <h2>Mobile-native iOS features.</h2>
+        <p>Harness features are <em>content</em>. iOS-native surfaces are <em>why you reach for the phone</em> instead of waiting for a laptop. Phone captures context and makes decisions; Mac runs harnesses and produces artifacts.</p>
+      </div>
+
+      <div class="plain-callout">
+        <strong>Second-agent review (2026-07-07):</strong> A skeptical product pass checked this list against the live repo, FEATURE_BACKLOG rejected items (Risk Meter, Haptic Risk Language), and Tier 0 gates. Verdict: strongest ideas are <strong>rich proof-backed push</strong> and <strong>Control Center emergency stop</strong> — both expose the governance/proof backend competitors can't fake. Push back hardest on <strong>swipe-to-approve</strong> (fights recent security posture) and <strong>Proof Reel</strong> (flashy, low workflow value). Use status lines like "3/4 checks passed" — not a single numeric proof score (too close to the cut Risk Meter).
+      </div>
+
+      <div class="verdict-grid" aria-label="Second-agent keep cut defer">
+        <div class="verdict-card keep"><strong>Keep</strong><p>Share Sheet intake, rich push + Live Activity proof line, Home widget, voice dictation, Tap-to-Isolate on static screenshots, Control Center stop (after atomic daemon fix), visual diff with tap-to-confirm.</p></div>
+        <div class="verdict-card cut"><strong>Cut for V1</strong><p>Camera OCR case file (agent already has logs), StandBy board (nightstand ≠ away-from-desk), swipe-to-approve diffs (accidental approvals), numeric proof score gauge, haptic risk encoding (rejected in backlog).</p></div>
+        <div class="verdict-card defer"><strong>Defer</strong><p>Proof Reel Stories format, on-device Foundation Models digest, full Watch app embed — build structured trace playback first.</p></div>
+        <div class="verdict-card add"><strong>Add (missed)</strong><p>Lock-screen notification quick-reply, Shortcuts automations (intents exist), Watch complications, Focus Filters for P0-only alerts while away.</p></div>
+      </div>
+
+      <!-- Share Sheet -->
+      <div class="harness-explainer" id="ios-share-sheet">
+        <h3>Share Sheet evidence intake <span class="priority p0" style="display:inline-block;vertical-align:middle;margin-left:8px;font-size:10px">P0</span></h3>
+        <p class="what-is"><strong>Only makes sense on phone.</strong> See a bug in Safari, Slack, TestFlight, or Messages → Share → Lancer creates a case file. Desktop can't capture "I saw this on my phone" in context. Already wireframed; not built.</p>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light" style="display:flex;flex-direction:column">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Safari</strong><span></span></div>
+                <div class="wf-body" style="flex:1"><div class="wf-shot" style="height:80px">Checkout page — Pay button missing</div></div>
+                <div class="ios-share-sheet">
+                  <div style="font-size:7px;color:var(--soft);margin-bottom:6px">Share to…</div>
+                  <div class="ios-share-row">
+                    <div class="ios-share-app"><span>↗</span>AirDrop</div>
+                    <div class="ios-share-app on"><span>L</span>Lancer</div>
+                    <div class="ios-share-app"><span>📋</span>Copy</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Share from any app → Lancer Evidence Inbox</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>New case file</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-card"><div class="wf-label">From Share Sheet</div>Screenshot · checkout bug · Safari</div>
+                  <div class="wf-card"><div class="wf-label">Suggested mission</div>Reproduce missing pay button, fix, prove with Playwright</div>
+                  <div class="wf-actions"><span class="wf-btn primary">Start mission</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Lancer suggests mission contract from shared evidence</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Rich push + Live Activity -->
+      <div class="harness-explainer" id="ios-rich-push">
+        <h3>Rich push + Live Activity proof line <span class="priority p0" style="display:inline-block;vertical-align:middle;margin-left:8px;font-size:10px">P0</span></h3>
+        <p class="what-is"><strong>Competitors can't copy the push — they can copy the UI.</strong> Orca/Happier/Cursor can ship approve/deny in an afternoon. Showing "3/4 checks passed, 1 visual diff needs review" requires the proof pipeline underneath. Partially built: <code>LiveActivityPresentation</code>, <code>ApprovalActionIntent</code>, push-backend Live Activity tokens.</p>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="ios-surface">
+              <div class="ios-lock">
+                <div class="ios-time">5:47</div>
+                <div class="ios-notif">
+                  <div class="ios-notif-head">
+                    <div class="ios-notif-icon">L</div>
+                    <div><strong style="color:#f4f0e7">Proof ready · checkout fix</strong><br><span style="color:var(--soft)">3/4 checks passed · 1 needs review</span></div>
+                  </div>
+                  <div style="font-size:7px;color:var(--muted)">Repro passes · trace attached · visual diff flagged</div>
+                  <div class="ios-notif-actions">
+                    <div class="ios-notif-btn primary">Approve</div>
+                    <div class="ios-notif-btn">Review</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>Lock screen.</strong> Pre-digested verdict — not "workflow finished." Approve or open to review.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen" style="background:#000;padding-top:8px">
+                <div class="ios-island"><span class="ios-island-dot"></span><span>1 review</span><span style="color:var(--soft)">3/4 ✓</span></div>
+                <div style="height:60px"></div>
+              </div>
+            </div>
+            <figcaption><strong>Dynamic Island.</strong> Status line, not chat stream. Expand for approve actions.</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="ios-surface" style="padding:12px;max-width:200px">
+              <div class="ios-widget">
+                <div style="font-size:8px;color:var(--soft)">LANCER</div>
+                <div style="font-size:18px;font-weight:800;color:#f4f0e7;margin:4px 0">2 need you</div>
+                <div style="font-size:7px;color:var(--amber)">checkout · high risk</div>
+              </div>
+            </div>
+            <figcaption><strong>Home Screen widget.</strong> Near-free — <code>InboxCountWidget</code> already exists.</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Tap to isolate -->
+      <div class="harness-explainer" id="ios-tap-isolate">
+        <h3>Tap-to-Isolate annotation <span class="priority p1" style="display:inline-block;vertical-align:middle;margin-left:8px;font-size:10px">P1</span></h3>
+        <p class="what-is"><strong>Headline mobile differentiator.</strong> Tap the broken element on a screenshot → Vision segments it → becomes a Mission Contract line item the agent must resolve. Static screenshot only (not live camera — battery + App Store risk). Desktop equivalent: draw a rectangle. Phone: one tap.</p>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Annotate bug</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="ios-tap-target"><div class="ios-tap-ring"></div><span style="position:absolute;bottom:4px;left:6px;font-size:6px;color:#514f47">Checkout screen</span></div>
+                  <div class="wf-card"><div class="wf-label">Vision mask</div>#payment-btn region · 48×32pt · tap target missing</div>
+                  <div class="wf-actions"><span class="wf-btn primary">Add to mission</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption>One tap → structured contract line, not freehand markup</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-dark">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Mission</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-card"><div class="wf-label">Contract item</div>Fix: payment button not rendered when address incomplete (region attached)</div>
+                  <div style="font-size:7px;color:#b9b1a3">Agent must prove fix against attached region</div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Annotation feeds agent scope — hard to copy without Mission Contract system</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Control Center + notification reply -->
+      <div class="harness-explainer" id="ios-system-surfaces">
+        <h3>System surfaces — stop, reply, automate</h3>
+        <p class="what-is"><strong>Emergency stop from anywhere.</strong> Control Center kill switch for runaway agents ($900 overnight is a documented failure mode). Gate on daemon atomic stop fix first. Plus: lock-screen quick-reply and Shortcuts automations (App Intents already exist in repo).</p>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="ios-surface">
+              <div style="font-size:8px;padding:8px 12px;color:var(--soft)">Control Center</div>
+              <div class="ios-cc-grid">
+                <div class="ios-cc-btn" style="grid-column:span 2;border-radius:12px;aspect-ratio:auto;padding:10px">⏹ STOP ALL AGENTS</div>
+              </div>
+            </div>
+            <figcaption><strong>Control Center.</strong> Cross-vendor panic button — governance moat made physical</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="ios-surface">
+              <div class="ios-lock">
+                <div class="ios-notif">
+                  <div class="ios-notif-head"><div class="ios-notif-icon">L</div><div><strong style="color:#f4f0e7">Agent asks</strong></div></div>
+                  <div style="font-size:7px;margin-bottom:6px">Skip visual diff and ship?</div>
+                  <div class="wf-code" style="margin-bottom:6px">Type reply…</div>
+                  <div class="ios-notif-actions"><div class="ios-notif-btn primary">Send</div></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>Notification quick-reply.</strong> Added per second-agent review — follow-up without opening app</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Shortcuts</strong><span></span></div>
+                <div class="wf-body">
+                  <div class="wf-list-item"><div class="wf-icon">⏸</div><div><strong>Pause all agents</strong><br>When Focus = Driving</div></div>
+                  <div class="wf-list-item"><div class="wf-icon">✗</div><div><strong>Deny latest approval</strong><br>Siri: "Deny Lancer"</div></div>
+                  <div class="wf-list-item"><div class="wf-icon">🔕</div><div><strong>P0 alerts only</strong><br>Focus Filter integration</div></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><strong>Shortcuts + Focus.</strong> <code>DenyLatestApprovalIntent</code> already shipped; donate to Shortcuts</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <!-- Mobile review patterns -->
+      <div class="harness-explainer" id="ios-review-patterns">
+        <h3>Thumb-native review patterns</h3>
+        <p class="what-is">Don't shrink desktop UIs. Design for glance + thumb: vertical step cards (not side-by-side panes), tap-to-confirm (not swipe-to-approve for irreversible actions), claim cards before code diffs.</p>
+        <div class="wireframe-gallery">
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Visual diff</strong><span>1/3</span></div>
+                <div class="wf-body">
+                  <div class="wf-diff-pair"><div class="wf-diff-pane before">Before</div><div class="wf-diff-pane after">After</div></div>
+                  <div class="wf-card">Pay button margin changed — intentional?</div>
+                  <div class="wf-actions"><span class="wf-btn primary">Tap to approve</span><span class="wf-btn danger">Reject</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Tap-to-confirm — not swipe (accidental approve risk)</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Defer</strong><span></span></div>
+                <div class="wf-body" style="justify-content:center">
+                  <div class="wf-banner" style="background:#2a2a26;color:var(--muted);border-color:var(--line)">Needs laptop</div>
+                  <div class="wf-card">Auth schema migration · 12 files · security-sensitive<br><br>Open on desktop to review diff.</div>
+                  <div class="wf-actions"><span class="wf-btn">Copy link for Mac</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Hard defer-to-desktop — a feature, not a failure</figcaption>
+          </figure>
+          <figure class="wireframe-item">
+            <div class="phone phone-sm">
+              <div class="screen wf-light">
+                <div class="wf-bar"><span class="wf-back">‹</span><strong>Voice</strong><span>🎤</span></div>
+                <div class="wf-body">
+                  <div style="font-size:8px;color:var(--soft);text-align:center;padding:20px 0">Hold to speak follow-up…</div>
+                  <div class="wf-card">"Skip the visual diff, the spacing change is intentional"</div>
+                  <div class="wf-actions"><span class="wf-btn primary">Send to agent</span></div>
+                </div>
+              </div>
+            </div>
+            <figcaption>Voice everywhere — <code>DictationEngine</code> exists; wire to follow-up fields</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <h3 style="margin-top:32px;font-size:22px">Recommended stack (post–Tier 0)</h3>
+      <p class="section-copy" style="margin-bottom:16px">Merged from primary research + second-agent review. Sequence: proof object first, then iOS surfaces that expose it.</p>
+      <div class="priority-stack">
+        <div class="priority-col p0">
+          <h4>P0 — first paid slice</h4>
+          <ul>
+            <li>Rich push + Live Activity proof status line</li>
+            <li>Home Screen "Needs You" widget</li>
+            <li>Share Sheet evidence intake</li>
+            <li>Voice dictation in follow-up fields</li>
+            <li>Minimal proof object in relay (unblocks push)</li>
+          </ul>
+        </div>
+        <div class="priority-col p1">
+          <h4>P1 — second wave</h4>
+          <ul>
+            <li>Control Center emergency stop (after atomic daemon fix)</li>
+            <li>Tap-to-Isolate on static screenshots</li>
+            <li>Visual diff review, tap-to-confirm</li>
+            <li>Notification quick-reply</li>
+            <li>Watch complication → glance + deny only</li>
+            <li>Shortcuts + Focus Filters</li>
+          </ul>
+        </div>
+        <div class="priority-col p2">
+          <h4>P2 — usage evidence only</h4>
+          <ul>
+            <li>On-device Foundation Models digest (summarize only, never verify)</li>
+            <li>Structured trace playback (before Proof Reel)</li>
+            <li>StandBy mission board</li>
+            <li>Camera OCR (cut unless hardware-debug case emerges)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="plain-callout" style="margin-top:24px">
+        <strong>Three moats competitors can't easily copy:</strong> (1) Rich push fed by real proof pipeline + policy engine, (2) Cross-vendor Control Center emergency stop with governance audit, (3) Tap-to-Isolate → Mission Contract line items. All three trace back to the governance/proof backend — not the iOS API surface alone.
+      </div>
+    </section>
+
+    <section class="section" id="sources">
+      <div class="section-head">
+        <h2>Research basis.</h2>
+        <p>The page condenses the harness research report into a visual product concept.</p>
+      </div>
+      <div class="sources">
+        <div>Primary local source: <a href="./2026-07-07-harness-feature-borrow-report.md">2026-07-07-harness-feature-borrow-report.md</a></div>
+        <div>Tools reviewed: Playwright, Cypress, Selenium/WebDriver, Appium, Maestro, Postman, Bruno, k6, JMeter, Storybook, Chromatic, Percy, axe-core, Sentry, Datadog, GitHub Actions artifacts.</div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

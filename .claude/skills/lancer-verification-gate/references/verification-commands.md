@@ -55,8 +55,16 @@ manual re-pair.
 ```bash
 cd /Users/roshansilva/Documents/command-center/Packages/LancerKit
 swift build
-swift test
+swift test --filter <SuiteOrTestName>
 ```
+
+Scope `swift test` to the suite(s) covering the touched module during day-to-day iteration —
+`--filter` takes a regex (`swift test --help`); `--skip <regex>` excludes known-flaky suites
+instead of skipping the whole run. Run the full, unfiltered `swift test` once before merge/PR,
+not on every iteration — the full LancerKit suite is 91 test files and most changes only touch one
+or two of them. Do not add `--no-parallel` locally: that flag exists only because CI's small-core
+runners deadlock under Swift Testing's concurrent scheduling (see `.github/workflows/ci.yml`); a
+dev Mac doesn't have that constraint and `--no-parallel` just makes local runs slower.
 
 Use for quick LancerKit feedback. It does not replace app-target simulator builds for iOS-only UI.
 
@@ -71,9 +79,19 @@ Required sequence in a fresh tool session:
    - project: `/Users/roshansilva/Documents/command-center/Lancer.xcodeproj`
    - scheme: `Lancer`
    - simulator: an available iPhone simulator, commonly `iPhone 17 Pro`
-3. Run `build_sim` or `build_run_sim`.
+3. For a build-only check, run `build_sim` or `build_run_sim`.
+4. For a change with UI/behavior logic worth testing, run `test_sim` instead of a build-only
+   check, scoped to the touched screen's test class via
+   `extraArgs: ["-only-testing:LancerUITests/<TouchedClass>"]` (repeat the flag per class/method).
+   `test_sim` has no dedicated "only run these tests" parameter — `-only-testing:`/`-skip-testing:`
+   inside `extraArgs` is the mechanism, same syntax as raw `xcodebuild`. Run the full
+   `LancerUITests` target only before merge/PR; it is not in CI today and a full run is
+   comparatively expensive — scope to what the change touched for iteration.
 
-Reason: `swift build` can skip `#if os(iOS)` app code and miss strict-concurrency or SwiftUI issues.
+Reason: `swift build` can skip `#if os(iOS)` app code and miss strict-concurrency or SwiftUI
+issues. A build-only check (`build_sim`) also misses runtime/UI regressions that only a real test
+run catches — prefer `test_sim` scoped to the touched area whenever the change has testable
+behavior, not just a build check.
 
 ## Go Daemon
 

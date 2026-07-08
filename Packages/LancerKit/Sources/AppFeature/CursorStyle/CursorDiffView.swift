@@ -108,21 +108,4 @@ public struct CursorDiffView: View {
     }
 }
 
-extension CursorDiffView {
-    /// Seeded sample: the retry-backoff fix to `RelayReconnectManager.swift`
-    /// from the "fix(relay): retry backoff on reconnect #142" PR shown in
-    /// `CursorPRDetailView`.
-    public static let sampleRelayBackoffDiff: [CursorDiffLine] = [
-        CursorDiffLine(oldNumber: 40, newNumber: 40, text: "    private var retryCount = 0", kind: .unchanged),
-        CursorDiffLine(oldNumber: 41, newNumber: 41, text: "", kind: .unchanged),
-        CursorDiffLine(oldNumber: 42, newNumber: 42, text: "    func scheduleReconnect() {", kind: .unchanged),
-        CursorDiffLine(oldNumber: 43, newNumber: nil, text: "        let delay = 2.0", kind: .removed),
-        CursorDiffLine(oldNumber: nil, newNumber: 43, text: "        let delay = min(30.0, pow(2.0, Double(retryCount)) * 1.5)", kind: .added),
-        CursorDiffLine(oldNumber: nil, newNumber: 44, text: "        retryCount += 1", kind: .added),
-        CursorDiffLine(oldNumber: 44, newNumber: 45, text: "        Task {", kind: .unchanged),
-        CursorDiffLine(oldNumber: 45, newNumber: 46, text: "            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))", kind: .unchanged),
-        CursorDiffLine(oldNumber: 46, newNumber: 47, text: "            await connect()", kind: .unchanged),
-        CursorDiffLine(oldNumber: 47, newNumber: 48, text: "        }", kind: .unchanged)
-    ]
-}
 #endif

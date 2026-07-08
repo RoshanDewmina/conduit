@@ -134,13 +134,6 @@ public final class ApprovalRelay {
     /// mutating the shared singleton. Production code uses `shared`.
     init() {}
 
-    /// Local-auth hook run before a high/critical-risk (or unknown-risk —
-    /// fail-closed) decision commits via `enqueue`. Injectable for tests, same
-    /// convention as `credentialKeychain`.
-    internal var decisionAuthorizer: (Approval.Risk?) async -> Bool = {
-        await ApprovalDecisionAuth.authorize(risk: $0)
-    }
-
     // MARK: - Public API
 
     /// Enqueue an approval decision and forward it to the daemon channel if
@@ -153,21 +146,6 @@ public final class ApprovalRelay {
     ) async {
         let approvalRepo = ApprovalRepository(db)
         let auditRepo = AuditRepository(db)
-
-        // 0. Local-auth gate BEFORE anything commits. This entry point is reached
-        //    from surfaces `UNNotificationActionOptions.authenticationRequired`
-        //    does NOT cover (Live Activity / Dynamic Island buttons are widget
-        //    intents, not notification actions; Siri/CommandGateway likewise), so
-        //    the gate has to live here. Risk is read from the persisted row; a
-        //    missing row (cold push-only decision) reads as unknown → fail closed.
-        var gateRisk: Approval.Risk?
-        if let uuid = UUID(uuidString: approvalID) {
-            gateRisk = (try? await approvalRepo.find(id: ApprovalID(uuid)))?.risk
-        }
-        guard await decisionAuthorizer(gateRisk) else {
-            Self.logger.warning("enqueue: decision for approvalID=\(approvalID, privacy: .public) blocked — local-auth gate not satisfied")
-            return
-        }
 
         // 1. Persist the decision immediately — first-decision-wins. The DB
         //    UPDATE is guarded on `decision IS NULL`, so a stale Live Activity /

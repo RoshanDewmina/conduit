@@ -1,72 +1,50 @@
 #if os(iOS)
 import SwiftUI
 import DesignSystem
+import LancerCore
 
 /// Full-screen Cursor-style search overlay: header with a close button and
 /// centered "Search" title (`CursorBottomSheetContainer`'s chrome, stretched
 /// to fill the presentation rather than a compact drawer height), an
 /// auto-focused `CursorSearchField`, a horizontally scrollable row of
-/// repo-filter chips, and a results list of `CursorThreadRow`s filtered by
-/// both the selected repo chip and the search text. Static seed data only —
-/// no daemon/network wiring.
+/// repo-filter chips, and a results list of `CursorThreadRow`s. Real
+/// full-text search over conversation history via `liveBridge.onSearch`
+/// (`chat_fts`) — previously filtered a 5-row hardcoded list client-side and
+/// never searched anything real (2026-07-07).
 public struct CursorSearchOverlay: View {
+    @Environment(\.cursorShellLiveBridge) private var liveBridge
     @State private var searchText = ""
     @State private var selectedFilter = "All"
+    @State private var results: [ChatConversationSearchResult] = []
+    @State private var searchTask: Task<Void, Never>?
     @FocusState private var isSearchFieldFocused: Bool
 
     private let onClose: () -> Void
-    private let onSelectResult: (String) -> Void
+    private let onSelectResult: (_ conversationID: String, _ title: String) -> Void
 
     public init(
         onClose: @escaping () -> Void = {},
-        onSelectResult: @escaping (String) -> Void = { _ in }
+        onSelectResult: @escaping (_ conversationID: String, _ title: String) -> Void = { _, _ in }
     ) {
         self.onClose = onClose
         self.onSelectResult = onSelectResult
     }
 
-    private var results: [CursorThreadRowModel] {
-        [
-            CursorThreadRowModel(
-                title: "Fix onboarding pairing flow",
-                repoName: "lancer-ios",
-                isActive: true,
-                statusLine: .checksPassed(diffAdded: 142, diffRemoved: 18)
-            ),
-            CursorThreadRowModel(
-                title: "Update relay retry backoff",
-                repoName: "push-backend",
-                isActive: false,
-                statusLine: .checksPassed(diffAdded: 31, diffRemoved: 4)
-            ),
-            CursorThreadRowModel(
-                title: "Review Siri intent donations",
-                repoName: "lancer-ios",
-                isActive: false,
-                statusLine: .noChanges
-            ),
-            CursorThreadRowModel(
-                title: "Harden approval risk-tier floor",
-                repoName: "push-backend",
-                isActive: false,
-                statusLine: .checksPassed(diffAdded: 96, diffRemoved: 22)
-            ),
-            CursorThreadRowModel(
-                title: "Fix relay reconnect race",
-                repoName: "lancer-ios",
-                isActive: false,
-                statusLine: .checksPassed(diffAdded: 54, diffRemoved: 11)
-            )
-        ]
+    private func repoName(for conversation: ChatConversation) -> String {
+        let last = (conversation.cwd as NSString).lastPathComponent
+        return last.isEmpty ? conversation.cwd : last
     }
 
     /// Repo names in first-seen order, used to seed one filter chip per repo.
     private var repoNames: [String] {
         var seen: Set<String> = []
         var ordered: [String] = []
-        for result in results where !seen.contains(result.repoName) {
-            seen.insert(result.repoName)
-            ordered.append(result.repoName)
+        for result in results {
+            let name = repoName(for: result.conversation)
+            if !seen.contains(name) {
+                seen.insert(name)
+                ordered.append(name)
+            }
         }
         return ordered
     }
@@ -75,10 +53,25 @@ public struct CursorSearchOverlay: View {
         ["All"] + repoNames
     }
 
-    private var filteredResults: [CursorThreadRowModel] {
-        results
-            .filter { selectedFilter == "All" || $0.repoName == selectedFilter }
-            .filter { searchText.isEmpty || $0.title.localizedCaseInsensitiveContains(searchText) }
+    private var filteredResults: [ChatConversationSearchResult] {
+        guard selectedFilter != "All" else { return results }
+        return results.filter { repoName(for: $0.conversation) == selectedFilter }
+    }
+
+    private func runSearch(_ query: String) {
+        searchTask?.cancel()
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            results = []
+            return
+        }
+        searchTask = Task {
+            // Debounce so every keystroke doesn't fire its own FTS query.
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            let matches = await liveBridge?.onSearch?(query) ?? []
+            guard !Task.isCancelled else { return }
+            results = matches
+        }
     }
 
     public var body: some View {
@@ -90,10 +83,13 @@ public struct CursorSearchOverlay: View {
                 CursorSearchField(text: $searchText)
                     .focused($isSearchFieldFocused)
                     .padding(.top, 4)
+                    .onChange(of: searchText) { _, newValue in runSearch(newValue) }
 
-                filterChipsRow
-                    .padding(.top, 14)
-                    .padding(.bottom, 8)
+                if !repoNames.isEmpty {
+                    filterChipsRow
+                        .padding(.top, 14)
+                        .padding(.bottom, 8)
+                }
 
                 resultsList
             }
@@ -119,17 +115,41 @@ public struct CursorSearchOverlay: View {
         }
     }
 
+    @ViewBuilder
     private var resultsList: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                ForEach(filteredResults) { model in
-                    Button(action: { onSelectResult(model.title) }) {
-                        CursorThreadRow(model: model, showRepoTag: true)
+        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            emptyState("Search your conversation history")
+        } else if filteredResults.isEmpty {
+            emptyState("No matches for \u{201c}\(searchText)\u{201d}")
+        } else {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(filteredResults) { result in
+                        Button(action: { onSelectResult(result.conversation.id, result.conversation.title) }) {
+                            CursorThreadRow(
+                                model: CursorThreadRowModel(
+                                    id: UUID(uuidString: result.conversation.id) ?? UUID(),
+                                    title: result.conversation.title,
+                                    repoName: repoName(for: result.conversation),
+                                    isActive: false,
+                                    statusLine: .noChanges
+                                ),
+                                showRepoTag: true
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
+    }
+
+    private func emptyState(_ text: String) -> some View {
+        Text(text)
+            .font(CursorType.bodyText)
+            .foregroundColor(CursorColors.light.secondaryText)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 40)
     }
 }
 #endif

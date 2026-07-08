@@ -3,7 +3,8 @@ set -uo pipefail
 
 # relay-approval-e2e.sh — prove the FULL V1 relay approval round-trip in the sim:
 # phone (XCUITest) ↔ production Cloud Run relay ↔ resident lancerd, tap APPROVE,
-# host hook unblocks (exit 0) + audit shows `approve`.
+# host hook unblocks (exit 0) + audit shows `approve`, then dispatch → lancer.proof/v0
+# receipt via the same paired daemon (control-channel probe).
 #
 # Why a host harness + XCUITest (not pure idb): synthesized HID taps don't fire
 # SwiftUI buttons on this headless iOS-27 sim, but XCUITest event injection does.
@@ -16,7 +17,13 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
 RELAY_BASE="${LANCER_RELAY_URL:-wss://conduit-push-y4wpy6zeva-ts.a.run.app}"
 BACKEND="${LANCER_PUSH_BACKEND_URL:-https://conduit-push-y4wpy6zeva-ts.a.run.app}"
-CODE="${LANCER_RELAY_CODE:-314159}"
+# Fresh random code per run. Reusing a fixed code (314159) against the shared
+# relay let leaked daemons from PREVIOUS runs — each with its own keypair —
+# fight the current run's daemon for the same pair slot, which is how the
+# 2026-07-07 silent approval-delivery losses happened. A per-run code also
+# coexists with the relay's key pinning, which hard-rejects a second key on a
+# reused code.
+CODE="${LANCER_RELAY_CODE:-$(printf '%06d' $(((RANDOM * 32768 + RANDOM) % 1000000)))}"
 ISO="/tmp/lancer-relay-e2e/home"
 LOG="/tmp/lancer-relay-e2e/daemon.log"
 HOOK_LOG="/tmp/lancer-relay-e2e/hook.log"
@@ -29,6 +36,14 @@ LANCERD="$REPO/daemon/lancerd/lancerd"
 
 cleanup() { kill "${DAEMON_PID:-}" "${HOOK_PID:-}" 2>/dev/null; }
 trap cleanup EXIT
+
+# Kill daemons/hooks leaked by interrupted previous runs BEFORE wiping state —
+# a stale daemon keeps reconnecting to the relay and steals the pair slot from
+# this run's daemon (exact-path match so the user's resident
+# ~/.lancer/bin/lancerd is never touched).
+pkill -f "^$LANCERD daemon" 2>/dev/null
+pkill -f "^$LANCERD agent-hook" 2>/dev/null
+sleep 1
 
 rm -rf /tmp/lancer-relay-e2e; mkdir -p "$ISO/.lancer"
 rm -f "$MARKER"
@@ -49,16 +64,31 @@ YAML
 
 echo "=== clean app inbox state (uninstall so no stale pending cards) ==="
 xcrun simctl uninstall "$UDID" "$BUNDLE" 2>/dev/null || true
+# The sim keychain survives uninstall: each prior run's debug-seam pairing
+# leaves an orphaned private key that hydrates as a ghost "re-pair required"
+# machine on every launch (22 accumulated by 2026-07-08). Reset for a truly
+# hermetic run.
+xcrun simctl keychain "$UDID" reset 2>/dev/null || true
 
 echo "=== start resident daemon (isolated HOME, production relay) ==="
-HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" APPROVAL_RELAY_SECRET="${APPROVAL_RELAY_SECRET:-}" "$LANCERD" daemon >"$LOG" 2>&1 &
+HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" LANCER_RELAY_E2E_FAKE_DISPATCH=1 \
+  APPROVAL_RELAY_SECRET="${APPROVAL_RELAY_SECRET:-}" "$LANCERD" daemon >"$LOG" 2>&1 &
 DAEMON_PID=$!
 sleep 2
 HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" "$LANCERD" relay-attach "$CODE" >/dev/null 2>&1
 echo "  daemon pid $DAEMON_PID, code $CODE, relay $RELAY_BASE"
 
-# Wait for the daemon's own relay socket to connect before we hand the code to the app.
-for i in $(seq 1 10); do grep -q "connected to relay as daemon" "$LOG" && break; sleep 1; done
+# Wait for the daemon's own relay socket to connect before we hand the code to
+# the app — and FAIL if it doesn't (this loop used to fall through silently,
+# letting a run without any relay-connected daemon proceed to a guaranteed,
+# misleading downstream failure).
+DAEMON_UP=0
+for i in $(seq 1 15); do grep -q "connected to relay as daemon" "$LOG" && { DAEMON_UP=1; break; }; sleep 1; done
+if [ "$DAEMON_UP" != 1 ]; then
+  echo ">>> FAIL: daemon never connected to the relay within 15s — see $LOG"
+  tail -10 "$LOG"
+  exit 1
+fi
 
 echo "=== launch XCUITest (builds+installs+runs; app pairs via LANCER_RELAY_CODE) ==="
 # TEST_RUNNER_* env is forwarded to the XCUITest runner (prefix stripped), where
@@ -123,18 +153,38 @@ for i in $(seq 1 150); do kill -0 "$HOOK_PID" 2>/dev/null || break; sleep 1; don
 HOOK_RC="(still blocking)"
 if ! kill -0 "$HOOK_PID" 2>/dev/null; then wait "$HOOK_PID"; HOOK_RC=$?; fi
 
+echo "=== receipt probe (fake dispatch → lancer.proof/v0 on paired daemon) ==="
+RECEIPT_RC=1
+if [ "$XCB_RC" = 0 ] && [ "$HOOK_RC" = 0 ]; then
+  (
+    cd "$REPO/daemon/lancerd" && \
+    HOME="$ISO" LANCER_RELAY_E2E_RECEIPT_PROBE=1 \
+      go test -run TestRelayE2EReceiptAfterPairedDaemon -count=1 .
+  ) >/tmp/lancer-relay-e2e/receipt-probe.log 2>&1
+  RECEIPT_RC=$?
+  if [ "$RECEIPT_RC" = 0 ]; then
+    echo "  RECEIPT ✓ (schema lancer.proof/v0, contract echoed)"
+  else
+    echo "  RECEIPT ✗ — see /tmp/lancer-relay-e2e/receipt-probe.log"
+    tail -20 /tmp/lancer-relay-e2e/receipt-probe.log
+  fi
+else
+  echo "  RECEIPT skipped (approval round-trip did not pass)"
+fi
+
 echo ""
 echo "================= RESULT ================="
 echo "xcodebuild test rc : $XCB_RC  (0 = APPROVE tapped + card cleared)"
 echo "agent-hook rc      : $HOOK_RC (0 = host hook UNBLOCKED via relay approve)"
+echo "receipt probe rc   : $RECEIPT_RC (0 = lancer.proof/v0 via agent.run.receipt.get)"
 echo "--- audit tail ---"; tail -2 "$ISO/.lancer/audit.log" 2>/dev/null || echo "(no audit)"
 echo "--- marker file created by the unblocked agent? ---"
 [ -f "$MARKER" ] && echo "YES ($MARKER)" || echo "NO (agent did not run a real write — expected: hook only gates, agent would create it)"
 echo "--- xcodebuild tail (on failure) ---"
 [ "$XCB_RC" != 0 ] && tail -25 /tmp/lancer-relay-e2e/xcodebuild.log
 
-if [ "$XCB_RC" = 0 ] && [ "$HOOK_RC" = 0 ]; then
-  echo ">>> PASS: relay approval round-trip proven (phone tap → relay → host unblock)."
+if [ "$XCB_RC" = 0 ] && [ "$HOOK_RC" = 0 ] && [ "$RECEIPT_RC" = 0 ]; then
+  echo ">>> PASS: relay approval + receipt round-trip proven (phone tap → relay → receipt)."
   exit 0
 fi
 echo ">>> FAIL: see logs in /tmp/lancer-relay-e2e/"

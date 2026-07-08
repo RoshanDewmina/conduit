@@ -27,8 +27,29 @@ func newE2ERouter(client *e2eRelayClient, srv *server) *e2eRouter {
 	r := &e2eRouter{client: client, server: srv}
 	if client != nil {
 		client.messageHandler = r.handleMessage
+		client.pairedHandler = r.resendPendingApprovals
 	}
 	return r
+}
+
+// resendPendingApprovals pushes every still-unresolved approval to the phone.
+// Called on every peer_joined: an approval escalated while the phone was
+// disconnected (or while the relay held an orphaned connection for either
+// role) would otherwise never reach it — the send once looked successful, so
+// nothing retries. The phone upserts by approval ID, so duplicates are
+// harmless.
+func (r *e2eRouter) resendPendingApprovals() {
+	if r.server == nil {
+		return
+	}
+	pending := r.server.approvals.pendingEvents()
+	if len(pending) == 0 {
+		return
+	}
+	log.Printf("e2e: re-sending %d pending approval(s) after (re)pair", len(pending))
+	for _, ev := range pending {
+		r.sendApproval(ev)
+	}
 }
 
 // sendApproval routes an approval event through the E2E relay.
@@ -62,6 +83,8 @@ func (r *e2eRouter) sendApproval(ev ApprovalEvent) {
 
 	if err := r.client.sendMessage("approval", data); err != nil {
 		log.Printf("e2e: send approval failed: %v", err)
+	} else {
+		log.Printf("e2e: sent approval %s over relay", ev.ApprovalID)
 	}
 }
 
@@ -578,6 +601,8 @@ func methodToRelayType(method string) string {
 		return "agentRunOutput"
 	case "agent.run.status":
 		return "agentRunStatus"
+	case "agent.run.receipt":
+		return "runReceipt"
 	case "agent.tool.start":
 		return "agentToolStart"
 	case "agent.artifact":

@@ -127,11 +127,10 @@ model:
 C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background model, and TOFU fail-closed are all
 **compliant** with current Apple/OWASP-MASVS guidance.
 
-**BiometricGate no-passcode policy (P0 — fixed 2026-07-06 on `codex/tier-0-live-cursor-shell`):**
-- `SecurityKit/BiometricGate.swift` now **fails closed** when biometry is unavailable except
-  `.biometryNotEnrolled`, which falls back to device-owner passcode. Covered by
-  `BiometricGateTests` (`passcode-not-set`, `biometry-unavailable` cases).
-  **Owner-gated:** validate on a real no-passcode test device before external beta sign-off.
+**BiometricGate no-passcode policy — moot, removed 2026-07-07:** `BiometricGate` (and the
+per-decision/per-key-load gate that used it) was deleted from the app entirely, a permanent product
+decision — there is no fail-open/fail-closed policy left to validate. See
+`docs/legal/SECURITY_ARCHITECTURE.md` §5.1. `BiometricGateTests` was deleted with it.
 
 **Approval-trust-boundary hardening pass — 2026-07-04 (branch `fable/approval-security-hardening`), against the 2026-07-02 Codex read-only audit's 6 findings:**
 
@@ -158,20 +157,12 @@ C617.1↔FileTimestamp) + honest DeviceID declaration, push-driven background mo
   clients may raise a tier, never lower it. Regressions: `TestEvaluateWireRiskCannotDowngrade`
   (policy) + `TestHookLiedLowRiskNoClientDoesNotAutoApprove` (server-level, proves the event stays
   pending past the grace and honors the eventual explicit decision).
-- ✅ **BiometricGate wired into approval decisions (audit finding — was: zero call sites on decision
-  paths).** New `SecurityKit/ApprovalDecisionAuth` gates approve/reject **before persist/forward**
-  for **high/critical-risk and unknown-risk (fail-closed)** decisions, at every live entry point:
-  inbox cards (`InboxViewModel`/`LiveInboxViewModel.decide`), notification-action routing, and
-  `ApprovalRelay.enqueue` (Live Activity/Dynamic Island widget intents — which
-  `authenticationRequired` does NOT cover — plus Siri/`CommandGateway` and the cold-launch drain).
-  **Scoped by design:** low/medium decisions are NOT biometric-gated (same tier split as
-  `PermitsNoClientGrace`; notification actions still require an unlocked device). **Documented
-  exception:** Watch decisions rely on wrist-detection + watch passcode (see AppRoot watch
-  `onDecision` comment + SECURITY_ARCHITECTURE §5.1). Tests: `ApprovalDecisionAuthTests` (macOS) +
-  `InboxDecisionGateTests` (iOS-gated, wired into the CI simulator step). Note: the pre-existing
-  P0 above (BiometricGate degrades open with no passcode enrolled) bounds this gate's strength too.
-  `AgentStore.respondToApproval` (AgentKit hosted-runtime path) is currently caller-less/dormant and
-  was not gated.
+- ⏹️ **BiometricGate wired into approval decisions — superseded, removed 2026-07-07.** This audit
+  finding described `ApprovalDecisionAuth`'s risk-tiered gate, which existed from 2026-07-04 to
+  2026-07-07. It was removed entirely (permanent product decision, not a regression) — approve/
+  reject decisions now commit directly at every entry point regardless of risk tier, with no local
+  auth check. `ApprovalDecisionAuth`, `InboxDecisionGateTests`'s gate-specific cases, and
+  `BiometricGateTests` were deleted with it. See `docs/legal/SECURITY_ARCHITECTURE.md` §5.1.
 - ✅ **App Attest on device binding (audit finding — was: QR secret + auth alone binds).**
   `push-backend` now verifies an Apple App Attest attestation at **bind** time (bind is the iOS-side
   step; redeem is performed by the Go daemon, which cannot attest — the audit's "at redeem" intent,
@@ -312,10 +303,13 @@ were **purged 2026-07-06** with the rest of `docs/_archive/`.
 
 ## 6. Remaining P0/P1/P2 after this audit
 
-- **P0 (fixed 2026-07-06, owner device validation pending):** `BiometricGate` fail-closed on
-  no-passcode / biometry-unavailable; daemon-side atomic Emergency Stop latch in `dispatch.go`
-  (`agent.emergencyStop` RPC). Verified: `swift test --filter BiometricGate`, `go test ./...`
-  from `daemon/lancerd`. External beta still needs owner sign-off on real-device policy behavior.
+- ~~P0 (fixed 2026-07-06): `BiometricGate` fail-closed on no-passcode / biometry-unavailable~~ —
+  **moot as of 2026-07-07:** `BiometricGate` was removed from the app entirely (commit `9e18d679`,
+  permanent product decision), so there is no fail-closed policy left to validate. See
+  `docs/legal/SECURITY_ARCHITECTURE.md` §5.1.
+- **P0 (fixed 2026-07-06, owner device validation pending):** daemon-side atomic Emergency Stop
+  latch in `dispatch.go` (`agent.emergencyStop` RPC). Verified: `go test ./...` from
+  `daemon/lancerd`. External beta still needs owner sign-off on real-device policy behavior.
 - **P1 (RESOLVED):** `e2eRouter.sendApproval` (`daemon/lancerd/e2e_router.go`) silently no-ops with zero
   logging when `!r.client.isPaired()` — found 2026-06-18 during `docs/LIVE_LOOP_RUNBOOK.md` Phase 3 live
   testing on a real phone. **Fixed:** early-return now logs

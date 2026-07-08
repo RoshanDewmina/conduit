@@ -86,9 +86,9 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
 
     private func dismissKeyboardIfPresent(_ app: XCUIApplication) {
         guard app.keyboards.count > 0 else { return }
-        let repoRow = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch
-        if repoRow.exists {
-            repoRow.tap()
+        let returnKey = app.keyboards.buttons["Return"]
+        if returnKey.exists {
+            returnKey.tap()
             return
         }
         app.swipeDown(velocity: .slow)
@@ -128,11 +128,8 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
 
     private func assertReviewDiffVisible(_ app: XCUIApplication, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
         let screen = app.otherElements["review-diff-screen"]
-        let requestBody = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", "terraform apply")
-        ).firstMatch
         XCTAssertTrue(
-            screen.waitForExistence(timeout: timeout) || requestBody.waitForExistence(timeout: timeout),
+            screen.waitForExistence(timeout: timeout),
             "Review diff screen should be visible",
             file: file,
             line: line
@@ -332,25 +329,15 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         searchField.typeText("relay")
         snapshot("04b-search-typed", app: app)
 
-        let chip = app.buttons.matching(NSPredicate(format: "label == %@", "push-backend")).firstMatch
-        if chip.waitForExistence(timeout: 5) {
-            chip.tap()
-            snapshot("04c-search-chip-selected", app: app)
-            // Reset back to the "All" filter chip so both filters are exercised.
-            let allChip = app.buttons.matching(NSPredicate(format: "label == %@", "All")).firstMatch
-            if allChip.waitForExistence(timeout: 5) { allChip.tap() }
-        }
-
-        // This plain SwiftUI TextField has no system clear button — backspace
-        // out "relay" (5 chars) to see the full result list again.
-        searchField.typeText(String(repeating: "\u{8}", count: 5))
-        let resultRow = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Fix onboarding pairing flow")).firstMatch
-        XCTAssertTrue(resultRow.waitForExistence(timeout: 5))
-        resultRow.tap()
-        XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].waitForExistence(timeout: 10),
-                      "Selecting a search result should dismiss overlay and push Work Thread")
-        XCTAssertFalse(app.staticTexts["Search"].exists, "Search overlay should be dismissed")
-        snapshot("04d-search-result-pushed-workthread", app: app)
+        XCTAssertTrue(
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "No matches for")).firstMatch.waitForExistence(timeout: 5),
+            "Without a live search bridge, the overlay should not invent seeded results"
+        )
+        XCTAssertFalse(
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Fix onboarding pairing flow")).firstMatch.exists,
+            "Search overlay must not show old hardcoded thread results when no real result exists"
+        )
+        snapshot("04c-search-no-fake-results", app: app)
     }
 
     // MARK: 5/6. Repo thread list, Repo picker
@@ -422,7 +409,14 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
     /// Verifies that `LANCER_CURSOR_MOCK_RUN_TARGETS=1` causes the mock shell
     /// to present `CursorWorkspaceDetailSheet` when the `lancer-ios` row is
     /// tapped, and that the sheet contains the expected run-target rows.
-    func testWorkspaces_WorkspaceDetailSheetShowsRunTargets() throws {
+    /// Tapping a repo row must always open its thread list — matching the
+    /// reference product exactly, a repo row is never an interstitial. The
+    /// Workspace Detail / run-targets sheet is a secondary affordance reached
+    /// by long-press, not the primary tap action (2026-07-07: an earlier
+    /// version of this test asserted tap-opens-the-detail-sheet, which was
+    /// itself the bug — this test enshrined the wrong behavior instead of
+    /// catching it).
+    func testWorkspaces_TapOpensThreadList_LongPressOpensDetailSheet() throws {
         let app = XCUIApplication()
         app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
         app.launchEnvironment["LANCER_CURSOR_SHELL"] = "1"
@@ -431,22 +425,36 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         defer { app.terminate() }
 
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
-        snapshot("05d-workspaces-before-detail-tap", app: app)
+        snapshot("05d-workspaces-before-tap", app: app)
 
-        // Tap the lancer-ios row — with mock run targets this should present
-        // the Workspace Detail sheet instead of pushing the thread list.
         let lancerRow = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch
         XCTAssertTrue(lancerRow.waitForExistence(timeout: 10), "lancer-ios row should be visible")
-        tapWithRetry(lancerRow, label: "lancer-ios workspace row")
 
-        // Sheet title matches the workspace name.
+        // Plain tap → thread list, even though this workspace has run targets.
+        tapWithRetry(lancerRow, label: "lancer-ios workspace row")
         XCTAssertTrue(
             app.staticTexts["lancer-ios"].waitForExistence(timeout: 10),
-            "Workspace detail sheet should show workspace name as title"
+            "Tapping a repo row should push the thread list with the workspace name as its title"
         )
-        snapshot("05d-workspace-detail-sheet", app: app)
+        XCTAssertFalse(
+            app.buttons["xmark"].waitForExistence(timeout: 2),
+            "A plain tap must not present the Workspace Detail sheet (no xmark dismiss button)"
+        )
+        snapshot("05d-thread-list-after-tap", app: app)
 
-        // At least one run-target row with the documented accessibility id.
+        // Back to Workspaces, then long-press for the detail sheet.
+        let backButton = app.buttons["chevron.left"]
+        if backButton.waitForExistence(timeout: 5) { tapWithRetry(backButton, label: "back to Workspaces") }
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 10))
+
+        let lancerRowAgain = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch
+        XCTAssertTrue(lancerRowAgain.waitForExistence(timeout: 10))
+        lancerRowAgain.press(forDuration: 0.6)
+
+        XCTAssertTrue(
+            app.staticTexts["lancer-ios"].waitForExistence(timeout: 10),
+            "Long-press should present the Workspace Detail sheet with the workspace name as title"
+        )
         let targetRow = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier == %@", "workspace-detail-target-row"))
             .firstMatch
@@ -457,6 +465,7 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
             targetRow.waitForExistence(timeout: 5) || hostLabel.waitForExistence(timeout: 2),
             "Detail sheet must contain at least one workspace-detail-target-row"
         )
+        snapshot("05d-workspace-detail-sheet-longpress", app: app)
 
         // Dismiss with xmark and confirm we're back on Workspaces.
         let xmark = app.buttons["xmark"].firstMatch
@@ -535,14 +544,13 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
             XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].exists, "Mark Ready should be a no-op")
         }
 
-        // View PR -> PR Detail, then back (single chevron check)
+        // PR detail is intentionally withheld from the default path until it is backed by real data.
         app.swipeUp()
-        tapButtonContaining(app, "View PR", timeout: 10)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "fix(relay)")).firstMatch.waitForExistence(timeout: 10))
-        XCTAssertEqual(app.buttons.matching(identifier: "chevron.left").count, 1, "Exactly one back chevron on PR Detail")
-        snapshot("09-prdetail-from-workthread", app: app)
-        app.buttons["chevron.left"].tap()
-        XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].waitForExistence(timeout: 10))
+        XCTAssertFalse(
+            app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "View PR")).firstMatch.waitForExistence(timeout: 2),
+            "Work Thread should not expose PR detail from the default path while the PR data source is deferred"
+        )
+        XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].exists)
         XCTAssertEqual(app.buttons.matching(identifier: "chevron.left").count, 1, "Exactly one back chevron on Work Thread")
 
         // Approval banner -> Review Diff
@@ -613,59 +621,36 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         snapshot("08d-reviewdiff-replied", app: app)
     }
 
-    func testReviewDiff_ViewFullDiffNoOp() throws {
+    func testReviewDiff_NoFakeFullDiffAction() throws {
         let app = launchSkipOnboarding(route: "reviewDiff")
         defer { app.terminate() }
         assertReviewDiffVisible(app)
-        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "View full diff")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.tap()
-        XCTAssertTrue(app.staticTexts["Review"].exists, "View full diff should be a no-op, still on Review")
+        XCTAssertFalse(
+            app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "View full diff")).firstMatch.exists,
+            "Review should not expose the old fake full-diff action"
+        )
+        XCTAssertFalse(
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "terraform apply")).firstMatch.exists,
+            "Review must not render the old fake terraform approval"
+        )
     }
 
     // MARK: 9. PR Detail
 
-    func testPRDetail_MenuFileExpandAndControls() throws {
-        let app = launchSkipOnboarding()
+    func testPRDetail_IsHonestDeferredState() throws {
+        let app = launchSkipOnboarding(route: "prDetail")
         defer { app.terminate() }
-        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
-        app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["lancer-ios"].waitForExistence(timeout: 10))
-        app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Fix onboarding pairing flow")).firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].waitForExistence(timeout: 10))
-        app.swipeUp()
-        tapButtonContaining(app, "View PR", timeout: 10)
-        XCTAssertTrue(app.staticTexts["Open"].waitForExistence(timeout: 10))
-
-        // Ellipsis -> popover menu
-        app.buttons["ellipsis"].tap()
-        XCTAssertTrue(app.staticTexts["Open in GitHub"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Close PR"].exists)
-        snapshot("09b-prdetail-menu-popover", app: app)
-        // Tap elsewhere to dismiss
-        app.staticTexts["Open"].tap()
-        XCTAssertFalse(app.staticTexts["Open in GitHub"].exists, "Tapping elsewhere should dismiss the popover")
-
-        // File row expand/collapse
-        let fileRow = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "RelayReconnectManager.swift")).firstMatch
-        XCTAssertTrue(fileRow.waitForExistence(timeout: 5))
-        fileRow.tap()
-        snapshot("09c-prdetail-file-expanded", app: app)
-        fileRow.tap()
-        snapshot("09d-prdetail-file-collapsed", app: app)
-
-        // Mark Ready / link icon no-ops
-        let markReady = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Mark Ready")).firstMatch
-        if markReady.waitForExistence(timeout: 5) { markReady.tap() }
-        XCTAssertTrue(app.staticTexts["Open"].exists, "Mark Ready should be a no-op")
-        let link = app.buttons["link"]
-        if link.waitForExistence(timeout: 5) { link.tap() }
-        XCTAssertTrue(app.staticTexts["Open"].exists, "Link icon should be a no-op")
+        XCTAssertTrue(app.staticTexts["Ship history not built yet"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "real PR, inline diff, or GitHub status data source")).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Open"].exists, "PR detail must not render fake PR status")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "RelayReconnectManager.swift")).firstMatch.exists,
+                       "PR detail must not render fake file rows")
+        snapshot("09b-prdetail-deferred", app: app)
 
         // Back chevron, single instance
         XCTAssertEqual(app.buttons.matching(identifier: "chevron.left").count, 1)
         app.buttons["chevron.left"].tap()
-        XCTAssertTrue(app.staticTexts["Fix onboarding pairing flow"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 10))
     }
 
     // MARK: 10. Composer sheet chain
@@ -687,16 +672,12 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         }
 
         // NOTE: the composer sheet has TWO separate pickers in its top row:
-        // the repo/branch text button (`onPickRepo`, left UNWIRED as a no-op
-        // by CursorAppShell — confirmed by reading the source, not a bug this
-        // pass fixes since it's a scope call, not a provably-wrong wire-up)
-        // and a separate cloud-icon button (`onPickRunTarget`, wired to the
-        // Run-On sheet). Target the cloud icon specifically for Run-On.
-        let repoPickerNoOp = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch
-        XCTAssertTrue(repoPickerNoOp.waitForExistence(timeout: 5))
-        tapWithRetry(repoPickerNoOp, label: "repo picker")
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch.exists,
-                      "Repo/branch picker is unwired (onPickRepo defaults to a no-op) — confirm it doesn't crash")
+        // the repo/branch text button and a separate cloud-icon run-target
+        // button. Repo picker behavior is covered by
+        // testRepoPickerSheet_SearchAndSelect; this chain keeps focus on
+        // Run-On and Model nested sheets.
+        let repoPicker = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch
+        XCTAssertTrue(repoPicker.waitForExistence(timeout: 5), "Composer should show its current repo selector")
 
         let runTargetPicker = app.buttons["cloud"]
         XCTAssertTrue(runTargetPicker.waitForExistence(timeout: 5), "Cloud run-target icon button should exist")
@@ -747,5 +728,28 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         app.swipeDown(velocity: .fast)
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 15), "Swiping composer down should dismiss back to Workspaces")
         snapshot("10h-composer-dismissed-to-workspaces", app: app)
+    }
+
+    func testReceiptCardMockShell() {
+        let app = XCUIApplication()
+        app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
+        app.launchEnvironment["LANCER_CURSOR_SHELL"] = "1"
+        app.launchEnvironment["LANCER_CURSOR_ROUTE"] = "receiptCard"
+        app.launchEnvironment["LANCER_CURSOR_MOCK_RECEIPT"] = "1"
+        app.launch()
+
+        let receiptCard = app.otherElements["receipt-card"]
+        XCTAssertTrue(receiptCard.waitForExistence(timeout: 10), "Receipt card should render in mock work thread")
+        snapshot("receipt-card-visible", app: app)
+
+        let acceptButton = app.buttons["receipt-accept"]
+        XCTAssertTrue(acceptButton.waitForExistence(timeout: 5))
+        tapWithRetry(acceptButton, label: "Accept receipt")
+
+        let anotherPass = app.buttons["receipt-another-pass"]
+        XCTAssertTrue(anotherPass.waitForExistence(timeout: 5))
+        tapWithRetry(anotherPass, label: "Request another pass")
+        XCTAssertTrue(isExpandedComposerVisible(app, timeout: 10), "Another pass should open composer")
+        snapshot("receipt-another-pass-composer", app: app)
     }
 }

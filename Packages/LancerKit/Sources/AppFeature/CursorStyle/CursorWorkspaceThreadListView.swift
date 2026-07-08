@@ -48,67 +48,176 @@ public struct CursorWorkspaceThreadListView: View {
         return liveBridge.threadsByWorkspace.values.flatMap { $0 }
     }
 
+    private var scopedLiveRows: [CursorShellLiveBridge.ThreadRow] {
+        guard let liveBridge else { return [] }
+        if workspaceName == "All Repos" { return allLiveThreads }
+        return liveBridge.threads(for: workspaceName)
+    }
+
+    private var hasLiveThreads: Bool {
+        liveBridge != nil && !scopedLiveRows.isEmpty
+    }
+
+    private func threadState(for row: CursorShellLiveBridge.ThreadRow) -> CursorThreadAttention.ThreadState {
+        liveBridge?.threadStates[row.id] ?? CursorThreadAttention.ThreadState()
+    }
+
+    private func sortedLiveRows(_ rows: [CursorShellLiveBridge.ThreadRow]) -> [CursorShellLiveBridge.ThreadRow] {
+        guard let liveBridge else { return rows }
+        return sortThreadsByAttention(
+            rows,
+            updatedAt: \.updatedAt,
+            threadState: { row in
+                liveBridge.threadStates[row.id] ?? CursorThreadAttention.ThreadState()
+            }
+        )
+    }
+
+    private var sortedScopedLiveRows: [CursorShellLiveBridge.ThreadRow] {
+        sortedLiveRows(scopedLiveRows)
+    }
+
+    private var needsYouLiveRows: [CursorShellLiveBridge.ThreadRow] {
+        sortedScopedLiveRows.filter { isNeedsYouThread(threadState(for: $0)) }
+    }
+
+    private var needsYouCount: Int { needsYouLiveRows.count }
+
+    private var needsYouIDs: Set<String> {
+        Set(needsYouLiveRows.map(\.id))
+    }
+
+    private var homeAttentionStatus: String? {
+        guard let liveBridge else { return nil }
+        return homeAttentionStatusMessage(
+            needsYouCount: needsYouCount,
+            relayHealthy: liveBridge.relayHealthy,
+            lastSnapshotAt: liveBridge.lastSnapshotAt
+        )
+    }
+
+    private func rowModel(
+        from row: CursorShellLiveBridge.ThreadRow,
+        isActive: Bool
+    ) -> CursorThreadRowModel {
+        let derived = CursorThreadAttention.derive(threadState(for: row))
+        return CursorThreadRowModel(
+            id: UUID(uuidString: row.id) ?? UUID(),
+            title: row.title,
+            repoName: row.repoName,
+            isActive: isActive,
+            statusLine: .noChanges,
+            attention: derived.0,
+            attentionDetail: derived.2
+        )
+    }
+
+    private func liveThreadModels(
+        _ rows: [CursorShellLiveBridge.ThreadRow],
+        markFirstActive: Bool = false
+    ) -> [CursorThreadRowModel] {
+        rows.enumerated().map { index, row in
+            rowModel(from: row, isActive: markFirstActive && index == 0)
+        }
+    }
+
+    private var needsYouThreadModels: [CursorThreadRowModel] {
+        liveThreadModels(needsYouLiveRows)
+    }
+
+    private func nonNeedsYouRows(matching predicate: (Date) -> Bool) -> [CursorShellLiveBridge.ThreadRow] {
+        sortedScopedLiveRows.filter { row in
+            guard !needsYouIDs.contains(row.id) else { return false }
+            guard let updatedAt = row.updatedAt else { return false }
+            return predicate(updatedAt)
+        }
+    }
+
+    @ViewBuilder
+    private func homeAttentionSection(colors: CursorColors) -> some View {
+        if let status = homeAttentionStatus {
+            Text(status)
+                .font(CursorType.rowSecondary)
+                .foregroundColor(colors.mutedText)
+                .padding(.horizontal, CursorMetrics.sectionHeaderHorizontalPadding)
+                .padding(.top, CursorMetrics.sectionHeaderTopPadding)
+                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("home-attention-status")
+        }
+
+        if needsYouCount > 0 {
+            CursorSectionHeader("Needs you (\(needsYouCount))")
+                .accessibilityIdentifier("home-needs-you-header")
+            ForEach(needsYouThreadModels) { model in
+                Button(action: { onSelectThread(model.title) }) {
+                    CursorThreadRow(model: model, showRepoTag: workspaceName == "All Repos")
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home-needs-you-row")
+            }
+        }
+    }
+
     /// True when the All Repos view should render grouped-by-repo sections from live data.
     private var showRepoGrouped: Bool {
         workspaceName == "All Repos" && liveBridge != nil && !allLiveThreads.isEmpty
     }
 
-    /// Live threads grouped by repoName, in first-seen order (deterministic for a given bridge snapshot).
+    /// Live threads grouped by repoName, excluding rows already shown under Needs you.
     private var liveThreadsGroupedByRepo: [RepoGroup] {
         var order: [String] = []
         var grouped: [String: [CursorShellLiveBridge.ThreadRow]] = [:]
-        for row in allLiveThreads {
+        let remainder = sortedLiveRows(allLiveThreads).filter { !needsYouIDs.contains($0.id) }
+        for row in remainder {
             if grouped[row.repoName] == nil {
                 order.append(row.repoName)
                 grouped[row.repoName] = []
             }
             grouped[row.repoName]!.append(row)
         }
-        return order.map { repoName in
+        return order.compactMap { repoName in
             let rows = grouped[repoName]!
+            guard !rows.isEmpty else { return nil }
             return RepoGroup(
                 repoName: repoName,
-                threads: rows.enumerated().map { index, row in
-                    CursorThreadRowModel(
-                        id: UUID(uuidString: row.id) ?? UUID(),
-                        title: row.title,
-                        repoName: row.repoName,
-                        isActive: index == 0,
-                        statusLine: .noChanges,
-                        attention: liveBridge?.threadAttention[row.id]
-                    )
-                }
+                threads: liveThreadModels(rows)
             )
         }
     }
 
     // MARK: - Single-workspace live / seed paths
 
+    // Real date-bucketed grouping. Previously `todayThreads` returned every
+    // live thread unconditionally (no date check at all) and `yesterdayThreads`
+    // returned `[]` whenever there was any live data — so a 3-day-old
+    // conversation rendered under "Today" and "Yesterday" never showed
+    // anything for a live workspace. `updatedAt` is nil-safe: a row with no
+    // timestamp sorts into "Earlier" rather than defaulting to "Today".
     private var todayThreads: [CursorThreadRowModel] {
-        if let liveBridge, !liveBridge.threads(for: workspaceName).isEmpty {
-            return liveThreadsSection(liveBridge.threads(for: workspaceName))
+        if hasLiveThreads {
+            let rows = nonNeedsYouRows { Calendar.current.isDateInToday($0) }
+            return liveThreadModels(rows, markFirstActive: true)
         }
         return seedTodayThreads
     }
 
     private var yesterdayThreads: [CursorThreadRowModel] {
-        if let liveBridge, !liveBridge.threads(for: workspaceName).isEmpty {
-            return []
+        if hasLiveThreads {
+            let rows = nonNeedsYouRows { Calendar.current.isDateInYesterday($0) }
+            return liveThreadModels(rows)
         }
         return seedYesterdayThreads
     }
 
-    private func liveThreadsSection(_ rows: [CursorShellLiveBridge.ThreadRow]) -> [CursorThreadRowModel] {
-        rows.enumerated().map { index, row in
-            CursorThreadRowModel(
-                id: UUID(uuidString: row.id) ?? UUID(),
-                title: row.title,
-                repoName: row.repoName,
-                isActive: index == 0,
-                statusLine: .noChanges,
-                attention: liveBridge?.threadAttention[row.id]
-            )
+    private var earlierThreads: [CursorThreadRowModel] {
+        guard hasLiveThreads else { return [] }
+        let rows = sortedScopedLiveRows.filter { row in
+            guard !needsYouIDs.contains(row.id) else { return false }
+            guard let updatedAt = row.updatedAt else { return true }
+            return !Calendar.current.isDateInToday(updatedAt) && !Calendar.current.isDateInYesterday(updatedAt)
         }
+        return liveThreadModels(rows)
     }
 
     private var seedTodayThreads: [CursorThreadRowModel] {
@@ -252,6 +361,7 @@ public struct CursorWorkspaceThreadListView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     if showRepoGrouped {
+                        homeAttentionSection(colors: CursorColors.resolve(.light))
                         ForEach(liveThreadsGroupedByRepo) { group in
                             CursorSectionHeader(group.repoName)
                                 .accessibilityIdentifier("repo-section-\(group.repoName)")
@@ -263,20 +373,43 @@ public struct CursorWorkspaceThreadListView: View {
                             }
                         }
                     } else {
-                        CursorSectionHeader("Today")
-                        ForEach(todayThreads) { model in
-                            Button(action: { onSelectThread(model.title) }) {
-                                CursorThreadRow(model: model, showRepoTag: false)
+                        homeAttentionSection(colors: CursorColors.resolve(.light))
+
+                        if !todayThreads.isEmpty {
+                            CursorSectionHeader("Today")
+                            ForEach(todayThreads) { model in
+                                Button(action: { onSelectThread(model.title) }) {
+                                    CursorThreadRow(model: model, showRepoTag: false)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
 
-                        CursorSectionHeader("Yesterday")
-                        ForEach(yesterdayThreads) { model in
-                            Button(action: { onSelectThread(model.title) }) {
-                                CursorThreadRow(model: model, showRepoTag: false)
+                        if !yesterdayThreads.isEmpty {
+                            CursorSectionHeader("Yesterday")
+                            ForEach(yesterdayThreads) { model in
+                                Button(action: { onSelectThread(model.title) }) {
+                                    CursorThreadRow(model: model, showRepoTag: false)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                        }
+
+                        if !earlierThreads.isEmpty {
+                            CursorSectionHeader("Earlier")
+                            ForEach(earlierThreads) { model in
+                                Button(action: { onSelectThread(model.title) }) {
+                                    CursorThreadRow(model: model, showRepoTag: false)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        if liveBridge != nil,
+                           todayThreads.isEmpty,
+                           yesterdayThreads.isEmpty,
+                           earlierThreads.isEmpty {
+                            liveEmptyState
                         }
                     }
                 }
@@ -287,6 +420,21 @@ public struct CursorWorkspaceThreadListView: View {
             CursorBottomComposer(onTap: onOpenComposer)
         }
         .environment(\.cursorScheme, .light)
+    }
+
+    private var liveEmptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("No threads yet")
+                .font(CursorType.rowTitle)
+                .foregroundColor(CursorColors.light.primaryText)
+            Text("Send a prompt from this workspace to start the first conversation.")
+                .font(CursorType.rowSecondary)
+                .foregroundColor(CursorColors.light.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 #endif

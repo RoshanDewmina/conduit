@@ -17,7 +17,7 @@ public actor SessionPool {
 
     /// Get or create a session for `host`. Connection is the caller's
     /// responsibility because credential acquisition (Keychain unlock,
-    /// biometric prompt) cannot live in the engine layer.
+    /// password prompt) cannot live in the engine layer.
     public func session(for host: LancerCore.Host) -> SSHSession {
         if let existing = sessions[host.id] { return existing }
         let session = SSHSession(host: host)

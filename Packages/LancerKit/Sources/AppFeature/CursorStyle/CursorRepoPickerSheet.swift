@@ -35,30 +35,20 @@ public struct CursorRepoPickerSheet: View {
     private let onSelect: (CursorRepoPickerOption) -> Void
 
     public init(
-        active: CursorRepoPickerOption = CursorRepoPickerOption(
-            id: "active-lancer-ios",
-            orgName: "RoshanDewmina",
-            repoName: "lancer-ios",
-            branchName: "master"
-        ),
-        recents: [CursorRepoPickerOption] = [
-            CursorRepoPickerOption(id: "recent-personal-web", orgName: "RoshanDewmina", repoName: "personal-web"),
-            CursorRepoPickerOption(id: "recent-lancer-ios-lower", orgName: "roshandewmina", repoName: "lancer-ios")
-        ],
-        more: [CursorRepoPickerOption] = [
-            CursorRepoPickerOption(id: "more-command-center", orgName: "RoshanDewmina", repoName: "command-center"),
-            CursorRepoPickerOption(id: "more-hermes", orgName: "roshandewmina", repoName: "hermes"),
-            CursorRepoPickerOption(id: "more-streak", orgName: "RoshanDewmina", repoName: "streak"),
-            CursorRepoPickerOption(id: "more-dotfiles", orgName: "roshandewmina", repoName: "dotfiles"),
-            CursorRepoPickerOption(id: "more-lancer-web", orgName: "RoshanDewmina", repoName: "lancer-web"),
-            CursorRepoPickerOption(id: "more-conduit-push", orgName: "roshandewmina", repoName: "conduit-push")
-        ],
+        active: CursorRepoPickerOption? = nil,
+        recents: [CursorRepoPickerOption]? = nil,
+        more: [CursorRepoPickerOption]? = nil,
         onClose: @escaping () -> Void = {},
         onSelect: @escaping (CursorRepoPickerOption) -> Void = { _ in }
     ) {
-        self.active = active
-        self.recents = recents
-        self.more = more
+        self.active = active ?? CursorRepoPickerOption(
+            id: "active-home",
+            orgName: "Local",
+            repoName: "Home",
+            branchName: nil
+        )
+        self.recents = recents ?? []
+        self.more = more ?? []
         self.onClose = onClose
         self.onSelect = onSelect
     }
@@ -132,14 +122,14 @@ private struct CursorRepoPickerRow: View {
                         .foregroundColor(colors.secondaryText)
                         .frame(width: CursorMetrics.rowIconSize, height: CursorMetrics.rowIconSize)
 
-                    (
+                    HStack(spacing: 0) {
                         Text("\(option.orgName)/")
                             .font(CursorType.rowTitle)
                             .foregroundColor(colors.secondaryText)
-                        + Text(option.repoName)
+                        Text(option.repoName)
                             .font(CursorType.rowTitle.weight(.semibold))
                             .foregroundColor(colors.primaryText)
-                    )
+                    }
                     .lineLimit(1)
 
                     Spacer()
