@@ -328,6 +328,9 @@ public struct CursorAppShell: View {
                         }
                         path.append(CursorRoute.workThread(title))
                     },
+                    onSelectObservedSession: { row in
+                        openImportedObservedSession(row)
+                    },
                     onOpenComposer: { openComposer(placeholder: "Follow up...") },
                     onOpenSearch: { showingSearchOverlay = true },
                     onOpenMenu: { showingRepoPicker = true }
@@ -389,6 +392,28 @@ public struct CursorAppShell: View {
             await bridge.onOpenThread?(id)
         }
         path.append(CursorRoute.workThread(conversation.title))
+    }
+
+    private func openImportedObservedSession(_ row: CursorObservedSessionMapping.RowModel) {
+        guard let bridge = liveBridge, let onImport = bridge.onImportObservedSession else {
+            path.append(CursorRoute.workThread(row.title))
+            return
+        }
+        bridge.activeThreadError = nil
+        Task {
+            switch await onImport(row) {
+            case .success(let conversationID):
+                bridge.selectedThreadID = conversationID
+                bridge.composerCWD = row.repoName
+                bridge.activeThreadPrompt = ""
+                bridge.activeThreadResponse = ""
+                bridge.activeThreadIsWorking = false
+                await bridge.onOpenThread?(conversationID)
+                path.append(CursorRoute.workThread(row.title))
+            case .failure(let error):
+                bridge.activeThreadError = error.message
+            }
+        }
     }
 
     private func openComposer(placeholder: String, prefill: String? = nil) {

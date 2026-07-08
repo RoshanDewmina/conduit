@@ -13,6 +13,7 @@ public struct CursorWorkspaceThreadListView: View {
     private let workspaceName: String
     private let onBack: () -> Void
     private let onSelectThread: (String) -> Void
+    private let onSelectObservedSession: (CursorObservedSessionMapping.RowModel) -> Void
     private let onOpenComposer: () -> Void
     private let onOpenSearch: () -> Void
     private let onOpenMenu: () -> Void
@@ -21,6 +22,7 @@ public struct CursorWorkspaceThreadListView: View {
         workspaceName: String,
         onBack: @escaping () -> Void = {},
         onSelectThread: @escaping (String) -> Void = { _ in },
+        onSelectObservedSession: @escaping (CursorObservedSessionMapping.RowModel) -> Void = { _ in },
         onOpenComposer: @escaping () -> Void = {},
         onOpenSearch: @escaping () -> Void = {},
         onOpenMenu: @escaping () -> Void = {}
@@ -28,6 +30,7 @@ public struct CursorWorkspaceThreadListView: View {
         self.workspaceName = workspaceName
         self.onBack = onBack
         self.onSelectThread = onSelectThread
+        self.onSelectObservedSession = onSelectObservedSession
         self.onOpenComposer = onOpenComposer
         self.onOpenSearch = onOpenSearch
         self.onOpenMenu = onOpenMenu
@@ -159,7 +162,26 @@ public struct CursorWorkspaceThreadListView: View {
         }
     }
 
-    /// True when the All Repos view should render grouped-by-repo sections from live data.
+    private var observedSessionRows: [CursorObservedSessionMapping.RowModel] {
+        #if DEBUG
+        if liveBridge == nil,
+           ProcessInfo.processInfo.environment["LANCER_CURSOR_MOCK_OBSERVED_SESSIONS"] == "1" {
+            return CursorObservedSessionMapping.RowModel.mockRows(for: workspaceName)
+        }
+        #endif
+        guard let liveBridge, liveBridge.relayHealthy else { return [] }
+        return CursorObservedSessionMapping.RowModel.sorted(
+            CursorObservedSessionMapping.RowModel.scoped(
+                liveBridge.observedSessions,
+                workspaceName: workspaceName
+            )
+        )
+    }
+
+    private var showObservedSessions: Bool {
+        !observedSessionRows.isEmpty
+    }
+
     private var showRepoGrouped: Bool {
         workspaceName == "All Repos" && liveBridge != nil && !allLiveThreads.isEmpty
     }
@@ -372,6 +394,7 @@ public struct CursorWorkspaceThreadListView: View {
                                 .buttonStyle(.plain)
                             }
                         }
+                        observedSessionsSection
                     } else {
                         homeAttentionSection(colors: CursorColors.resolve(.light))
 
@@ -408,9 +431,12 @@ public struct CursorWorkspaceThreadListView: View {
                         if liveBridge != nil,
                            todayThreads.isEmpty,
                            yesterdayThreads.isEmpty,
-                           earlierThreads.isEmpty {
+                           earlierThreads.isEmpty,
+                           !showObservedSessions {
                             liveEmptyState
                         }
+
+                        observedSessionsSection
                     }
                 }
             }
@@ -420,6 +446,18 @@ public struct CursorWorkspaceThreadListView: View {
             CursorBottomComposer(onTap: onOpenComposer)
         }
         .environment(\.cursorScheme, .light)
+        .onAppear {
+            liveBridge?.onRequestRefresh?()
+        }
+    }
+
+    @ViewBuilder
+    private var observedSessionsSection: some View {
+        if showObservedSessions {
+            CursorObservedSessionsSection(rows: observedSessionRows) { row in
+                onSelectObservedSession(row)
+            }
+        }
     }
 
     private var liveEmptyState: some View {
