@@ -97,7 +97,6 @@ public struct CursorRepoPickerSheet: View {
             }
             .padding(.bottom, CursorMetrics.sheetContentBottomPadding)
         }
-        .environment(\.cursorScheme, .light)
     }
 }
 

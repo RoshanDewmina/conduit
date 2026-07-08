@@ -13,6 +13,7 @@ import LancerCore
 /// never searched anything real (2026-07-07).
 public struct CursorSearchOverlay: View {
     @Environment(\.cursorShellLiveBridge) private var liveBridge
+    @Environment(\.cursorScheme) private var cursorScheme
     @State private var searchText = ""
     @State private var selectedFilter = "All"
     @State private var results: [ChatConversationSearchResult] = []
@@ -102,7 +103,6 @@ public struct CursorSearchOverlay: View {
             .frame(maxHeight: .infinity)
         }
         .frame(maxHeight: .infinity)
-        .environment(\.cursorScheme, .light)
         .onAppear {
             isSearchFieldFocused = true
             if let initialQuery, !initialQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -159,7 +159,7 @@ public struct CursorSearchOverlay: View {
     private func emptyState(_ text: String) -> some View {
         Text(text)
             .font(CursorType.bodyText)
-            .foregroundColor(CursorColors.light.secondaryText)
+            .foregroundColor(CursorColors.resolve(cursorScheme).secondaryText)
             .frame(maxWidth: .infinity)
             .padding(.top, 40)
     }

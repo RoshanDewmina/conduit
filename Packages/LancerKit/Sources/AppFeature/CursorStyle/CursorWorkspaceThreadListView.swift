@@ -9,6 +9,7 @@ import DesignSystem
 /// fallback for mock UI tests.
 public struct CursorWorkspaceThreadListView: View {
     @Environment(\.cursorShellLiveBridge) private var liveBridge
+    @Environment(\.cursorScheme) private var cursorScheme
 
     private let workspaceName: String
     private let onBack: () -> Void
@@ -361,6 +362,7 @@ public struct CursorWorkspaceThreadListView: View {
     }
 
     public var body: some View {
+        let colors = CursorColors.resolve(cursorScheme)
         VStack(spacing: 0) {
             CursorHeaderBar(
                 leading: AnyView(
@@ -374,7 +376,7 @@ public struct CursorWorkspaceThreadListView: View {
 
             Text(workspaceName)
                 .font(CursorType.pageTitle)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
                 .lineLimit(1)
                 .padding(.leading, CursorMetrics.pageTitleLeadingPadding)
                 .padding(.top, CursorMetrics.pageTitleTopPadding)
@@ -383,7 +385,7 @@ public struct CursorWorkspaceThreadListView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     if showRepoGrouped {
-                        homeAttentionSection(colors: CursorColors.resolve(.light))
+                        homeAttentionSection(colors: colors)
                         ForEach(liveThreadsGroupedByRepo) { group in
                             CursorSectionHeader(group.repoName)
                                 .accessibilityIdentifier("repo-section-\(group.repoName)")
@@ -396,7 +398,7 @@ public struct CursorWorkspaceThreadListView: View {
                         }
                         observedSessionsSection
                     } else {
-                        homeAttentionSection(colors: CursorColors.resolve(.light))
+                        homeAttentionSection(colors: colors)
 
                         if !todayThreads.isEmpty {
                             CursorSectionHeader("Today")
@@ -441,11 +443,10 @@ public struct CursorWorkspaceThreadListView: View {
                 }
             }
         }
-        .background(CursorColors.light.background.ignoresSafeArea())
+        .background(colors.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             CursorBottomComposer(onTap: onOpenComposer)
         }
-        .environment(\.cursorScheme, .light)
         .onAppear {
             liveBridge?.onRequestRefresh?()
         }
@@ -461,13 +462,14 @@ public struct CursorWorkspaceThreadListView: View {
     }
 
     private var liveEmptyState: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let colors = CursorColors.resolve(cursorScheme)
+        return VStack(alignment: .leading, spacing: 6) {
             Text("No threads yet")
                 .font(CursorType.rowTitle)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
             Text("Send a prompt from this workspace to start the first conversation.")
                 .font(CursorType.rowSecondary)
-                .foregroundColor(CursorColors.light.secondaryText)
+                .foregroundColor(colors.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, CursorMetrics.rowHorizontalPadding)

@@ -39,7 +39,6 @@ public struct CursorWorkspaceDetailSheet: View {
             }
             .padding(.bottom, CursorMetrics.sheetContentBottomPadding)
         }
-        .environment(\.cursorScheme, .light)
     }
 
     @ViewBuilder
