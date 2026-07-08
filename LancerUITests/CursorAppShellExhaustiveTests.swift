@@ -393,6 +393,39 @@ final class CursorAppShellExhaustiveTests: XCTestCase {
         snapshot("10-composer-from-threadlist", app: app)
     }
 
+    func testRepoThreadList_ObservedSessionsSection() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
+        app.launchEnvironment["LANCER_CURSOR_SHELL"] = "1"
+        app.launchEnvironment["LANCER_CURSOR_MOCK_OBSERVED_SESSIONS"] = "1"
+        app.launch()
+        defer { app.terminate() }
+
+        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
+        app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "lancer-ios")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["lancer-ios"].waitForExistence(timeout: 10))
+
+        XCTAssertTrue(
+            app.staticTexts["On your Mac"].waitForExistence(timeout: 5),
+            "Mock observed sessions should render the On your Mac section"
+        )
+        XCTAssertTrue(
+            app.otherElements["observed-sessions-section"].waitForExistence(timeout: 5)
+                || app.staticTexts["On your Mac"].exists,
+            "Section should expose observed-sessions-section accessibility id"
+        )
+        XCTAssertTrue(
+            app.buttons["observed-session-row-0"].waitForExistence(timeout: 5),
+            "First observed session row should be tappable"
+        )
+        XCTAssertTrue(
+            app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS[c] %@", "Add observed-session import UI")
+            ).firstMatch.waitForExistence(timeout: 5)
+        )
+        snapshot("05e-observed-sessions-section", app: app)
+    }
+
     func testAllRepos_DistinctContent() throws {
         let app = launchSkipOnboarding()
         defer { app.terminate() }

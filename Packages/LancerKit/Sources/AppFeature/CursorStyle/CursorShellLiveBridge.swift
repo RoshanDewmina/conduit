@@ -141,6 +141,14 @@ public final class CursorShellLiveBridge {
     /// `DaemonChannel.sendQuestionAnswer` or `E2ERelayBridge.sendQuestionAnswer`.
     public var onAnswerQuestion: ((ChatArtifact, QuestionAnswerParams) async -> Void)?
 
+    public var observedSessions: [CursorObservedSessionMapping.RowModel] = []
+    /// Bumps the same refresh trigger the workspace/thread list uses (AppRoot's
+    /// `workspacesRevision` → `refreshCursorLiveBridge`).
+    public var onRequestRefresh: (() -> Void)?
+    /// Imports a terminal-originated session via `agent.conversations.attachObservedSession`
+    /// and returns the resulting Lancer `conversationId`, or an error message.
+    public var onImportObservedSession: ((CursorObservedSessionMapping.RowModel) async -> Result<String, CursorObservedSessionImportError>)?
+
     public var onDispatch: ((String, String, String?, ProofReceipt.Contract?) async -> Void)?
     public var onContinue: ((String, String, String?, ProofReceipt.Contract?) async -> Void)?
     /// Loads a selected EXISTING thread's real, already-persisted content

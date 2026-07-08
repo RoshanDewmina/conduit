@@ -1023,6 +1023,15 @@ public struct AppRoot: View {
         cursorLiveBridge.onClearInvalid = { [self] in
             relayFleetStore.removeAllInvalid()
         }
+        cursorLiveBridge.onRequestRefresh = { [self] in
+            workspacesRevision = UUID()
+        }
+        cursorLiveBridge.onImportObservedSession = { [self] row in
+            guard case .ready(let env) = environment else {
+                return .failure(CursorObservedSessionImportError("App isn't ready yet."))
+            }
+            return await importObservedSession(row, env: env)
+        }
     }
 
     @MainActor
@@ -1129,6 +1138,11 @@ public struct AppRoot: View {
                 for: relayFleetStore,
                 fleetStore: fleetStore
             )
+            if cursorLiveBridge.connectionPhase == .connected {
+                await refreshObservedSessions()
+            } else {
+                cursorLiveBridge.observedSessions = []
+            }
         } catch {
             // Best-effort hydration for the Cursor live shell.
         }
@@ -1155,6 +1169,141 @@ public struct AppRoot: View {
             map[conv.id] = attention
         }
         return map
+    }
+
+    @MainActor
+    private func refreshObservedSessions() async {
+        var rows: [CursorObservedSessionMapping.RowModel] = []
+        for machine in relayFleetStore.machines where relayFleetStore.isConnected(machine.id) {
+            guard let sessions = try? await machine.bridge.relayListSessions() else { continue }
+            rows.append(contentsOf: CursorObservedSessionMapping.RowModel.rows(
+                from: sessions,
+                machineID: machine.id.uuidString,
+                hostName: machine.record.displayName
+            ))
+        }
+        if let slot = selectedFleetSlot ?? fleetStore.slots.first,
+           slot.sessionViewModel.status == .connected,
+           let sessions = try? await slot.channel.listSessions() {
+            rows.append(contentsOf: CursorObservedSessionMapping.RowModel.rows(
+                from: sessions,
+                machineID: slot.hostID.uuidString,
+                hostName: slot.hostName
+            ))
+        }
+        var seen = Set<String>()
+        cursorLiveBridge.observedSessions = CursorObservedSessionMapping.RowModel.sorted(
+            rows.filter { seen.insert($0.id).inserted }
+        )
+    }
+
+    private struct ObservedSessionImportChannel {
+        let transport: ConversationTransport
+        let attach: () async throws -> ConversationAttachObservedSessionResponse
+    }
+
+    @MainActor
+    private func resolveObservedSessionImportChannel(
+        for row: CursorObservedSessionMapping.RowModel
+    ) -> ObservedSessionImportChannel? {
+        if let machineID = row.machineID,
+           let uuid = UUID(uuidString: machineID),
+           let machine = relayFleetStore.machine(RelayMachineID(uuid)),
+           relayFleetStore.isConnected(machine.id) {
+            let bridge = machine.bridge
+            return ObservedSessionImportChannel(
+                transport: ConversationTransport(
+                    append: { try await bridge.relayAppendConversation($0) },
+                    fetch: { try await bridge.relayFetchConversation($0) },
+                    archive: { try await bridge.relayArchiveConversation($0) }
+                ),
+                attach: {
+                    try await bridge.relayAttachObservedSession(
+                        ConversationAttachObservedSessionRequest(
+                            provider: row.provider,
+                            sessionId: row.id,
+                            cwd: row.cwd
+                        )
+                    )
+                }
+            )
+        }
+        if let slot = fleetStore.slots.first(where: { $0.hostID.uuidString == row.machineID })
+            ?? selectedFleetSlot
+            ?? fleetStore.slots.first,
+           slot.sessionViewModel.status == .connected {
+            let channel = slot.channel
+            return ObservedSessionImportChannel(
+                transport: ConversationTransport(
+                    append: { try await channel.appendConversation($0) },
+                    fetch: { try await channel.fetchConversation($0) },
+                    archive: { try await channel.archiveConversation($0) }
+                ),
+                attach: {
+                    try await channel.attachObservedSession(
+                        ConversationAttachObservedSessionRequest(
+                            provider: row.provider,
+                            sessionId: row.id,
+                            cwd: row.cwd
+                        )
+                    )
+                }
+            )
+        }
+        if let machine = relayFleetStore.machines.first(where: { relayFleetStore.isConnected($0.id) }) {
+            let bridge = machine.bridge
+            return ObservedSessionImportChannel(
+                transport: ConversationTransport(
+                    append: { try await bridge.relayAppendConversation($0) },
+                    fetch: { try await bridge.relayFetchConversation($0) },
+                    archive: { try await bridge.relayArchiveConversation($0) }
+                ),
+                attach: {
+                    try await bridge.relayAttachObservedSession(
+                        ConversationAttachObservedSessionRequest(
+                            provider: row.provider,
+                            sessionId: row.id,
+                            cwd: row.cwd
+                        )
+                    )
+                }
+            )
+        }
+        return nil
+    }
+
+    /// Imports a terminal-originated session via `agent.conversations.attachObservedSession`
+    /// (not `agent.observedSession.continue` — the relay arm rejects an empty prompt),
+    /// then hydrates the local GRDB mirror before navigation.
+    @MainActor
+    private func importObservedSession(
+        _ row: CursorObservedSessionMapping.RowModel,
+        env: AppEnvironment
+    ) async -> Result<String, CursorObservedSessionImportError> {
+        guard let channel = resolveObservedSessionImportChannel(for: row) else {
+            return .failure(CursorObservedSessionImportError("Host is not connected."))
+        }
+        do {
+            let response = try await channel.attach()
+            if let error = response.error, !error.isEmpty {
+                return .failure(CursorObservedSessionImportError(error))
+            }
+            guard !response.conversationId.isEmpty else {
+                return .failure(CursorObservedSessionImportError("Import didn't return a conversation."))
+            }
+            do {
+                _ = try await env.conversationSyncCoordinator.refreshConversation(
+                    conversationID: response.conversationId,
+                    transport: channel.transport
+                )
+            } catch {
+                Self.logger.error("importObservedSession: mirror refresh failed for \(response.conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+            workspacesRevision = UUID()
+            return .success(response.conversationId)
+        } catch {
+            return .failure(CursorObservedSessionImportError(error.localizedDescription))
+        }
     }
 
     private func defaultDispatchAgentID(env: AppEnvironment) -> String {
