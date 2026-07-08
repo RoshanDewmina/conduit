@@ -3,7 +3,10 @@ import SwiftUI
 import LancerCore
 import DesignSystem
 
-/// Terminal-style proof receipt card for a completed agent run (`lancer.proof/v0`).
+/// Proof receipt card for a completed agent run (`lancer.proof/v0`).
+/// A3-R4 Cursor-language pass: draws exclusively from `CursorColors`/
+/// `CursorType`/`CursorPillButton` (this card is only ever hosted by the
+/// Cursor-style `CursorWorkThreadView`).
 public struct ReceiptCardView: View {
     let artifact: ChatArtifact
     let receipt: ProofReceipt
@@ -15,7 +18,9 @@ public struct ReceiptCardView: View {
     @State private var filesExpanded = false
     @State private var commandsExpanded = false
     @State private var showingProofReel = false
-    @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
     private var accepted: Bool { ReceiptCardModel.isAccepted(payloadJSON: artifact.payloadJSON) }
 
@@ -79,11 +84,11 @@ public struct ReceiptCardView: View {
                 actionsSection
             }
         }
-        .background(t.termSurface)
-        .clipShape(RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous))
+        .background(colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: CursorMetrics.cardCornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: t.radiusMD, style: .continuous)
-                .strokeBorder(t.termBorder, lineWidth: 0.75)
+            RoundedRectangle(cornerRadius: CursorMetrics.cardCornerRadius, style: .continuous)
+                .strokeBorder(colors.hairline, lineWidth: 0.75)
         )
         // .contain keeps the card itself in the accessibility tree as a
         // container element; without it SwiftUI smears the identifier onto
@@ -107,12 +112,12 @@ public struct ReceiptCardView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 4) {
                     Text("Proof")
-                        .foregroundStyle(t.termText2)
+                        .foregroundStyle(colors.secondaryText)
                         .fontWeight(.semibold)
                     Text("›")
-                        .foregroundStyle(t.termText3)
+                        .foregroundStyle(colors.mutedText)
                     Text(receipt.agent)
-                        .foregroundStyle(t.termText3)
+                        .foregroundStyle(colors.mutedText)
                 }
                 .font(.dsMonoPt(10))
                 .tracking(10 * 0.12)
@@ -125,7 +130,7 @@ public struct ReceiptCardView: View {
                 ) {
                     Text(duration)
                         .font(.dsMonoPt(11))
-                        .foregroundStyle(t.termText3)
+                        .foregroundStyle(colors.mutedText)
                 }
             }
 
@@ -153,14 +158,14 @@ public struct ReceiptCardView: View {
 
     private var acceptedBadge: some View {
         HStack(spacing: 4) {
-            DSIconView(.check, size: 11, color: t.ok)
+            DSIconView(.check, size: 11, color: colors.successGreen)
             Text("Accepted")
                 .font(.dsMonoPt(10, weight: .semibold))
         }
-        .foregroundStyle(t.ok)
+        .foregroundStyle(colors.successGreen)
         .padding(.horizontal, 8)
         .padding(.vertical, 2)
-        .background(t.okSoft)
+        .background(colors.successGreen.opacity(0.12))
         .clipShape(Capsule())
         .accessibilityIdentifier("receipt-accepted-badge")
     }
@@ -171,7 +176,7 @@ public struct ReceiptCardView: View {
         sectionBlock(label: "Goal") {
             Text(goal)
                 .font(.dsMonoPt(12))
-                .foregroundStyle(t.termText)
+                .foregroundStyle(colors.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -187,11 +192,11 @@ public struct ReceiptCardView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(row.text)
                                 .font(.dsMonoPt(12))
-                                .foregroundStyle(t.termText)
+                                .foregroundStyle(colors.primaryText)
                             if let evidence = row.evidence, !evidence.isEmpty {
                                 Text(evidence)
                                     .font(.dsMonoPt(10))
-                                    .foregroundStyle(t.termText3)
+                                    .foregroundStyle(colors.mutedText)
                             }
                         }
                     }
@@ -206,12 +211,12 @@ public struct ReceiptCardView: View {
             HStack {
                 Text(testsSummary ?? "")
                     .font(.dsMonoPt(12))
-                    .foregroundStyle(t.termText)
+                    .foregroundStyle(colors.primaryText)
                 Spacer(minLength: 0)
                 if let caption = ReceiptCardModel.confidenceCaption(receipt.confidence?.tests) {
                     Text(caption)
                         .font(.dsMonoPt(10))
-                        .foregroundStyle(t.termText3)
+                        .foregroundStyle(colors.mutedText)
                 }
             }
         }
@@ -226,12 +231,12 @@ public struct ReceiptCardView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(shortPath(file.path))
                             .font(.dsMonoPt(11))
-                            .foregroundStyle(t.termText)
+                            .foregroundStyle(colors.primaryText)
                             .lineLimit(1)
                         Spacer(minLength: 0)
                         Text("+\(file.additions) -\(file.deletions)")
                             .font(.dsMonoPt(10))
-                            .foregroundStyle(t.termText3)
+                            .foregroundStyle(colors.mutedText)
                     }
                 }
                 if fileRows.count > 5 {
@@ -240,14 +245,14 @@ public struct ReceiptCardView: View {
                     } label: {
                         Text(filesExpanded ? "Show fewer" : "Show \(fileRows.count - 5) more")
                             .font(.dsMonoPt(10, weight: .semibold))
-                            .foregroundStyle(t.termAccent)
+                            .foregroundStyle(colors.orangeAccent)
                     }
                     .buttonStyle(.plain)
                 }
                 if let caption = ReceiptCardModel.confidenceCaption(receipt.confidence?.files) {
                     Text(caption)
                         .font(.dsMonoPt(10))
-                        .foregroundStyle(t.termText3)
+                        .foregroundStyle(colors.mutedText)
                 }
             }
         }
@@ -263,15 +268,15 @@ public struct ReceiptCardView: View {
                     HStack(spacing: 6) {
                         Image(systemName: commandsExpanded ? "chevron.down" : "chevron.right")
                             .font(.caption2)
-                            .foregroundStyle(t.termText3)
+                            .foregroundStyle(colors.mutedText)
                         Text("\(commandRows.count) command\(commandRows.count == 1 ? "" : "s")")
                             .font(.dsMonoPt(11, weight: .semibold))
-                            .foregroundStyle(t.termText2)
+                            .foregroundStyle(colors.secondaryText)
                         Spacer(minLength: 0)
                         if let caption = ReceiptCardModel.confidenceCaption(receipt.confidence?.commands) {
                             Text(caption)
                                 .font(.dsMonoPt(10))
-                                .foregroundStyle(t.termText3)
+                                .foregroundStyle(colors.mutedText)
                         }
                     }
                 }
@@ -282,13 +287,13 @@ public struct ReceiptCardView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(command.command)
                                 .font(.dsMonoPt(11))
-                                .foregroundStyle(t.termText)
+                                .foregroundStyle(colors.primaryText)
                                 .textSelection(.enabled)
                             Spacer(minLength: 0)
                             if let code = command.exitCode {
                                 Text("exit \(code)")
                                     .font(.dsMonoPt(10))
-                                    .foregroundStyle(code == 0 ? t.termOk : t.termErr)
+                                    .foregroundStyle(code == 0 ? colors.successGreen : colors.dangerRed)
                             }
                         }
                     }
@@ -364,7 +369,7 @@ public struct ReceiptCardView: View {
             Text(label.uppercased())
                 .font(.dsMonoPt(10))
                 .tracking(10 * 0.12)
-                .foregroundStyle(t.termText3)
+                .foregroundStyle(colors.mutedText)
             content()
         }
         .padding(.horizontal, 12)
@@ -372,7 +377,7 @@ public struct ReceiptCardView: View {
     }
 
     private var sectionDivider: some View {
-        Rectangle().fill(t.termBorder).frame(height: 1)
+        Rectangle().fill(colors.hairline).frame(height: 1)
     }
 
     private func actionButton(
@@ -385,15 +390,15 @@ public struct ReceiptCardView: View {
         Button(action: action) {
             Text(title)
                 .font(.dsMonoPt(12, weight: .semibold))
-                .foregroundStyle(primary ? t.accentFg : t.termText)
+                .foregroundStyle(primary ? colors.pillPrimaryText : colors.primaryText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(primary ? t.termAccent : t.termSurface2)
-                .clipShape(RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous))
+                .background(primary ? colors.orangeAccent : colors.composerBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay {
                     if !primary {
-                        RoundedRectangle(cornerRadius: t.radiusSM, style: .continuous)
-                            .strokeBorder(t.termBorder, lineWidth: 0.75)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(colors.hairline, lineWidth: 0.75)
                     }
                 }
         }
@@ -407,13 +412,13 @@ public struct ReceiptCardView: View {
         Group {
             switch status {
             case .met:
-                DSIconView(.check, size: 12, color: t.termOk)
+                DSIconView(.check, size: 12, color: colors.successGreen)
             case .unmet:
-                DSIconView(.close, size: 12, color: t.termErr)
+                DSIconView(.close, size: 12, color: colors.dangerRed)
             case .unknown:
                 Image(systemName: "questionmark.circle")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(t.termText3)
+                    .foregroundStyle(colors.mutedText)
             }
         }
     }
@@ -424,11 +429,11 @@ public struct ReceiptCardView: View {
             HStack {
                 Text(label)
                     .font(.dsMonoPt(11))
-                    .foregroundStyle(t.termText2)
+                    .foregroundStyle(colors.secondaryText)
                 Spacer(minLength: 0)
                 Text(caption)
                     .font(.dsMonoPt(10))
-                    .foregroundStyle(t.termText3)
+                    .foregroundStyle(colors.mutedText)
             }
         }
     }
@@ -467,17 +472,17 @@ public struct ReceiptCardView: View {
     }
 
     private var gutterColor: Color {
-        if accepted { return t.termOk.opacity(0.55) }
-        if receipt.exitCode == 0 || receipt.status == "completed" { return t.termOk.opacity(0.55) }
-        if receipt.exitCode != nil && receipt.exitCode != 0 { return t.termErr }
-        return t.termAccent
+        if accepted { return colors.successGreen.opacity(0.55) }
+        if receipt.exitCode == 0 || receipt.status == "completed" { return colors.successGreen.opacity(0.55) }
+        if receipt.exitCode != nil && receipt.exitCode != 0 { return colors.dangerRed }
+        return colors.orangeAccent
     }
 
     private var statusColor: Color {
         switch receipt.status {
-        case "completed": return t.termOk
-        case "failed": return t.termErr
-        default: return t.termText2
+        case "completed": return colors.successGreen
+        case "failed": return colors.dangerRed
+        default: return colors.secondaryText
         }
     }
 }
