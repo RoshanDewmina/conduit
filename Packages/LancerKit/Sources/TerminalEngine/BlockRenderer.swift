@@ -34,7 +34,7 @@ public final class BlockRenderer {
     public static let maxLinearLines = 2000
 
     /// Number of lines silently discarded for each block. Non-zero entries
-    /// power the "⚠ N earlier lines dropped" affordance in `ToolCardView`.
+    /// let renderers surface an "N earlier lines dropped" affordance.
     public private(set) var droppedLineCount: [BlockID: Int] = [:]
 
     /// Running line count for the linear SGR path (chunk-level, not rendered).

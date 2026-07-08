@@ -12,12 +12,10 @@ The old mock-gallery harness was **deleted**; the seams below replace it.
 
 `AppRoot.swift` reads these env vars (all `#if DEBUG`):
 
-- **`LANCER_DESTINATION`** — land directly in the sidebar shell, onboarding skipped. Values:
-  `inbox` · `governance` · `machines` · `sessions` · `settings` (anything else → home).
+- **`LANCER_DESTINATION`** — land directly in the Cursor shell, onboarding skipped. Values:
+  `inbox` / `approval` / `review` (open the approval Review sheet) · `settings` / `governance`
+  (open the Settings sheet); anything else → the Workspaces root.
 - **`LANCER_SEED_DEMO=1`** — populate demo hosts/approvals/snippets so screens aren't empty.
-- **`LANCER_FAKE_RELAY_HOST=<name>`** — simulate a paired, live relay host (Home's machine list
-  renders without a real relay; the real bridge subscription early-returns so it isn't clobbered).
-- Live SSH session: `LANCER_DAEMON_E2E=1` + `LANCER_TEST_HOST/USER/PW/PORT` — see `terminal-blocks` rule.
 
 `simctl` strips the `SIMCTL_CHILD_` prefix when forwarding env to the app:
 
@@ -40,17 +38,13 @@ on-screen assertions use `mcp__ios-simulator__ui_describe_all` / `ui_find_elemen
 
 ## Design system
 
-- Tokens: `DesignSystem/Tokens.swift`. Components: `DesignSystem/Components/`.
+- Tokens: `DesignSystem/Tokens.swift`. Components: `DesignSystem/Components/` and
+  `DesignSystem/Cursor/Components/` (the Cursor shell's own set).
 - **Use the existing components — don't reinvent:**
   - `DSButton` — `.primary` (WHITE) / `.accent` (ORANGE, brand CTA) / secondary / ghost / destructive;
     pass `mono: true` for terminal-context labels. Use `.accent` for brand CTAs, not `.primary`.
-  - `DSQuoteBlock` — left-bar callout (title/tags/body); tone maps to severity (ok/warn/accent/danger).
-  - `DSLink` — underlined accent inline link; needs a real action to be meaningful.
-  - `DSDiffChips` — "X → Y" status-transition chips. `PixelBox` — animated agent-state grid.
-    `PixelAvatar` — deterministic pixel avatar seeded by a string (host name, etc.).
-- **Layout invariant:** list rows reserve a fixed-width trailing slot for the unread badge even
-  when empty (`ZStack(alignment: .trailing) { … }.frame(width: 20, alignment: .trailing)`) so the
-  animated `PixelBox` never shifts horizontally between rows.
+  - Cursor shell surfaces use `CursorPillButton` / `CursorDrawer` / `CursorArtifactCard` etc. from
+    `DesignSystem/Cursor/Components/`.
 
 ## Verify a component change
 
