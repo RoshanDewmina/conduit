@@ -1215,8 +1215,10 @@ public struct AppRoot: View {
             cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
             cursorLiveBridge.threadAttention = threadAttentionMap(
                 conversations: conversations,
-                pendingApprovals: activeInboxViewModel.approvals.filter(\.isPending)
+                pendingApprovals: activeInboxViewModel.approvals.filter(\.isPending),
+                threadStates: &cursorLiveBridge.threadStates
             )
+            cursorLiveBridge.lastSnapshotAt = .now
             cursorLiveBridge.connectionPhase = Self.connectionPhase(
                 for: relayFleetStore,
                 fleetStore: fleetStore
@@ -1229,18 +1231,22 @@ public struct AppRoot: View {
     @MainActor
     private func threadAttentionMap(
         conversations: [ChatConversation],
-        pendingApprovals: [Approval]
+        pendingApprovals: [Approval],
+        threadStates: inout [String: CursorThreadAttention.ThreadState]
     ) -> [String: CursorThreadAttention] {
         var map: [String: CursorThreadAttention] = [:]
+        threadStates = [:]
         for conv in conversations {
             let hasApproval = pendingApprovals.contains { approval in
                 approval.cwd == conv.cwd || approval.agentSessionID == conv.id
             }
-            if hasApproval {
-                map[conv.id] = .needsApproval
-            } else if conv.status == .active {
-                map[conv.id] = .working
-            }
+            let state = CursorThreadAttention.ThreadState(
+                hasPendingApproval: hasApproval,
+                conversationStatus: conv.status
+            )
+            threadStates[conv.id] = state
+            let (attention, _, _) = CursorThreadAttention.derive(state)
+            map[conv.id] = attention
         }
         return map
     }

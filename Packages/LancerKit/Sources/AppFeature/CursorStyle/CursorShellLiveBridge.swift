@@ -117,6 +117,12 @@ public final class CursorShellLiveBridge {
     public var composerModelLabel: String = ManagedModel.claudeHaiku.label
     public var connectionPhase: ConnectionPhase = .connected
     public var threadAttention: [String: CursorThreadAttention] = [:]
+    /// Published inputs for `CursorThreadAttention.derive` per conversation id.
+    public var threadStates: [String: CursorThreadAttention.ThreadState] = [:]
+    /// When `refreshCursorLiveBridge` last completed — drives stale-relay copy.
+    public var lastSnapshotAt: Date?
+
+    public var relayHealthy: Bool { connectionPhase == .connected }
 
     public var onDispatch: ((String, String, String?, ProofReceipt.Contract?) async -> Void)?
     public var onContinue: ((String, String, String?, ProofReceipt.Contract?) async -> Void)?
