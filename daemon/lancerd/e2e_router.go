@@ -613,6 +613,8 @@ func methodToRelayType(method string) string {
 		return "agentToolStart"
 	case "agent.artifact":
 		return "agentArtifact"
+	case "agent.ship.result":
+		return "shipResult"
 	default:
 		return ""
 	}
