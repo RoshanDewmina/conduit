@@ -782,6 +782,7 @@ func TestMethodToRelayType(t *testing.T) {
 	}{
 		{"agent.run.output", "agentRunOutput"},
 		{"agent.run.status", "agentRunStatus"},
+		{"agent.run.receipt", "runReceipt"},
 		{"agent.approval.pending", ""},
 		{"", ""},
 	}

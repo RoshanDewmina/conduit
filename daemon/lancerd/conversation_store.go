@@ -882,6 +882,37 @@ func (s *conversationStore) appendRunStatus(runID, status string, exitCode *int)
 	return tx.Commit()
 }
 
+// appendRunReceipt records the finalized lancer.proof/v0 payload for a
+// terminal run so agent.conversations.fetch can replay it after reconnect.
+func (s *conversationStore) appendRunReceipt(runID, receiptJSON string) error {
+	convID, turnID, err := s.turnByRunID(runID)
+	if err != nil {
+		return err
+	}
+	now := conversationNow()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var newSeq int64
+	if err := tx.QueryRow(`UPDATE conversations SET last_seq = last_seq + 1, updated_at = ?, last_activity_at = ?
+		WHERE id = ? RETURNING last_seq`, now, now, convID).Scan(&newSeq); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`INSERT INTO conversation_events
+		(conversation_id, seq, turn_id, run_id, kind, payload_json, created_at)
+		VALUES (?, ?, ?, ?, 'receipt', ?, ?)`,
+		convID, newSeq, turnID, runID, receiptJSON, now); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 func isTerminalRunStatus(status string) bool {
 	switch status {
 	case "completed", "failed", "cancelled", "error", "denied", "budgetExceeded":

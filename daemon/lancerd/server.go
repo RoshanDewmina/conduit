@@ -280,9 +280,13 @@ func newServer(home string) *server {
 	return s
 }
 
-// handleRunTerminal applies per-run worktree retention: successful runs are
-// removed automatically; failed runs are kept for host-side inspection.
+// handleRunTerminal emits the finalized lancer.proof/v0 receipt (when present)
+// and applies per-run worktree retention: successful runs are removed
+// automatically; failed runs are kept for host-side inspection.
 func (s *server) handleRunTerminal(runID, status string, exitCode int) {
+	if receipt := s.dispatcher.getReceipt(runID); receipt != nil {
+		s.emitNotification("agent.run.receipt", receipt)
+	}
 	wtPath, repoRoot := s.dispatcher.takeRunWorktree(runID)
 	if wtPath == "" {
 		return
@@ -945,6 +949,21 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		_ = json.Unmarshal(msg.Params, &p)
 		s.writeResult(msg.ID, map[string]bool{"cancelled": s.dispatcher.cancel(p.RunID)})
 
+	case "agent.run.receipt.get":
+		var p struct {
+			RunID string `json:"runId"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.RunID == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		receipt := s.dispatcher.getReceipt(p.RunID)
+		if receipt == nil {
+			s.writeError(msg.ID, -32000, "receipt not found")
+			return
+		}
+		s.writeResult(msg.ID, receipt)
+
 	case "agent.emergencyStop":
 		stopped := s.applyEmergencyStop()
 		s.writeResult(msg.ID, map[string]interface{}{"emergencyStopped": true, "stoppedRuns": stopped})
@@ -1603,16 +1622,39 @@ func (s *server) persistConversationEvent(method string, params any) {
 	}()
 
 	switch method {
-	case "agent.run.output", "agent.run.status", "agent.artifact":
+	case "agent.run.output", "agent.run.status", "agent.artifact", "agent.run.receipt":
 	default:
 		return
 	}
 
-	m, ok := params.(map[string]any)
-	if !ok {
-		return
+	var (
+		runID string
+		m     map[string]any
+	)
+	switch method {
+	case "agent.run.receipt":
+		switch r := params.(type) {
+		case *runReceipt:
+			if r != nil {
+				runID = r.RunID
+			}
+		case runReceipt:
+			runID = r.RunID
+		default:
+			var ok bool
+			m, ok = params.(map[string]any)
+			if ok {
+				runID = stringParam(m, "runId", "runID")
+			}
+		}
+	default:
+		var ok bool
+		m, ok = params.(map[string]any)
+		if !ok {
+			return
+		}
+		runID = stringParam(m, "runId", "runID")
 	}
-	runID := stringParam(m, "runId", "runID")
 	if runID == "" {
 		return
 	}
@@ -1669,6 +1711,16 @@ func (s *server) persistConversationEvent(method string, params any) {
 		}
 		if err := s.conversations.upsertArtifact(event); err != nil {
 			logConversationPersistError("upsertArtifact", runID, err)
+		}
+
+	case "agent.run.receipt":
+		receiptJSON, marshalErr := json.Marshal(params)
+		if marshalErr != nil {
+			logConversationPersistError("appendRunReceipt", runID, marshalErr)
+			return
+		}
+		if err := s.conversations.appendRunReceipt(runID, string(receiptJSON)); err != nil {
+			logConversationPersistError("appendRunReceipt", runID, err)
 		}
 	}
 }

@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -300,5 +302,134 @@ func TestE2ELoopbackThroughBlindRelay(t *testing.T) {
 		if strings.Contains(p, "approvalResponse") || strings.Contains(p, "approvalPending") {
 			t.Fatalf("relay payload[%d] leaked cleartext message type: %s", i, p)
 		}
+	}
+}
+
+func relayMessageOfType(client *fakeRelayClient, msgType string) ([]byte, bool) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	for _, m := range client.messages {
+		if m.msgType == msgType {
+			return append([]byte(nil), m.data...), true
+		}
+	}
+	return nil, false
+}
+
+func waitForRelayMessage(client *fakeRelayClient, msgType string, timeout time.Duration) ([]byte, error) {
+	deadline := time.After(timeout)
+	for {
+		if data, ok := relayMessageOfType(client, msgType); ok {
+			return data, nil
+		}
+		select {
+		case <-deadline:
+			return nil, fmt.Errorf("timeout waiting for relay message %q", msgType)
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
+// TestE2EReceiptLoopbackDispatchGetIdentical proves a terminal dispatch emits a
+// runReceipt frame over the E2E relay and that agent.run.receipt.get returns the
+// same lancer.proof/v0 payload.
+func TestE2EReceiptLoopbackDispatchGetIdentical(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	srv.dispatcher.receiptGit = func(string, string, ...string) (string, error) {
+		return "", nil
+	}
+	srv.dispatcher.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		go func() {
+			emit("agent.run.status", map[string]any{"runId": runID, "status": "exited", "exitCode": 0})
+		}()
+		return &procHandle{kill: func() {}}, nil
+	}
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+	srv.setE2ERouter(router)
+
+	res := srv.dispatcher.dispatch(
+		dispatchParams{Agent: "claudeCode", CWD: home, Prompt: "hi", Model: "sonnet"},
+		allowEval,
+		noAudit,
+	)
+	if res.Status != "started" {
+		t.Fatalf("dispatch status = %q, want started", res.Status)
+	}
+
+	relayData, err := waitForRelayMessage(client, "runReceipt", 3*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var relayEnv struct {
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(relayData, &relayEnv); err != nil {
+		t.Fatalf("unmarshal relay envelope: %v", err)
+	}
+	if relayEnv.Type != "runReceipt" {
+		t.Fatalf("relay type = %q, want runReceipt", relayEnv.Type)
+	}
+	var relayReceipt map[string]any
+	if err := json.Unmarshal(relayEnv.Payload, &relayReceipt); err != nil {
+		t.Fatalf("unmarshal relay receipt: %v", err)
+	}
+	if relayReceipt["schema"] != receiptSchema {
+		t.Fatalf("relay schema = %v, want %q", relayReceipt["schema"], receiptSchema)
+	}
+	if relayReceipt["runId"] != res.RunID {
+		t.Fatalf("relay runId = %v, want %q", relayReceipt["runId"], res.RunID)
+	}
+
+	resultCh := make(chan json.RawMessage, 1)
+	srv.setEmitter(func(data []byte) error {
+		var m rpcMessage
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil
+		}
+		if m.ID == nil {
+			return nil
+		}
+		if fmt.Sprint(m.ID) != "1" {
+			return nil
+		}
+		raw, err := json.Marshal(m.Result)
+		if err != nil {
+			return err
+		}
+		select {
+		case resultCh <- raw:
+		default:
+		}
+		return nil
+	})
+
+	params, _ := json.Marshal(map[string]string{"runId": res.RunID})
+	srv.handleMessage(&rpcMessage{JSONRPC: "2.0", ID: 1, Method: "agent.run.receipt.get", Params: params})
+
+	var rpcReceipt json.RawMessage
+	select {
+	case rpcReceipt = <-resultCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("agent.run.receipt.get never returned a result")
+	}
+
+	var rpcMap map[string]any
+	if err := json.Unmarshal(rpcReceipt, &rpcMap); err != nil {
+		t.Fatalf("unmarshal rpc receipt: %v", err)
+	}
+	if rpcMap["schema"] != receiptSchema {
+		t.Fatalf("rpc schema = %v, want %q", rpcMap["schema"], receiptSchema)
+	}
+
+	if !reflect.DeepEqual(relayReceipt, rpcMap) {
+		t.Fatalf("relay and rpc receipts differ:\nrelay: %s\nrpc:   %s", relayEnv.Payload, rpcReceipt)
 	}
 }
