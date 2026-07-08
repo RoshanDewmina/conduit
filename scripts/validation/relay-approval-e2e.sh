@@ -3,7 +3,8 @@ set -uo pipefail
 
 # relay-approval-e2e.sh — prove the FULL V1 relay approval round-trip in the sim:
 # phone (XCUITest) ↔ production Cloud Run relay ↔ resident lancerd, tap APPROVE,
-# host hook unblocks (exit 0) + audit shows `approve`.
+# host hook unblocks (exit 0) + audit shows `approve`, then dispatch → lancer.proof/v0
+# receipt via the same paired daemon (control-channel probe).
 #
 # Why a host harness + XCUITest (not pure idb): synthesized HID taps don't fire
 # SwiftUI buttons on this headless iOS-27 sim, but XCUITest event injection does.
@@ -51,7 +52,8 @@ echo "=== clean app inbox state (uninstall so no stale pending cards) ==="
 xcrun simctl uninstall "$UDID" "$BUNDLE" 2>/dev/null || true
 
 echo "=== start resident daemon (isolated HOME, production relay) ==="
-HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" APPROVAL_RELAY_SECRET="${APPROVAL_RELAY_SECRET:-}" "$LANCERD" daemon >"$LOG" 2>&1 &
+HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" LANCER_RELAY_E2E_FAKE_DISPATCH=1 \
+  APPROVAL_RELAY_SECRET="${APPROVAL_RELAY_SECRET:-}" "$LANCERD" daemon >"$LOG" 2>&1 &
 DAEMON_PID=$!
 sleep 2
 HOME="$ISO" LANCER_RELAY_URL="$RELAY_BASE" "$LANCERD" relay-attach "$CODE" >/dev/null 2>&1
@@ -123,18 +125,38 @@ for i in $(seq 1 150); do kill -0 "$HOOK_PID" 2>/dev/null || break; sleep 1; don
 HOOK_RC="(still blocking)"
 if ! kill -0 "$HOOK_PID" 2>/dev/null; then wait "$HOOK_PID"; HOOK_RC=$?; fi
 
+echo "=== receipt probe (fake dispatch → lancer.proof/v0 on paired daemon) ==="
+RECEIPT_RC=1
+if [ "$XCB_RC" = 0 ] && [ "$HOOK_RC" = 0 ]; then
+  (
+    cd "$REPO/daemon/lancerd" && \
+    HOME="$ISO" LANCER_RELAY_E2E_RECEIPT_PROBE=1 \
+      go test -run TestRelayE2EReceiptAfterPairedDaemon -count=1 .
+  ) >/tmp/lancer-relay-e2e/receipt-probe.log 2>&1
+  RECEIPT_RC=$?
+  if [ "$RECEIPT_RC" = 0 ]; then
+    echo "  RECEIPT ✓ (schema lancer.proof/v0, contract echoed)"
+  else
+    echo "  RECEIPT ✗ — see /tmp/lancer-relay-e2e/receipt-probe.log"
+    tail -20 /tmp/lancer-relay-e2e/receipt-probe.log
+  fi
+else
+  echo "  RECEIPT skipped (approval round-trip did not pass)"
+fi
+
 echo ""
 echo "================= RESULT ================="
 echo "xcodebuild test rc : $XCB_RC  (0 = APPROVE tapped + card cleared)"
 echo "agent-hook rc      : $HOOK_RC (0 = host hook UNBLOCKED via relay approve)"
+echo "receipt probe rc   : $RECEIPT_RC (0 = lancer.proof/v0 via agent.run.receipt.get)"
 echo "--- audit tail ---"; tail -2 "$ISO/.lancer/audit.log" 2>/dev/null || echo "(no audit)"
 echo "--- marker file created by the unblocked agent? ---"
 [ -f "$MARKER" ] && echo "YES ($MARKER)" || echo "NO (agent did not run a real write — expected: hook only gates, agent would create it)"
 echo "--- xcodebuild tail (on failure) ---"
 [ "$XCB_RC" != 0 ] && tail -25 /tmp/lancer-relay-e2e/xcodebuild.log
 
-if [ "$XCB_RC" = 0 ] && [ "$HOOK_RC" = 0 ]; then
-  echo ">>> PASS: relay approval round-trip proven (phone tap → relay → host unblock)."
+if [ "$XCB_RC" = 0 ] && [ "$HOOK_RC" = 0 ] && [ "$RECEIPT_RC" = 0 ]; then
+  echo ">>> PASS: relay approval + receipt round-trip proven (phone tap → relay → receipt)."
   exit 0
 fi
 echo ">>> FAIL: see logs in /tmp/lancer-relay-e2e/"

@@ -960,12 +960,29 @@ type dispatcher struct {
 }
 
 func newDispatcher() *dispatcher {
-	return &dispatcher{
+	d := &dispatcher{
 		runs:          map[string]*dispatchRun{},
 		providerSpend: map[string]*providerSpend{},
 		launch:        realLauncher,
 		audit:         func(AuditEntry) {},
 	}
+	if os.Getenv("LANCER_RELAY_E2E_FAKE_DISPATCH") == "1" {
+		d.launch = e2eFakeRelayLaunch
+	}
+	return d
+}
+
+// e2eFakeRelayLaunch is used only by scripts/validation/relay-approval-e2e.sh to
+// prove the receipt pipeline on a live, relay-paired resident daemon without
+// invoking a real vendor CLI.
+func e2eFakeRelayLaunch(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+	go func() {
+		emit("agent.tool.start", map[string]any{
+			"inputJSON": `{"command":"go test ./..."}`,
+		})
+		emit("agent.run.status", map[string]any{"runId": runID, "status": "exited", "exitCode": 0})
+	}()
+	return &procHandle{kill: func() {}}, nil
 }
 
 // emitAudit forwards to the audit sink, tolerating a nil sink (a dispatcher built
