@@ -1244,6 +1244,29 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		s.writeResult(msg.ID, res)
 
+	case "agent.ship.preflight":
+		var p struct {
+			Workdir string `json:"workdir"`
+		}
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Workdir == "" {
+			s.writeError(msg.ID, -32602, "workdir required")
+			return
+		}
+		s.writeResult(msg.ID, s.shipPreflight(p.Workdir))
+
+	case "agent.ship.propose":
+		var p shipActionParams
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.Workdir == "" || p.Message == "" {
+			s.writeError(msg.ID, -32602, "workdir and message required")
+			return
+		}
+		res, err := s.proposeShipAction(p)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, res)
+
 	case "agent.worktree.list":
 		var p struct {
 			Workdir     string `json:"workdir"`
