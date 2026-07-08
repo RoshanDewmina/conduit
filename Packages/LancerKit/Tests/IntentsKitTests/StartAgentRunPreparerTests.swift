@@ -194,6 +194,7 @@ struct StartAgentRunPreparerTests {
         let db = try AppDatabase.inMemory()
         let repo = WorkspaceRepository(db)
         try await repo.create(name: "older", machineID: machine.id, path: "/repos/older")
+        try await Task.sleep(for: .milliseconds(20))
         let newer = try await repo.create(name: "newer", machineID: machine.id, path: "/repos/newer")
         try await repo.touch(newer.id)
 

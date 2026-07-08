@@ -48,6 +48,7 @@ struct WorkspaceEntityQueryTests {
     try await IntentsKitTestFixtures.withDatabase(relayMachines: [machineA, machineB]) { db in
       let repo = WorkspaceRepository(db)
       let older = try await repo.create(name: "older", machineID: machineA.id, path: "/a/older")
+      try await Task.sleep(for: .milliseconds(20))
       let newer = try await repo.create(name: "newer", machineID: machineB.id, path: "/b/newer")
       try await repo.touch(newer.id)
 
