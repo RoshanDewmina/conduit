@@ -24,10 +24,16 @@ import AppIntents
 //     bridge instance; they're not guaranteed stable across device add/remove.
 //   • WorkspaceEntity IDs are relay-machine-scoped and not CloudKit-backed.
 
+// Guarded by `#if swift(>=6.4)`, not just `@available(iOS 27.0, *)`: `SyncableEntity`
+// doesn't exist in the iOS 26 SDK at all.
+#if swift(>=6.4)
+
 @available(iOS 27.0, macOS 27.0, watchOS 27.0, tvOS 27.0, visionOS 27.0, *)
 extension ConversationEntity: SyncableEntity {}
 
 @available(iOS 27.0, macOS 27.0, watchOS 27.0, tvOS 27.0, visionOS 27.0, *)
 extension RunEntity: SyncableEntity {}
+
+#endif // swift(>=6.4)
 
 #endif

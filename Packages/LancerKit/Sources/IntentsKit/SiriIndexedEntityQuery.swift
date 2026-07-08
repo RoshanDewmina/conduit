@@ -29,6 +29,11 @@ import Foundation
 // `SiriEntityIndexer.refreshPendingApprovals()` (called on every
 // `SiriSurfaceBootstrap.refresh()`) is the right cadence for those.
 
+// Guarded by `#if swift(>=6.4)`, not just `@available(iOS 27.0, *)`: these
+// protocols/types don't exist in the iOS 26 SDK at all, so a toolchain/SDK that
+// predates iOS 27 can't type-check this code regardless of runtime availability.
+#if swift(>=6.4)
+
 // MARK: - ConversationEntityQuery
 
 @available(iOS 27.0, macOS 27.0, visionOS 27.0, *)
@@ -145,5 +150,7 @@ private func spotlightIndex(
         protectionClass: description.protectionClass
     )
 }
+
+#endif // swift(>=6.4)
 
 #endif

@@ -17,6 +17,13 @@ import PersistenceKit
 //   3. ApprovalEntity, MachineEntity, WorkspaceEntity do NOT conform (they
 //      are intentionally excluded per design; see SiriSyncableEntities.swift).
 
+@Suite("SiriSyncableEntity")
+struct SiriSyncableEntityTests {
+
+    // MARK: - SyncableEntity conformances
+
+#if swift(>=6.4)
+
 // Generic helper: compile-fails if `E` does not conform to `SyncableEntity`.
 // This is the canonical way to assert a conformance in a Swift test without
 // using an existential (`any SyncableEntity` is valid Swift 6 but accessing
@@ -28,11 +35,6 @@ private func assertSyncableID<E: SyncableEntity>(_ entity: E) -> String {
     // the system stores as the cross-device identifier.
     entity.id.entityIdentifierString
 }
-
-@Suite("SiriSyncableEntity")
-struct SiriSyncableEntityTests {
-
-    // MARK: - SyncableEntity conformances
 
     @Test("ConversationEntity conforms to SyncableEntity on iOS/macOS 27+")
     func conversationEntityConformance() async throws {
@@ -75,6 +77,8 @@ struct SiriSyncableEntityTests {
             }
         }
     }
+
+#endif // swift(>=6.4)
 
     // MARK: - Stable ID invariant
 

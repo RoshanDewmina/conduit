@@ -19,6 +19,8 @@ struct SiriIndexedEntityQueryTests {
 
     // MARK: - Structural conformance (compile-time + runtime availability)
 
+#if swift(>=6.4)
+
     @Test("ConversationEntityQuery conforms to IndexedEntityQuery on iOS/macOS 27+")
     func conversationQueryConformance() {
         guard #available(macOS 27.0, iOS 27.0, visionOS 27.0, *) else { return }
@@ -47,6 +49,8 @@ struct SiriIndexedEntityQueryTests {
         let query = WorkspaceEntityQuery()
         let _: any IndexedEntityQuery = query
     }
+
+#endif // swift(>=6.4)
 
     // MARK: - Secret screening (observable without Spotlight integration)
 
