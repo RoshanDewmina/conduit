@@ -64,17 +64,17 @@ public struct CursorRunOnSheet: View {
             }
             .padding(.bottom, CursorMetrics.sheetContentBottomPadding)
         }
-        .environment(\.cursorScheme, .light)
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let colors = CursorColors.resolve(cursorScheme)
+        return VStack(alignment: .leading, spacing: 6) {
             Text("No run target selected")
                 .font(CursorType.rowTitle)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
             Text("Pair a machine or open a conversation from a paired host to choose where prompts run.")
                 .font(CursorType.rowSecondary)
-                .foregroundColor(CursorColors.light.secondaryText)
+                .foregroundColor(colors.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
