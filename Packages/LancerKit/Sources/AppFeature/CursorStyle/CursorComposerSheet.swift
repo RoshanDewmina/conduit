@@ -35,6 +35,9 @@ public struct CursorComposerSheet: View {
     private let runTargetName: String?
     private let placeholder: String
     private let prefillText: String?
+    private let resolvedCWDPath: String?
+    private let cwdBlockedMessage: String?
+    private let sendExternallyDisabled: Bool
     private let onPickRepo: () -> Void
     private let onPickRunTarget: () -> Void
     private let onAttach: () -> Void
@@ -54,6 +57,9 @@ public struct CursorComposerSheet: View {
         runTargetName: String? = nil,
         placeholder: String = "Plan, ask, build...",
         prefillText: String? = nil,
+        resolvedCWDPath: String? = nil,
+        cwdBlockedMessage: String? = nil,
+        sendExternallyDisabled: Bool = false,
         onPickRepo: @escaping () -> Void = {},
         onPickRunTarget: @escaping () -> Void = {},
         onAttach: @escaping () -> Void = {},
@@ -68,6 +74,9 @@ public struct CursorComposerSheet: View {
         self.runTargetName = runTargetName
         self.placeholder = placeholder
         self.prefillText = prefillText
+        self.resolvedCWDPath = resolvedCWDPath
+        self.cwdBlockedMessage = cwdBlockedMessage
+        self.sendExternallyDisabled = sendExternallyDisabled
         self.onPickRepo = onPickRepo
         self.onPickRunTarget = onPickRunTarget
         self.onAttach = onAttach
@@ -124,6 +133,8 @@ public struct CursorComposerSheet: View {
                     .padding(.horizontal, CursorMetrics.sheetHeaderHorizontalPadding)
                     .padding(.bottom, CursorMetrics.composerSheetPickerBottomPadding)
 
+                    cwdStatusLine(colors: colors)
+
                     contractDisclosure(colors: colors)
 
                     TextField(placeholder, text: $text, axis: .vertical)
@@ -159,8 +170,8 @@ public struct CursorComposerSheet: View {
                                 action: submitIfNeeded
                             )
                             .accessibilityIdentifier("composer.send")
-                            .opacity(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.35 : 1)
-                            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .opacity(canSend ? 1 : 0.35)
+                            .disabled(!canSend)
                         } else {
                             CursorIconButton(
                                 systemImageName: "photo",
@@ -209,6 +220,30 @@ public struct CursorComposerSheet: View {
                 attachmentsEnabled: false,
                 onClose: { showingContextSheet = false }
             )
+        }
+    }
+
+    private var canSend: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sendExternallyDisabled
+    }
+
+    @ViewBuilder
+    private func cwdStatusLine(colors: CursorColors) -> some View {
+        if let message = cwdBlockedMessage {
+            Text(message)
+                .font(CursorType.rowSecondary)
+                .foregroundColor(colors.dangerRed)
+                .padding(.horizontal, CursorMetrics.sheetHeaderHorizontalPadding)
+                .padding(.bottom, 8)
+                .accessibilityIdentifier("composer.cwd-warning")
+        } else if let path = resolvedCWDPath, repoName != "Home" {
+            Text("Runs in \(path)")
+                .font(CursorType.rowSecondary)
+                .foregroundColor(colors.secondaryText)
+                .lineLimit(2)
+                .padding(.horizontal, CursorMetrics.sheetHeaderHorizontalPadding)
+                .padding(.bottom, 8)
+                .accessibilityIdentifier("composer.cwd-path")
         }
     }
 
@@ -367,7 +402,7 @@ public struct CursorComposerSheet: View {
 
     private func submitIfNeeded() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, !sendExternallyDisabled else { return }
         if let id = threadID {
             CursorComposerDraftStore.shared.clearDraft(threadID: id)
         }
