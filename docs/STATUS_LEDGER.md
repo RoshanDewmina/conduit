@@ -1,11 +1,12 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-08 (evening)  
-**`master` tip:** `732071a7` — `fix(5c): echo contentHash on lock-screen decisions and close D0.2` — open this file first for current priority, canonical doc map, and branch status.
+**Last updated:** 2026-07-09 (morning)  
+**Active branch:** `feat/chat-overhaul-w0a` (Wave 0 chat dogfood) — open this file first for current priority, canonical doc map, and branch status.  
+**`master` tip (stale vs active work):** `732071a7` — re-check `git rev-parse HEAD` / `gh pr list` before citing.
 
 > **Sidebar/Command Home IA refs scrubbed from active docs 2026-07-08** (A2 audit, PR #53); historical
 > evidence files may still mention the old shell. Cross-check any "Fixed"/"Shipped"/"PASS" claim here
-> against `git log` / `gh pr list` — this ledger was refreshed 2026-07-08 against live `master`.
+> against `git log` / `gh pr list` — this ledger was refreshed 2026-07-09 against live branch tip.
 
 Living trackers (update these when code or tests change):
 
@@ -13,12 +14,33 @@ Living trackers (update these when code or tests change):
 - Feature scope decisions → [`docs/product/2026-07-05-lancer-feature-master-plan.md`](product/2026-07-05-lancer-feature-master-plan.md)
 - Full feature list with wireframe links → [`docs/product/FEATURE_BACKLOG.md`](product/FEATURE_BACKLOG.md)
 - Agent read order → [`docs/AGENT_READ_FIRST.md`](AGENT_READ_FIRST.md)
+- Chat UI port map (competitor borrow) → [`docs/product/2026-07-09-chat-ui-port-map.md`](product/2026-07-09-chat-ui-port-map.md)
+- Cross-device continuity study → [`docs/product/2026-07-09-cross-device-continuity-study.md`](product/2026-07-09-cross-device-continuity-study.md)
+- Feature × competitor matrix → [`docs/product/2026-07-09-feature-improvement-matrix.md`](product/2026-07-09-feature-improvement-matrix.md)
+- Production / TestFlight burn list → [`docs/product/2026-07-09-production-readiness-gaps.md`](product/2026-07-09-production-readiness-gaps.md)
 
 ---
 
 ## Current priority (engineering)
 
-**Tier 0 exit bar** (Codex `019f3763`, 2026-07-06): prove the **live Cursor shell** end-to-end against real `lancerd`:
+**Wave 0 dogfood (2026-07-09):** chat multi-turn on device is the #1 blocker. Active work on `feat/chat-overhaul-w0a`.
+
+| Slice | Status | Notes |
+|-------|--------|-------|
+| W0.A chat identity / sync / errors / discovery | **Landed on branch** | conversationID routing, conflict refetch, vendor-error + ledger poll, host-ledger thread discovery |
+| W0.A Slice 1 chat polish | **Landed on branch** (`fa04426f`) | MarkdownUI + streaming smoother + jump-to-latest (Orca/Happier/Omnara port map); unit tests + app-target build green |
+| W0.B cross-device continue | **Partial** | Discovery wired; two-device QA script in continuity study §4 — needs second device |
+| W0.C/D/E | **Landed on branch** | Trusted machines, search polish, honest add-repo |
+
+**Ranked next (confirm with owner before starting):**
+
+1. **Owner phone retest** of Slice 1 + multi-turn script (markdown, no hung Working…, host-ledger threads visible).
+2. **Slice 1b** — stop-while-generating + thinking indicator (parity plan; out of Slice 1).
+3. **W0.B two-device QA** — continuity study §4; optionally wire/delete `.streamingElsewhere`.
+4. **Production P0s** from burn list — GCS `lancerd` publish, VPS C1, CloudKit Production schema (D2) — owner-gated.
+5. Away Launch Composer remains deferred until chat green.
+
+**Tier 0 exit bar** (still the live-loop foundation; Codex `019f3763`, 2026-07-06):
 
 > pair → dispatch prompt → receive approval → approve/deny → follow-up/continue
 
@@ -30,7 +52,7 @@ Living trackers (update these when code or tests change):
 | Physical device governed loop (D0.2) | **PASS** (owner, 2026-07-08 evening) — host audit `approve` + `deny` | [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); prior morning FAIL [`test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md) |
 | APNs lock-screen approve (5c) | **PASS** — force-quit + lock Approve (`79137ae4…`) and Reject (`461bc3e0…`) | [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); #52 + `732071a7` content-hash echo/race fix |
 
-**Unfrozen by D0.2 / 5c PASS:** Away Launch Composer (next product lane — not built yet). Watch embed **cut** by owner Jul 8 — do not schedule. A3 R1–R4 **merged** (#63–#66).
+**Unfrozen by D0.2 / 5c PASS:** Away Launch Composer (deferred until chat green). Watch embed **cut** by owner Jul 8 — do not schedule. A3 R1–R4 **merged** (#63–#66).
 
 **Unfrozen / merged (2026-07-07–08):** proof receipts + home attention (Layers 0–3, #34); approve-and-remember (#47); deep-link auth/billing paths (#48); Siri entity intents D2/D3 (#46), I1 (#38), I2 (#41), I3 (#43), E3 voice-answer (#45); question/Ladder pipeline E1 (#49) + QuestionCardView E2 (#44); gated git/PR ship actions G (#50); Proof Reel H1 (#51); 5c lock-screen delivery fix (#52); A2 dead-code cleanup (#55); settings feedback rows (#56); A3 design tokens (#57); observed sessions J1–J2 (#54, #58); Return-to-Desk J3 (#59); push `/secret-request` + `/question` routes (#62); append-retry offline fix (#19); daemon/conn test deflake (#60, #61).
 
