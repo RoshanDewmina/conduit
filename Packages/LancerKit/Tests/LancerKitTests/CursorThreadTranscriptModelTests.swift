@@ -168,4 +168,53 @@ struct CursorTranscriptMapperTests {
         )
         #expect(overlay == nil)
     }
+
+    @Test("mirrored failed turn with vendor errorMessage renders error row")
+    func mirroredFailedTurnVendorError() {
+        let turns = [
+            turn(
+                id: "t1",
+                ordinal: 0,
+                prompt: "Run agent",
+                status: .failed,
+                errorMessage: "Credit balance is too low"
+            ),
+        ]
+        let rows = CursorTranscriptMapper.makeRows(
+            turns: turns,
+            artifacts: [],
+            liveOverlay: nil,
+            bridgeError: nil
+        )
+        guard case .turnSection(let section) = rows[0] else {
+            Issue.record("Expected turn section")
+            return
+        }
+        #expect(section.turnError == "Credit balance is too low")
+    }
+
+    @Test("completed turn stops working overlay on last row")
+    func completedTurnStopsWorkingOverlay() {
+        let turns = [
+            turn(id: "t1", ordinal: 0, prompt: "Hi", assistantText: "Done.", status: .completed),
+        ]
+        let overlay = CursorTranscriptMapper.LiveOverlayInput(
+            isActive: true,
+            prompt: "Hi",
+            response: "Done.",
+            isWorking: false
+        )
+        let rows = CursorTranscriptMapper.makeRows(
+            turns: turns,
+            artifacts: [],
+            liveOverlay: overlay,
+            bridgeError: nil
+        )
+        guard case .turnSection(let section) = rows[0] else {
+            Issue.record("Expected turn section")
+            return
+        }
+        #expect(section.liveOverlay?.isWorking == false)
+        #expect(section.liveOverlay?.response == "Done.")
+    }
 }

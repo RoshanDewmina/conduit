@@ -221,6 +221,10 @@ type server struct {
 	// runStderr accumulates stderr chunks per runID so failed turns get a useful error_message.
 	runStderrMu sync.Mutex
 	runStderr   map[string]string
+	// runResultError holds vendor stream-json result errors (stdout) per runID;
+	// takes priority over stderr when persisting a failed turn's error_message.
+	runResultErrorMu sync.Mutex
+	runResultError   map[string]string
 }
 
 type loopState struct {
@@ -251,7 +255,8 @@ func newServer(home string) *server {
 		scheduler:  newScheduler(home),
 		loops:      map[string]loopState{},
 		loopsPath:  filepath.Join(home, ".lancer", "loops.json"),
-		runStderr:  map[string]string{},
+		runStderr:      map[string]string{},
+		runResultError: map[string]string{},
 	}
 	s.loadLoops()
 	// The conversation ledger opens its own SQLite file under <home>/.lancer —
@@ -1667,6 +1672,16 @@ func (s *server) writeError(id interface{}, code int, message string) {
 // which must behave EXACTLY as it did before Task 4 (cross-device sync build
 // handoff) regardless of ledger persistence outcome.
 func (s *server) emitNotification(method string, params any) {
+	if method == "agent.run.resultError" {
+		if m, ok := params.(map[string]any); ok {
+			runID := stringParam(m, "runId", "runID")
+			errText := stringParam(m, "error")
+			if runID != "" && errText != "" {
+				s.appendRunResultError(runID, errText)
+			}
+		}
+		return
+	}
 	s.persistConversationEvent(method, params)
 
 	data, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
@@ -1783,9 +1798,14 @@ func (s *server) persistConversationEvent(method string, params any) {
 		}
 		errMsg := ""
 		if isTerminalRunStatus(status) {
-			stderrTail := s.takeRunStderr(runID)
 			if status == "failed" {
-				errMsg = stderrTail
+				errMsg = s.takeRunResultError(runID)
+				if errMsg == "" {
+					errMsg = s.takeRunStderr(runID)
+				}
+			} else {
+				s.takeRunResultError(runID)
+				s.takeRunStderr(runID)
 			}
 		}
 		if err := s.conversations.appendRunStatus(runID, status, exitCode, errMsg); err != nil {
@@ -1837,6 +1857,20 @@ func (s *server) takeRunStderr(runID string) string {
 	defer s.runStderrMu.Unlock()
 	buf := s.runStderr[runID]
 	delete(s.runStderr, runID)
+	return buf
+}
+
+func (s *server) appendRunResultError(runID, errText string) {
+	s.runResultErrorMu.Lock()
+	defer s.runResultErrorMu.Unlock()
+	s.runResultError[runID] = truncateRunErrorMessage(errText)
+}
+
+func (s *server) takeRunResultError(runID string) string {
+	s.runResultErrorMu.Lock()
+	defer s.runResultErrorMu.Unlock()
+	buf := s.runResultError[runID]
+	delete(s.runResultError, runID)
 	return buf
 }
 

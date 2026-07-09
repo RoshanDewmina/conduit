@@ -162,6 +162,9 @@ public final class CursorShellLiveBridge {
     /// the generic "No output recorded" placeholder even for a thread with a
     /// real, complete saved response (2026-07-07).
     public var onOpenThread: ((String) async -> Void)?
+    /// Fallback ledger poll while a thread is still "Working…" — reconciles
+    /// terminal state when live relay events were lost during re-pair.
+    public var onPollThread: ((String) async -> Void)?
     /// Real full-text search over conversation history (title/prompt/
     /// assistant-text/artifact-text, via the existing `chat_fts` table) — the
     /// search overlay previously filtered a 5-row hardcoded list client-side
