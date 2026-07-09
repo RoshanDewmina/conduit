@@ -147,3 +147,6 @@ tier1-cursor-shell/
 # Cloned competitor repos for research only — not part of this codebase
 research_repos/
 .study/
+
+# Competitor study clones — never commit
+research-repos/
