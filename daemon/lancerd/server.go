@@ -1798,14 +1798,13 @@ func (s *server) persistConversationEvent(method string, params any) {
 		}
 		errMsg := ""
 		if isTerminalRunStatus(status) {
+			resultErr := s.takeRunResultError(runID)
+			stderrTail := s.takeRunStderr(runID)
 			if status == "failed" {
-				errMsg = s.takeRunResultError(runID)
+				errMsg = resultErr
 				if errMsg == "" {
-					errMsg = s.takeRunStderr(runID)
+					errMsg = stderrTail
 				}
-			} else {
-				s.takeRunResultError(runID)
-				s.takeRunStderr(runID)
 			}
 		}
 		if err := s.conversations.appendRunStatus(runID, status, exitCode, errMsg); err != nil {
