@@ -424,7 +424,7 @@ public struct CursorAppShell: View {
     /// for a single call site.
     private func openConversationFromSiri(id: String) async {
         guard let db = try? AppDatabase.openShared(),
-              let conversation = try? await ChatConversationRepository(db).conversation(id: id)
+              (try? await ChatConversationRepository(db).conversation(id: id)) != nil
         else { return }
         if let bridge = liveBridge {
             bridge.selectedThreadID = id
@@ -510,7 +510,6 @@ public struct CursorAppShell: View {
             onPickModel: { showingModelSheet = true },
             onSend: liveBridge == nil ? nil : { payload in
                 guard let liveBridge else { return }
-                let repoName = liveBridge.composerCWD.isEmpty ? "Home" : liveBridge.composerCWD
                 let model = ManagedModel.cliDispatchSlug(for: liveBridge.composerModelSlug)
                 if let threadID = liveBridge.selectedThreadID {
                     liveBridge.activeThreadPrompt = payload.prompt

@@ -399,7 +399,7 @@ public struct CursorWorkThreadView: View {
     }
 
     @ViewBuilder
-    private func changesCard(for artifacts: [ChatArtifact]) {
+    private func changesCard(for artifacts: [ChatArtifact]) -> some View {
         if let receipt = activeReceipt(in: artifacts), let files = receipt.filesTouched, !files.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -588,9 +588,5 @@ public struct CursorWorkThreadView: View {
         )
     }()
     #endif
-}
-
-private extension Notification.Name {
-    static let lancerChatArtifactPersisted = Notification.Name("lancerChatArtifactPersisted")
 }
 #endif
