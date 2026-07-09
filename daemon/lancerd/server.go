@@ -218,6 +218,9 @@ type server struct {
 	// (conversation_rpc.go) then return a clear "conversation store
 	// unavailable" error instead of panicking on a nil pointer.
 	conversations *conversationStore
+	// runStderr accumulates stderr chunks per runID so failed turns get a useful error_message.
+	runStderrMu sync.Mutex
+	runStderr   map[string]string
 }
 
 type loopState struct {
@@ -248,6 +251,7 @@ func newServer(home string) *server {
 		scheduler:  newScheduler(home),
 		loops:      map[string]loopState{},
 		loopsPath:  filepath.Join(home, ".lancer", "loops.json"),
+		runStderr:  map[string]string{},
 	}
 	s.loadLoops()
 	// The conversation ledger opens its own SQLite file under <home>/.lancer —
@@ -1764,6 +1768,9 @@ func (s *server) persistConversationEvent(method string, params any) {
 		}
 		stream := stringParam(m, "stream")
 		chunk := stringParam(m, "chunk")
+		if stream == "stderr" && chunk != "" {
+			s.appendRunStderr(runID, chunk)
+		}
 		if err := s.conversations.appendRunOutput(runID, stream, chunk, seq); err != nil {
 			logConversationPersistError("appendRunOutput", runID, err)
 		}
@@ -1774,7 +1781,11 @@ func (s *server) persistConversationEvent(method string, params any) {
 		if v, ok := intParam(m, "exitCode"); ok {
 			exitCode = &v
 		}
-		if err := s.conversations.appendRunStatus(runID, status, exitCode); err != nil {
+		errMsg := ""
+		if status == "failed" {
+			errMsg = s.takeRunStderr(runID)
+		}
+		if err := s.conversations.appendRunStatus(runID, status, exitCode, errMsg); err != nil {
 			logConversationPersistError("appendRunStatus", runID, err)
 		}
 
@@ -1806,6 +1817,24 @@ func (s *server) persistConversationEvent(method string, params any) {
 			logConversationPersistError("appendRunReceipt", runID, err)
 		}
 	}
+}
+
+func (s *server) appendRunStderr(runID, chunk string) {
+	s.runStderrMu.Lock()
+	defer s.runStderrMu.Unlock()
+	s.runStderr[runID] += chunk
+	const maxCapture = 8192
+	if len(s.runStderr[runID]) > maxCapture {
+		s.runStderr[runID] = s.runStderr[runID][len(s.runStderr[runID])-maxCapture:]
+	}
+}
+
+func (s *server) takeRunStderr(runID string) string {
+	s.runStderrMu.Lock()
+	defer s.runStderrMu.Unlock()
+	buf := s.runStderr[runID]
+	delete(s.runStderr, runID)
+	return buf
 }
 
 // logConversationPersistError logs a genuine ledger-write failure (as opposed

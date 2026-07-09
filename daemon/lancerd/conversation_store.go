@@ -43,9 +43,11 @@ var errNoLedgerTurn = errors.New("conversation_store: no turn found for run")
 // baseSeq conflict check safe against concurrent callers.
 
 const conversationsDBFileName = "conversations.sqlite"
+const daemonHostIDFileName = "host-id"
 
 type conversationStore struct {
-	db *sql.DB
+	db     *sql.DB
+	hostID string
 }
 
 // openConversationStore opens (creating if needed) the host conversation ledger
@@ -71,11 +73,33 @@ func openConversationStore(home string) (*conversationStore, error) {
 	db.SetMaxOpenConns(1)
 
 	s := &conversationStore{db: db}
+	hostID, err := loadOrCreateDaemonHostID(dir)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("conversation_store: host id: %w", err)
+	}
+	s.hostID = hostID
 	if err := s.migrate(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("conversation_store: migrate: %w", err)
 	}
 	return s, nil
+}
+
+// loadOrCreateDaemonHostID returns a stable UUID persisted under ~/.lancer/host-id
+// so every conversation row on this daemon shares the same host_id for cross-device identity.
+func loadOrCreateDaemonHostID(lancerDir string) (string, error) {
+	path := filepath.Join(lancerDir, daemonHostIDFileName)
+	if data, err := os.ReadFile(path); err == nil {
+		if id := strings.TrimSpace(string(data)); id != "" {
+			return id, nil
+		}
+	}
+	id := newUUID()
+	if err := os.WriteFile(path, []byte(id+"\n"), 0600); err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 func (s *conversationStore) close() error {
@@ -697,8 +721,8 @@ func (s *conversationStore) createConversationAndFirstTurn(tx *sql.Tx, req conve
 	_, err := tx.Exec(`INSERT INTO conversations
 		(id, title, provider, agent_id, host_id, host_name, cwd, model, budget_usd, state, source,
 		 created_at, updated_at, last_activity_at, last_seq)
-		VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, 'active', 'phone', ?, ?, ?, 0)`,
-		convID, deriveTitle(req.Prompt), provider, provider, hostName, resolvedCWD,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'phone', ?, ?, ?, 0)`,
+		convID, deriveTitle(req.Prompt), provider, provider, s.hostID, hostName, resolvedCWD,
 		nullIfEmpty(req.Model), nullIfZero(req.BudgetUSD), now, now, now)
 	if err != nil {
 		return conversationAppendResult{}, err
@@ -841,7 +865,7 @@ func (s *conversationStore) appendRunOutput(runID, stream, chunk string, seq int
 // appendRunStatus updates the owning turn's status (and completed_at/
 // error_message for terminal states) and appends a status event allocated at
 // the next conversation-level sequence number.
-func (s *conversationStore) appendRunStatus(runID, status string, exitCode *int) error {
+func (s *conversationStore) appendRunStatus(runID, status string, exitCode *int, errorMessage string) error {
 	convID, turnID, err := s.turnByRunID(runID)
 	if err != nil {
 		return err
@@ -855,7 +879,16 @@ func (s *conversationStore) appendRunStatus(runID, status string, exitCode *int)
 	defer func() { _ = tx.Rollback() }()
 
 	if isTerminalRunStatus(status) {
-		if _, err := tx.Exec(`UPDATE conversation_turns SET status = ?, completed_at = ? WHERE run_id = ?`,
+		msg := truncateRunErrorMessage(errorMessage)
+		if msg == "" && status == "failed" && exitCode != nil && *exitCode != 0 {
+			msg = fmt.Sprintf("Run failed with exit code %d", *exitCode)
+		}
+		if msg != "" {
+			if _, err := tx.Exec(`UPDATE conversation_turns SET status = ?, completed_at = ?, error_message = ? WHERE run_id = ?`,
+				status, now, msg, runID); err != nil {
+				return err
+			}
+		} else if _, err := tx.Exec(`UPDATE conversation_turns SET status = ?, completed_at = ? WHERE run_id = ?`,
 			status, now, runID); err != nil {
 			return err
 		}
@@ -928,6 +961,16 @@ func isTerminalRunStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+const maxRunErrorMessageLen = 500
+
+func truncateRunErrorMessage(msg string) string {
+	msg = strings.TrimSpace(msg)
+	if len(msg) <= maxRunErrorMessageLen {
+		return msg
+	}
+	return msg[len(msg)-maxRunErrorMessageLen:]
 }
 
 // bindVendorSession records the exact vendor CLI session/thread ID for a run's
@@ -1171,8 +1214,8 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 	if _, err := tx.Exec(`INSERT INTO conversations
 		(id, title, provider, agent_id, host_id, host_name, cwd, state, source,
 		 created_at, updated_at, last_activity_at, last_seq)
-		VALUES (?, ?, ?, ?, NULL, ?, ?, 'active', 'observedImport', ?, ?, ?, 0)`,
-		convID, convTitle, provider, provider, hostName, cwd, now, now, now); err != nil {
+		VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'observedImport', ?, ?, ?, 0)`,
+		convID, convTitle, provider, provider, s.hostID, hostName, cwd, now, now, now); err != nil {
 		return conversationImportResult{}, err
 	}
 

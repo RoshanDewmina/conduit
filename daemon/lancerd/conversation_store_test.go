@@ -107,7 +107,7 @@ func TestAppendRunOutputAndStatusOrderingViaFetch(t *testing.T) {
 		t.Fatalf("appendRunOutput chunk-b: %v", err)
 	}
 	exitCode := 0
-	if err := s.appendRunStatus("run_1", "completed", &exitCode); err != nil {
+	if err := s.appendRunStatus("run_1", "completed", &exitCode, ""); err != nil {
 		t.Fatalf("appendRunStatus: %v", err)
 	}
 
@@ -530,5 +530,56 @@ func TestSetArchived(t *testing.T) {
 
 	if _, err := s.setArchived("conv_does_not_exist", true); err == nil {
 		t.Error("expected error archiving an unknown conversationId, got nil")
+	}
+}
+
+func TestDaemonHostIDStableAcrossConversationsAndReopen(t *testing.T) {
+	home := t.TempDir()
+	s1, err := openConversationStore(home)
+	if err != nil {
+		t.Fatalf("openConversationStore: %v", err)
+	}
+
+	res1, err := s1.beginTurn(conversationAppendRequest{
+		ClientTurnID: "device-1:1", Agent: "claudeCode", Prompt: "first",
+	}, "/proj", "run_a")
+	if err != nil {
+		t.Fatalf("beginTurn first: %v", err)
+	}
+	res2, err := s1.beginTurn(conversationAppendRequest{
+		ClientTurnID: "device-1:2", Agent: "claudeCode", Prompt: "second",
+	}, "/proj", "run_b")
+	if err != nil {
+		t.Fatalf("beginTurn second: %v", err)
+	}
+
+	fetch1, err := s1.fetch(res1.ConversationID, 0, 100)
+	if err != nil {
+		t.Fatalf("fetch first: %v", err)
+	}
+	fetch2, err := s1.fetch(res2.ConversationID, 0, 100)
+	if err != nil {
+		t.Fatalf("fetch second: %v", err)
+	}
+	if fetch1.Conversation.HostID == "" {
+		t.Fatal("expected host_id on first conversation")
+	}
+	if fetch1.Conversation.HostID != fetch2.Conversation.HostID {
+		t.Fatalf("host_id mismatch: %q vs %q", fetch1.Conversation.HostID, fetch2.Conversation.HostID)
+	}
+	if fetch1.Conversation.HostID != s1.hostID {
+		t.Fatalf("listed host_id %q != store hostID %q", fetch1.Conversation.HostID, s1.hostID)
+	}
+
+	if err := s1.close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	s2, err := openConversationStore(home)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer s2.close()
+	if s2.hostID != fetch1.Conversation.HostID {
+		t.Fatalf("host_id after reopen = %q, want %q", s2.hostID, fetch1.Conversation.HostID)
 	}
 }
