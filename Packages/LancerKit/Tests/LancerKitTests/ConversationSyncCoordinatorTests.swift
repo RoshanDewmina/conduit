@@ -76,9 +76,9 @@ struct ConversationSyncCoordinatorTests {
         let repo = ChatConversationRepository(db)
         let coordinator = ConversationSyncCoordinator(chatRepo: repo)
         let machineID = "557A7877-F729-5031-9606-0E04F2B67822"
-        var sawWireVendor: String?
+        let wireVendorCapture = WireVendorCapture()
         let transport = makeTransport(append: { request in
-            sawWireVendor = request.agent
+            await wireVendorCapture.set(request.agent)
             return ConversationAppendResponse(
                 status: "started", conversationId: "conv-relay", turnId: "turn-1", runId: "run-1",
                 cwd: "/proj", baseSeq: 0, nextSeq: 2, resumeMode: "new"
@@ -93,7 +93,7 @@ struct ConversationSyncCoordinatorTests {
             Issue.record("expected .started, got \(outcome)")
             return
         }
-        #expect(sawWireVendor == "claudeCode")
+        #expect(await wireVendorCapture.value == "claudeCode")
         let mirrored = try await repo.conversation(id: "conv-relay")
         #expect(mirrored?.agentID == "relay|\(machineID)|claudeCode")
         #expect(mirrored?.vendor == "claudeCode")
@@ -153,17 +153,125 @@ struct ConversationSyncCoordinatorTests {
         #expect(turns.last?.vendorSessionID == "sess-1")
     }
 
-    @Test("conflict status marks the conversation conflict and does not touch the mirror row's seq")
-    func conflictStatus() async throws {
+    @Test("conflict auto-recovers: stale baseSeq refetches then retries with fresh nextSeq")
+    func conflictAutoRecoversOnce() async throws {
         let db = try AppDatabase.inMemory()
         let repo = ChatConversationRepository(db)
         let coordinator = ConversationSyncCoordinator(chatRepo: repo)
         let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
         _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 2, syncState: .synced)
 
-        let transport = makeTransport(append: { _ in
-            ConversationAppendResponse(status: "conflict", conversationId: "conv-1", baseSeq: 1, nextSeq: 5, message: "stale baseSeq")
-        })
+        let appendCount = Counter()
+        let transport = makeTransport(
+            append: { request in
+                let n = await appendCount.increment()
+                if n == 1 {
+                    #expect(request.baseSeq == 1)
+                    return ConversationAppendResponse(
+                        status: "conflict", conversationId: "conv-1", baseSeq: 1, nextSeq: 7,
+                        message: "Conversation changed. Refetch before appending."
+                    )
+                }
+                #expect(request.baseSeq == 7)
+                return ConversationAppendResponse(
+                    status: "started", conversationId: "conv-1", turnId: "turn-2", runId: "run-2",
+                    cwd: "/proj", baseSeq: 7, nextSeq: 9, resumeMode: "exact"
+                )
+            },
+            fetch: { req in
+                ConversationFetchResponse(
+                    conversation: ConversationSummary(
+                        id: req.conversationId, title: "T", provider: "claudeCode", agentID: "claudeCode",
+                        hostName: "h", cwd: "/proj", state: "active", source: "app",
+                        createdAt: "2026-07-02T00:00:00Z", updatedAt: "2026-07-02T01:00:00Z",
+                        lastActivityAt: "2026-07-02T01:00:00Z", lastSeq: 7
+                    ),
+                    nextSeq: 7
+                )
+            }
+        )
+
+        let outcome = await coordinator.continueConversation(
+            conversationID: "conv-1", baseSeq: 1, prompt: "Thank you", clientTurnID: "d:3",
+            hostName: "h", hostID: nil, transport: transport
+        )
+        guard case .started(let started) = outcome else {
+            Issue.record("expected .started after conflict recovery, got \(outcome)")
+            return
+        }
+        #expect(started.runID == "run-2")
+        #expect(started.baseSeqForNextTurn == 9)
+        #expect(await appendCount.value == 2)
+        let mirrored = try await repo.conversation(id: "conv-1")
+        #expect(mirrored?.lastHostSeq == 9)
+        #expect(mirrored?.syncState == .synced)
+        #expect(await coordinator.currentSyncState("conv-1") == .synced)
+    }
+
+    @Test("conflict after refetch and retry still conflicts surfaces runbook blocked message")
+    func conflictDoubleBlocked() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 2, syncState: .synced)
+
+        let transport = makeTransport(
+            append: { _ in
+                ConversationAppendResponse(
+                    status: "conflict", conversationId: "conv-1", baseSeq: 1, nextSeq: 5,
+                    message: "Conversation changed. Refetch before appending."
+                )
+            },
+            fetch: { req in
+                ConversationFetchResponse(
+                    conversation: ConversationSummary(
+                        id: req.conversationId, title: "T", provider: "claudeCode", agentID: "claudeCode",
+                        hostName: "h", cwd: "/proj", state: "active", source: "app",
+                        createdAt: "2026-07-02T00:00:00Z", updatedAt: "2026-07-02T01:00:00Z",
+                        lastActivityAt: "2026-07-02T01:00:00Z", lastSeq: 5
+                    ),
+                    nextSeq: 5
+                )
+            }
+        )
+
+        let outcome = await coordinator.continueConversation(
+            conversationID: "conv-1", baseSeq: 1, prompt: "stale", clientTurnID: "d:3",
+            hostName: "h", hostID: nil, transport: transport
+        )
+        guard case .blocked(let message) = outcome else {
+            Issue.record("expected .blocked, got \(outcome)")
+            return
+        }
+        #expect(message == "This conversation changed on another device. Refresh to catch up.")
+        let mirrored = try await repo.conversation(id: "conv-1")
+        #expect(mirrored?.syncState == .conflict)
+        #expect(mirrored?.lastHostSeq == 5, "refetch should advance mirror seq before the retry conflict")
+        #expect(await coordinator.currentSyncState("conv-1") == .conflict)
+    }
+
+    @Test("conflict when refetch throws blocks without retrying append")
+    func conflictRefetchThrows() async throws {
+        struct Boom: Error {}
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 2, syncState: .synced)
+
+        let appendCount = Counter()
+        let transport = makeTransport(
+            append: { _ in
+                await appendCount.increment()
+                return ConversationAppendResponse(
+                    status: "conflict", conversationId: "conv-1", baseSeq: 1, nextSeq: 5,
+                    message: "stale baseSeq"
+                )
+            },
+            fetch: { _ in throw Boom() }
+        )
+
         let outcome = await coordinator.continueConversation(
             conversationID: "conv-1", baseSeq: 1, prompt: "stale", clientTurnID: "d:3",
             hostName: "h", hostID: nil, transport: transport
@@ -173,9 +281,10 @@ struct ConversationSyncCoordinatorTests {
             return
         }
         #expect(message == "stale baseSeq")
+        #expect(await appendCount.value == 1, "must not retry append when refetch fails")
         let mirrored = try await repo.conversation(id: "conv-1")
         #expect(mirrored?.syncState == .conflict)
-        #expect(mirrored?.lastHostSeq == 2, "a conflict response must not advance the mirror's seq")
+        #expect(mirrored?.lastHostSeq == 2)
         #expect(await coordinator.currentSyncState("conv-1") == .conflict)
     }
 
@@ -268,6 +377,11 @@ struct ConversationSyncCoordinatorTests {
         private(set) var value = 0
         @discardableResult
         func increment() -> Int { value += 1; return value }
+    }
+
+    private actor WireVendorCapture {
+        private(set) var value: String?
+        func set(_ vendor: String?) { value = vendor }
     }
 
     @Test("refreshConversation merges conversation, turns, and events into the mirror")
@@ -438,9 +552,12 @@ struct ConversationSyncCoordinatorTests {
         let first = await iterator.next()
         #expect(first == .synced)
 
-        let transport = makeTransport(append: { _ in
-            ConversationAppendResponse(status: "conflict", conversationId: "conv-1", baseSeq: 1, nextSeq: 5)
-        })
+        let transport = makeTransport(
+            append: { _ in
+                ConversationAppendResponse(status: "conflict", conversationId: "conv-1", baseSeq: 1, nextSeq: 5)
+            },
+            fetch: { _ in throw NSError(domain: "test", code: 1) }
+        )
         async let outcome: ConversationSyncCoordinator.TurnOutcome = coordinator.continueConversation(
             conversationID: "conv-1", baseSeq: 1, prompt: "x", clientTurnID: "d:1",
             hostName: "h", hostID: nil, transport: transport

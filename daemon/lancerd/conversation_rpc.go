@@ -248,7 +248,7 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 	// re-read the authoritative value so this response's NextSeq (and thus
 	// what the caller uses as their next baseSeq) isn't stale by one.
 	if launchResult.Status != "" && launchResult.Status != "started" {
-		if err := s.conversations.appendRunStatus(runID, launchResult.Status, nil); err == nil {
+		if err := s.conversations.appendRunStatus(runID, launchResult.Status, nil, launchResult.Message); err == nil {
 			if conv, err := s.conversations.conversationByID(res.ConversationID); err == nil {
 				resp.NextSeq = conv.LastSeq
 			}

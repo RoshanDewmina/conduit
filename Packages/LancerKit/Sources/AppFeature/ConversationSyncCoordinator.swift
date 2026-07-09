@@ -117,9 +117,8 @@ public actor ConversationSyncCoordinator {
     }
 
     /// Appends a follow-up turn to an existing conversation. `baseSeq` must be
-    /// the caller's last-known `nextSeq` — a stale value is exactly what
-    /// produces a host-reported conflict, which this method surfaces as
-    /// `.conflict` sync state rather than silently retrying.
+    /// the caller's last-known `nextSeq`. A stale value produces a host-reported
+    /// conflict; this method refetches once and retries before surfacing `.conflict`.
     public func continueConversation(
         conversationID: String, baseSeq: Int, prompt: String, clientTurnID: String,
         agent: String? = nil, model: String? = nil, budgetUSD: Double? = nil,
@@ -196,6 +195,87 @@ public actor ConversationSyncCoordinator {
             return .blocked(Self.transportErrorMessage(error))
         }
 
+        if response.status == "conflict" {
+            return await recoverFromConflict(
+                request: request, response: response, hostName: hostName, hostID: hostID,
+                transport: transport, routingAgentID: routingAgentID
+            )
+        }
+
+        return await finishAppendResponse(
+            request: request, response: response, hostName: hostName, hostID: hostID,
+            routingAgentID: routingAgentID
+        )
+    }
+
+    private func recoverFromConflict(
+        request: ConversationAppendRequest, response: ConversationAppendResponse,
+        hostName: String, hostID: String?, transport: ConversationTransport,
+        routingAgentID: String?
+    ) async -> TurnOutcome {
+        let conversationID = response.conversationId
+        let refreshedSeq: Int
+        do {
+            refreshedSeq = try await refetchConversationForRecovery(
+                conversationID: conversationID, transport: transport
+            )
+        } catch {
+            return await blockConflict(conversationID: conversationID, message: response.message)
+        }
+
+        let retryRequest = ConversationAppendRequest(
+            conversationId: request.conversationId, baseSeq: refreshedSeq,
+            clientTurnId: request.clientTurnId, agent: request.agent, cwd: request.cwd,
+            prompt: request.prompt, model: request.model, budgetUSD: request.budgetUSD,
+            useWorktree: request.useWorktree, contract: request.contract
+        )
+
+        let retryResponse: ConversationAppendResponse
+        do {
+            retryResponse = try await transport.append(retryRequest)
+        } catch {
+            if !conversationID.isEmpty { publish(.hostOffline, for: conversationID) }
+            return .blocked(Self.transportErrorMessage(error))
+        }
+
+        if retryResponse.status == "conflict" {
+            return await blockConflict(
+                conversationID: conversationID,
+                message: "This conversation changed on another device. Refresh to catch up."
+            )
+        }
+
+        return await finishAppendResponse(
+            request: retryRequest, response: retryResponse, hostName: hostName, hostID: hostID,
+            routingAgentID: routingAgentID
+        )
+    }
+
+    private func refetchConversationForRecovery(
+        conversationID: String, transport: ConversationTransport
+    ) async throws -> Int {
+        let local = try await chatRepo.conversation(id: conversationID)
+        let response = try await transport.fetch(
+            ConversationFetchRequest(
+                conversationId: conversationID, sinceSeq: local?.lastHostSeq ?? 0, limit: 2000
+            )
+        )
+        try await mergeFetchResponse(response)
+        return response.nextSeq
+    }
+
+    private func blockConflict(conversationID: String, message: String?) async -> TurnOutcome {
+        if !conversationID.isEmpty {
+            publish(.conflict, for: conversationID)
+            try? await chatRepo.updateSyncState(conversationID: conversationID, state: .conflict)
+        }
+        return .blocked(message ?? "This conversation changed on another device. Refresh to catch up.")
+    }
+
+    private func finishAppendResponse(
+        request: ConversationAppendRequest, response: ConversationAppendResponse,
+        hostName: String, hostID: String?, routingAgentID: String?
+    ) async -> TurnOutcome {
         switch response.status {
         case "started":
             await persistStartedTurn(
@@ -215,10 +295,6 @@ public actor ConversationSyncCoordinator {
                 worktreePath: response.worktreePath,
                 isolated: response.isolated ?? false
             ))
-        case "conflict":
-            publish(.conflict, for: response.conversationId)
-            try? await chatRepo.updateSyncState(conversationID: response.conversationId, state: .conflict)
-            return .blocked(response.message ?? "This conversation changed on another device.")
         case "denied":
             publish(.synced, for: response.conversationId)
             return .blocked("Blocked by policy\(response.rule.map { " (\($0))" } ?? "").")
