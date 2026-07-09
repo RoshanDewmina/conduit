@@ -74,6 +74,9 @@ public struct CursorTrustedMachinesView: View {
                     } else {
                         CursorSectionHeader("Paired")
                         ForEach(displayTrustedMachines) { machine in
+                            // Always offer Remove in live shell — buried ellipsis-only
+                            // menus made the 3-machine cap feel like a dead end
+                            // (2026-07-09 pairing unblock).
                             machineRow(machine, removable: onRemoveMachine != nil && !usesMockData)
                         }
                     }
@@ -81,14 +84,20 @@ public struct CursorTrustedMachinesView: View {
                     if !displayInvalidMachines.isEmpty {
                         CursorSectionHeader("Dead pairings")
                         ForEach(displayInvalidMachines) { machine in
-                            machineRow(machine, removable: false)
+                            // Dead rows are removable one-by-one (same remove
+                            // callback) so a full fleet of ghost sim pairings
+                            // can be cleared without hunting for Clear-all.
+                            machineRow(
+                                machine,
+                                removable: onRemoveMachine != nil && !usesMockData
+                            )
                         }
                         if onClearInvalid != nil {
                             Button {
                                 showingClearInvalidConfirmation = true
                             } label: {
                                 CursorListRow(
-                                    title: "Clear dead pairings",
+                                    title: "Clear all dead pairings",
                                     titleColor: colors.dangerRed,
                                     trailingText: "\(displayInvalidMachines.count) invalid",
                                     showChevron: false
@@ -111,7 +120,8 @@ public struct CursorTrustedMachinesView: View {
         .sheet(isPresented: $showingPairing) {
             if let onPaired {
                 CursorRelayPairingSheet(
-                    existingMachineCount: displayTrustedMachines.count,
+                    // Cap must ignore dead pairings — same rule as RelayFleetStore.usableMachineCount.
+                    existingMachineCount: displayTrustedMachines.filter { !$0.isInvalid }.count,
                     onPaired: onPaired
                 )
             }
@@ -223,21 +233,15 @@ public struct CursorTrustedMachinesView: View {
                 Spacer(minLength: 8)
 
                 if removable {
-                    Menu {
-                        Button("Re-pair machine") {
-                            requestPairing()
-                        }
-                        Button("Remove machine", role: .destructive) {
-                            machinePendingRemoval = machine
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(colors.mutedText)
-                            .frame(width: 32, height: 32)
-                            .contentShape(Rectangle())
+                    Button("Remove") {
+                        machinePendingRemoval = machine
                     }
-                    .accessibilityIdentifier("cursor.trusted-machines.menu.\(machine.shortMachineID)")
+                    .font(CursorType.statusPill)
+                    .foregroundColor(colors.dangerRed)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(colors.dangerRed.opacity(0.12), in: Capsule())
+                    .accessibilityIdentifier("cursor.trusted-machines.remove.\(machine.shortMachineID)")
                 }
             }
             .padding(.horizontal, CursorMetrics.rowHorizontalPadding)

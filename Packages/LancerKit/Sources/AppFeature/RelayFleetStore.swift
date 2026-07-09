@@ -70,7 +70,11 @@ public final class RelayFleetStore {
     /// silently rejects every subsequent real pairing at `add()` below.
     public var isFull: Bool { isRelayFleetFull(count: usableMachineCount) }
 
-    private var usableMachineCount: Int {
+    /// Machines that still count toward `relayFleetMaxMachines`. Dead
+    /// (`.pairingInvalid`) pairings are excluded so the pairing sheet's cap
+    /// matches `add()` — counting ghosts here used to block Connect with
+    /// "maximum machines" while Remove was hard to find (2026-07-09).
+    public var usableMachineCount: Int {
         machines.filter { connectionStates.state(for: $0.id) != .pairingInvalid }.count
     }
 

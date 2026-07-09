@@ -36,6 +36,16 @@ public struct CursorRelayPairingSheet: View {
         existingMachineCount >= relayFleetMaxMachines
     }
 
+    private var isPairingFailed: Bool {
+        if case .pairingFailed = client.pairingState { return true }
+        return false
+    }
+
+    private var pairingFailureReason: String? {
+        guard case .pairingFailed(let reason) = client.pairingState else { return nil }
+        return humanizePairingFailure(reason)
+    }
+
     public var body: some View {
         CursorBottomSheetContainer(
             title: "Pair machine",
@@ -57,8 +67,11 @@ public struct CursorRelayPairingSheet: View {
                         sectionLabel("Pairing code")
                         codeField
                         helperText("Run `lancerd pair` on your machine, then enter the 6-digit code.")
-                        if client.connectionState != .disconnected {
+                        if client.connectionState != .disconnected || isPairingFailed {
                             statusCard
+                        }
+                        if let failure = pairingFailureReason {
+                            failureBanner(failure)
                         }
                         CursorPillButton(title: "Connect", style: .primary) {
                             connect()
@@ -168,14 +181,42 @@ public struct CursorRelayPairingSheet: View {
 
     private var capReached: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("You've paired \(relayFleetMaxMachines) machines — the maximum. Remove one from Trusted machines in Settings to pair another.")
+            Text("You've paired \(relayFleetMaxMachines) machines — the maximum (often ghost simulator pairings). Remove one from Trusted machines, then try again.")
                 .font(CursorType.bodyText)
                 .foregroundColor(colors.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
-            CursorPillButton(title: "Maximum machines paired", style: .secondary) {}
-                .disabled(true)
-                .frame(maxWidth: .infinity)
+            CursorPillButton(title: "Close and manage machines", style: .primary) {
+                dismiss()
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityIdentifier("cursor.relay.pairing.manage-machines")
         }
+    }
+
+    private func failureBanner(_ message: String) -> some View {
+        Text(message)
+            .font(CursorType.bodyText)
+            .foregroundColor(colors.dangerRed)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(colors.dangerRed.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .accessibilityIdentifier("cursor.relay.pairing.failure")
+    }
+
+    /// Maps relay/daemon failure strings into an actionable sentence.
+    private func humanizePairingFailure(_ reason: String) -> String {
+        let lower = reason.lowercased()
+        if lower.contains("key mismatch") {
+            return "This code is already pinned to another device (often a simulator auto-pair). On the Mac run `lancerd pair` for a fresh code, then enter that new code here — don't reuse an old one."
+        }
+        if lower.contains("expired") {
+            return "That pairing code expired. Run `lancerd pair` on the Mac for a new code."
+        }
+        if lower.contains("too many") {
+            return "Too many pairing attempts from this network. Wait a minute, then try again with a fresh `lancerd pair` code."
+        }
+        return reason
     }
 
     private func connect() {

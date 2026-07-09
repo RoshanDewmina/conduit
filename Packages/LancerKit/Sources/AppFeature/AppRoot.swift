@@ -664,7 +664,7 @@ public struct AppRoot: View {
                     .environment(\.cursorShellLiveBridge, cursorLiveBridge)
                     .sheet(isPresented: $showingCursorRelayPairing) {
                         CursorRelayPairingSheet(
-                            existingMachineCount: relayFleetStore.machines.count,
+                            existingMachineCount: relayFleetStore.usableMachineCount,
                             onPaired: { client, record in
                                 addRelayMachine(client: client, record: record, env: env)
                                 showingCursorRelayPairing = false
@@ -781,7 +781,7 @@ public struct AppRoot: View {
             }
             .sheet(isPresented: $showingCursorRelayPairing) {
                 CursorRelayPairingSheet(
-                    existingMachineCount: relayFleetStore.machines.count,
+                    existingMachineCount: relayFleetStore.usableMachineCount,
                     onPaired: { client, record in
                         addRelayMachine(client: client, record: record, env: env)
                         showingCursorRelayPairing = false
