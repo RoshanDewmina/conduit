@@ -295,60 +295,152 @@ public struct CursorWorkspacesView: View {
 
 // MARK: - Add Repo sheet (screen-map row 6, IMG_2414 / dark equivalent)
 
-/// Cursor-style "Add Repo" sheet: X close, centered "Add Repo" title, a
-/// rounded "Repo…" search field, a "Workspaces" section header, and a list
-/// of org/repo rows (muted org segment + bold repo-name segment, no chevron,
-/// no branch affordance — unlike `CursorRepoPickerSheet`'s Active row). This
-/// is a demo/mock affordance only (no daemon/GitHub wiring exists yet for
-/// actually adding a repo) — selecting a row simply dismisses, matching the
-/// no-op pattern already used by the Profile drawer's other placeholder rows.
+/// Mode selection for `CursorAddRepoSheet` — internal for unit tests.
+enum CursorAddRepoSheetPresentation {
+    /// Whether the sheet should render the DEBUG mock repo list (mock shell
+    /// only). Live shell always gets the honest explainer — no fake success.
+    static func showsMockRepoList(liveBridgeIsSet: Bool) -> Bool {
+        #if DEBUG
+        return !liveBridgeIsSet
+        #else
+        return false
+        #endif
+    }
+}
+
+/// Cursor-style "Add Repo" sheet: X close, centered "Add Repo" title.
+///
+/// **Live shell** (`cursorShellLiveBridge` is set): honest deferred state — no
+/// GitHub OAuth pretense, no clone button, no fake selectable repo list. Repos
+/// appear in Workspaces automatically when an agent runs in them on a paired
+/// machine; the sheet explains that and offers a "How to add a repo" guide.
+///
+/// **Mock shell** (`LANCER_CURSOR_SHELL=1`, no live bridge): DEBUG-only pixel
+/// reference list for UI tests/screenshots — clearly not wired to any backend.
 private struct CursorAddRepoSheet: View {
     @Environment(\.cursorScheme) private var cursorScheme
+    @Environment(\.cursorShellLiveBridge) private var liveBridge
     @State private var searchText: String = ""
+    @State private var showingHowToAddRepo = false
 
     let onClose: () -> Void
 
-    /// Representative repo list — same account/repos already used by
-    /// `CursorRepoPickerSheet`'s mock "More" section, extended to look like
-    /// the long scrollable list in IMG_2414.
-    private static let allRepos: [CursorRepoPickerOption] = [
-        .init(id: "add-repo-1501-assignment-5", orgName: "RoshanDewmina", repoName: "1501-assignment-5"),
-        .init(id: "add-repo-3004-final-project", orgName: "RoshanDewmina", repoName: "3004-Final-Project"),
-        .init(id: "add-repo-3005-assignment-3", orgName: "RoshanDewmina", repoName: "3005-Assignment-3"),
-        .init(id: "add-repo-5g-advanced-test-suite", orgName: "RoshanDewmina", repoName: "5g-advanced-test-suite"),
-        .init(id: "add-repo-adpack-ai", orgName: "RoshanDewmina", repoName: "adpack-ai"),
-        .init(id: "add-repo-adventure-works-report", orgName: "RoshanDewmina", repoName: "Adventure-Works-Report"),
-        .init(id: "add-repo-astro-bot", orgName: "RoshanDewmina", repoName: "astro-bot"),
-        .init(id: "add-repo-career-builder", orgName: "RoshanDewmina", repoName: "career-builder")
-    ]
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
-    private var filteredRepos: [CursorRepoPickerOption] {
-        guard !searchText.isEmpty else { return Self.allRepos }
-        return Self.allRepos.filter { $0.repoName.localizedCaseInsensitiveContains(searchText) }
+    private var useMockRepoList: Bool {
+        CursorAddRepoSheetPresentation.showsMockRepoList(liveBridgeIsSet: liveBridge != nil)
     }
+
+    #if DEBUG
+    /// Small static list for mock-shell UI tests (`LANCER_CURSOR_SHELL=1`) —
+    /// not shown in the live shell and not wired to any clone/add RPC.
+    private static let mockShellRepos: [CursorRepoPickerOption] = [
+        .init(id: "add-repo-lancer-ios", orgName: "RoshanDewmina", repoName: "lancer-ios"),
+        .init(id: "add-repo-command-center", orgName: "RoshanDewmina", repoName: "command-center"),
+        .init(id: "add-repo-push-backend", orgName: "RoshanDewmina", repoName: "push-backend")
+    ]
+    #endif
+
+    #if DEBUG
+    private var filteredMockRepos: [CursorRepoPickerOption] {
+        guard !searchText.isEmpty else { return Self.mockShellRepos }
+        return Self.mockShellRepos.filter { $0.repoName.localizedCaseInsensitiveContains(searchText) }
+    }
+    #endif
 
     var body: some View {
         CursorBottomSheetContainer(
             title: "Add Repo",
             leadingButton: (systemImageName: "xmark", action: onClose)
         ) {
-            VStack(spacing: 0) {
-                addRepoSearchField
-                    .padding(.bottom, CursorMetrics.sectionHeaderTopPadding)
-
-                CursorSectionHeader("Workspaces")
-                ForEach(filteredRepos) { option in
-                    addRepoRow(option)
+            Group {
+                #if DEBUG
+                if useMockRepoList {
+                    mockRepoListContent
+                } else {
+                    honestContent
                 }
+                #else
+                honestContent
+                #endif
             }
             .padding(.bottom, CursorMetrics.sheetContentBottomPadding)
         }
+        .accessibilityIdentifier("add-repo-sheet")
     }
 
+    // MARK: Live — honest deferred state
+
+    private var honestContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Repos appear here automatically when you run an agent in them from a paired machine.")
+                .font(CursorType.bodyText)
+                .foregroundColor(colors.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, CursorMetrics.sheetHeaderHorizontalPadding)
+                .padding(.bottom, CursorMetrics.sectionHeaderTopPadding)
+                .accessibilityIdentifier("add-repo-honest-message")
+
+            DisclosureGroup(isExpanded: $showingHowToAddRepo) {
+                VStack(alignment: .leading, spacing: 14) {
+                    howToStep(
+                        number: 1,
+                        text: "Pair a machine from Settings or tap + on the Workspaces screen."
+                    )
+                    howToStep(
+                        number: 2,
+                        text: "On that machine, open a terminal in the repo's directory."
+                    )
+                    howToStep(
+                        number: 3,
+                        text: "Start a thread or run an agent there — the repo will show up in Workspaces."
+                    )
+                }
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+            } label: {
+                Text("How to add a repo")
+                    .font(CursorType.rowTitle)
+                    .foregroundColor(colors.primaryText)
+            }
+            .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
+            .accessibilityIdentifier("add-repo-how-to")
+        }
+    }
+
+    private func howToStep(number: Int, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(CursorType.rowSecondary.weight(.semibold))
+                .foregroundColor(colors.secondaryText)
+                .frame(width: 20, alignment: .trailing)
+            Text(text)
+                .font(CursorType.rowSecondary)
+                .foregroundColor(colors.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: DEBUG mock shell — pixel reference only
+
+    #if DEBUG
+    @ViewBuilder
+    private var mockRepoListContent: some View {
+        VStack(spacing: 0) {
+            addRepoSearchField
+                .padding(.bottom, CursorMetrics.sectionHeaderTopPadding)
+
+            CursorSectionHeader("Workspaces")
+            ForEach(filteredMockRepos) { option in
+                mockRepoRow(option)
+            }
+        }
+    }
+    #endif
+
+    #if DEBUG
     /// A `CursorSearchField`-alike with the "Repo…" placeholder the reference
-    /// uses (IMG_2414) — built locally rather than adding a placeholder
-    /// parameter to the shared `CursorSearchField` component, which sits
-    /// outside this task's write-set.
+    /// uses (IMG_2414) — mock shell only.
     private var addRepoSearchField: some View {
         let colors = CursorColors.resolve(cursorScheme)
         return HStack(spacing: CursorMetrics.searchFieldIconSpacing) {
@@ -366,7 +458,7 @@ private struct CursorAddRepoSheet: View {
         .padding(.horizontal, CursorMetrics.searchFieldMargin)
     }
 
-    private func addRepoRow(_ option: CursorRepoPickerOption) -> some View {
+    private func mockRepoRow(_ option: CursorRepoPickerOption) -> some View {
         let colors = CursorColors.resolve(cursorScheme)
         return Button(action: onClose) {
             VStack(spacing: 0) {
@@ -400,5 +492,6 @@ private struct CursorAddRepoSheet: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("add-repo-sheet-row")
     }
+    #endif
 }
 #endif
