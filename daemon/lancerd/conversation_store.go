@@ -838,10 +838,18 @@ func nullIfZero(f float64) any {
 // --- appendRunOutput / appendRunStatus / bindVendorSession / upsertArtifact --
 
 // appendRunOutput records one chunk of a run's stdout/stderr as an immutable
-// conversation_events row. seq is the caller-assigned position in the
-// conversation's global event sequence (the dispatcher/RPC layer owns
-// allocating it as output streams in); appendRunOutput is idempotent against
-// redelivery of the same (conversation, seq) pair.
+// conversation_events row. seq is the caller-assigned position in the RUN's
+// own chunk sequence (streamJSONOutput's per-run counter, used by the phone
+// for live in-run ordering only) — it plays no part in ledger placement.
+// The ledger seq is allocated here from the conversation's own sequence
+// space (conversations.last_seq), the same idiom appendRunStatus uses,
+// because the conversation ledger had already spent low seqs on
+// turn_started/status events before any output chunk arrives; reusing the
+// run-local chunk seq as the ledger seq collided with those rows and
+// silently dropped early chunks via ON CONFLICT DO NOTHING (2026-07-09).
+// persistConversationEvent (server.go) calls this exactly once per emitted
+// notification, in-process, off a single per-run goroutine with no replay/
+// redelivery path, so no dedupe is needed at this layer.
 func (s *conversationStore) appendRunOutput(runID, stream, chunk string, seq int) error {
 	convID, turnID, err := s.turnByRunID(runID)
 	if err != nil {
@@ -849,17 +857,26 @@ func (s *conversationStore) appendRunOutput(runID, stream, chunk string, seq int
 	}
 	now := conversationNow()
 
-	if _, err := s.db.Exec(`INSERT INTO conversation_events
-		(conversation_id, seq, turn_id, run_id, kind, stream, text, created_at)
-		VALUES (?, ?, ?, ?, 'output', ?, ?, ?)
-		ON CONFLICT(conversation_id, seq) DO NOTHING`,
-		convID, seq, turnID, runID, stream, chunk, now); err != nil {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var newSeq int64
+	if err := tx.QueryRow(`UPDATE conversations SET last_seq = last_seq + 1, updated_at = ?, last_activity_at = ?
+		WHERE id = ? RETURNING last_seq`, now, now, convID).Scan(&newSeq); err != nil {
 		return err
 	}
 
-	_, err = s.db.Exec(`UPDATE conversations SET last_seq = MAX(last_seq, ?), updated_at = ?, last_activity_at = ?
-		WHERE id = ?`, seq, now, now, convID)
-	return err
+	if _, err := tx.Exec(`INSERT INTO conversation_events
+		(conversation_id, seq, turn_id, run_id, kind, stream, text, created_at)
+		VALUES (?, ?, ?, ?, 'output', ?, ?, ?)`,
+		convID, newSeq, turnID, runID, stream, chunk, now); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // appendRunStatus updates the owning turn's status (and completed_at/

@@ -166,6 +166,89 @@ func TestAppendRunOutputAndStatusOrderingViaFetch(t *testing.T) {
 	}
 }
 
+// TestAppendRunOutputAllocatesFromConversationSeqSpace proves the 2026-07-09
+// data-loss fix: appendRunOutput must NOT use its caller-supplied per-run
+// chunk seq (streamJSONOutput's own counter, starting at 1 for every run) as
+// the conversation_events primary-key seq. A short reply's first chunks
+// collided with the turn_started/status rows the ledger had already
+// allocated at those same low seqs and were silently dropped via the old
+// ON CONFLICT(conversation_id, seq) DO NOTHING. This test starts a
+// conversation already at last_seq 2 (turn_started + a first output chunk),
+// then appends a run whose OWN chunk seq restarts at 1 and 2, and asserts
+// both chunks persist at freshly allocated conversation seqs 3 and 4.
+func TestAppendRunOutputAllocatesFromConversationSeqSpace(t *testing.T) {
+	s := openTestConversationStore(t)
+
+	res, err := s.beginTurn(conversationAppendRequest{
+		ClientTurnID: "device-1:1",
+		Agent:        "claudeCode",
+		Prompt:       "first prompt",
+	}, "/proj", "run_1")
+	if err != nil {
+		t.Fatalf("beginTurn: %v", err)
+	}
+	// Advances the conversation to last_seq 2 (turn_started=1, this
+	// output=2), mirroring the state a conversation is already in by the
+	// time a SECOND turn's run starts streaming its own chunk 1.
+	if err := s.appendRunOutput("run_1", "stdout", "run_1 chunk", 1); err != nil {
+		t.Fatalf("appendRunOutput run_1: %v", err)
+	}
+
+	followUp, err := s.beginTurn(conversationAppendRequest{
+		ConversationID: res.ConversationID,
+		BaseSeq:        2,
+		ClientTurnID:   "device-1:2",
+		Agent:          "claudeCode",
+		Prompt:         "second prompt",
+	}, "/proj", "run_2")
+	if err != nil {
+		t.Fatalf("beginTurn (follow-up): %v", err)
+	}
+	if followUp.RunID != "run_2" {
+		t.Fatalf("follow-up runID = %q, want run_2", followUp.RunID)
+	}
+
+	// run_2's OWN chunk sequence restarts at 1, exactly like conv_e87ef148's
+	// "pong" reply did live: chunk seq 1 and 2 land on top of conversation
+	// seqs already spent by turn_started/status events.
+	if err := s.appendRunOutput("run_2", "stdout", "run_2 chunk-a", 1); err != nil {
+		t.Fatalf("appendRunOutput run_2 chunk-a: %v", err)
+	}
+	if err := s.appendRunOutput("run_2", "stdout", "run_2 chunk-b", 2); err != nil {
+		t.Fatalf("appendRunOutput run_2 chunk-b: %v", err)
+	}
+
+	fetchRes, err := s.fetch(res.ConversationID, 0, 500)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	// turn_started(1), run_1 output(2), turn_started(3), run_2 chunk-a(4), run_2 chunk-b(5).
+	if len(fetchRes.Events) != 5 {
+		t.Fatalf("events = %d, want 5: %+v", len(fetchRes.Events), fetchRes.Events)
+	}
+
+	var run2Texts []string
+	for i, ev := range fetchRes.Events {
+		if i > 0 && ev.Seq <= fetchRes.Events[i-1].Seq {
+			t.Fatalf("events not strictly increasing by seq: %+v", fetchRes.Events)
+		}
+		if ev.RunID == "run_2" && ev.Kind == "output" {
+			run2Texts = append(run2Texts, ev.Text)
+		}
+	}
+	if len(run2Texts) != 2 {
+		t.Fatalf("run_2 output events = %d, want 2 (both chunks must survive, not just the last): %+v", len(run2Texts), fetchRes.Events)
+	}
+	if run2Texts[0] != "run_2 chunk-a" || run2Texts[1] != "run_2 chunk-b" {
+		t.Fatalf("run_2 output texts = %v, want [run_2 chunk-a, run_2 chunk-b] in order", run2Texts)
+	}
+
+	lastSeq := fetchRes.Events[len(fetchRes.Events)-1].Seq
+	if lastSeq != 5 {
+		t.Fatalf("last event seq = %d, want 5", lastSeq)
+	}
+}
+
 func TestBeginTurnIdempotentClientTurnID(t *testing.T) {
 	s := openTestConversationStore(t)
 
