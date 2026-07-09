@@ -81,7 +81,6 @@ public struct CursorRelayPairingSheet: View {
                 .padding(.bottom, CursorMetrics.sheetContentBottomPadding)
             }
         }
-        .environment(\.cursorScheme, .light)
         .accessibilityIdentifier("cursor.relay.pairing")
         .onChange(of: client.pairingState) { _, newValue in
             guard newValue == .paired else { return }

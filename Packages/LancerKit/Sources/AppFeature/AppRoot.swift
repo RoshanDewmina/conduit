@@ -251,6 +251,8 @@ public struct AppRoot: View {
         #if DEBUG
         if usesMockCursorShell {
             CursorAppShell()
+                .cursorTheme(appearance: appearance)
+                .preferredColorScheme(preferredScheme)
         } else {
             mainBody.environment(\.lancerTokens, tokens)
         }
@@ -1044,11 +1046,16 @@ public struct AppRoot: View {
             }
         }
         cursorLiveBridge.onRequestPairing = { showingCursorRelayPairing = true }
+        cursorLiveBridge.onOpenReview = { showingApprovalReview = true }
         cursorLiveBridge.onPaired = { [self] client, record in
             addRelayMachine(client: client, record: record, env: env)
         }
         cursorLiveBridge.onClearInvalid = { [self] in
             relayFleetStore.removeAllInvalid()
+        }
+        cursorLiveBridge.onResetAppData = { [self] in
+            guard case .ready(let env) = environment else { return }
+            await performAppDataReset(env: env)
         }
         cursorLiveBridge.onRequestRefresh = { [self] in
             workspacesRevision = UUID()
@@ -1059,6 +1066,66 @@ public struct AppRoot: View {
             }
             return await importObservedSession(row, env: env)
         }
+    }
+
+    /// Keeps the composer run-target selection valid as workspaces refresh.
+    @MainActor
+    private func syncSelectedRunTarget(from targets: [CursorShellLiveBridge.RunTarget]) {
+        if let selectedID = cursorLiveBridge.selectedRunTargetMachineID,
+           let match = targets.first(where: { $0.machineID == selectedID }) {
+            cursorLiveBridge.selectedRunTargetHostName = match.hostName
+            return
+        }
+        if let first = targets.first {
+            cursorLiveBridge.selectedRunTargetMachineID = first.machineID
+            cursorLiveBridge.selectedRunTargetHostName = first.hostName
+        } else {
+            cursorLiveBridge.selectedRunTargetMachineID = nil
+            cursorLiveBridge.selectedRunTargetHostName = nil
+        }
+    }
+
+    /// Settings → Reset app data: wipe local DB, pairings, and onboarding.
+    @MainActor
+    private func performAppDataReset(env: AppEnvironment) async {
+        try? await env.database.wipeAll()
+        for id in relayFleetStore.machines.map(\.id) {
+            relayFleetStore.remove(id)
+        }
+        for id in fleetStore.slots.map(\.id) {
+            fleetStore.remove(id: id)
+        }
+        fleetStore.relayInboxVM = nil
+        liveInboxVM = nil
+        relayApprovalsByID = [:]
+        selectedFleetSlotID = nil
+
+        cursorLiveBridge.workspaces = []
+        cursorLiveBridge.threadsByWorkspace = [:]
+        cursorLiveBridge.pendingApprovalID = nil
+        cursorLiveBridge.pendingApproval = nil
+        cursorLiveBridge.repoPaths = [:]
+        cursorLiveBridge.composerCWD = ""
+        cursorLiveBridge.selectedThreadID = nil
+        cursorLiveBridge.selectedRunTargetMachineID = nil
+        cursorLiveBridge.selectedRunTargetHostName = nil
+        cursorLiveBridge.activeThreadPrompt = ""
+        cursorLiveBridge.activeThreadResponse = ""
+        cursorLiveBridge.activeRunID = nil
+        cursorLiveBridge.activeThreadIsWorking = false
+        cursorLiveBridge.activeThreadError = nil
+        cursorLiveBridge.activeThreadArtifacts = []
+        cursorLiveBridge.composerPrefillText = nil
+        cursorLiveBridge.threadAttention = [:]
+        cursorLiveBridge.threadStates = [:]
+        cursorLiveBridge.relayMachineCount = 0
+        cursorLiveBridge.invalidMachineCount = 0
+
+        onboardingSeen = false
+        #if DEBUG
+        UserDefaults.standard.set(false, forKey: "dev.lancer.debugSeeded")
+        #endif
+        workspacesRevision = UUID()
     }
 
     @MainActor
@@ -1088,6 +1155,9 @@ public struct AppRoot: View {
             },
             onClearInvalid: {
                 relayFleetStore.removeAllInvalid()
+            },
+            onReset: { [self] in
+                await performAppDataReset(env: env)
             }
         )
     }
@@ -1143,6 +1213,7 @@ public struct AppRoot: View {
                 threadCounts: counts,
                 runTargetsByRepo: runTargetsByRepo
             )
+            syncSelectedRunTarget(from: cursorLiveBridge.workspaces.flatMap(\.runTargets))
             cursorLiveBridge.repoPaths = repoPaths
             for (name, rows) in threads {
                 let sorted = rows.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
@@ -1334,10 +1405,10 @@ public struct AppRoot: View {
     }
 
     private func defaultDispatchAgentID(env: AppEnvironment) -> String {
-        if let online = dispatchAgents().first(where: { !$0.isOffline }) {
-            return online.id
-        }
-        return dispatchAgents().first?.id ?? "claude"
+        DispatchAgent.preferredAgentID(
+            from: dispatchAgents(),
+            preferredMachineID: cursorLiveBridge.selectedRunTargetMachineID
+        )
     }
 
     /// Bridge RPC actions for the selected (or first) fleet slot.

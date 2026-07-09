@@ -10,6 +10,7 @@ import SettingsFeature
 public struct CursorSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.cursorScheme) private var cursorScheme
     @State private var purchaseManager = PurchaseManager.shared
     @State private var showingPairing = false
     @State private var activeDestination: SettingsDestination?
@@ -20,18 +21,23 @@ public struct CursorSettingsView: View {
     private let invalidMachineCount: Int
     private let onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
     private let onClearInvalid: (() -> Void)?
+    private let onReset: (() async -> Void)?
 
     public init(
         relayMachineCount: Int = 0,
         invalidMachineCount: Int = 0,
         onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)? = nil,
-        onClearInvalid: (() -> Void)? = nil
+        onClearInvalid: (() -> Void)? = nil,
+        onReset: (() async -> Void)? = nil
     ) {
         self.relayMachineCount = relayMachineCount
         self.invalidMachineCount = invalidMachineCount
         self.onPaired = onPaired
         self.onClearInvalid = onClearInvalid
+        self.onReset = onReset
     }
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -44,7 +50,7 @@ public struct CursorSettingsView: View {
 
             Text("Settings")
                 .font(CursorType.pageTitle)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
                 .padding(.leading, CursorMetrics.pageTitleLeadingPadding)
                 .padding(.top, CursorMetrics.pageTitleTopPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -76,7 +82,7 @@ public struct CursorSettingsView: View {
                     if invalidMachineCount > 0 {
                         row(
                             title: "Clear dead pairings",
-                            titleColor: CursorColors.light.dangerRed,
+                            titleColor: colors.dangerRed,
                             trailingText: "\(invalidMachineCount) invalid",
                             showChevron: false,
                             accessibilityIdentifier: "cursor.settings.row.clear-dead-pairings"
@@ -156,18 +162,19 @@ public struct CursorSettingsView: View {
                     }
                     row(
                         title: "Reset app data",
-                        titleColor: CursorColors.light.dangerRed,
-                        showChevron: true,
+                        titleColor: colors.dangerRed,
+                        showChevron: onReset != nil,
                         accessibilityIdentifier: "cursor.settings.row.reset"
                     ) {
-                        showingResetConfirmation = true
+                        if onReset != nil {
+                            showingResetConfirmation = true
+                        }
                     }
                 }
                 .padding(.bottom, 24)
             }
         }
-        .background(CursorColors.light.background.ignoresSafeArea())
-        .environment(\.cursorScheme, .light)
+        .background(colors.background.ignoresSafeArea())
         .accessibilityIdentifier("cursor.settings")
         .sheet(isPresented: $showingPairing) {
             if let onPaired {
@@ -181,7 +188,10 @@ public struct CursorSettingsView: View {
             CursorSettingsStubSheet(destination: destination)
         }
         .alert("Reset app data?", isPresented: $showingResetConfirmation) {
-            Button("Reset", role: .destructive) {}
+            Button("Reset", role: .destructive) {
+                guard let onReset else { return }
+                Task { await onReset() }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes local pairing, threads, and cached settings from this device. Your hosts and audit history on paired machines are not affected.")
@@ -213,20 +223,20 @@ public struct CursorSettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Local account")
                 .font(CursorType.rowTitle)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
             Text(accountBannerSubtitle)
                 .font(CursorType.rowSecondary)
-                .foregroundColor(CursorColors.light.secondaryText)
+                .foregroundColor(colors.secondaryText)
         }
         .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(CursorColors.light.hairline, lineWidth: 1)
+                .stroke(colors.hairline, lineWidth: 1)
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(CursorColors.light.cardBackground)
+                        .fill(colors.cardBackground)
                 )
         )
         .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
@@ -271,7 +281,7 @@ public struct CursorSettingsView: View {
         accessibilityIdentifier: String,
         url: URL
     ) -> some View {
-        let colors = CursorColors.light
+        let colors = CursorColors.resolve(cursorScheme)
         Button {
             openURL(url)
         } label: {
@@ -358,9 +368,12 @@ private enum SettingsDestination: String, Identifiable {
 
 private struct CursorSettingsStubSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.cursorScheme) private var cursorScheme
     @State private var purchaseManager = PurchaseManager.shared
 
     let destination: SettingsDestination
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -373,7 +386,7 @@ private struct CursorSettingsStubSheet: View {
 
             Text(destination.title)
                 .font(CursorType.pageTitle)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
                 .padding(.leading, CursorMetrics.pageTitleLeadingPadding)
                 .padding(.top, CursorMetrics.pageTitleTopPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -386,15 +399,14 @@ private struct CursorSettingsStubSheet: View {
 
                     Text(destination.stubMessage)
                         .font(CursorType.rowSecondary)
-                        .foregroundColor(CursorColors.light.secondaryText)
+                        .foregroundColor(colors.secondaryText)
                         .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
                         .padding(.top, 8)
                 }
                 .padding(.bottom, 24)
             }
         }
-        .background(CursorColors.light.background.ignoresSafeArea())
-        .environment(\.cursorScheme, .light)
+        .background(colors.background.ignoresSafeArea())
         .accessibilityIdentifier(destination.accessibilityIdentifier)
     }
 
@@ -402,24 +414,24 @@ private struct CursorSettingsStubSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(purchaseManager.hasCloudEntitlement ? "Lancer Cloud" : "Away Mode Solo")
                 .font(CursorType.rowTitle)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
             Text(
                 purchaseManager.hasCloudEntitlement
                     ? "Stripe cloud entitlement active — hosted agents and managed AI unlocked."
                     : "Local pairing on your own machines. Upgrade to Lancer Cloud for hosted agents."
             )
             .font(CursorType.rowSecondary)
-            .foregroundColor(CursorColors.light.secondaryText)
+            .foregroundColor(colors.secondaryText)
         }
         .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(CursorColors.light.hairline, lineWidth: 1)
+                .stroke(colors.hairline, lineWidth: 1)
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(CursorColors.light.cardBackground)
+                        .fill(colors.cardBackground)
                 )
         )
         .padding(.horizontal, CursorMetrics.rowHorizontalPadding)

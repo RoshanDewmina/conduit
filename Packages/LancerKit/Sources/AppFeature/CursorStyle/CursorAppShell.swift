@@ -51,6 +51,7 @@ public struct CursorAppShell: View {
     @State private var showingRunOnSheet = false
     @State private var showingModelSheet = false
     @State private var composerPlaceholder = "Plan, ask, build..."
+    @State private var mockSelectedRunTargetID = "mock-mac-mini-studio"
     @State private var detailWorkspace: CursorShellLiveBridge.WorkspaceRow? = nil
     /// Set by `handleSiriNavigation(.search)` right before opening the search
     /// overlay so it can prefill/run the same query Siri already spoke a
@@ -64,6 +65,7 @@ public struct CursorAppShell: View {
 
     private var runTargetOptions: [CursorRunOnSheet.CursorRunTargetOption] {
         guard let liveBridge else { return [] }
+        let selectedID = liveBridge.selectedRunTargetMachineID
         var seen: Set<String> = []
         var options: [CursorRunOnSheet.CursorRunTargetOption] = []
         for target in liveBridge.workspaces.flatMap(\.runTargets) where !seen.contains(target.machineID) {
@@ -72,10 +74,32 @@ public struct CursorAppShell: View {
                 id: target.machineID,
                 icon: "desktopcomputer",
                 title: target.hostName,
-                isSelected: options.isEmpty
+                isSelected: target.machineID == selectedID
             ))
         }
         return options
+    }
+
+    private var runTargetSheetActive: [CursorRunOnSheet.CursorRunTargetOption] {
+        if liveBridge == nil {
+            return mockRunTargetOptions.filter(\.isSelected)
+        }
+        let selected = runTargetOptions.filter(\.isSelected)
+        return selected.isEmpty ? [] : selected
+    }
+
+    private var runTargetSheetMore: [CursorRunOnSheet.CursorRunTargetOption] {
+        if liveBridge == nil {
+            return mockRunTargetOptions.filter { !$0.isSelected }
+        }
+        return runTargetOptions.filter { !$0.isSelected }
+    }
+
+    private var composerRunTargetName: String? {
+        if let liveBridge {
+            return liveBridge.selectedRunTargetHostName
+        }
+        return mockRunTargetOptions.first(where: { $0.id == mockSelectedRunTargetID })?.title
     }
 
     private var activeRepoOption: CursorRepoPickerOption? {
@@ -108,8 +132,8 @@ public struct CursorAppShell: View {
 
     private var mockRunTargetOptions: [CursorRunOnSheet.CursorRunTargetOption] {
         [
-            .init(id: "mock-mac-mini-studio", icon: "desktopcomputer", title: "Mac Mini Studio", isSelected: true),
-            .init(id: "mock-home-server", icon: "server.rack", title: "Home Server", isSelected: false)
+            .init(id: "mock-mac-mini-studio", icon: "desktopcomputer", title: "Mac Mini Studio", isSelected: mockSelectedRunTargetID == "mock-mac-mini-studio"),
+            .init(id: "mock-home-server", icon: "server.rack", title: "Home Server", isSelected: mockSelectedRunTargetID == "mock-home-server")
         ]
     }
 
@@ -441,7 +465,8 @@ public struct CursorAppShell: View {
                 relayMachineCount: liveBridge?.relayMachineCount ?? 0,
                 invalidMachineCount: liveBridge?.invalidMachineCount ?? 0,
                 onPaired: liveBridge?.onPaired,
-                onClearInvalid: liveBridge?.onClearInvalid
+                onClearInvalid: liveBridge?.onClearInvalid,
+                onReset: liveBridge?.onResetAppData
             )
         }
     }
@@ -450,13 +475,14 @@ public struct CursorAppShell: View {
 
     /// `CursorRunOnSheet` / `CursorModelSheet` are presented as their own
     /// nested `.sheet`s directly on `CursorComposerSheet` — SwiftUI supports
-    /// sheet-on-sheet via separate `@State` bools. Both dismiss themselves on
-    /// selection since there's no real state to persist yet.
+    /// sheet-on-sheet via separate `@State` bools.
     private var composerSheetChain: some View {
         CursorComposerSheet(
             threadID: liveBridge?.selectedThreadID ?? "composer.new",
             repoName: composerRepoName,
+            branchName: "main",
             modelName: liveBridge?.composerModelLabel ?? ManagedModel.claudeHaiku.label,
+            runTargetName: composerRunTargetName,
             placeholder: composerPlaceholder,
             prefillText: liveBridge?.composerPrefillText,
             onPickRepo: { showingRepoPicker = true },
@@ -501,10 +527,18 @@ public struct CursorAppShell: View {
         )
         .sheet(isPresented: $showingRunOnSheet) {
             CursorRunOnSheet(
-                activeTargets: liveBridge == nil ? mockRunTargetOptions : runTargetOptions,
-                moreTargets: liveBridge == nil ? nil : [],
+                activeTargets: runTargetSheetActive,
+                moreTargets: runTargetSheetMore,
                 onClose: { showingRunOnSheet = false },
-                onSelect: { _ in showingRunOnSheet = false }
+                onSelect: { option in
+                    if let liveBridge {
+                        liveBridge.selectedRunTargetMachineID = option.id
+                        liveBridge.selectedRunTargetHostName = option.title
+                    } else {
+                        mockSelectedRunTargetID = option.id
+                    }
+                    showingRunOnSheet = false
+                }
             )
         }
         .sheet(isPresented: $showingModelSheet) {

@@ -47,6 +47,7 @@ public struct CursorContextSheet: View {
 
     private let thumbnails: [Thumbnail]
     private let mcpServerCount: Int
+    private let attachmentsEnabled: Bool
     private let onClose: () -> Void
     private let onSelectMode: (Mode) -> Void
     private let onPhotos: () -> Void
@@ -58,6 +59,7 @@ public struct CursorContextSheet: View {
     public init(
         thumbnails: [Thumbnail] = [],
         mcpServerCount: Int = 0,
+        attachmentsEnabled: Bool = true,
         initialMode: Mode = .plan,
         onClose: @escaping () -> Void = {},
         onSelectMode: @escaping (Mode) -> Void = { _ in },
@@ -69,6 +71,7 @@ public struct CursorContextSheet: View {
     ) {
         self.thumbnails = thumbnails
         self.mcpServerCount = mcpServerCount
+        self.attachmentsEnabled = attachmentsEnabled
         self._selectedMode = State(initialValue: initialMode)
         self.onClose = onClose
         self.onSelectMode = onSelectMode
@@ -179,15 +182,23 @@ public struct CursorContextSheet: View {
         showChevron: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        let colors = CursorColors.resolve(cursorScheme)
+        let disabled = !attachmentsEnabled
+        return Button {
+            guard attachmentsEnabled else { return }
+            action()
+        } label: {
             CursorListRow(
                 iconSystemName: iconSystemName,
                 title: title,
+                titleColor: disabled ? colors.mutedText : nil,
                 trailingCount: trailingCount,
-                showChevron: showChevron
+                trailingText: disabled ? "Coming soon" : nil,
+                showChevron: attachmentsEnabled && showChevron
             )
         }
         .buttonStyle(.plain)
+        .disabled(disabled)
         .accessibilityIdentifier("context.add.\(title.lowercased())")
     }
 }

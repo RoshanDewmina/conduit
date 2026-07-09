@@ -13,6 +13,7 @@ public struct CursorReturnPacketView: View {
     let onDismiss: () -> Void
 
     @Environment(\.lancerTokens) private var t
+    @Environment(\.cursorScheme) private var cursorScheme
     @State private var copied = false
 
     public init(
@@ -24,6 +25,8 @@ public struct CursorReturnPacketView: View {
         self.workingDirectory = workingDirectory
         self.onDismiss = onDismiss
     }
+
+    private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -52,9 +55,8 @@ public struct CursorReturnPacketView: View {
                 .padding(.bottom, 24)
             }
         }
-        .background(CursorColors.light.background.ignoresSafeArea())
-        .environment(\.cursorScheme, .light)
-        .lancerTokens(appearance: .light)
+        .background(CursorColors.resolve(cursorScheme).background.ignoresSafeArea())
+        .lancerTokens(appearance: cursorScheme == .dark ? .dark : .light)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("return-packet-screen")
     }
@@ -71,7 +73,7 @@ public struct CursorReturnPacketView: View {
         .overlay(alignment: .center) {
             Text("Continue on desktop")
                 .font(CursorType.sheetTitle)
-                .foregroundColor(CursorColors.light.primaryText)
+                .foregroundColor(colors.primaryText)
                 .padding(.top, CursorMetrics.headerTopPadding)
         }
     }

@@ -32,6 +32,7 @@ public struct CursorComposerSheet: View {
     private let repoName: String
     private let branchName: String
     private let modelName: String
+    private let runTargetName: String?
     private let placeholder: String
     private let prefillText: String?
     private let onPickRepo: () -> Void
@@ -50,6 +51,7 @@ public struct CursorComposerSheet: View {
         repoName: String = "lancer-ios",
         branchName: String = "main",
         modelName: String = "Composer 2.5",
+        runTargetName: String? = nil,
         placeholder: String = "Plan, ask, build...",
         prefillText: String? = nil,
         onPickRepo: @escaping () -> Void = {},
@@ -63,6 +65,7 @@ public struct CursorComposerSheet: View {
         self.repoName = repoName
         self.branchName = branchName
         self.modelName = modelName
+        self.runTargetName = runTargetName
         self.placeholder = placeholder
         self.prefillText = prefillText
         self.onPickRepo = onPickRepo
@@ -106,6 +109,11 @@ public struct CursorComposerSheet: View {
                                 Image(systemName: "cloud")
                                     .font(.system(size: 15, weight: .regular))
                                     .foregroundColor(colors.secondaryText)
+                                if let runTargetName, !runTargetName.isEmpty {
+                                    Text(runTargetName)
+                                        .foregroundColor(colors.primaryText)
+                                        .lineLimit(1)
+                                }
                                 chevronDown(colors)
                             }
                         }
@@ -197,7 +205,10 @@ public struct CursorComposerSheet: View {
         .onChange(of: doneCriteria) { _, _ in persistDrafts(prompt: text) }
         .onChange(of: validationCommands) { _, _ in persistDrafts(prompt: text) }
         .sheet(isPresented: $showingContextSheet) {
-            CursorContextSheet(onClose: { showingContextSheet = false })
+            CursorContextSheet(
+                attachmentsEnabled: false,
+                onClose: { showingContextSheet = false }
+            )
         }
     }
 
