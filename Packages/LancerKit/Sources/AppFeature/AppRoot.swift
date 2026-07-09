@@ -1009,9 +1009,23 @@ public struct AppRoot: View {
             // "Unknown agent."
             let routingAgentID = Self.routingAgentID(for: conv)
                 ?? defaultDispatchAgentID(env: env)
+            var baseSeq = conv.lastHostSeq
+            if let refreshTransport = resolveTransport(forConversation: conv)
+                ?? {
+                    switch resolveAgentTransport(agentID: routingAgentID, cwd: conv.cwd, model: model ?? conv.model) {
+                    case .success(let resolved): resolved.transport
+                    case .failure: nil
+                    }
+                }() {
+                if let refreshed = try? await env.conversationSyncCoordinator.refreshConversation(
+                    conversationID: conversationID, transport: refreshTransport
+                ) {
+                    baseSeq = refreshed
+                }
+            }
             let outcome = await performContinueConversation(
                 conversationID: conv.id,
-                baseSeq: conv.lastHostSeq,
+                baseSeq: baseSeq,
                 prompt: prompt,
                 agentID: routingAgentID,
                 cwd: conv.cwd,
