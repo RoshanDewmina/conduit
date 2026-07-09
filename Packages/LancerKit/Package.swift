@@ -59,6 +59,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0"),
         // SwiftTerm — iOS-only UI dep, isolated to TerminalEngine
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.2.0"),
+        // MarkdownUI — assistant-text + code-block rendering in CursorStyle (chat-polish Slice 1).
+        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.0.2"),
     ],
     targets: [
         // ── Engines ──────────────────────────────────────────────────────
@@ -232,6 +234,7 @@ let package = Package(
                 "SSHTransport",
                 "FilesFeature",
                 "SyncKit",
+                .product(name: "MarkdownUI", package: "swift-markdown-ui"),
             ],
             swiftSettings: swiftSettings,
             linkerSettings: [

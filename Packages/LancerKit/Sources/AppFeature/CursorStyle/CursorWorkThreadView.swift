@@ -24,6 +24,9 @@ public struct CursorWorkThreadView: View {
     @State private var transcriptModel = CursorThreadTranscriptModel()
     @State private var returnPacketPresentation: ReturnPacketPresentation?
     @State private var copiedToastText: String?
+    @State private var streamingPacer = CursorStreamingTextPacer()
+    @State private var scrollFollowState = CursorTranscriptAutoScrollPolicy.FollowState()
+    @State private var bottomOffset: CGFloat = 0
 
     private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
 
@@ -99,10 +102,28 @@ public struct CursorWorkThreadView: View {
                     .padding(.top, 20)
                     .padding(.bottom, 12)
                 }
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
+                } action: { _, newValue in
+                    bottomOffset = newValue
+                    scrollFollowState = scrollFollowState.handlingScroll(offsetFromBottom: newValue)
+                }
                 .onChange(of: transcriptModel.rows.map(\.id)) { _, ids in
                     guard let last = ids.last else { return }
+                    scrollFollowState = scrollFollowState.handlingNewRow(offsetFromBottom: bottomOffset)
+                    guard scrollFollowState.isFollowing else { return }
                     withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo(last, anchor: .bottom)
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    if CursorTranscriptAutoScrollPolicy.shouldShowJumpToLatest(
+                        isFollowing: scrollFollowState.isFollowing,
+                        hasContentBelow: !CursorTranscriptAutoScrollPolicy.isNearBottom(offsetFromBottom: bottomOffset)
+                    ) {
+                        jumpToLatestPill(proxy: proxy)
+                            .padding(.bottom, 8)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
             }
@@ -230,29 +251,42 @@ public struct CursorWorkThreadView: View {
     @ViewBuilder
     private func assistantBody(for section: CursorTranscriptRow.TurnSection) -> some View {
         if let overlay = section.liveOverlay {
-            if let response = overlay.response, !response.isEmpty {
-                Text(response)
-                    .font(CursorType.bodyText)
-                    .foregroundColor(colors.primaryText)
+            // Orca's anti-flicker rule + Happier's frame-paced commit — see
+            // CursorStreamingTextSmoother / CursorStreamingTextPacer.
+            let resolved = CursorStreamingTextSmoother.resolvedDisplayText(
+                overlayResponse: overlay.response,
+                persistedAssistantText: section.assistantText
+            )
+            if !resolved.isEmpty {
+                let displayed = streamingPacer.displayText.isEmpty ? resolved : streamingPacer.displayText
+                CursorAssistantMarkdownView(text: displayed, onCopyCodeBlock: copyCodeBlock)
                     .textSelection(.enabled)
+                    .contentTransition(.interpolate)
+                    .animation(.easeOut(duration: 0.12), value: streamingPacer.displayText)
+                    .task(id: section.turnID) {
+                        streamingPacer.reset(to: resolved)
+                    }
+                    .onChange(of: resolved) { _, newValue in
+                        streamingPacer.ingest(newValue)
+                    }
             } else if overlay.isWorking {
                 logLine("Working…")
-            } else if section.assistantText.isEmpty {
-                logLine("Starting…")
             } else {
-                Text(section.assistantText)
-                    .font(CursorType.bodyText)
-                    .foregroundColor(colors.primaryText)
-                    .textSelection(.enabled)
+                logLine("Starting…")
             }
         } else if !section.assistantText.isEmpty {
-            Text(section.assistantText)
-                .font(CursorType.bodyText)
-                .foregroundColor(colors.primaryText)
+            CursorAssistantMarkdownView(text: section.assistantText, onCopyCodeBlock: copyCodeBlock)
                 .textSelection(.enabled)
         } else if section.artifacts.isEmpty {
             logLine("No output recorded for this turn.")
         }
+    }
+
+    private func copyCodeBlock(_ code: String) {
+        #if os(iOS)
+        UIPasteboard.general.string = code
+        #endif
+        showCopiedToast("Copied code")
     }
 
     private var startingPlaceholder: some View {
@@ -541,6 +575,34 @@ public struct CursorWorkThreadView: View {
         default:
             EmptyView()
         }
+    }
+
+    /// Jump-to-latest pill, shown only while detached from the bottom with content below.
+    /// Ported: Orca (MIT) `native-chat-autoscroll.ts` pill behavior +
+    /// Happier (MIT) `JumpToBottomButton.tsx` unread-count badge.
+    private func jumpToLatestPill(proxy: ScrollViewProxy) -> some View {
+        Button {
+            guard let last = transcriptModel.rows.last?.id else { return }
+            scrollFollowState = scrollFollowState.handlingJumpToLatest()
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(last, anchor: .bottom)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(scrollFollowState.unreadCount > 0 ? "\(scrollFollowState.unreadCount) new" : "Jump to latest")
+                    .font(CursorType.statusPill)
+            }
+            .foregroundColor(colors.primaryText)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(colors.hairline, lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.2), radius: 8, y: 2)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("work-thread-jump-to-latest")
     }
 
     private func logLine(_ text: String) -> some View {
