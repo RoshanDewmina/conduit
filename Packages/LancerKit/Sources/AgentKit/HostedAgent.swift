@@ -475,8 +475,58 @@ public enum ManagedModel: String, CaseIterable, Sendable, Hashable {
 
     public static let `default`: ManagedModel = .claudeSonnet
 
+    /// Claude Code CLI accepts short aliases, not OpenRouter slugs.
+    public var claudeCodeCLIAlias: String? {
+        switch self {
+        case .claudeSonnet: "sonnet"
+        case .claudeOpus: "opus"
+        case .claudeHaiku: "haiku"
+        default: nil
+        }
+    }
+
+    public static let claudeCodeDispatchModels: [ManagedModel] = [.claudeHaiku, .claudeSonnet, .claudeOpus]
+
+    public var claudeCodeDispatchLabel: String {
+        switch self {
+        case .claudeSonnet: "Sonnet"
+        case .claudeOpus: "Opus"
+        case .claudeHaiku: "Haiku"
+        default: label
+        }
+    }
+
+    public static func fromCLIDispatchSlug(_ slug: String) -> ManagedModel? {
+        switch slug {
+        case "sonnet": .claudeSonnet
+        case "opus": .claudeOpus
+        case "haiku": .claudeHaiku
+        default: nil
+        }
+    }
+
+    public static func cliDispatchSlug(for storedSlug: String) -> String {
+        if let model = fromCLIDispatchSlug(storedSlug) {
+            return model.claudeCodeCLIAlias ?? storedSlug
+        }
+        if let model = ManagedModel(rawValue: storedSlug), let alias = model.claudeCodeCLIAlias {
+            return alias
+        }
+        return storedSlug
+    }
+
+    public static func cliDispatchLabel(for storedSlug: String) -> String {
+        if let model = fromCLIDispatchSlug(storedSlug) {
+            return model.claudeCodeDispatchLabel
+        }
+        if let model = ManagedModel(rawValue: storedSlug) {
+            return model.claudeCodeDispatchLabel
+        }
+        return storedSlug
+    }
+
     /// True when the slug isn't one of the curated presets (→ show custom field).
     public static func isCustom(_ slug: String) -> Bool {
-        ManagedModel(rawValue: slug) == nil
+        ManagedModel(rawValue: slug) == nil && fromCLIDispatchSlug(slug) == nil
     }
 }

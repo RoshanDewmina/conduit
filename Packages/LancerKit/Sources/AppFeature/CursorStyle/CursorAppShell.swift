@@ -11,7 +11,7 @@ import PersistenceKit
 /// onto that one stack or presented as a sheet/drawer on top of it.
 private enum CursorRoute: Hashable {
     case workspaceThreadList(String)
-    case workThread(String)
+    case workThread(String?)
     case prDetail
     case reviewDiff
 }
@@ -182,11 +182,11 @@ public struct CursorAppShell: View {
         case "prDetail":
             path.append(CursorRoute.prDetail)
         case "workThread":
-            path.append(CursorRoute.workThread("Fix onboarding pairing flow"))
+            path.append(CursorRoute.workThread("debug-fix-onboarding"))
         case "receiptCard":
-            path.append(CursorRoute.workThread("Receipt card UI test"))
+            path.append(CursorRoute.workThread("debug-receipt-card"))
         case "returnPacket":
-            path.append(CursorRoute.workThread("Return packet UI test"))
+            path.append(CursorRoute.workThread("debug-return-packet"))
         default:
             break
         }
@@ -264,7 +264,7 @@ public struct CursorAppShell: View {
                         bridge.activeThreadIsWorking = false
                         Task { await bridge.onOpenThread?(conversationID) }
                     }
-                    path.append(CursorRoute.workThread(title))
+                    path.append(CursorRoute.workThread(conversationID))
                 }
             )
         }
@@ -321,6 +321,29 @@ public struct CursorAppShell: View {
 
     // MARK: Pushed destinations
 
+    private var composerResolvedCWD: (path: String?, blocked: Bool, message: String?) {
+        let repoName = composerRepoName
+        if repoName == "Home" {
+            return ("~", false, nil)
+        }
+        if let path = liveBridge?.repoPaths[repoName] {
+            return (path, false, nil)
+        }
+        return (nil, liveBridge?.selectedThreadID == nil, "Path for \(repoName) unknown — open one of its threads first")
+    }
+
+    private var claudeCodeModelOptions: [CursorModelSheet.CursorModelOption] {
+        let selected = liveBridge?.composerModelSlug ?? ManagedModel.claudeHaiku.claudeCodeCLIAlias ?? "haiku"
+        return ManagedModel.claudeCodeDispatchModels.map { model in
+            let slug = model.claudeCodeCLIAlias ?? model.rawValue
+            return .init(
+                id: slug,
+                title: model.claudeCodeDispatchLabel,
+                isSelected: slug == selected || ManagedModel.cliDispatchSlug(for: selected) == slug
+            )
+        }
+    }
+
     /// Every pushed screen gets its own nav-bar/back-button hiding applied
     /// here, centrally: `.toolbar(.hidden, for: .navigationBar)` on the
     /// enclosing `NavigationStack` does not reliably propagate onto pushed
@@ -334,25 +357,18 @@ public struct CursorAppShell: View {
                 CursorWorkspaceThreadListView(
                     workspaceName: name,
                     onBack: { popIfPossible() },
-                    onSelectThread: { title in
+                    onSelectThread: { conversationID in
                         if let bridge = liveBridge,
-                           let row = liveThread(named: title, in: name, bridge: bridge) {
+                           let row = liveThread(id: conversationID, in: name, bridge: bridge) {
                             bridge.selectedThreadID = row.id
                             bridge.composerCWD = row.repoName
-                            // Clear stale state from whatever was last viewed,
-                            // then load this thread's real persisted content —
-                            // without the clear, a fast tap can show the
-                            // PREVIOUS thread's response for a frame; without
-                            // the load, an old completed thread always showed
-                            // "No output recorded" regardless of its real
-                            // saved content.
                             bridge.activeThreadPrompt = ""
                             bridge.activeThreadResponse = ""
                             bridge.activeThreadError = nil
                             bridge.activeThreadIsWorking = false
                             Task { await bridge.onOpenThread?(row.id) }
                         }
-                        path.append(CursorRoute.workThread(title))
+                        path.append(CursorRoute.workThread(conversationID))
                     },
                     onSelectObservedSession: { row in
                         openImportedObservedSession(row)
@@ -361,9 +377,10 @@ public struct CursorAppShell: View {
                     onOpenSearch: { showingSearchOverlay = true },
                     onOpenMenu: { showingRepoPicker = true }
                 )
-            case .workThread(let title):
+            case .workThread(let conversationID):
                 CursorWorkThreadView(
-                    missionTitle: title,
+                    routedConversationID: conversationID,
+                    fallbackTitle: conversationID ?? "Thread",
                     onBack: { popIfPossible() },
                     onViewPR: { path.append(CursorRoute.prDetail) },
                     onOpenReview: { path.append(CursorRoute.reviewDiff) },
@@ -417,12 +434,12 @@ public struct CursorAppShell: View {
             bridge.activeThreadIsWorking = false
             await bridge.onOpenThread?(id)
         }
-        path.append(CursorRoute.workThread(conversation.title))
+        path.append(CursorRoute.workThread(id))
     }
 
     private func openImportedObservedSession(_ row: CursorObservedSessionMapping.RowModel) {
         guard let bridge = liveBridge, let onImport = bridge.onImportObservedSession else {
-            path.append(CursorRoute.workThread(row.title))
+            path.append(CursorRoute.workThread(nil))
             return
         }
         bridge.activeThreadError = nil
@@ -435,7 +452,7 @@ public struct CursorAppShell: View {
                 bridge.activeThreadResponse = ""
                 bridge.activeThreadIsWorking = false
                 await bridge.onOpenThread?(conversationID)
-                path.append(CursorRoute.workThread(row.title))
+                path.append(CursorRoute.workThread(conversationID))
             case .failure(let error):
                 bridge.activeThreadError = error.message
             }
@@ -481,45 +498,33 @@ public struct CursorAppShell: View {
             threadID: liveBridge?.selectedThreadID ?? "composer.new",
             repoName: composerRepoName,
             branchName: "main",
-            modelName: liveBridge?.composerModelLabel ?? ManagedModel.claudeHaiku.label,
+            modelName: liveBridge?.composerModelLabel ?? ManagedModel.claudeHaiku.claudeCodeDispatchLabel,
             runTargetName: composerRunTargetName,
             placeholder: composerPlaceholder,
             prefillText: liveBridge?.composerPrefillText,
+            resolvedCWDPath: composerResolvedCWD.path,
+            cwdBlockedMessage: composerResolvedCWD.blocked ? composerResolvedCWD.message : nil,
+            sendExternallyDisabled: composerResolvedCWD.blocked,
             onPickRepo: { showingRepoPicker = true },
             onPickRunTarget: { showingRunOnSheet = true },
             onPickModel: { showingModelSheet = true },
             onSend: liveBridge == nil ? nil : { payload in
                 guard let liveBridge else { return }
                 let repoName = liveBridge.composerCWD.isEmpty ? "Home" : liveBridge.composerCWD
-                let model = liveBridge.composerModelSlug
+                let model = ManagedModel.cliDispatchSlug(for: liveBridge.composerModelSlug)
                 if let threadID = liveBridge.selectedThreadID {
-                    // Same real-state update as a fresh dispatch — without
-                    // this a follow-up sent from an existing thread doesn't
-                    // update the prompt bubble/narration at all (onContinue
-                    // itself had no wiring here until this pass either).
                     liveBridge.activeThreadPrompt = payload.prompt
                     Task { await liveBridge.onContinue?(threadID, payload.prompt, model, payload.contract) }
                 } else {
-                    // `repoName` is a display name, not a path — the daemon can't
-                    // resolve a bare relative name to a real directory (it only
-                    // expands `~`). Prefer the real absolute cwd of that repo's
-                    // most recent known conversation; "~" (home) is the only safe
-                    // fallback for a repo with no history yet, never the bare name.
-                    let cwd = liveBridge.repoPaths[repoName] ?? "~"
-                    // Reset stale state from whatever thread was last viewed —
-                    // otherwise a fresh dispatch briefly shows the PREVIOUS
-                    // thread's response text under the new prompt.
+                    let cwdResolution = composerResolvedCWD
+                    guard !cwdResolution.blocked, let cwd = cwdResolution.path else { return }
                     liveBridge.activeThreadPrompt = payload.prompt
                     liveBridge.activeThreadResponse = ""
                     liveBridge.activeRunID = nil
                     liveBridge.selectedThreadID = nil
                     liveBridge.activeThreadError = nil
                     Task { await liveBridge.onDispatch?(payload.prompt, cwd, model, payload.contract) }
-                    // A fresh dispatch has no existing thread to navigate into —
-                    // without this, closing the composer sheet just reveals
-                    // whatever was underneath it (usually Workspaces root),
-                    // regardless of whether the dispatch even succeeds.
-                    path.append(CursorRoute.workThread(payload.prompt))
+                    path.append(CursorRoute.workThread(nil))
                 }
                 liveBridge.composerPrefillText = nil
                 showingComposerSheet = false
@@ -542,14 +547,12 @@ public struct CursorAppShell: View {
             )
         }
         .sheet(isPresented: $showingModelSheet) {
+            let options = claudeCodeModelOptions
             CursorModelSheet(
-                activeModels: [
-                    .init(
-                        id: liveBridge?.composerModelSlug ?? ManagedModel.claudeHaiku.rawValue,
-                        title: liveBridge?.composerModelLabel ?? ManagedModel.claudeHaiku.label,
-                        isSelected: true
-                    )
-                ],
+                activeModels: options.filter(\.isSelected).isEmpty
+                    ? [options.first ?? .init(id: "haiku", title: "Haiku", isSelected: true)]
+                    : options.filter(\.isSelected),
+                moreModels: options.filter { !$0.isSelected },
                 onClose: { showingModelSheet = false },
                 onSelect: { option in
                     liveBridge?.composerModelSlug = option.id
@@ -561,14 +564,14 @@ public struct CursorAppShell: View {
     }
 
     private func liveThread(
-        named title: String,
+        id conversationID: String,
         in workspaceName: String,
         bridge: CursorShellLiveBridge
     ) -> CursorShellLiveBridge.ThreadRow? {
         if workspaceName == "All Repos" {
-            return bridge.threadsByWorkspace.values.flatMap { $0 }.first { $0.title == title }
+            return bridge.threadsByWorkspace.values.flatMap { $0 }.first { $0.id == conversationID }
         }
-        return bridge.threads(for: workspaceName).first { $0.title == title }
+        return bridge.threads(for: workspaceName).first { $0.id == conversationID }
     }
 }
 #endif

@@ -3,27 +3,25 @@ import SwiftUI
 import DesignSystem
 import LancerCore
 import SessionFeature
+import AgentKit
 
-/// Work Thread transcript: a user prompt bubble followed by the run's real
-/// live/final output text, with a floating sticky action rail above a
-/// follow-up composer. Bound to `CursorShellLiveBridge.activeThread*` —
-/// previously this rendered a single hardcoded example conversation
-/// regardless of what was actually dispatched (2026-07-07: found via a real
-/// device test — "the chat is just a template"). There is no real plan/
-/// todo-checklist/diff-stat data anywhere in Lancer's V1 model, so those
-/// cards are gone rather than filled with more fake content. Forces `.light`
-/// to match the rest of the app.
+/// Work Thread transcript backed by the persisted mirror (`ChatTurn` rows +
+/// artifacts), with a live overlay on the active run's last row. Bound to a
+/// stable `conversationID` route — bridge `activeThread*` fields only overlay
+/// the in-flight turn, never replace prior history.
 public struct CursorWorkThreadView: View {
     @Environment(\.cursorScheme) private var cursorScheme
     @Environment(\.cursorShellLiveBridge) private var liveBridge
 
-    private let missionTitle: String
+    private let routedConversationID: String?
+    private let fallbackTitle: String
     private let onBack: () -> Void
     private let onViewPR: () -> Void
     private let onOpenReview: () -> Void
     private let onOpenComposer: () -> Void
     private let onOpenComposerPrefilled: (String) -> Void
 
+    @State private var transcriptModel = CursorThreadTranscriptModel()
     @State private var returnPacketPresentation: ReturnPacketPresentation?
     @State private var copiedToastText: String?
 
@@ -34,8 +32,25 @@ public struct CursorWorkThreadView: View {
         var id: String { receipt.runId }
     }
 
-    /// Mock shell always shows the banner for UI tests; live shell only when a
-    /// pending approval is wired through `CursorShellLiveBridge`.
+    private var effectiveConversationID: String? {
+        routedConversationID ?? liveBridge?.selectedThreadID
+    }
+
+    private var isActiveRoutedThread: Bool {
+        guard let liveBridge, let effectiveConversationID else { return false }
+        return liveBridge.selectedThreadID == effectiveConversationID
+    }
+
+    private var headerTitle: String {
+        if let title = transcriptModel.conversationTitle, !title.isEmpty {
+            return title
+        }
+        if let prompt = liveBridge?.activeThreadPrompt, !prompt.isEmpty {
+            return prompt
+        }
+        return fallbackTitle
+    }
+
     private var showsApprovalBanner: Bool {
         #if DEBUG
         if ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" {
@@ -46,27 +61,17 @@ public struct CursorWorkThreadView: View {
         return liveBridge.pendingApprovalID != nil
     }
 
-    private var displayedArtifacts: [ChatArtifact] {
-        if let liveBridge, !liveBridge.activeThreadArtifacts.isEmpty {
-            return liveBridge.activeThreadArtifacts
-        }
-        #if DEBUG
-        if ProcessInfo.processInfo.environment["LANCER_CURSOR_MOCK_RECEIPT"] == "1" {
-            return [Self.mockReceiptArtifact]
-        }
-        #endif
-        return []
-    }
-
     public init(
-        missionTitle: String = "Fix onboarding pairing flow",
+        routedConversationID: String? = nil,
+        fallbackTitle: String = "Thread",
         onBack: @escaping () -> Void = {},
         onViewPR: @escaping () -> Void = {},
         onOpenReview: @escaping () -> Void = {},
         onOpenComposer: @escaping () -> Void = {},
         onOpenComposerPrefilled: @escaping (String) -> Void = { _ in }
     ) {
-        self.missionTitle = missionTitle
+        self.routedConversationID = routedConversationID
+        self.fallbackTitle = fallbackTitle
         self.onBack = onBack
         self.onViewPR = onViewPR
         self.onOpenReview = onOpenReview
@@ -78,16 +83,28 @@ public struct CursorWorkThreadView: View {
         VStack(spacing: 0) {
             header
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    userPromptBubble
-                    narration
-                    changesCard
-                    artifactCards
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        if transcriptModel.rows.isEmpty {
+                            startingPlaceholder
+                        } else {
+                            ForEach(transcriptModel.rows) { row in
+                                transcriptRowView(row)
+                                    .id(row.id)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 12)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 20)
-                .padding(.bottom, 12)
+                .onChange(of: transcriptModel.rows.map(\.id)) { _, ids in
+                    guard let last = ids.last else { return }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(last, anchor: .bottom)
+                    }
+                }
             }
         }
         .background(colors.background.ignoresSafeArea())
@@ -99,12 +116,6 @@ public struct CursorWorkThreadView: View {
                 composer
             }
         }
-        // Pushed via `.navigationDestination` inside a `NavigationStack` whose
-        // ancestor hides the nav bar — that hidden state doesn't reliably
-        // propagate onto pushed destinations, so the system re-adds its own
-        // back chevron alongside this view's own custom one. Hide both the
-        // bar and the system back button explicitly, here, so this view is
-        // correct regardless of what its host `NavigationStack` does.
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .sheet(item: $returnPacketPresentation) { presentation in
@@ -125,6 +136,153 @@ public struct CursorWorkThreadView: View {
                     .onAppear { scheduleToastDismiss() }
             }
         }
+        .onAppear {
+            bindTranscript()
+        }
+        .onChange(of: effectiveConversationID) { _, _ in
+            bindTranscript()
+        }
+        .onChange(of: liveBridge?.selectedThreadID) { _, _ in
+            refreshTranscriptOverlay()
+        }
+        .onChange(of: liveBridge?.activeThreadResponse) { _, _ in
+            refreshTranscriptOverlay()
+        }
+        .onChange(of: liveBridge?.activeThreadIsWorking) { _, isWorking in
+            refreshTranscriptOverlay()
+            if isWorking == false {
+                Task { await transcriptModel.reload() }
+            }
+        }
+        .onChange(of: liveBridge?.activeThreadError) { _, _ in
+            refreshTranscriptOverlay()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { _ in
+            Task { await transcriptModel.reload() }
+        }
+    }
+
+    private func bindTranscript() {
+        transcriptModel.configure(conversationID: effectiveConversationID)
+        refreshTranscriptOverlay()
+        if effectiveConversationID != nil {
+            Task { await transcriptModel.reload() }
+        }
+    }
+
+    private func refreshTranscriptOverlay() {
+        transcriptModel.refreshRows(
+            bridge: liveBridge,
+            bridgeError: isActiveRoutedThread ? liveBridge?.activeThreadError : nil,
+            isActiveThread: isActiveRoutedThread
+        )
+    }
+
+    @ViewBuilder
+    private func transcriptRowView(_ row: CursorTranscriptRow) -> some View {
+        switch row {
+        case .turnSection(let section):
+            turnSectionView(section)
+        case .bridgeErrorBanner(let message):
+            bridgeErrorBanner(message: message)
+        }
+    }
+
+    @ViewBuilder
+    private func turnSectionView(_ section: CursorTranscriptRow.TurnSection) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            userPromptBubble(section.prompt)
+            assistantBody(for: section)
+            if let error = section.turnError, !error.isEmpty {
+                turnErrorText(error)
+            }
+            ForEach(section.artifacts) { artifact in
+                artifactView(for: artifact)
+            }
+            changesCard(for: section.artifacts)
+        }
+    }
+
+    @ViewBuilder
+    private func assistantBody(for section: CursorTranscriptRow.TurnSection) -> some View {
+        if let overlay = section.liveOverlay {
+            if let response = overlay.response, !response.isEmpty {
+                Text(response)
+                    .font(CursorType.bodyText)
+                    .foregroundColor(colors.primaryText)
+                    .textSelection(.enabled)
+            } else if overlay.isWorking {
+                logLine("Working…")
+            } else if section.assistantText.isEmpty {
+                logLine("Starting…")
+            } else {
+                Text(section.assistantText)
+                    .font(CursorType.bodyText)
+                    .foregroundColor(colors.primaryText)
+                    .textSelection(.enabled)
+            }
+        } else if !section.assistantText.isEmpty {
+            Text(section.assistantText)
+                .font(CursorType.bodyText)
+                .foregroundColor(colors.primaryText)
+                .textSelection(.enabled)
+        } else if section.artifacts.isEmpty {
+            logLine("No output recorded for this turn.")
+        }
+    }
+
+    private var startingPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let prompt = liveBridge?.activeThreadPrompt, !prompt.isEmpty {
+                userPromptBubble(prompt)
+            }
+            if liveBridge?.activeThreadIsWorking == true {
+                logLine("Working…")
+            } else {
+                logLine("Starting…")
+            }
+        }
+    }
+
+    private func bridgeErrorBanner(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(message)
+                .font(CursorType.bodyText)
+                .foregroundColor(colors.dangerRed)
+            HStack(spacing: 12) {
+                Button("Retry", action: handleRetry)
+                    .font(CursorType.rowTitle)
+                    .foregroundColor(colors.primaryText)
+                Button("Refresh", action: handleRefresh)
+                    .font(CursorType.rowTitle)
+                    .foregroundColor(colors.primaryText)
+            }
+        }
+        .padding(14)
+        .background(colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: CursorMetrics.cardCornerRadius, style: .continuous))
+        .accessibilityIdentifier("work-thread-bridge-error-banner")
+    }
+
+    private func handleRetry() {
+        guard let liveBridge, let conversationID = effectiveConversationID else { return }
+        let prompt = liveBridge.activeThreadPrompt.isEmpty
+            ? (transcriptModel.lastPersistedPrompt ?? "")
+            : liveBridge.activeThreadPrompt
+        guard !prompt.isEmpty else { return }
+        let model = ManagedModel.cliDispatchSlug(for: liveBridge.composerModelSlug)
+        liveBridge.activeThreadError = nil
+        Task { await liveBridge.onContinue?(conversationID, prompt, model, nil) }
+    }
+
+    private func handleRefresh() {
+        guard let liveBridge, let conversationID = effectiveConversationID else { return }
+        liveBridge.activeThreadError = nil
+        Task {
+            await transcriptModel.reload()
+            await liveBridge.onOpenThread?(conversationID)
+            refreshTranscriptOverlay()
+        }
     }
 
     private func scheduleToastDismiss() {
@@ -138,10 +296,6 @@ public struct CursorWorkThreadView: View {
         withAnimation(.easeInOut(duration: 0.2)) { copiedToastText = text }
     }
 
-    // MARK: Needs-approval banner
-
-    /// Governed-approval quick actions above the sticky action rail. Live shell
-    /// gates on `pendingApprovalID`; mock shell always shows for UI tests.
     private var approvalBanner: some View {
         CursorApprovalBanner(
             count: 1,
@@ -167,8 +321,6 @@ public struct CursorWorkThreadView: View {
         Task { await liveBridge.onDecide?(approvalID, .rejected) }
     }
 
-    // MARK: Composer
-
     private var composer: some View {
         CursorBottomComposer(
             placeholder: "Follow up...",
@@ -176,8 +328,6 @@ public struct CursorWorkThreadView: View {
             onTap: onOpenComposer
         )
     }
-
-    // MARK: Header
 
     private var header: some View {
         HStack(spacing: CursorMetrics.headerSpacing) {
@@ -189,7 +339,7 @@ public struct CursorWorkThreadView: View {
         .padding(.top, CursorMetrics.headerTopPadding)
         .overlay(alignment: .center) {
             HStack(spacing: 6) {
-                Text(missionTitle)
+                Text(headerTitle)
                     .font(CursorType.sheetTitle)
                     .foregroundColor(colors.primaryText)
                     .lineLimit(1)
@@ -201,11 +351,6 @@ public struct CursorWorkThreadView: View {
         }
     }
 
-    /// Row-13 "…" menu (Pin / Rename / Mark as Unread / Archive / Copy ID /
-    /// Share, IMG_2429). Only "Copy ID" has a real effect (clipboard + toast)
-    /// — Pin/Rename/Mark-Unread/Archive/Share have no backing RPC in Lancer's
-    /// V1 model yet, so they're present for pixel-closeness but intentionally
-    /// no-op (see report: "wiring needs").
     private var threadOverflowMenu: some View {
         Menu {
             Button { } label: { Label("Pin", systemImage: "pin") }
@@ -215,7 +360,7 @@ public struct CursorWorkThreadView: View {
             Divider()
             Button {
                 #if os(iOS)
-                UIPasteboard.general.string = liveBridge?.selectedThreadID ?? missionTitle
+                UIPasteboard.general.string = effectiveConversationID ?? fallbackTitle
                 #endif
                 showCopiedToast("Copied ID")
             } label: { Label("Copy ID", systemImage: "doc.on.doc") }
@@ -234,21 +379,10 @@ public struct CursorWorkThreadView: View {
         .accessibilityIdentifier("work-thread-overflow-menu")
     }
 
-    // MARK: User prompt bubble
-
-    /// The real dispatched prompt if this is the thread just sent from the
-    /// composer; falls back to the mission title (the conversation's stored
-    /// title, itself derived server-side from the original prompt) when
-    /// opening an older thread from the list/search rather than a fresh send.
-    private var displayedPrompt: String {
-        let live = liveBridge?.activeThreadPrompt ?? ""
-        return live.isEmpty ? missionTitle : live
-    }
-
-    private var userPromptBubble: some View {
+    private func userPromptBubble(_ prompt: String) -> some View {
         HStack {
             Spacer(minLength: 48)
-            Text(displayedPrompt)
+            Text(prompt)
                 .font(CursorType.bodyText)
                 .foregroundColor(colors.primaryText)
                 .padding(.horizontal, 16)
@@ -258,51 +392,15 @@ public struct CursorWorkThreadView: View {
         }
     }
 
-    // MARK: Narration — the run's real output, not a scripted example
-
-    private var narration: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let error = liveBridge?.activeThreadError, !error.isEmpty {
-                Text(error)
-                    .font(CursorType.bodyText)
-                    .foregroundColor(colors.dangerRed)
-            } else if let text = liveBridge?.activeThreadResponse, !text.isEmpty {
-                Text(text)
-                    .font(CursorType.bodyText)
-                    .foregroundColor(colors.primaryText)
-                    .textSelection(.enabled)
-            } else if liveBridge?.activeThreadIsWorking == true {
-                logLine("Working…")
-            } else if displayedArtifacts.isEmpty {
-                logLine("No output recorded for this thread yet.")
-            }
-        }
+    private func turnErrorText(_ message: String) -> some View {
+        Text(message)
+            .font(CursorType.bodyText)
+            .foregroundColor(colors.dangerRed)
     }
-
-    // MARK: Artifacts
 
     @ViewBuilder
-    private var artifactCards: some View {
-        ForEach(displayedArtifacts) { artifact in
-            artifactView(for: artifact)
-        }
-    }
-
-    /// The most recent receipt among the displayed artifacts, if any — source
-    /// for the "Changes N" card and "View PR" pill (IMG_2410/2412). No fake
-    /// diffstat is ever synthesized: this is nil (and the card/pill don't
-    /// render) unless a real `ProofReceipt.filesTouched` exists.
-    private var activeReceipt: ProofReceipt? {
-        displayedArtifacts.compactMap(ReceiptCardModel.decodeReceipt(from:)).first { receipt in
-            !(receipt.filesTouched?.isEmpty ?? true)
-        }
-    }
-
-    // MARK: Changes card + View PR pill (IMG_2410/2412)
-
-    @ViewBuilder
-    private var changesCard: some View {
-        if let receipt = activeReceipt, let files = receipt.filesTouched, !files.isEmpty {
+    private func changesCard(for artifacts: [ChatArtifact]) {
+        if let receipt = activeReceipt(in: artifacts), let files = receipt.filesTouched, !files.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text("Changes")
@@ -345,6 +443,12 @@ public struct CursorWorkThreadView: View {
             .accessibilityIdentifier("work-thread-changes-card")
 
             viewPRPill(files: files)
+        }
+    }
+
+    private func activeReceipt(in artifacts: [ChatArtifact]) -> ProofReceipt? {
+        artifacts.compactMap(ReceiptCardModel.decodeReceipt(from:)).first { receipt in
+            !(receipt.filesTouched?.isEmpty ?? true)
         }
     }
 
@@ -484,5 +588,9 @@ public struct CursorWorkThreadView: View {
         )
     }()
     #endif
+}
+
+private extension Notification.Name {
+    static let lancerChatArtifactPersisted = Notification.Name("lancerChatArtifactPersisted")
 }
 #endif

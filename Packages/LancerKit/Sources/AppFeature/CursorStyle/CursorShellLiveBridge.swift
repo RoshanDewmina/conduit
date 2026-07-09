@@ -123,8 +123,9 @@ public final class CursorShellLiveBridge {
     /// Working directory used when building resume commands for receipts.
     public var activeThreadCWD: String?
     /// OpenRouter / vendor model slug used for the next dispatch from the composer.
-    public var composerModelSlug: String = ManagedModel.claudeHaiku.rawValue
-    public var composerModelLabel: String = ManagedModel.claudeHaiku.label
+    /// For Claude Code CLI dispatch this is a short alias (`haiku`/`sonnet`/`opus`), not an OpenRouter slug.
+    public var composerModelSlug: String = ManagedModel.claudeHaiku.claudeCodeCLIAlias ?? "haiku"
+    public var composerModelLabel: String = ManagedModel.claudeHaiku.claudeCodeDispatchLabel
     /// Machine the composer "Run on" picker targets for the next dispatch.
     public var selectedRunTargetMachineID: String?
     /// Display name for `selectedRunTargetMachineID` — shown in the composer header.

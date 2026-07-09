@@ -126,7 +126,7 @@ public struct CursorWorkspaceThreadListView: View {
     ) -> CursorThreadRowModel {
         let derived = CursorThreadAttention.derive(threadState(for: row))
         return CursorThreadRowModel(
-            id: UUID(uuidString: row.id) ?? UUID(),
+            conversationID: row.id,
             title: row.title,
             repoName: row.repoName,
             isActive: isActive,
@@ -174,7 +174,7 @@ public struct CursorWorkspaceThreadListView: View {
             CursorSectionHeader("Needs you (\(needsYouCount))")
                 .accessibilityIdentifier("home-needs-you-header")
             ForEach(needsYouThreadModels) { model in
-                Button(action: { onSelectThread(model.title) }) {
+                Button(action: { onSelectThread(model.conversationID) }) {
                     CursorThreadRow(model: model, showRepoTag: workspaceName == "All Repos")
                 }
                 .buttonStyle(.plain)
@@ -414,7 +414,7 @@ public struct CursorWorkspaceThreadListView: View {
                             CursorSectionHeader(group.repoName)
                                 .accessibilityIdentifier("repo-section-\(group.repoName)")
                             ForEach(group.threads) { model in
-                                Button(action: { onSelectThread(model.title) }) {
+                                Button(action: { onSelectThread(model.conversationID) }) {
                                     CursorThreadRow(model: model, showRepoTag: false)
                                 }
                                 .buttonStyle(.plain)
@@ -427,7 +427,7 @@ public struct CursorWorkspaceThreadListView: View {
                         if !todayThreads.isEmpty {
                             CursorSectionHeader("Today")
                             ForEach(todayThreads) { model in
-                                Button(action: { onSelectThread(model.title) }) {
+                                Button(action: { onSelectThread(model.conversationID) }) {
                                     CursorThreadRow(model: model, showRepoTag: false)
                                 }
                                 .buttonStyle(.plain)
@@ -437,7 +437,7 @@ public struct CursorWorkspaceThreadListView: View {
                         if !yesterdayThreads.isEmpty {
                             CursorSectionHeader("Yesterday")
                             ForEach(yesterdayThreads) { model in
-                                Button(action: { onSelectThread(model.title) }) {
+                                Button(action: { onSelectThread(model.conversationID) }) {
                                     CursorThreadRow(model: model, showRepoTag: false)
                                 }
                                 .buttonStyle(.plain)
@@ -447,7 +447,7 @@ public struct CursorWorkspaceThreadListView: View {
                         if !earlierThreads.isEmpty {
                             CursorSectionHeader("Earlier")
                             ForEach(earlierThreads) { model in
-                                Button(action: { onSelectThread(model.title) }) {
+                                Button(action: { onSelectThread(model.conversationID) }) {
                                     CursorThreadRow(model: model, showRepoTag: false)
                                 }
                                 .buttonStyle(.plain)

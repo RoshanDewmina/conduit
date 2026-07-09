@@ -32,14 +32,11 @@ public struct CursorModelSheet: View {
 
     public init(
         activeModels: [CursorModelOption] = [
-            CursorModelOption(id: ManagedModel.claudeHaiku.rawValue, title: ManagedModel.claudeHaiku.label, isSelected: true)
+            CursorModelOption(id: "haiku", title: ManagedModel.claudeHaiku.claudeCodeDispatchLabel, isSelected: true)
         ],
         moreModels: [CursorModelOption] = [
-            CursorModelOption(id: ManagedModel.claudeSonnet.rawValue, title: ManagedModel.claudeSonnet.label),
-            CursorModelOption(id: ManagedModel.claudeOpus.rawValue, title: ManagedModel.claudeOpus.label),
-            CursorModelOption(id: ManagedModel.gptCodex.rawValue, title: ManagedModel.gptCodex.label),
-            CursorModelOption(id: ManagedModel.gpt.rawValue, title: ManagedModel.gpt.label),
-            CursorModelOption(id: ManagedModel.geminiPro.rawValue, title: ManagedModel.geminiPro.label)
+            CursorModelOption(id: "sonnet", title: ManagedModel.claudeSonnet.claudeCodeDispatchLabel),
+            CursorModelOption(id: "opus", title: ManagedModel.claudeOpus.claudeCodeDispatchLabel),
         ],
         onClose: @escaping () -> Void = {},
         onSelect: @escaping (CursorModelOption) -> Void = { _ in },
