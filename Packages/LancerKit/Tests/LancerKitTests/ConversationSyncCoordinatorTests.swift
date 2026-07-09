@@ -539,6 +539,77 @@ struct ConversationSyncCoordinatorTests {
         #expect(artifacts.count == 1, "re-fetching the same receipt event twice must not duplicate the artifact row")
     }
 
+    @Test("mergeConversationSummaries creates mirror rows for conversations discovered via list")
+    func mergeConversationSummariesCreatesMirrorRows() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+
+        let summaries = [
+            ConversationSummary(
+                id: "conv-remote-1", title: "Started on Mac", provider: "claudeCode", agentID: "claudeCode",
+                hostName: "MacBook Pro", cwd: "/proj", state: "active", source: "app",
+                createdAt: "2026-07-08T00:00:00Z", updatedAt: "2026-07-08T00:05:00Z",
+                lastActivityAt: "2026-07-08T00:05:00Z", lastSeq: 6
+            ),
+        ]
+        await coordinator.mergeConversationSummaries(summaries, hostName: "MacBook Pro", hostID: "host-1")
+
+        let mirrored = try await repo.conversation(id: "conv-remote-1")
+        #expect(mirrored?.title == "Started on Mac")
+        #expect(mirrored?.hostName == "MacBook Pro")
+        #expect(mirrored?.lastHostSeq == 6)
+        #expect(mirrored?.syncState == .synced)
+    }
+
+    @Test("mergeConversationSummaries never regresses lastHostSeq below the existing mirror value")
+    func mergeConversationSummariesDoesNotRegressSeq() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 12, syncState: .synced)
+
+        // A stale list summary reporting a lower lastSeq than what this
+        // device already mirrored from a live turn (e.g. the daemon's list
+        // cache hadn't caught up yet) must not roll the mirror backward.
+        let staleSummary = ConversationSummary(
+            id: "conv-1", title: "T (stale)", provider: "claudeCode", agentID: "claudeCode",
+            hostName: "h", cwd: "/proj", state: "active", source: "app",
+            createdAt: "2026-07-08T00:00:00Z", updatedAt: "2026-07-08T00:01:00Z",
+            lastActivityAt: "2026-07-08T00:01:00Z", lastSeq: 3
+        )
+        await coordinator.mergeConversationSummaries([staleSummary], hostName: "h", hostID: nil)
+
+        let mirrored = try await repo.conversation(id: "conv-1")
+        #expect(mirrored?.lastHostSeq == 12, "list-based merge must never regress lastHostSeq")
+    }
+
+    @Test("mergeConversationSummaries never clobbers a stored relay routing agentID with a bare provider token")
+    func mergeConversationSummariesPreservesRelayRoutingID() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let machineID = "557A7877-F729-5031-9606-0E04F2B67822"
+        let seed = ChatConversation(
+            id: "conv-relay", title: "T", agentID: "relay|\(machineID)|claudeCode",
+            hostName: "Mac", hostID: machineID, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 2, syncState: .synced)
+
+        let summary = ConversationSummary(
+            id: "conv-relay", title: "T (from list)", provider: "claudeCode", agentID: "claudeCode",
+            hostID: machineID, hostName: "Mac", cwd: "/proj", state: "active", source: "app",
+            createdAt: "2026-07-08T00:00:00Z", updatedAt: "2026-07-08T00:01:00Z",
+            lastActivityAt: "2026-07-08T00:01:00Z", lastSeq: 5
+        )
+        await coordinator.mergeConversationSummaries([summary], hostName: "Mac", hostID: machineID)
+
+        let mirrored = try await repo.conversation(id: "conv-relay")
+        #expect(mirrored?.agentID == "relay|\(machineID)|claudeCode", "must not clobber the stored routing id with the bare provider token")
+        #expect(mirrored?.lastHostSeq == 5)
+    }
+
     @Test("observeSyncState immediately yields the current state, then updates on transitions")
     func observeSyncStateStream() async throws {
         let db = try AppDatabase.inMemory()

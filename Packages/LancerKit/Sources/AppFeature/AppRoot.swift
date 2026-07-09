@@ -1242,7 +1242,47 @@ public struct AppRoot: View {
     }
 
     @MainActor
+    private func discoverRemoteConversations(env: AppEnvironment) async {
+        let request = ConversationListRequest(limit: 100)
+        for machine in relayFleetStore.machines where relayFleetStore.isConnected(machine.id) {
+            let bridge = machine.bridge
+            guard let response = await Self.withShortTimeout({ try await bridge.relayListConversations(request) }) else { continue }
+            await env.conversationSyncCoordinator.mergeConversationSummaries(
+                response.conversations, hostName: machine.record.displayName, hostID: machine.id.uuidString
+            )
+        }
+        for slot in fleetStore.slots where slot.sessionViewModel.status == .connected {
+            let channel = slot.channel
+            guard let response = await Self.withShortTimeout({ try await channel.listConversations(request) }) else { continue }
+            await env.conversationSyncCoordinator.mergeConversationSummaries(
+                response.conversations, hostName: slot.hostName, hostID: slot.hostID.uuidString
+            )
+        }
+    }
+
+    /// Races an async call against a short deadline so one unreachable host
+    /// can't block or blank the Workspaces list refresh — errors and timeouts
+    /// both resolve to `nil`, never thrown, so callers stay fail-quiet.
+    private static func withShortTimeout<T: Sendable>(
+        timeout: TimeInterval = 3.0, _ call: @escaping @Sendable () async throws -> T
+    ) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask {
+                try? await call()
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                return nil
+            }
+            let result = await group.next() ?? nil
+            group.cancelAll()
+            return result
+        }
+    }
+
+    @MainActor
     private func refreshCursorLiveBridge(env: AppEnvironment) async {
+        await discoverRemoteConversations(env: env)
         do {
             let conversations = try await env.chatRepo.recent(limit: 200)
             var counts: [String: Int] = [:]

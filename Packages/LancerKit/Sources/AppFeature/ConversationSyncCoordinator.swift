@@ -360,6 +360,37 @@ public actor ConversationSyncCoordinator {
         )
     }
 
+    /// Best-effort discovery merge for `agent.conversations.list` results —
+    /// lets `AppRoot.refreshCursorLiveBridge` surface a conversation started
+    /// on another device without waiting on CloudKit. Only upserts summary
+    /// fields (title/state/hostName/timestamps); turns/events are untouched
+    /// here and hydrate on thread-open via the existing `refreshConversation`.
+    ///
+    /// Two invariants a bulk list merge must not violate (unlike a single
+    /// authoritative fetch, a list summary can be stale relative to what this
+    /// device already mirrored from a live turn):
+    /// - never lower a mirror row's `lastHostSeq` below what's already stored
+    ///   (`upsertConversationMirror` overwrites it unconditionally, so the
+    ///   max is computed here before calling it);
+    /// - never clobber a stored relay routing agentID (`relay|<id>|<vendor>`)
+    ///   with a bare provider token — `mapSummary` preserves it via
+    ///   `fallback`, and the repository's UPDATE clause never touches
+    ///   `agent_id`/`vendor` on conflict regardless.
+    public func mergeConversationSummaries(
+        _ summaries: [ConversationSummary], hostName: String, hostID: String?
+    ) async {
+        for summary in summaries {
+            let existing = try? await chatRepo.conversation(id: summary.id)
+            var conversation = Self.mapSummary(summary, fallback: existing)
+            if conversation.hostName.isEmpty { conversation.hostName = hostName }
+            if conversation.hostID == nil { conversation.hostID = hostID }
+            let mergedSeq = max(summary.lastSeq, existing?.lastHostSeq ?? 0)
+            _ = try? await chatRepo.upsertConversationMirror(
+                conversation, lastHostSeq: mergedSeq, syncState: existing?.syncState ?? .synced
+            )
+        }
+    }
+
     private func mergeFetchResponse(_ response: ConversationFetchResponse) async throws {
         let existing = try await chatRepo.conversation(id: response.conversation.id)
         let conversation = Self.mapSummary(response.conversation, fallback: existing)
