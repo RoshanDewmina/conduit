@@ -11,6 +11,7 @@ public enum CursorThreadStatus: Sendable {
 
 public struct CursorThreadRowModel: Identifiable, Sendable {
     public let id: UUID
+    public let conversationID: String
     public let title: String
     public let repoName: String
     public let isActive: Bool
@@ -21,6 +22,7 @@ public struct CursorThreadRowModel: Identifiable, Sendable {
 
     public init(
         id: UUID = UUID(),
+        conversationID: String? = nil,
         title: String,
         repoName: String,
         isActive: Bool,
@@ -29,6 +31,7 @@ public struct CursorThreadRowModel: Identifiable, Sendable {
         attentionDetail: String? = nil
     ) {
         self.id = id
+        self.conversationID = conversationID ?? title
         self.title = title
         self.repoName = repoName
         self.isActive = isActive
