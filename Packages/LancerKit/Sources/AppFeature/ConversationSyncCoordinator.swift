@@ -100,13 +100,19 @@ public actor ConversationSyncCoordinator {
         hostName: String, hostID: String?, clientTurnID: String,
         transport: ConversationTransport
     ) async -> TurnOutcome {
-        await append(
+        // `agent` may be a full routing id (`relay|<machineID>|<vendor>` or
+        // `<slotUUID>|<vendor>`) from the composer — the daemon wire only wants
+        // the vendor token, but the local mirror must keep the routing id so
+        // follow-ups can resolve a transport without "Unknown agent."
+        let vendor = agent.split(separator: "|").last.map(String.init) ?? agent
+        return await append(
             ConversationAppendRequest(
                 conversationId: nil, baseSeq: 0, clientTurnId: clientTurnID,
-                agent: agent, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
+                agent: vendor, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
                 contract: contract
             ),
-            hostName: hostName, hostID: hostID, transport: transport
+            hostName: hostName, hostID: hostID, transport: transport,
+            routingAgentID: agent.contains("|") ? agent : nil
         )
     }
 
@@ -176,7 +182,8 @@ public actor ConversationSyncCoordinator {
     // MARK: - Internals
 
     private func append(
-        _ request: ConversationAppendRequest, hostName: String, hostID: String?, transport: ConversationTransport
+        _ request: ConversationAppendRequest, hostName: String, hostID: String?, transport: ConversationTransport,
+        routingAgentID: String? = nil
     ) async -> TurnOutcome {
         let conversationIDForBanner = request.conversationId
         if let id = conversationIDForBanner { publish(.syncing, for: id) }
@@ -191,7 +198,10 @@ public actor ConversationSyncCoordinator {
 
         switch response.status {
         case "started":
-            await persistStartedTurn(request: request, response: response, hostName: hostName, hostID: hostID)
+            await persistStartedTurn(
+                request: request, response: response, hostName: hostName, hostID: hostID,
+                routingAgentID: routingAgentID
+            )
             let uiState: ConversationSyncUIState = response.resumeMode == "latestInCwdFallback" ? .degradedResume : .synced
             publish(uiState, for: response.conversationId)
             return .started(TurnStarted(
@@ -225,19 +235,30 @@ public actor ConversationSyncCoordinator {
     }
 
     private func persistStartedTurn(
-        request: ConversationAppendRequest, response: ConversationAppendResponse, hostName: String, hostID: String?
+        request: ConversationAppendRequest, response: ConversationAppendResponse, hostName: String, hostID: String?,
+        routingAgentID: String? = nil
     ) async {
         let isNew = request.conversationId == nil
         let existing = isNew ? nil : try? await chatRepo.conversation(id: response.conversationId)
-        // A follow-up legitimately omits `agent` (inherited from the
-        // conversation server-side) — fall back to what's already mirrored
-        // locally rather than overwriting a known provider with "".
-        let agentID = request.agent ?? existing?.agentID ?? ""
+        // Prefer the composer routing id (`relay|<uuid>|<vendor>`) so follow-ups
+        // can resolve a transport. Fall back to an existing routing id, then the
+        // wire vendor token. Never overwrite a stored routing id with bare vendor.
+        let wireVendor = request.agent ?? existing?.vendor ?? ""
+        let agentID: String = {
+            if let routingAgentID, routingAgentID.contains("|") { return routingAgentID }
+            if let existingID = existing?.agentID, existingID.contains("|") { return existingID }
+            if let hostID, UUID(uuidString: hostID) != nil, !wireVendor.isEmpty, !wireVendor.contains("|") {
+                // Relay machines use the machine UUID as hostID — reconstruct.
+                return "relay|\(hostID)|\(wireVendor)"
+            }
+            return wireVendor.isEmpty ? (existing?.agentID ?? "") : wireVendor
+        }()
+        let vendor = agentID.split(separator: "|").last.map(String.init) ?? agentID
         let conversation = ChatConversation(
             id: response.conversationId,
             title: existing?.title ?? Self.titleFromPrompt(request.prompt),
             agentID: agentID,
-            vendor: agentID,
+            vendor: vendor,
             hostName: hostName,
             hostID: hostID,
             cwd: response.cwd ?? request.cwd ?? existing?.cwd ?? "",
@@ -397,11 +418,24 @@ public actor ConversationSyncCoordinator {
     }
 
     private static func mapSummary(_ summary: ConversationSummary, fallback: ChatConversation?) -> ChatConversation {
-        ChatConversation(
+        // Host summaries only carry the vendor/provider token. Preserve a local
+        // routing agentID (`relay|…|…`) across refresh so follow-ups keep working.
+        let provider = summary.provider
+        let preservedRouting = fallback?.agentID
+        let agentID: String = {
+            if let preservedRouting, preservedRouting.contains("|") { return preservedRouting }
+            if let hostID = summary.hostID ?? fallback?.hostID ?? fallback?.sourceHostID,
+               UUID(uuidString: hostID) != nil, !provider.contains("|") {
+                return "relay|\(hostID)|\(provider)"
+            }
+            return provider
+        }()
+        let vendor = agentID.split(separator: "|").last.map(String.init) ?? provider
+        return ChatConversation(
             id: summary.id,
             title: summary.title,
-            agentID: summary.provider,
-            vendor: summary.provider,
+            agentID: agentID,
+            vendor: vendor,
             hostName: summary.hostName,
             hostID: summary.hostID,
             cwd: summary.cwd,

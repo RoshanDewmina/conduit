@@ -59,6 +59,7 @@ struct ConversationSyncCoordinatorTests {
         #expect(mirrored?.syncState == .synced)
         #expect(mirrored?.lastHostSeq == 2)
         #expect(mirrored?.hostID == "host-1")
+        #expect(mirrored?.agentID == "claudeCode")
 
         let turns = try await repo.turns(conversationID: "conv-1")
         #expect(turns.count == 1)
@@ -67,6 +68,35 @@ struct ConversationSyncCoordinatorTests {
 
         let state = await coordinator.currentSyncState("conv-1")
         #expect(state == .synced)
+    }
+
+    @Test("startConversation with relay routing id persists it for follow-ups")
+    func startConversationPersistsRelayRoutingID() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let machineID = "557A7877-F729-5031-9606-0E04F2B67822"
+        var sawWireVendor: String?
+        let transport = makeTransport(append: { request in
+            sawWireVendor = request.agent
+            return ConversationAppendResponse(
+                status: "started", conversationId: "conv-relay", turnId: "turn-1", runId: "run-1",
+                cwd: "/proj", baseSeq: 0, nextSeq: 2, resumeMode: "new"
+            )
+        })
+
+        let outcome = await coordinator.startConversation(
+            agent: "relay|\(machineID)|claudeCode", cwd: "/proj", prompt: "hello", model: nil, budgetUSD: nil,
+            hostName: "Mac", hostID: machineID, clientTurnID: "device-1:1", transport: transport
+        )
+        guard case .started = outcome else {
+            Issue.record("expected .started, got \(outcome)")
+            return
+        }
+        #expect(sawWireVendor == "claudeCode")
+        let mirrored = try await repo.conversation(id: "conv-relay")
+        #expect(mirrored?.agentID == "relay|\(machineID)|claudeCode")
+        #expect(mirrored?.vendor == "claudeCode")
     }
 
     @Test("startConversation with latestInCwdFallback resumeMode publishes degradedResume")

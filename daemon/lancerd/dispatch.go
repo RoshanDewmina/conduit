@@ -28,14 +28,34 @@ func expandHome(cwd string) string {
 	return cwd
 }
 
+// normalizeClaudeModel maps phone/OpenRouter-style model slugs onto Claude Code
+// CLI aliases. The iOS ManagedModel enum historically sent values like
+// "anthropic/claude-haiku-4", which Claude Code 2.x rejects with model_not_found
+// (exit 1). Short aliases (haiku/sonnet/opus) resolve to the current CLI defaults.
+func normalizeClaudeModel(model string) string {
+	switch strings.TrimSpace(model) {
+	case "", "haiku", "sonnet", "opus":
+		return model
+	case "anthropic/claude-haiku-4", "claude-haiku-4", "claude-haiku-4-5", "claude-haiku-4-5-20251001":
+		return "haiku"
+	case "anthropic/claude-sonnet-4", "claude-sonnet-4", "claude-sonnet-4-5", "claude-sonnet-5":
+		return "sonnet"
+	case "anthropic/claude-opus-4", "claude-opus-4", "claude-opus-4-5", "claude-opus-4-8":
+		return "opus"
+	default:
+		// Pass through unknown IDs so newer CLI-accepted names still work.
+		return model
+	}
+}
+
 // agentArgv builds an explicit, shell-free argv for launching an agent with a
 // prompt. Explicit argv (never `sh -c "<interpolated>"`) avoids command injection.
 func agentArgv(agent, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
 		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "-p", prompt}
-		if model != "" {
-			argv = append(argv, "--model", model)
+		if m := normalizeClaudeModel(model); m != "" {
+			argv = append(argv, "--model", m)
 		}
 		return argv, true
 	case "codex":
@@ -74,8 +94,8 @@ func continueArgv(agent, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
 		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--continue", "-p", prompt}
-		if model != "" {
-			argv = append(argv, "--model", model)
+		if m := normalizeClaudeModel(model); m != "" {
+			argv = append(argv, "--model", m)
 		}
 		return argv, true
 	case "codex":
@@ -129,8 +149,8 @@ func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
 		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--resume", sessionID, "-p", prompt}
-		if model != "" {
-			argv = append(argv, "--model", model)
+		if m := normalizeClaudeModel(model); m != "" {
+			argv = append(argv, "--model", m)
 		}
 		return argv, true
 	case "codex":

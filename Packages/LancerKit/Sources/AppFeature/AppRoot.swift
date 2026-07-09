@@ -1002,11 +1002,18 @@ public struct AppRoot: View {
             cursorLiveBridge.activeThreadError = nil
             cursorLiveBridge.activeThreadIsWorking = true
             cursorLiveBridge.activeThreadResponse = ""
+            // Older mirrors stored bare vendor (`claudeCode`) instead of the
+            // routing id. Reconstruct from hostID/sourceHostID; if that fails
+            // (daemon rows often omit hostID), fall back to the current
+            // preferred dispatch target so follow-ups don't die with
+            // "Unknown agent."
+            let routingAgentID = Self.routingAgentID(for: conv)
+                ?? defaultDispatchAgentID(env: env)
             let outcome = await performContinueConversation(
                 conversationID: conv.id,
                 baseSeq: conv.lastHostSeq,
                 prompt: prompt,
-                agentID: conv.agentID,
+                agentID: routingAgentID,
                 cwd: conv.cwd,
                 model: model ?? conv.model,
                 contract: contract,
@@ -1605,17 +1612,32 @@ public struct AppRoot: View {
         ))
     }
 
+    /// Rebuilds a composer routing id from a mirrored conversation when the
+    /// stored `agentID` is only a vendor token (pre-fix mirrors).
+    private static func routingAgentID(for conv: ChatConversation) -> String? {
+        if conv.agentID.contains("|") { return conv.agentID }
+        let vendorCandidate = (conv.vendor?.isEmpty == false) ? conv.vendor! : conv.agentID
+        let vendor = vendorCandidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !vendor.isEmpty else { return nil }
+        if let hostID = conv.hostID ?? conv.sourceHostID, UUID(uuidString: hostID) != nil {
+            return "relay|\(hostID)|\(vendor)"
+        }
+        return nil
+    }
+
     private func performDispatch(
         agentID: String, cwd: String, prompt: String, budgetUSD: Double?, model: String? = nil,
         contract: ProofReceipt.Contract? = nil, env: AppEnvironment
     ) async -> ChatDispatchOutcome {
-        let vendor = agentID.split(separator: "|").last.map(String.init) ?? agentID
         switch resolveAgentTransport(agentID: agentID, cwd: cwd, model: model) {
         case .failure(let message):
             return .blocked(message)
         case .success(let resolved):
+            // Pass the full routing id (`relay|<machineID>|<vendor>` / `<slot>|<vendor>`)
+            // so the mirror persists it for follow-ups. startConversation strips the
+            // vendor token for the daemon wire itself.
             let outcome = await env.conversationSyncCoordinator.startConversation(
-                agent: vendor, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
+                agent: agentID, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
                 contract: contract,
                 hostName: resolved.hostName, hostID: resolved.hostID,
                 clientTurnID: Self.newClientTurnID(), transport: resolved.transport
