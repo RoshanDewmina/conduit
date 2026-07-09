@@ -59,6 +59,23 @@ public enum CursorTranscriptMapper {
         )
         let unmatchedArtifacts = artifacts.filter { !matchedArtifactIDs.contains($0.id) }
 
+        // Ported from stablyai/orca (MIT):
+        // src/renderer/src/components/native-chat/native-chat-pending.ts
+        // (`prunePendingSends`/`pendingSendsAsMessages`) — an in-flight send is its
+        // own synthetic row until the persisted transcript has *provably advanced
+        // past it*, not merely because a turn already exists. Before this fix, a
+        // live overlay was only ever rendered as a standalone "pending" row when
+        // `sortedTurns` was completely empty (turn 1). On turn 2+ (`onContinue`),
+        // the last PERSISTED turn is turn 1, so the overlay (carrying turn 2's new
+        // prompt + in-flight response) got silently grafted onto turn 1's
+        // `TurnSection` — which only forwards `response`/`isWorking`, never
+        // `prompt` — so the new user bubble had nowhere to render and the
+        // assistant text appeared stuck on turn 1's old content until the daemon
+        // round-trip finished and a full reload pulled turn 2 from the ledger
+        // (2026-07-09, "second message stale until reopen").
+        let overlayIsNewPendingTurn = liveOverlay?.isActive == true
+            && liveOverlay?.prompt != sortedTurns.last?.prompt
+
         if sortedTurns.isEmpty {
             if let overlay = liveOverlay, overlay.isActive {
                 rows.append(.turnSection(.init(
@@ -74,7 +91,7 @@ public enum CursorTranscriptMapper {
             for (index, turn) in sortedTurns.enumerated() {
                 let isLast = index == sortedTurns.count - 1
                 let overlay: CursorTranscriptRow.TurnSection.LiveOverlay?
-                if isLast, let live = liveOverlay, live.isActive {
+                if isLast, !overlayIsNewPendingTurn, let live = liveOverlay, live.isActive {
                     overlay = .init(response: live.response, isWorking: live.isWorking)
                 } else {
                     overlay = nil
@@ -86,6 +103,17 @@ public enum CursorTranscriptMapper {
                     turnError: turn.status == .failed ? turn.errorMessage : nil,
                     artifacts: artifactsForTurn(turn, in: artifacts),
                     liveOverlay: overlay
+                )))
+            }
+
+            if overlayIsNewPendingTurn, let live = liveOverlay {
+                rows.append(.turnSection(.init(
+                    turnID: "live-pending",
+                    prompt: live.prompt,
+                    assistantText: "",
+                    turnError: nil,
+                    artifacts: [],
+                    liveOverlay: .init(response: live.response, isWorking: live.isWorking)
                 )))
             }
         }

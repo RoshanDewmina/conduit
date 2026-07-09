@@ -1,6 +1,5 @@
 #if os(iOS)
 import SwiftUI
-import DesignSystem
 import LancerCore
 
 /// User-visible import failure for terminal-originated session pickup.
@@ -148,11 +147,8 @@ public enum CursorObservedSessionMapping {
     }
 }
 
-/// "On your Mac" — terminal-started sessions discovered on the connected host,
-/// offered for one-tap import into the Lancer conversation ledger.
+/// "On your Mac" — terminal-started sessions offered for import.
 public struct CursorObservedSessionsSection: View {
-    @Environment(\.cursorScheme) private var cursorScheme
-
     private let rows: [CursorObservedSessionMapping.RowModel]
     private let onSelect: (CursorObservedSessionMapping.RowModel) -> Void
 
@@ -166,53 +162,18 @@ public struct CursorObservedSessionsSection: View {
 
     public var body: some View {
         if !rows.isEmpty {
-            VStack(spacing: 0) {
-                CursorSectionHeader("On your Mac")
-                    .accessibilityIdentifier("observed-sessions-section")
+            Section("On your Mac") {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    Button(action: { onSelect(row) }) {
-                        observedRow(row, colors: CursorColors.resolve(cursorScheme))
+                    Button { onSelect(row) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title)
+                            Text(row.subtitle).font(.caption).foregroundStyle(.secondary)
+                        }
                     }
-                    .buttonStyle(.plain)
                     .accessibilityIdentifier("observed-session-row-\(index)")
                 }
             }
-        }
-    }
-
-    private func observedRow(
-        _ row: CursorObservedSessionMapping.RowModel,
-        colors: CursorColors
-    ) -> some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: CursorMetrics.rowSpacing) {
-                Circle()
-                    .fill(colors.statusDotIdle)
-                    .frame(width: CursorMetrics.threadRowStatusDotSize, height: CursorMetrics.threadRowStatusDotSize)
-                    .padding(.top, CursorMetrics.threadRowStatusDotTopPadding)
-
-                VStack(alignment: .leading, spacing: CursorMetrics.threadRowContentSpacing) {
-                    Text(row.title)
-                        .font(CursorType.rowTitle)
-                        .foregroundColor(colors.primaryText)
-                        .lineLimit(2)
-
-                    Text(row.subtitle)
-                        .font(CursorType.rowSecondary)
-                        .foregroundColor(colors.secondaryText)
-                        .lineLimit(2)
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, CursorMetrics.rowHorizontalPadding)
-            .padding(.vertical, CursorMetrics.rowVerticalPadding)
-            .contentShape(Rectangle())
-
-            Rectangle()
-                .fill(colors.hairline)
-                .frame(height: CursorMetrics.rowHairlineHeight)
-                .padding(.leading, CursorMetrics.threadRowHairlineLeadingInset)
+            .accessibilityIdentifier("observed-sessions-section")
         }
     }
 }

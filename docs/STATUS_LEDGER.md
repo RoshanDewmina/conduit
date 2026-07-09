@@ -49,8 +49,8 @@ Living trackers (update these when code or tests change):
 | Live shell wiring | **Shipped** — `LANCER_CURSOR_SHELL_LIVE=1` + `CursorShellLiveBridge`; Layers 0–3 merged (#34) | gap matrix, `ARCHITECTURE.md` §0.1 |
 | Simulator UI test | PASS | `codex/tier-0-live-cursor-shell`, wave merges #28–#32 |
 | Relay E2E harness | **PASS** — `relay-approval-e2e.sh` through live Cursor shell | [`test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md`](test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md) |
-| Physical device governed loop (D0.2) | **PASS** (owner, 2026-07-08 evening) — host audit `approve` + `deny` | [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); prior morning FAIL [`test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md) |
-| APNs lock-screen approve (5c) | **PASS** — force-quit + lock Approve (`79137ae4…`) and Reject (`461bc3e0…`) | [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); #52 + `732071a7` content-hash echo/race fix |
+| Physical device governed loop (D0.2) | **Historical PASS** (owner, 2026-07-08 evening on `732071a7`); **current tip re-proof PENDING** | Evening: [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); morning FAIL [`test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md); fresh run → [`test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md) |
+| APNs lock-screen approve (5c) | **Historical PASS** — force-quit + lock Approve (`79137ae4…`) / Reject (`461bc3e0…`) on `732071a7`; **current tip re-proof PENDING** | [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); #52 + `732071a7`; tip moved (`b18f519d`+) — Layer 0 CLOSED only after [`test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md) |
 
 **Unfrozen by D0.2 / 5c PASS:** Away Launch Composer (deferred until chat green). Watch embed **cut** by owner Jul 8 — do not schedule. A3 R1–R4 **merged** (#63–#66).
 
@@ -167,7 +167,7 @@ From master plan §7 + gap matrix + Codex `019f2f6d`:
 |-----|----------|--------|
 | BiometricGate fail-open (no passcode) | P0 | **Moot — removed entirely** on `master` 2026-07-07; nothing left to validate |
 | Emergency stop non-atomic | P0 | **Fixed** — daemon latch + RPC (tier-0 branch, merged via #28/#34) |
-| Tier 0 D0.2 / 5c physical-device gate | P0 | **PASS** (owner, 2026-07-08 evening) — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); fix committed `732071a7` |
+| Tier 0 D0.2 / 5c physical-device gate | P0 | **Historical PASS** 2026-07-08 evening on `732071a7` — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); **current tip re-proof PENDING** → [`test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md) |
 | JWT HS256-only | P1 | Open |
 | StoreKit IAP dormant vs Stripe cloud entitlement | P1 | Open — billing reconciliation needed |
 | Watch app not embedded in iOS target | P1 | **Cut** — owner decision Jul 8; do not schedule |
@@ -178,8 +178,8 @@ From master plan §7 + gap matrix + Codex `019f2f6d`:
 
 ## Owner-gated checklist
 
-1. **Tier 0 live loop** on physical iPhone + running `lancerd` — [`docs/LIVE_LOOP_RUNBOOK.md`](LIVE_LOOP_RUNBOOK.md) — **PASS** (2026-07-08 evening); optional screen recording archive
-2. **APNs lock-screen approve (5c)** — **PASS** — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); fix committed `732071a7`
+1. **Tier 0 live loop** on physical iPhone + running `lancerd` — [`docs/LIVE_LOOP_RUNBOOK.md`](LIVE_LOOP_RUNBOOK.md) — **Historical PASS** (2026-07-08 evening on `732071a7`); **current tip re-proof PENDING** → [`test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md)
+2. **APNs lock-screen approve (5c)** — **Historical PASS** — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md) (`732071a7`); **current tip re-proof PENDING** (tip `b18f519d`+)
 3. **Jul 21 validation gate** — run or explicitly descope
 4. **Away Launch Composer** — next product lane (wireframes `04-launch-setup.html`)
 

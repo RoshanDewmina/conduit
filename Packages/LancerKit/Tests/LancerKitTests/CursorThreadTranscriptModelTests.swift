@@ -133,6 +133,44 @@ struct CursorTranscriptMapperTests {
         #expect(last.liveOverlay?.isWorking == true)
     }
 
+    /// Ported from stablyai/orca (MIT) native-chat-pending.ts — a follow-up send whose
+    /// prompt has already moved past the last persisted turn must render as its own
+    /// synthetic pending row (not graft onto turn N-1). This is the D8 / "2nd message
+    /// stale until reopen" fix covered by `overlayIsNewPendingTurn`.
+    @Test("Nth-turn live overlay with new prompt becomes a pending row")
+    func nthTurnLiveOverlayIsPendingRow() {
+        let turns = [
+            turn(id: "t1", ordinal: 0, prompt: "First", assistantText: "Done."),
+        ]
+        let overlay = CursorTranscriptMapper.LiveOverlayInput(
+            isActive: true,
+            prompt: "Second follow-up",
+            response: "Streaming turn 2…",
+            isWorking: true
+        )
+        let rows = CursorTranscriptMapper.makeRows(
+            turns: turns,
+            artifacts: [],
+            liveOverlay: overlay,
+            bridgeError: nil
+        )
+        #expect(rows.count == 2)
+        guard case .turnSection(let first) = rows[0] else {
+            Issue.record("Expected persisted turn")
+            return
+        }
+        #expect(first.prompt == "First")
+        #expect(first.liveOverlay == nil)
+        guard case .turnSection(let pending) = rows[1] else {
+            Issue.record("Expected pending turn row")
+            return
+        }
+        #expect(pending.turnID == "live-pending")
+        #expect(pending.prompt == "Second follow-up")
+        #expect(pending.liveOverlay?.response == "Streaming turn 2…")
+        #expect(pending.liveOverlay?.isWorking == true)
+    }
+
     @Test("artifacts interleave on matching turnID")
     func artifactInterleave() {
         let turns = [turn(id: "t1", ordinal: 0, prompt: "Run", assistantText: "ok", runID: "r1")]

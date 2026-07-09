@@ -45,7 +45,7 @@ hook blocks ≤120s ◀── decision relayed back ◀── phone Approve/Reje
 **What's already PROVEN (don't re-litigate):** the full SSH loop on the simulator + localhost sshd — real `claude` → daemon → policy → Inbox card → Approve → agent unblocked (audit `approve` ~+13–20s, well under the 120s fail-closed timeout). Two bugs were found & fixed there: (1) TOFU first-connect didn't arm the daemon channel — fixed in `SessionViewModel.trustHostKey()` (now calls `onReconnected?()`); (2) UUID case mismatch dropped every decision — fixed by case-insensitive normalization in lancerd `approvalStore`. Evidence: `docs/test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md` and `ARCHITECTURE.md` §0.1.
 
 **What is NOT yet proven (the point of this runbook):**
-- **APNs on a physical device while the app is closed** — simulators can't receive real APNs. This is the #1 unverified product promise.
+- **APNs on a physical device while the app is closed — on the *current tip*** — simulators can't receive real APNs. **Historical PASS** 2026-07-08 evening on tip `732071a7` ([`docs/test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md)); tip has moved, so re-proof on what we install today → [`docs/test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md).
 - **Real *remote* host** (only localhost-sim subset done).
 - **`continue`/follow-up** live for each vendor (argv exists; verify per vendor — see `vendor-cli-adapter-audit`).
 
@@ -193,7 +193,7 @@ Simulators cannot receive production APNs. On a real iPhone (signed dev build, P
 4. A **lock-screen / Dynamic Island** notification should fire with the approval context, with **Approve / Reject** actions.
 5. Tap **Approve** on the lock screen → the decision routes through `LancerNotificationDelegate` → `.lancerApprovalAction` (and, on cold launch, `ApprovalActionBuffer` drain) → agent unblocks **without opening the app to the foreground first**.
 
-🛑 **CHECKPOINT 5c (THE milestone):** backgrounded/closed app receives the push, lock-screen Approve unblocks the host agent, and `audit.log` shows the decision with `source` reflecting the notification path. Capture a screen recording. **This is the gate that's never been passed — treat any failure here as P0 and report the exact step.**
+🛑 **CHECKPOINT 5c (THE milestone):** backgrounded/closed app receives the push, lock-screen Approve unblocks the host agent, and `audit.log` shows the decision with `source` reflecting the notification path. Capture a screen recording. **Historical PASS** 2026-07-08 evening ([`docs/test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md), Approve `79137ae4…` / Reject `461bc3e0…`). **Current tip re-proof PENDING** — record today's run in [`docs/test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md); treat any failure here as P0 and report the exact step.
 
 ---
 
