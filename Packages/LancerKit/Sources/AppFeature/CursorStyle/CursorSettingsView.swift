@@ -21,17 +21,20 @@ public struct CursorSettingsView: View {
     private let invalidMachineCount: Int
     private let onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
     private let onClearInvalid: (() -> Void)?
+    private let onReset: (() async -> Void)?
 
     public init(
         relayMachineCount: Int = 0,
         invalidMachineCount: Int = 0,
         onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)? = nil,
-        onClearInvalid: (() -> Void)? = nil
+        onClearInvalid: (() -> Void)? = nil,
+        onReset: (() async -> Void)? = nil
     ) {
         self.relayMachineCount = relayMachineCount
         self.invalidMachineCount = invalidMachineCount
         self.onPaired = onPaired
         self.onClearInvalid = onClearInvalid
+        self.onReset = onReset
     }
 
     private var colors: CursorColors { CursorColors.resolve(cursorScheme) }
@@ -160,10 +163,12 @@ public struct CursorSettingsView: View {
                     row(
                         title: "Reset app data",
                         titleColor: colors.dangerRed,
-                        showChevron: true,
+                        showChevron: onReset != nil,
                         accessibilityIdentifier: "cursor.settings.row.reset"
                     ) {
-                        showingResetConfirmation = true
+                        if onReset != nil {
+                            showingResetConfirmation = true
+                        }
                     }
                 }
                 .padding(.bottom, 24)
@@ -183,7 +188,10 @@ public struct CursorSettingsView: View {
             CursorSettingsStubSheet(destination: destination)
         }
         .alert("Reset app data?", isPresented: $showingResetConfirmation) {
-            Button("Reset", role: .destructive) {}
+            Button("Reset", role: .destructive) {
+                guard let onReset else { return }
+                Task { await onReset() }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes local pairing, threads, and cached settings from this device. Your hosts and audit history on paired machines are not affected.")

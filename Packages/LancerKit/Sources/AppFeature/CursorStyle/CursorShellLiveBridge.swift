@@ -125,6 +125,10 @@ public final class CursorShellLiveBridge {
     /// OpenRouter / vendor model slug used for the next dispatch from the composer.
     public var composerModelSlug: String = ManagedModel.claudeHaiku.rawValue
     public var composerModelLabel: String = ManagedModel.claudeHaiku.label
+    /// Machine the composer "Run on" picker targets for the next dispatch.
+    public var selectedRunTargetMachineID: String?
+    /// Display name for `selectedRunTargetMachineID` — shown in the composer header.
+    public var selectedRunTargetHostName: String?
     public var connectionPhase: ConnectionPhase = .connected
     public var threadAttention: [String: CursorThreadAttention] = [:]
     /// Published inputs for `CursorThreadAttention.derive` per conversation id.
@@ -171,6 +175,8 @@ public final class CursorShellLiveBridge {
     public var onOpenReview: (() -> Void)?
     public var onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
     public var onClearInvalid: (() -> Void)?
+    /// Settings → Reset app data — wipes local DB, pairings, and onboarding.
+    public var onResetAppData: (() async -> Void)?
     public var relayMachineCount: Int = 0
     public var invalidMachineCount: Int = 0
 

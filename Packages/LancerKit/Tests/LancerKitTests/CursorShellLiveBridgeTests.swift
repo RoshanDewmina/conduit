@@ -81,5 +81,15 @@ struct CursorShellLiveBridgeTests {
         #expect(row.hostID == "host-aaa")
         #expect(row.hostName == "hermes-box")
     }
+
+    @Test("selectedRunTargetMachineID persists on bridge")
+    @MainActor
+    func selectedRunTargetPersistence() {
+        let bridge = CursorShellLiveBridge()
+        bridge.selectedRunTargetMachineID = "host-bbb"
+        bridge.selectedRunTargetHostName = "studio-m4"
+        #expect(bridge.selectedRunTargetMachineID == "host-bbb")
+        #expect(bridge.selectedRunTargetHostName == "studio-m4")
+    }
 }
 #endif

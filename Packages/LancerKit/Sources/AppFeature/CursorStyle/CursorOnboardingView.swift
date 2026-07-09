@@ -68,10 +68,11 @@ public struct CursorOnboardingView: View {
 // MARK: - Step 1: Product proof
 
 private struct CursorOnboardingProductProofStep: View {
+    @Environment(\.cursorScheme) private var cursorScheme
     let onGetStarted: () -> Void
 
     var body: some View {
-        let colors = CursorColors.light
+        let colors = CursorColors.resolve(cursorScheme)
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Steer AI coding agents\nfrom your phone.")
@@ -119,13 +120,14 @@ private struct CursorOnboardingProductProofStep: View {
 // MARK: - Step 2: Code-only pairing
 
 private struct CursorOnboardingPairingStep: View {
+    @Environment(\.cursorScheme) private var cursorScheme
     @Binding var showInvalidCodePreview: Bool
     let onContinue: () -> Void
 
     private let digitCount = 6
 
     var body: some View {
-        let colors = CursorColors.light
+        let colors = CursorColors.resolve(cursorScheme)
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Pair your machine")
@@ -187,7 +189,7 @@ private struct CursorOnboardingPairingStep: View {
     }
 
     private func digitBox(filled digit: String) -> some View {
-        let colors = CursorColors.light
+        let colors = CursorColors.resolve(cursorScheme)
         return Text(digit)
             .font(.system(size: 22, weight: .semibold, design: .monospaced))
             .foregroundColor(showInvalidCodePreview ? colors.dangerRed : colors.primaryText)
@@ -207,11 +209,12 @@ private struct CursorOnboardingPairingStep: View {
 // MARK: - Step 3: Notifications pre-prompt
 
 private struct CursorOnboardingNotificationsStep: View {
+    @Environment(\.cursorScheme) private var cursorScheme
     let onEnable: () -> Void
     let onNotNow: () -> Void
 
     var body: some View {
-        let colors = CursorColors.light
+        let colors = CursorColors.resolve(cursorScheme)
         VStack(alignment: .leading, spacing: 20) {
             ZStack {
                 Circle()
@@ -252,11 +255,12 @@ private struct CursorOnboardingNotificationsStep: View {
 // MARK: - Step 4: Policy default
 
 private struct CursorOnboardingPolicyStep: View {
+    @Environment(\.cursorScheme) private var cursorScheme
     let onContinueRecommended: () -> Void
     let onCustomize: () -> Void
 
     var body: some View {
-        let colors = CursorColors.light
+        let colors = CursorColors.resolve(cursorScheme)
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Choose a policy")
@@ -306,11 +310,12 @@ private struct CursorOnboardingPolicyStep: View {
 // MARK: - Step 5: Account choice (optional, skippable, last)
 
 private struct CursorOnboardingAccountStep: View {
+    @Environment(\.cursorScheme) private var cursorScheme
     let onAddAccount: () -> Void
     let onSkip: () -> Void
 
     var body: some View {
-        let colors = CursorColors.light
+        let colors = CursorColors.resolve(cursorScheme)
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Add a Lancer account?")

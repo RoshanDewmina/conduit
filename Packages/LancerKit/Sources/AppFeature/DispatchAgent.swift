@@ -30,5 +30,26 @@ public struct DispatchAgent: Identifiable {
         self.hostID = hostID
         self.hostName = hostName
     }
+
+    /// Picks the best dispatch agent for a composer run-target selection.
+    /// Prefers an online agent on `preferredMachineID`, then any agent on that
+    /// machine, then the first online agent, then any agent.
+    public static func preferredAgentID(
+        from agents: [DispatchAgent],
+        preferredMachineID: String?
+    ) -> String {
+        if let machineID = preferredMachineID {
+            if let match = agents.first(where: { !$0.isOffline && $0.hostID == machineID }) {
+                return match.id
+            }
+            if let match = agents.first(where: { $0.hostID == machineID }) {
+                return match.id
+            }
+        }
+        if let online = agents.first(where: { !$0.isOffline }) {
+            return online.id
+        }
+        return agents.first?.id ?? "claude"
+    }
 }
 #endif
