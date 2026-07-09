@@ -12,27 +12,42 @@ public struct CursorSettingsView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.cursorScheme) private var cursorScheme
     @State private var purchaseManager = PurchaseManager.shared
-    @State private var showingPairing = false
+    @State private var showingTrustedMachines = false
     @State private var activeDestination: SettingsDestination?
     @State private var showingResetConfirmation = false
     @State private var showingClearInvalidConfirmation = false
 
     private let relayMachineCount: Int
     private let invalidMachineCount: Int
+    private let trustedMachines: [CursorTrustedMachineRow]
+    private let invalidTrustedMachines: [CursorTrustedMachineRow]
+    private let usesMockTrustedMachines: Bool
+    private let onRequestPairing: (() -> Void)?
     private let onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
+    private let onRemoveMachine: ((String) -> Void)?
     private let onClearInvalid: (() -> Void)?
     private let onReset: (() async -> Void)?
 
     public init(
         relayMachineCount: Int = 0,
         invalidMachineCount: Int = 0,
+        trustedMachines: [CursorTrustedMachineRow] = [],
+        invalidTrustedMachines: [CursorTrustedMachineRow] = [],
+        usesMockTrustedMachines: Bool = false,
+        onRequestPairing: (() -> Void)? = nil,
         onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)? = nil,
+        onRemoveMachine: ((String) -> Void)? = nil,
         onClearInvalid: (() -> Void)? = nil,
         onReset: (() async -> Void)? = nil
     ) {
         self.relayMachineCount = relayMachineCount
         self.invalidMachineCount = invalidMachineCount
+        self.trustedMachines = trustedMachines
+        self.invalidTrustedMachines = invalidTrustedMachines
+        self.usesMockTrustedMachines = usesMockTrustedMachines
+        self.onRequestPairing = onRequestPairing
         self.onPaired = onPaired
+        self.onRemoveMachine = onRemoveMachine
         self.onClearInvalid = onClearInvalid
         self.onReset = onReset
     }
@@ -77,7 +92,7 @@ public struct CursorSettingsView: View {
                         showChevron: true,
                         accessibilityIdentifier: "cursor.settings.row.trusted-machines"
                     ) {
-                        showingPairing = true
+                        showingTrustedMachines = true
                     }
                     if invalidMachineCount > 0 {
                         row(
@@ -176,13 +191,16 @@ public struct CursorSettingsView: View {
         }
         .background(colors.background.ignoresSafeArea())
         .accessibilityIdentifier("cursor.settings")
-        .sheet(isPresented: $showingPairing) {
-            if let onPaired {
-                CursorRelayPairingSheet(
-                    existingMachineCount: relayMachineCount,
-                    onPaired: onPaired
-                )
-            }
+        .sheet(isPresented: $showingTrustedMachines) {
+            CursorTrustedMachinesView(
+                trustedMachines: trustedMachines,
+                invalidMachines: invalidTrustedMachines,
+                usesMockData: usesMockTrustedMachines,
+                onRequestPairing: onRequestPairing,
+                onRemoveMachine: onRemoveMachine,
+                onClearInvalid: onClearInvalid,
+                onPaired: onPaired
+            )
         }
         .sheet(item: $activeDestination) { destination in
             CursorSettingsStubSheet(destination: destination)

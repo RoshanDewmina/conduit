@@ -176,10 +176,14 @@ public final class CursorShellLiveBridge {
     public var onOpenReview: (() -> Void)?
     public var onPaired: ((E2ERelayClient, RelayMachineRecord) -> Void)?
     public var onClearInvalid: (() -> Void)?
+    /// Settings → Trusted machines → remove/unpair one machine by UUID string.
+    public var onRemoveTrustedMachine: ((String) -> Void)?
     /// Settings → Reset app data — wipes local DB, pairings, and onboarding.
     public var onResetAppData: (() async -> Void)?
     public var relayMachineCount: Int = 0
     public var invalidMachineCount: Int = 0
+    public var trustedMachines: [CursorTrustedMachineRow] = []
+    public var invalidTrustedMachines: [CursorTrustedMachineRow] = []
 
     public init() {}
 
