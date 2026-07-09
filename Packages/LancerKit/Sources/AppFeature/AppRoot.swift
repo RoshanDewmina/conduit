@@ -1012,6 +1012,7 @@ public struct AppRoot: View {
                 cursorLiveBridge.activeThreadIsWorking = false
                 if lastTurn.status == .failed {
                     cursorLiveBridge.activeThreadError = lastTurn.errorMessage
+                        ?? "This run failed."
                 }
             }
             let bridgeText = cursorLiveBridge.activeThreadResponse

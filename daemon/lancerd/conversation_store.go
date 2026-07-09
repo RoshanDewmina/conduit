@@ -973,7 +973,10 @@ func (s *conversationStore) appendRunReceipt(runID, receiptJSON string) error {
 
 func isTerminalRunStatus(status string) bool {
 	switch status {
-	case "completed", "failed", "cancelled", "error", "denied", "budgetExceeded":
+	// "exited" is the process-lifecycle terminal status emitRunStatus writes
+	// on success (dispatch.go). Omitting it left successful turns without
+	// completed_at and made phone poll-sync treat them as still running.
+	case "completed", "exited", "failed", "cancelled", "error", "denied", "budgetExceeded":
 		return true
 	default:
 		return false

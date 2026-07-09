@@ -693,7 +693,7 @@ public actor ChatConversationRepository {
             id: row["id"] ?? "", conversationID: row["conversation_id"] ?? "",
             ordinal: row["ordinal"] ?? 0, prompt: row["prompt"] ?? "",
             runID: row["run_id"] ?? "", transportKind: row["transport_kind"] ?? "ssh",
-            status: ChatTurn.Status(rawValue: row["status"] ?? "running") ?? .running,
+            status: ChatTurn.Status.fromHostStatus(row["status"] ?? "running"),
             assistantText: row["assistant_text"] ?? "", errorMessage: row["error_message"],
             createdAt: row["created_at"] ?? .now, completedAt: row["completed_at"],
             clientTurnID: row["client_turn_id"], vendorSessionID: row["vendor_session_id"],

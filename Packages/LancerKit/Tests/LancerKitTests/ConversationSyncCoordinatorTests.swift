@@ -433,6 +433,59 @@ struct ConversationSyncCoordinatorTests {
         #expect(events.map(\.seq) == [1, 2])
     }
 
+    @Test("refreshConversation maps host 'exited' turn status to .completed (not .running)")
+    func refreshMapsExitedHostStatusToCompleted() async throws {
+        // Daemon persist uses process-lifecycle "exited" on success. Phone
+        // ChatTurn.Status has no "exited" case — rawValue decode used to fall
+        // through to .running, so onPollThread never cleared Working… after a
+        // successful live run when run.status events were missed.
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "hi", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/Users/roshansilva")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .syncing)
+
+        let transport = makeTransport(fetch: { _ in
+            ConversationFetchResponse(
+                conversation: ConversationSummary(
+                    id: "conv-1", title: "hi", provider: "claudeCode", agentID: "claudeCode",
+                    hostName: "h", cwd: "/Users/roshansilva", state: "active", source: "phone",
+                    createdAt: "2026-07-09T19:28:33Z", updatedAt: "2026-07-09T19:28:40Z",
+                    lastActivityAt: "2026-07-09T19:28:40Z", lastSeq: 6
+                ),
+                turns: [
+                    ConversationTurnEnvelope(
+                        id: "turn-1", conversationId: "conv-1", ordinal: 0, clientTurnId: "device-1:1",
+                        prompt: "hi", runId: "run-exited-1", provider: "claudeCode",
+                        vendorSessionId: "sess-1", status: "exited",
+                        startedAt: "2026-07-09T19:28:33Z", completedAt: "2026-07-09T19:28:40Z"
+                    ),
+                ],
+                events: [
+                    ConversationEvent(conversationId: "conv-1", seq: 1, kind: "turn_started", createdAt: "2026-07-09T19:28:33Z"),
+                    ConversationEvent(
+                        conversationId: "conv-1", seq: 3, turnId: "turn-1", runId: "run-exited-1",
+                        kind: "output", role: "assistant", stream: "stdout",
+                        text: "Hey! How can I help you today?", createdAt: "2026-07-09T19:28:38Z"
+                    ),
+                    ConversationEvent(
+                        conversationId: "conv-1", seq: 6, turnId: "turn-1", runId: "run-exited-1",
+                        kind: "status", payloadJson: "{\"status\":\"exited\",\"exitCode\":0}",
+                        createdAt: "2026-07-09T19:28:40Z"
+                    ),
+                ],
+                nextSeq: 6
+            )
+        })
+
+        _ = try await coordinator.refreshConversation(conversationID: "conv-1", transport: transport)
+
+        let turns = try await repo.turns(conversationID: "conv-1")
+        #expect(turns.count == 1)
+        #expect(turns.first?.status == .completed)
+        #expect(turns.first?.assistantText.contains("How can I help") == true)
+    }
+
     // --- receipt materialization on reconnect (PR #34 review finding P2) ---
     //
     // The host stores a terminal `lancer.proof/v0` receipt ONLY as a

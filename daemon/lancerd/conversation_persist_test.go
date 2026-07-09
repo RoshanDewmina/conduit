@@ -108,6 +108,34 @@ func TestPersistConversationEventStatusUpdatesTurn(t *testing.T) {
 	}
 }
 
+// TestPersistConversationEventExitedSetsCompletedAt proves the live process
+// terminal status "exited" (emitRunStatus on success) is treated as terminal
+// so completed_at is written. Without this, phone poll-sync saw status=exited
+// with no completed_at and mapped it to still-running.
+func TestPersistConversationEventExitedSetsCompletedAt(t *testing.T) {
+	s, conversationID, runID := newLedgerBackedTestServer(t)
+
+	s.emitNotification("agent.run.status", map[string]any{
+		"runId":    runID,
+		"status":   "exited",
+		"exitCode": 0,
+	})
+
+	fetchRes, err := s.conversations.fetch(conversationID, 0, 500)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(fetchRes.Turns) != 1 {
+		t.Fatalf("turns = %d, want 1", len(fetchRes.Turns))
+	}
+	if fetchRes.Turns[0].Status != "exited" {
+		t.Errorf("turn status = %q, want exited", fetchRes.Turns[0].Status)
+	}
+	if fetchRes.Turns[0].CompletedAt == "" {
+		t.Error("expected completedAt to be set for an exited turn")
+	}
+}
+
 // TestPersistConversationEventArtifactUpsertsArtifact proves an agent.artifact
 // notification upserts a conversation_artifacts row. The live event shape
 // (dispatch.go's emitToolArtifact) uses "artifactID"/"runID" (capital ID) and

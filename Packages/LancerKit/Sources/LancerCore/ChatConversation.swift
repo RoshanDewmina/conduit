@@ -141,6 +141,25 @@ public struct ChatTurn: Codable, Sendable, Identifiable {
         case running
         case completed
         case failed
+
+        /// Maps host-ledger / process-lifecycle status strings onto the phone's
+        /// three-state turn vocabulary. The daemon persists `exited` (and a few
+        /// other terminal labels) on `conversation_turns.status`; treating those
+        /// as unknown → `.running` left the Cursor shell stuck on "Working…"
+        /// forever after a successful run when live `run.status` events were
+        /// missed and the poll fallback re-synced the ledger (2026-07-09).
+        public static func fromHostStatus(_ raw: String) -> Status {
+            switch raw {
+            case "running", "started", "needsApproval":
+                return .running
+            case "completed", "exited":
+                return .completed
+            case "failed", "error", "cancelled", "denied", "budgetExceeded":
+                return .failed
+            default:
+                return .running
+            }
+        }
     }
 
     public init(

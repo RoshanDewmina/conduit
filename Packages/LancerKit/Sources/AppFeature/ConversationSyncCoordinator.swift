@@ -562,7 +562,7 @@ public actor ConversationSyncCoordinator {
         LancerCore.ChatTurn(
             id: turn.id, conversationID: conversationID, ordinal: turn.ordinal,
             prompt: turn.prompt, runID: turn.runId, transportKind: "sync",
-            status: LancerCore.ChatTurn.Status(rawValue: turn.status) ?? .running,
+            status: LancerCore.ChatTurn.Status.fromHostStatus(turn.status),
             errorMessage: turn.errorMessage,
             createdAt: parseDate(turn.startedAt) ?? .now,
             completedAt: parseDate(turn.completedAt),
