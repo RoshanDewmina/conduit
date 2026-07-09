@@ -238,3 +238,68 @@ func TestStreamJSONEmptyDeltaSkipped(t *testing.T) {
 		t.Fatalf("want 'real', got %q", chunks[0]["chunk"])
 	}
 }
+
+func TestStreamJSONResultErrorEmitsOutputAndResultError(t *testing.T) {
+	var mu sync.Mutex
+	var outputs []map[string]any
+	var resultErrors []map[string]any
+	emit := func(method string, params any) {
+		p := params.(map[string]any)
+		mu.Lock()
+		defer mu.Unlock()
+		switch method {
+		case "agent.run.output":
+			outputs = append(outputs, p)
+		case "agent.run.resultError":
+			resultErrors = append(resultErrors, p)
+		}
+	}
+
+	var seq int64
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	input := `{"type":"result","subtype":"error","is_error":true,"result":"Credit balance is too low"}
+`
+	streamJSONOutput(emit, "run-err", strings.NewReader(input), &seq, &wg)
+	wg.Wait()
+
+	if len(outputs) != 1 {
+		t.Fatalf("want 1 output event, got %d: %+v", len(outputs), outputs)
+	}
+	if !strings.Contains(outputs[0]["chunk"].(string), "Credit balance is too low") {
+		t.Fatalf("output chunk = %q, want vendor error text", outputs[0]["chunk"])
+	}
+	if len(resultErrors) != 1 {
+		t.Fatalf("want 1 resultError event, got %d: %+v", len(resultErrors), resultErrors)
+	}
+	if resultErrors[0]["error"] != "Credit balance is too low" {
+		t.Fatalf("resultError = %q", resultErrors[0]["error"])
+	}
+}
+
+func TestStreamJSONSuccessResultSuppressed(t *testing.T) {
+	var mu sync.Mutex
+	var outputs []map[string]any
+	emit := func(method string, params any) {
+		if method != "agent.run.output" {
+			return
+		}
+		p := params.(map[string]any)
+		mu.Lock()
+		outputs = append(outputs, p)
+		mu.Unlock()
+	}
+
+	var seq int64
+	var wg sync.WaitGroup
+	wg.Add(1)
+	input := `{"type":"result","subtype":"success","result":"done","is_error":false}
+`
+	streamJSONOutput(emit, "run-ok", strings.NewReader(input), &seq, &wg)
+	wg.Wait()
+
+	if len(outputs) != 0 {
+		t.Fatalf("success result should not emit output, got %d", len(outputs))
+	}
+}

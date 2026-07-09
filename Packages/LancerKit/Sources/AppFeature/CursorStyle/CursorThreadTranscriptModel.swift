@@ -78,6 +78,10 @@ final class CursorThreadTranscriptModel {
         turns.sorted { $0.ordinal < $1.ordinal }.last?.prompt
     }
 
+    var lastTurnIsRunning: Bool {
+        turns.sorted { $0.ordinal < $1.ordinal }.last?.status == .running
+    }
+
     private func liveOverlay(
         from bridge: CursorShellLiveBridge?,
         isActiveThread: Bool

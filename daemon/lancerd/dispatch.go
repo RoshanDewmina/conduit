@@ -636,6 +636,50 @@ func emitVendorSession(emit emitFunc, runID, vendorSessionID string) {
 	emit("agent.run.vendorSession", map[string]any{"runId": runID, "vendorSessionId": vendorSessionID})
 }
 
+// extractStreamJSONResultError reads Claude's terminal stream-json `result`
+// object when the run failed at the vendor/API layer (is_error or non-success
+// subtype). Field priority matches live claude CLI output: result, error, then
+// subtype + api_error_status.
+func extractStreamJSONResultError(obj map[string]any) (string, bool) {
+	typ, _ := obj["type"].(string)
+	if typ != "result" {
+		return "", false
+	}
+	subtype, _ := obj["subtype"].(string)
+	isError, _ := obj["is_error"].(bool)
+	if !isError && (subtype == "" || subtype == "success") {
+		return "", false
+	}
+	if r, ok := obj["result"].(string); ok && strings.TrimSpace(r) != "" {
+		return strings.TrimSpace(r), true
+	}
+	if e, ok := obj["error"].(string); ok && strings.TrimSpace(e) != "" {
+		return strings.TrimSpace(e), true
+	}
+	apiStatus, _ := obj["api_error_status"].(string)
+	if subtype != "" && apiStatus != "" {
+		return subtype + ": " + apiStatus, true
+	}
+	if subtype != "" && subtype != "success" {
+		return subtype, true
+	}
+	if strings.TrimSpace(apiStatus) != "" {
+		return strings.TrimSpace(apiStatus), true
+	}
+	return "Run failed", true
+}
+
+func emitStreamJSONResultError(emit emitFunc, runID, errText string, seq *int64) {
+	if emit == nil || errText == "" {
+		return
+	}
+	n := atomic.AddInt64(seq, 1)
+	emit("agent.run.output", map[string]any{
+		"runId": runID, "stream": "stdout", "chunk": errText + "\n", "seq": int(n),
+	})
+	emit("agent.run.resultError", map[string]any{"runId": runID, "error": errText})
+}
+
 func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done *sync.WaitGroup) {
 	defer done.Done()
 	if emit == nil {
@@ -768,10 +812,12 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 					}
 				}
 			}
-		case "assistant", "result":
-			// Recognised types we do not emit text from:
-			//   assistant – whole-message fallback (superseded by deltas).
-			//   result   – run completion metadata.
+		case "assistant":
+			// Whole-message fallback (superseded by deltas) — suppress.
+		case "result":
+			if errText, ok := extractStreamJSONResultError(obj); ok {
+				emitStreamJSONResultError(emit, runID, errText, seq)
+			}
 		case "text":
 			part, _ := obj["part"].(map[string]any)
 			if part == nil {

@@ -160,6 +160,30 @@ public struct CursorWorkThreadView: View {
         .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { _ in
             Task { await transcriptModel.reload() }
         }
+        .task(id: effectiveConversationID) {
+            await pollThreadWhileWorking()
+        }
+    }
+
+    private func pollThreadWhileWorking() async {
+        guard let conversationID = effectiveConversationID else { return }
+        var pollInFlight = false
+        while !Task.isCancelled {
+            let isWorking = (liveBridge?.activeThreadIsWorking == true) || transcriptModel.lastTurnIsRunning
+            guard isWorking else { return }
+            if !pollInFlight {
+                pollInFlight = true
+                if let onPoll = liveBridge?.onPollThread {
+                    await onPoll(conversationID)
+                }
+                await transcriptModel.reload()
+                refreshTranscriptOverlay()
+                pollInFlight = false
+            }
+            let stillWorking = (liveBridge?.activeThreadIsWorking == true) || transcriptModel.lastTurnIsRunning
+            guard stillWorking else { return }
+            try? await Task.sleep(for: .seconds(5))
+        }
     }
 
     private func bindTranscript() {

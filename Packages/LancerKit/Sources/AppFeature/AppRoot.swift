@@ -989,6 +989,40 @@ public struct AppRoot: View {
             }
             await reloadActiveThreadArtifacts(env: env, conversationID: conversationID)
         }
+        cursorLiveBridge.onPollThread = { [self] conversationID in
+            guard cursorLiveBridge.selectedThreadID == conversationID else { return }
+            guard let conv = try? await env.chatRepo.conversation(id: conversationID) else { return }
+            let routingAgentID = Self.routingAgentID(for: conv)
+                ?? defaultDispatchAgentID(env: env)
+            if let refreshTransport = resolveTransport(forConversation: conv)
+                ?? {
+                    switch resolveAgentTransport(agentID: routingAgentID, cwd: conv.cwd, model: conv.model) {
+                    case .success(let resolved): resolved.transport
+                    case .failure: nil
+                    }
+                }() {
+                _ = try? await env.conversationSyncCoordinator.refreshConversation(
+                    conversationID: conversationID, transport: refreshTransport
+                )
+            }
+            guard let lastTurn = try? await env.chatRepo.turns(conversationID: conversationID).last else {
+                return
+            }
+            if lastTurn.status != .running {
+                cursorLiveBridge.activeThreadIsWorking = false
+                if lastTurn.status == .failed {
+                    cursorLiveBridge.activeThreadError = lastTurn.errorMessage
+                }
+            }
+            let bridgeText = cursorLiveBridge.activeThreadResponse
+            if bridgeText.isEmpty && !lastTurn.assistantText.isEmpty {
+                cursorLiveBridge.activeThreadResponse = lastTurn.assistantText
+            } else if lastTurn.status != .running,
+                      !lastTurn.assistantText.isEmpty,
+                      bridgeText != lastTurn.assistantText {
+                cursorLiveBridge.activeThreadResponse = lastTurn.assistantText
+            }
+        }
         cursorLiveBridge.onAcceptReceipt = { [self] artifact in
             guard case .ready(let env) = environment,
                   let updatedPayload = ReceiptCardModel.mergeAcceptedAt(into: artifact.payloadJSON) else { return }

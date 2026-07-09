@@ -407,3 +407,37 @@ func TestPersistConversationEventFailedRunCapturesStderrErrorMessage(t *testing.
 		t.Errorf("error_message = %q, want stderr tail containing model_not_found", fetchRes.Turns[0].ErrorMessage)
 	}
 }
+
+func TestPersistConversationEventFailedRunPrefersResultErrorOverStderr(t *testing.T) {
+	s, conversationID, runID := newLedgerBackedTestServer(t)
+
+	s.emitNotification("agent.run.output", map[string]any{
+		"runId":  runID,
+		"stream": "stderr",
+		"chunk":  "stderr noise\n",
+		"seq":    1,
+	})
+	s.emitNotification("agent.run.output", map[string]any{
+		"runId":  runID,
+		"stream": "stdout",
+		"chunk":  "Credit balance is too low\n",
+		"seq":    2,
+	})
+	s.emitNotification("agent.run.resultError", map[string]any{
+		"runId": runID,
+		"error": "Credit balance is too low",
+	})
+	s.emitNotification("agent.run.status", map[string]any{
+		"runId":    runID,
+		"status":   "failed",
+		"exitCode": 1,
+	})
+
+	fetchRes, err := s.conversations.fetch(conversationID, 0, 500)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if fetchRes.Turns[0].ErrorMessage != "Credit balance is too low" {
+		t.Errorf("error_message = %q, want result-error priority", fetchRes.Turns[0].ErrorMessage)
+	}
+}
