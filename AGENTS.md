@@ -37,6 +37,17 @@ Three layers: the **iOS app** (`Packages/LancerKit/`), the **`lancerd`** residen
 - **No dead code / back-compat shims / speculative abstractions** (`agent-contract.md` §3). Delete cleanly.
 - **Security is fail-closed.** Keep the TOFU host-key prompt on production paths; never log secrets. Hooks default to hold-on-unreachable. Face ID/biometric gating was removed from the app entirely (2026-07-07, permanent) — don't reintroduce `BiometricGate` or a per-decision/per-key-load auth prompt. Full threat model: `docs/legal/SECURITY_ARCHITECTURE.md`.
 - **Vendor CLI adapters drift fast** — before changing `daemon/lancerd/dispatch.go`, re-verify `which`/`--version`/`--help` and run the `vendor-cli-adapter-audit` skill. Never `sh -c` an interpolated prompt; build explicit argv.
+- **New feature? Study the competitors first — borrow, don't reinvent** (owner directive 2026-07-09).
+  Before designing any user-facing feature from scratch, check the local competitor clones under
+  `research-repos/` (gitignored; restore with `git clone --depth 1` of `stablyai/orca`,
+  `happier-dev/happier`, `omnara-ai/omnara` if absent) for a shipped implementation of the same
+  problem, and mine it with file:line evidence before writing a design. Precedent + method:
+  `docs/product/2026-07-09-chat-ui-port-map.md` (gap → per-competitor approach → "Port to Lancer").
+  License discipline is mandatory: read each clone's LICENSE/LICENCE first — MIT/Apache-2.0 code is
+  portable with an attribution comment (repo + source file); no license means patterns only, never
+  verbatim code. These are React Native/web apps: port protocols, state machines, and policy logic
+  directly; re-implement UI in SwiftUI informed by their patterns. Never commit competitor code
+  or clones into the repo history.
 
 ## Project skills
 
