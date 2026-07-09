@@ -1782,8 +1782,11 @@ func (s *server) persistConversationEvent(method string, params any) {
 			exitCode = &v
 		}
 		errMsg := ""
-		if status == "failed" {
-			errMsg = s.takeRunStderr(runID)
+		if isTerminalRunStatus(status) {
+			stderrTail := s.takeRunStderr(runID)
+			if status == "failed" {
+				errMsg = stderrTail
+			}
 		}
 		if err := s.conversations.appendRunStatus(runID, status, exitCode, errMsg); err != nil {
 			logConversationPersistError("appendRunStatus", runID, err)
