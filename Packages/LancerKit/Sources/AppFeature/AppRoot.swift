@@ -138,6 +138,9 @@ public struct AppRoot: View {
     @State private var inboxVM = InboxViewModel()
     @State private var liveInboxVM: LiveInboxViewModel?
     @State private var relayApprovalsByID: [ApprovalID: Approval] = [:]
+    /// Maps pending relay approvals to the machine they arrived from — used for
+    /// fail-closed unpair warnings in Settings → Trusted machines.
+    @State private var relayApprovalOriginsByID: [ApprovalID: RelayMachineID] = [:]
     @State private var runOutputStore = RunOutputStore()
     @State private var approvalRepository: ApprovalRepository?
     @State private var daemonChannel: DaemonChannel?
@@ -529,6 +532,7 @@ public struct AppRoot: View {
             // specific machine's bridge (ApprovalRelay.forwardDecisionOnly step 0).
             if let machineID = note.userInfo?["machineID"] as? RelayMachineID {
                 ApprovalRelay.shared.registerRelayOrigin(approvalID: data.approvalID, machineID: machineID)
+                relayApprovalOriginsByID[approval.id] = machineID
             }
             relayApprovalsByID[approval.id] = approval
             // Persist before making the approval tappable in the live VM. The
@@ -1065,6 +1069,8 @@ public struct AppRoot: View {
             } else {
                 activeInboxViewModel.decide(id, decision: decision)
             }
+            relayApprovalOriginsByID.removeValue(forKey: id)
+            workspacesRevision = UUID()
         }
         cursorLiveBridge.onRequestPairing = { showingCursorRelayPairing = true }
         cursorLiveBridge.onOpenReview = { showingApprovalReview = true }
@@ -1073,6 +1079,14 @@ public struct AppRoot: View {
         }
         cursorLiveBridge.onClearInvalid = { [self] in
             relayFleetStore.removeAllInvalid()
+            workspacesRevision = UUID()
+        }
+        cursorLiveBridge.onRemoveTrustedMachine = { [self] idString in
+            guard let uuid = UUID(uuidString: idString) else { return }
+            let machineID = RelayMachineID(uuid)
+            relayFleetStore.remove(machineID)
+            relayApprovalOriginsByID = relayApprovalOriginsByID.filter { $0.value != machineID }
+            workspacesRevision = UUID()
         }
         cursorLiveBridge.onResetAppData = { [self] in
             guard case .ready(let env) = environment else { return }
@@ -1119,6 +1133,7 @@ public struct AppRoot: View {
         fleetStore.relayInboxVM = nil
         liveInboxVM = nil
         relayApprovalsByID = [:]
+        relayApprovalOriginsByID = [:]
         selectedFleetSlotID = nil
 
         cursorLiveBridge.workspaces = []
@@ -1141,6 +1156,8 @@ public struct AppRoot: View {
         cursorLiveBridge.threadStates = [:]
         cursorLiveBridge.relayMachineCount = 0
         cursorLiveBridge.invalidMachineCount = 0
+        cursorLiveBridge.trustedMachines = []
+        cursorLiveBridge.invalidTrustedMachines = []
 
         onboardingSeen = false
         #if DEBUG
@@ -1171,11 +1188,18 @@ public struct AppRoot: View {
         CursorSettingsView(
             relayMachineCount: relayFleetStore.machines.count,
             invalidMachineCount: relayFleetStore.invalidMachines.count,
+            trustedMachines: cursorLiveBridge.trustedMachines,
+            invalidTrustedMachines: cursorLiveBridge.invalidTrustedMachines,
+            onRequestPairing: { showingCursorRelayPairing = true },
             onPaired: { client, record in
                 addRelayMachine(client: client, record: record, env: env)
             },
+            onRemoveMachine: { idString in
+                cursorLiveBridge.onRemoveTrustedMachine?(idString)
+            },
             onClearInvalid: {
                 relayFleetStore.removeAllInvalid()
+                workspacesRevision = UUID()
             },
             onReset: { [self] in
                 await performAppDataReset(env: env)
@@ -1247,6 +1271,7 @@ public struct AppRoot: View {
             }
             cursorLiveBridge.relayMachineCount = relayFleetStore.machines.count
             cursorLiveBridge.invalidMachineCount = relayFleetStore.invalidMachines.count
+            refreshTrustedMachineRows()
             cursorLiveBridge.threadAttention = threadAttentionMap(
                 conversations: conversations,
                 pendingApprovals: activeInboxViewModel.approvals.filter(\.isPending),
@@ -1265,6 +1290,60 @@ public struct AppRoot: View {
         } catch {
             // Best-effort hydration for the Cursor live shell.
         }
+    }
+
+    @MainActor
+    private func pendingRelayApprovalCount(for machineID: RelayMachineID) -> Int {
+        var seen = Set<ApprovalID>()
+        var count = 0
+        let pendingInVM = activeInboxViewModel.approvals.filter(\.isPending)
+        let pendingInRelay = relayApprovalsByID.values.filter(\.isPending)
+        for approval in pendingInVM + pendingInRelay {
+            guard seen.insert(approval.id).inserted else { continue }
+            if relayApprovalOriginsByID[approval.id] == machineID {
+                count += 1
+            }
+        }
+        return count
+    }
+
+    @MainActor
+    private func refreshTrustedMachineRows() {
+        let usableInputs = relayFleetStore.machines
+            .filter { relayFleetStore.connectionState(for: $0.id) != .pairingInvalid }
+            .map {
+                CursorTrustedMachineSnapshot.MachineInput(
+                    id: $0.id.raw,
+                    displayName: $0.record.displayName,
+                    pairedAt: $0.record.pairedAt,
+                    isConnected: relayFleetStore.isConnected($0.id),
+                    isInvalid: false
+                )
+            }
+        let invalidInputs = relayFleetStore.invalidMachines.map {
+            CursorTrustedMachineSnapshot.MachineInput(
+                id: $0.id.raw,
+                displayName: $0.record.displayName,
+                pairedAt: $0.record.pairedAt,
+                isConnected: false,
+                isInvalid: true
+            )
+        }
+        var pendingCounts: [UUID: Int] = [:]
+        for machine in relayFleetStore.machines {
+            let count = pendingRelayApprovalCount(for: machine.id)
+            if count > 0 {
+                pendingCounts[machine.id.raw] = count
+            }
+        }
+        cursorLiveBridge.trustedMachines = CursorTrustedMachineSnapshot.buildRows(
+            machines: usableInputs,
+            pendingApprovalCounts: pendingCounts
+        )
+        cursorLiveBridge.invalidTrustedMachines = CursorTrustedMachineSnapshot.buildRows(
+            machines: invalidInputs,
+            pendingApprovalCounts: pendingCounts
+        )
     }
 
     @MainActor

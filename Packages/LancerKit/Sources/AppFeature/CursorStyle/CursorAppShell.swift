@@ -481,7 +481,12 @@ public struct CursorAppShell: View {
             CursorSettingsView(
                 relayMachineCount: liveBridge?.relayMachineCount ?? 0,
                 invalidMachineCount: liveBridge?.invalidMachineCount ?? 0,
+                trustedMachines: liveBridge?.trustedMachines ?? [],
+                invalidTrustedMachines: liveBridge?.invalidTrustedMachines ?? [],
+                usesMockTrustedMachines: liveBridge == nil,
+                onRequestPairing: { liveBridge?.onRequestPairing?() },
                 onPaired: liveBridge?.onPaired,
+                onRemoveMachine: { liveBridge?.onRemoveTrustedMachine?($0) },
                 onClearInvalid: liveBridge?.onClearInvalid,
                 onReset: liveBridge?.onResetAppData
             )
