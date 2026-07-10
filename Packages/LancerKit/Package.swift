@@ -36,7 +36,6 @@ let package = Package(
         .library(name: "IntentsKit",       targets: ["IntentsKit"]),
 
         // ── UI-bearing modules ───────────────────────────────────────────
-        .library(name: "DesignSystem",      targets: ["DesignSystem"]),
         .library(name: "PreviewKit",        targets: ["PreviewKit"]),
         .library(name: "AppFeature",        targets: ["AppFeature"]),
         .library(name: "WorkspacesFeature", targets: ["WorkspacesFeature"]),
@@ -44,8 +43,6 @@ let package = Package(
         .library(name: "InboxFeature",      targets: ["InboxFeature"]),
         .library(name: "SettingsFeature",   targets: ["SettingsFeature"]),
         .library(name: "OnboardingFeature", targets: ["OnboardingFeature"]),
-        .library(name: "DiffFeature",       targets: ["DiffFeature"]),
-        .library(name: "FilesFeature",      targets: ["FilesFeature"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0"),
@@ -59,8 +56,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0"),
         // SwiftTerm — iOS-only UI dep, isolated to TerminalEngine
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.2.0"),
-        // MarkdownUI — assistant-text + code-block rendering in CursorStyle (chat-polish Slice 1).
-        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.0.2"),
     ],
     targets: [
         // ── Engines ──────────────────────────────────────────────────────
@@ -145,34 +140,29 @@ let package = Package(
         ),
 
         // ── UI-bearing ───────────────────────────────────────────────────
-        .target(
-            name: "DesignSystem",
-            dependencies: ["LancerCore"],
-            resources: [.process("Resources")],
-            swiftSettings: swiftSettings
-        ),
+        // DesignSystem deleted (owner scorched-earth wipe 2026-07-09)
         .target(
             name: "PreviewKit",
-            dependencies: ["SSHTransport", "DesignSystem"],
+            dependencies: ["SSHTransport"],
             swiftSettings: swiftSettings
         ),
 
         // Features (UI). Each feature is one-screen-deep + view models.
         .target(
             name: "OnboardingFeature",
-            dependencies: ["DesignSystem", "SecurityKit", "AccountKit", "NotificationsKit", "PersistenceKit", "SSHTransport", "AgentKit"],
+            dependencies: ["SecurityKit", "AccountKit", "NotificationsKit", "PersistenceKit", "SSHTransport", "AgentKit"],
             swiftSettings: swiftSettings
         ),
         .target(
             name: "WorkspacesFeature",
-            dependencies: ["DesignSystem", "PersistenceKit", "SecurityKit", "SSHTransport"],
+            dependencies: ["PersistenceKit", "SecurityKit", "SSHTransport"],
             swiftSettings: swiftSettings
         ),
         .target(
             name: "SessionFeature",
             dependencies: [
                 "LancerCore",
-                "DesignSystem", "TerminalEngine", "SSHTransport",
+                "TerminalEngine", "SSHTransport",
                 "AgentKit", "PersistenceKit", "SecurityKit", "NotificationsKit",
             ],
             swiftSettings: swiftSettings
@@ -180,25 +170,13 @@ let package = Package(
         .target(
             name: "InboxFeature",
             dependencies: [
-                "DesignSystem",
                 "AgentKit",
                 "NotificationsKit",
                 "PersistenceKit",
                 "DiffKit",
-                "DiffFeature",
                 "SSHTransport",
                 "SecurityKit",
             ],
-            swiftSettings: swiftSettings
-        ),
-        .target(
-            name: "DiffFeature",
-            dependencies: ["DesignSystem", "DiffKit"],
-            swiftSettings: swiftSettings
-        ),
-        .target(
-            name: "FilesFeature",
-            dependencies: ["DesignSystem", "SSHTransport"],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -206,7 +184,6 @@ let package = Package(
             dependencies: [
                 "LancerCore",
                 "AccountKit",
-                "DesignSystem",
                 "PersistenceKit",
                 "AgentKit",
                 "SecurityKit",
@@ -219,7 +196,6 @@ let package = Package(
         .target(
             name: "AppFeature",
             dependencies: [
-                "DesignSystem",
                 "AgentKit",
                 "PersistenceKit",
                 "NotificationsKit",
@@ -228,13 +204,10 @@ let package = Package(
                 "InboxFeature",
                 "OnboardingFeature",
                 "SettingsFeature",
-                "DiffFeature",
                 "DiffKit",
                 "PreviewKit",
                 "SSHTransport",
-                "FilesFeature",
                 "SyncKit",
-                .product(name: "MarkdownUI", package: "swift-markdown-ui"),
             ],
             swiftSettings: swiftSettings,
             linkerSettings: [
@@ -261,7 +234,6 @@ let package = Package(
                 "SessionFeature",
                 "SettingsFeature",
                 "AppFeature",
-                "DesignSystem",
             ],
             swiftSettings: swiftSettings
         ),

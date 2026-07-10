@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-09 (Wave 0 executed by Fable 5 this date)
 **Track:** Frontend wipe → Orca study → Apple docs → rebuild (plan-first)
-**Status:** **Wave 0 COMPLETE — awaiting owner APPROVED.** No deletes performed; no product/backend code touched.
+**Status:** **OWNER APPROVED 2026-07-09 — C/A/A scorched-earth wipe-only.** Wave 0 tables remain as inventory evidence; execute scope is **broader than Table 1** (see Decision log). **No stub / no rebuild / no implement** in the wipe session.
 **Inventory base:** main checkout `~/Documents/command-center`, branch `feat/chat-overhaul-w0a`, tip `d4db7da7`, **dirty working tree** (W0.A dogfood in flight — see IN-FLIGHT flags).
 **Supersedes (frontend portion only):** [`2026-07-09-fable-cleanup-PASTE.md`](2026-07-09-fable-cleanup-PASTE.md) / [`2026-07-09-fable-cleanup-plan-only.md`](2026-07-09-fable-cleanup-plan-only.md).
 **Companion PASTE:** [`2026-07-09-fable-frontend-wipe-PASTE.md`](2026-07-09-fable-frontend-wipe-PASTE.md) · **Status:** [`2026-07-09-fable-frontend-wipe-Status.md`](2026-07-09-fable-frontend-wipe-Status.md)
@@ -295,6 +295,7 @@ git diff --name-only | rg '^daemon/' && echo FAIL || echo OK
 | 2026-07-09 | **IA recommendation: keep 3-root, Orca-informed content contracts** (Home=attention+resume, Workspaces=browse, Settings=manage); owner may override at APPROVED |
 | 2026-07-09 | `CursorRelayPairingSheet` + `CursorReviewDiffView` deferred to Wave 3 (function can't be no-op-stubbed); everything else in Table 1 deletable at Wave 1 |
 | 2026-07-09 | `ReturnPacketModel` orphaned — owner decision at Wave 2 (re-wire or retire), no silent delete |
+| 2026-07-09 | **Owner APPROVED C/A/A:** (1C) scorched earth — delete entire `CursorStyle/` incl. former hard-KEEP bridges/engines, entire `DesignSystem/`, SessionFeature Chat/ + UI views, DiffFeature/FilesFeature, HostKeyConfirmSheet, PaywallSheet, chrome UITests, Cursor* unit tests tied to deleted chrome, Live Activity + Status widget UI sources; (2A) broken compile OK — **no stub, no implement**; (3A) checkpoint W0.A → isolated worktree. Rebuild is owner's next session. Table 2/3 KEEP+stub strategy **superseded for this execute**. |
 
 ## Progress
 
@@ -302,10 +303,10 @@ git diff --name-only | rg '^daemon/' && echo FAIL || echo OK
 - [x] Wave 0: Orca study notes with file:line (prior citations re-verified + new IA mining)
 - [x] Wave 0: Apple docs citations
 - [x] Wave 0: Rebuild architecture + stub-shell strategy + staged delete order
-- [ ] Owner **APPROVED** (tables locked, IA choice confirmed)
-- [ ] Wave 1: W0.A landed/checkpointed → isolated worktree → deletes per approved tables → gate green, no `daemon/**` touched
-- [ ] Wave 2: full rebuild plan
-- [ ] Wave 3: implement (separate session; Done-bar D1–D10)
+- [x] Owner **APPROVED** — C/A/A scorched-earth wipe-only (no stub/rebuild)
+- [ ] Wave 1: W0.A checkpointed → isolated worktree → scorched deletes → report (compile expected fail); no `daemon/**` touched
+- [ ] Owner rebuild (separate session — not this wipe agent)
+- [ ] ~~Wave 2/3 stub-then-rebuild from this brief~~ — superseded; owner drives rebuild
 
 ---
 
