@@ -1,8 +1,8 @@
 # Frontend rebuild — Status
 
-**Updated:** 2026-07-10T17:20:00Z  
+**Updated:** 2026-07-10T17:45:00Z  
 **Plan:** `docs/plans/2026-07-10-frontend-rebuild-Plan.md`  
-**Branch / worktree:** `feat/frontend-rebuild-m1` @ `97071246` in `/Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe`
+**Branch / worktree:** `feat/frontend-rebuild-m1` @ `be2e1650` in `/Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe`
 
 ## Done
 
@@ -42,6 +42,18 @@
 - **Scope held to the Plan:** manual code entry only (no QR/camera scan), plain confirmation alert on remove (no pending-approval-count fail-closed warning — that reference behavior depended on `ApprovalRepository` queries out of scope for this milestone), no daemon changes, no chat/dispatch/approval wiring (M3/M4).
 - Committed as `97071246` on `feat/frontend-rebuild-m1`. 6 files, 359 insertions. Not pushed, not merged to master.
 - **M2 acceptance status:** pairing UI is real and build-verified; hydration against real persisted state is confirmed; the interactive pair→list→remove tap sequence could not be exercised end-to-end by automation on this simulator (same documented HID limitation as every prior section) — a manual on-device or Xcode-attached-debugger check is the one remaining gap, consistent with the open manual-check items already carried from Sections 2/4/7 below.
+
+## M3 — Live thread send + poll-until-reply (2026-07-10, Claude Code Opus plan/dispatch/verify, Sonnet 5 implement)
+
+- **Owner approved starting M3** in the same session as M2 (a second "continue" after the M2 brief was presented — treated as sign-off per the established pattern from M2's own start).
+- **Explored first (Opus, read-only):** read `ConversationSyncCoordinator` (host-mediated append/fetch + local GRDB mirror, already constructed on `AppEnvironment` but never passed to any view), `ChatConversationRepository`/`ChatConversation.swift` (`ChatTurn.status`/`.assistantText` — confirmed polling to a terminal status is a legitimate way to satisfy the Plan's "streamed (or completed) reply visible" acceptance bar, not just token-streaming), and `RunDispatchService` (determined this is Siri App-Intent plumbing only, not part of the in-app send path — the real pattern is `AppRoot`'s pre-wipe `resolveAgentTransport`/`performDispatch`, found via `git show 3789aa5f`). Made a deliberate scope call: Section 7's `ThreadDetailView` is a static PR-review-style mockup with no live analog in `ChatTurn` data — live chat needed a **new**, separate view (`AppFeature/Chat/LiveThreadView`) reached only from the composer's send action, not a rewrite of the owner-approved Section 7 screen.
+- **First dispatch attempt was cut off** by an account-wide Claude session-limit error after only 10 exploratory tool calls (no files written — confirmed via `git status` before redispatch). Redispatched the identical brief; the second attempt completed successfully.
+- **Implemented by Claude Code Sonnet:** new `AppFeature/Bridge/ShellLiveBridge` (the one engine-glue type — `send`/`sendFollowUp` resolve `RelayFleetStore.firstConnectedMachine`, build a `ConversationTransport` from its `E2ERelayBridge`, call `ConversationSyncCoordinator.startConversation`/`continueConversation`, then poll `chatRepo.turnByRunID` every 1.5s up to 90s until the turn leaves `.running`) and new `AppFeature/Chat/LiveThreadView` (independent of `ThreadDetailView`, enforces the Orca mutual-exclusivity rule between the working indicator and reply/error text via one `switch`). `NewChatComposerView` gained a real send button (`onSend` closure, nil-default so existing call sites are unaffected). `WorkspacesView` presents `LiveThreadView` via `.sheet(item:)` with explicit environment re-injection at the sheet boundary, matching M2's pattern. `AppRoot` constructs `ShellLiveBridge` in `init()` (needs `AppEnvironment`, so can't be a plain `@State` default) and injects it alongside `relayFleetStore`.
+- **Independently re-verified (Opus):** reviewed every file by hand — confirmed no dead/unreachable logic beyond one harmless redundant defensive check in `LiveThreadView` (`.completed(let turn)` re-checks `turn.status == .failed`, which `ShellLiveBridge.pollUntilTerminal` already routes to `.failed(...)` instead — never actually reachable, but harmless). Ran a fresh clean `build_run_sim` myself: **SUCCEEDED**, 0 errors, 0 new warnings (same 25 pre-existing `SiriRelevanceCoordinator.swift` warnings). Added a `LANCER_DESTINATION=liveThread` DEBUG capture seam (matching the established pattern) and screenshotted the real send flow against this simulator's actual M2-paired-but-currently-offline machines: the `.task` fired, `firstConnectedMachine` correctly resolved `nil` (both persisted machines are "host offline" — no daemon running in this session), and the UI rendered the "No connected machine. Pair one in Settings → Trusted Machines." error state with a Retry button — proof the wiring is real end-to-end down to the relay-store check, not a demo, and that environment propagation across the sheet boundary works correctly (an unsatisfied `@Environment(ShellLiveBridge.self)` would have crashed).
+- **Not verified (no live daemon in this session):** an actual successful send → real host reply round-trip. The failure-path UI is proven; the happy path is architecturally identical (same `ShellLiveBridge.send` call, same poll loop) but has not been exercised against a running `lancerd`. Worth a manual dogfood pass once a host is available.
+- **Scope held to the Plan:** vendor hardcoded `"claudeCode"` (no picker UI), placeholder `cwd = "~"` (no repo-picker wiring), no markdown rendering (plain `Text`), no in-thread approval card (M4), `ThreadDetailView`/`PRDetailView` untouched, no daemon changes.
+- Committed as `be2e1650` on `feat/frontend-rebuild-m1`. 5 files, 429 insertions.
+- **M3 acceptance status:** send/poll/display plumbing is real, build-verified, and the failure path is confirmed live; the success-path round-trip against an actual running host is the one remaining gap before this milestone is fully proven end-to-end.
 
 ## Closeout (2026-07-10, Claude Code Opus — advisor/delegator, plan/dispatch/verify)
 
@@ -185,6 +197,37 @@ git add Packages/LancerKit/Sources/AppFeature/AppRoot.swift \
   Packages/LancerKit/Sources/AppFeature/Settings
 git commit -m "feat(ios): M2 — Settings pairing + trusted machines on real relay state"
 # → [feat/frontend-rebuild-m1 97071246] 6 files changed, 359 insertions(+)
+
+# M3: first Agent dispatch (Claude Code Sonnet) cut off by an account-wide
+# session-limit error after 10 exploratory tool calls, 0 files written
+# (confirmed via git status before redispatch). Redispatched the identical
+# brief; second attempt completed and self-reported build_sim green.
+
+# Opus independent re-verification (fresh clean build):
+git status --short   # confirmed exact file set matched the subagent's report
+git diff --stat       # 3 modified + 2 new files, matched report
+# XcodeBuildMCP: clean → build_run_sim → SUCCEEDED, 64455ms, 0 errors, 25
+#   pre-existing SiriRelevanceCoordinator.swift warnings, 0 new
+
+# Added DEBUG capture seam (LANCER_DESTINATION=liveThread) to exercise the
+# real send flow against this simulator's actual M2-paired machines:
+# clean → build_run_sim → SUCCEEDED, 16211ms, 0 errors, 0 warnings
+# stop_app_sim → launch_app_sim with LANCER_DESTINATION=liveThread →
+#   screenshot showed: user prompt bubble rendered, .task fired,
+#   firstConnectedMachine resolved nil (both machines "host offline" — no
+#   daemon running), UI correctly rendered "No connected machine. Pair one
+#   in Settings → Trusted Machines." error state with Retry — proof the
+#   wiring is real end-to-end down to the relay-store check, and that
+#   @Environment(ShellLiveBridge.self) resolves across the sheet boundary
+#   (an unsatisfied environment object would have crashed, it did not)
+
+git add Packages/LancerKit/Sources/AppFeature/AppRoot.swift \
+  Packages/LancerKit/Sources/AppFeature/Composer/NewChatComposerView.swift \
+  Packages/LancerKit/Sources/AppFeature/Workspaces/WorkspacesView.swift \
+  Packages/LancerKit/Sources/AppFeature/Bridge \
+  Packages/LancerKit/Sources/AppFeature/Chat
+git commit -m "feat(ios): M3 — live thread send + poll-until-reply on real relay state"
+# → [feat/frontend-rebuild-m1 be2e1650] 5 files changed, 429 insertions(+), 20 deletions(-)
 ```
 
 ## Blockers
@@ -196,14 +239,17 @@ git commit -m "feat(ios): M2 — Settings pairing + trusted machines on real rel
 
 ## Next agent instruction
 
-**M2 complete, build-verified.** Signed `build_sim` is green through both the visual-rebuild closeout (`2c44728d`) and M2 (`97071246`) on `feat/frontend-rebuild-m1`. Status is up to date. This session stops here — **do not start M3 without explicit owner OK**, and do not attempt M4 at all yet.
+**M3 complete, build-verified.** Signed `build_sim` is green through the visual-rebuild closeout (`2c44728d`), M2 (`97071246`), and M3 (`be2e1650`) on `feat/frontend-rebuild-m1`. Status is up to date. This session stops here — **do not start M4 without explicit owner OK.**
 
-**Open manual-check item (carry forward):** the interactive pair → trusted-list → remove tap sequence has not been exercised end-to-end by automation — HID taps land but don't reliably fire SwiftUI Button actions on this simulator (same limitation noted for Sections 2/4/7). Worth a real-device or Xcode-attached-debugger pass before M2 is considered fully proven, though the code path, real hydration, and build are all independently verified.
+**Open manual-check items (carried forward, none blocking):**
+1. From M2: the interactive pair → trusted-list → remove tap sequence hasn't been exercised end-to-end by automation (HID taps don't reliably fire SwiftUI actions on this simulator — same limitation as Sections 2/4/7).
+2. From M3: the send → real host reply round-trip hasn't been exercised against a running `lancerd` (none was running in either session). Only the failure path (`firstConnectedMachine == nil`) is live-confirmed. The happy path is architecturally identical, not separately proven.
+Both are real-device/live-daemon dogfood items, not build or code-review gaps — worth a manual pass when a host is available.
 
-**M3 brief for the next session** (work thread + composer + stream — scope only, no code):
-- Goal: open/create a thread, send a prompt, stream the assistant's reply via a **new** `ShellLiveBridge` onto the now-wired `E2ERelayBridge` (from M2) / `RunDispatchService` / `ConversationSyncCoordinator`.
-- Restore transcript **contracts** (data types) from `80407933^` if needed for compile — **not** SwiftUI; rewrite the chat views fresh against the existing `ThreadDetailView`/`NewChatComposerView` static shells from Sections 3/7.
-- Files: `AppFeature/Chat/*`, `AppFeature/Bridge/ShellLiveBridge.swift`; wire Workspaces → thread navigation to a live (not static-sample) thread.
-- Acceptance: send a prompt on a paired host (M2's Trusted Machines now provides real paired machines) → streamed or completed reply visible; working indicator mutually exclusive with visible streamed text (Orca rule, per Plan's competitor notes); `build_sim` green; unit tests for transcript mapping if new pure types warrant them.
-- Stop: no in-thread approval card yet (that's M4).
-- Same cadence: Opus plans/dispatches/verifies, Sonnet 5 subagents implement via `Agent` tool with `model: sonnet`, one milestone → verify → stop for owner review before M4.
+**M4 brief for the next session** (in-thread Approve/Deny — scope only, no code):
+- Goal: surface a pending approval on `LiveThreadView` (M3's new live conversation view — not `ThreadDetailView`, which stays static/out of scope per M3's own boundary decision) and let Approve/Deny complete the governed step, wired to `ApprovalIngest`/`ApprovalRelay`/the existing decision path.
+- `ApprovalRelay.shared` and its `relayBridges` map are already wired (M2 registers every machine's bridge there on pair/hydrate). Check `ApprovalRelay.swift`'s existing decision-forwarding methods before inventing new plumbing — M2/M3 both found the "real" pattern already existed and just needed UI wiring, likely true here too.
+- `SessionFeature/Chat/QuestionCardModel.swift`/`AnswerQuestionResolver.swift` (restored pre-M2, unused so far) look relevant for in-thread question/approval card rendering — read them before designing new types.
+- Acceptance: a pending approval appears in `LiveThreadView`; both Approve and Deny complete the governed step; `build_sim` green; document manual dogfood steps (this needs a live daemon + an actual pending approval to prove end-to-end, same gap as M3's happy path above).
+- After M4: owner decides on merge to `master` (wipe + rebuild still not auto-merged) — do not merge without being asked.
+- Same cadence: Opus plans/dispatches/verifies (explore real APIs before spec'ing — this has been the single highest-leverage step in M2 and M3 alike), Sonnet 5 subagents implement via `Agent` tool with `model: sonnet`, independently re-verify with a fresh clean build + hand-reviewed diff before committing, one milestone → verify → stop for owner review.
