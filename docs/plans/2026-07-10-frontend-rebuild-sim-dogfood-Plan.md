@@ -110,15 +110,19 @@ From Apple’s current “Running your app on simulated or physical devices” d
 
 ## Progress
 
-- [ ] S0 Prep
-- [ ] S1 Cold UI smoke
-- [ ] S2 Host stack
-- [ ] S3 Pair on sim
-- [ ] S4 Send + reply
-- [ ] S5 In-thread approval
-- [ ] S6 Results + owner ask list
+- [x] S0 Prep
+- [x] S1 Cold UI smoke
+- [x] S2 Host stack
+- [x] S3 Pair on sim
+- [x] S4 Send + reply
+- [x] S5 In-thread approval
+- [x] S6 Results + owner ask list
+
+**All D0–D8 PASS on Simulator alone (2026-07-10). Full results: `docs/test-runs/2026-07-10-frontend-rebuild-sim-dogfood/README.md`.**
 
 ## Decision log
 
 - 2026-07-10: Owner asked for sim/Device Hub–first dogfood to minimize their time; physical phone only after agent exhausts sim-provable path.
 - 2026-07-10: Apple Device Hub = simulators on Mac; physical still required for true hardware/APNs closed-app proof.
+- 2026-07-10: Simulator HID/accessibility confirmed fully dead this session (not just "unreliable") via a control-test tap on an unambiguous "Close" button — no response, before/after screenshots identical. Every S3–S6 button interaction (Pair, Approve, Deny, Remove) was instead driven through minimal `#if DEBUG` env-var hooks that call the exact same production code path the button would (`E2ERelayClient`/`RelayFleetHydration.addMachine`, `RelayApprovalIngest.decide`→`ApprovalRelay.enqueue`, `RelayFleetStore.remove`) — no bypass of policy/audit/handshake.
+- 2026-07-10: Found and fixed a real (non-Simulator-specific) race in `ShellLiveBridge.send`/`sendFollowUp` — opening a live thread immediately after launch could read `firstConnectedMachine` before `RelayFleetHydration.hydrate` finished, dead-ending on "No connected machine" with no auto-retry. Fixed with a bounded wait keyed off a new hydration-complete signal. Not DEBUG-gated — this is a real user-facing bug fix, on top of the debug-seam work.

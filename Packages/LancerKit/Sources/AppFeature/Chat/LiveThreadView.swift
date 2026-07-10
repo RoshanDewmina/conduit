@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import LancerCore
+import Foundation
 
 /// M3: the real, live conversation view — reached only from the New Chat
 /// composer's send action (a brand-new conversation flow). This is
@@ -65,6 +66,22 @@ public struct LiveThreadView: View {
             hasSentInitialPrompt = true
             await bridge.send(prompt: prompt, cwd: cwd)
         }
+        #if DEBUG
+        // Simulator HID taps are unreliable on this iOS build (see
+        // docs/test-runs/2026-07-02-device-hub-matrix-simulator-pass.md), so
+        // the Approve/Deny buttons above can't always be driven by a tap.
+        // Gated on LANCER_DEBUG_APPROVAL_DECISION, this drives the exact same
+        // `RelayApprovalIngest.decide` → `ApprovalRelay.enqueue` path the
+        // buttons call — no bypass of the real decision/audit flow.
+        .onChange(of: pendingApproval) { _, newValue in
+            guard let approval = newValue,
+                  let machineID = bridge.activeMachineID,
+                  let decisionRaw = ProcessInfo.processInfo.environment["LANCER_DEBUG_APPROVAL_DECISION"]
+            else { return }
+            let decision: Approval.Decision = decisionRaw == "deny" ? .rejected : .approved
+            Task { await approvalIngest.decide(approval, decision: decision, machineID: machineID) }
+        }
+        #endif
     }
 
     // MARK: - Reply state (Orca rule: working indicator and visible reply text

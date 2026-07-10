@@ -49,6 +49,16 @@ public final class ShellLiveBridge {
     /// run-scoped.
     public private(set) var activeMachineID: RelayMachineID?
 
+    /// Set by `AppRoot` once `RelayFleetHydration.hydrate` returns. Needed
+    /// because `waitForConnectedMachine` can't tell "no machine was ever
+    /// paired" apart from "hydration hasn't populated `relayFleetStore.machines`
+    /// yet" just by checking `machines.isEmpty` — checking too early reads an
+    /// array that's still empty because hydration hasn't run, not because
+    /// nothing is paired (found 2026-07-10 sim dogfood).
+    public private(set) var isHydrated = false
+
+    public func markHydrated() { isHydrated = true }
+
     private let relayFleetStore: RelayFleetStore
     private let conversationSyncCoordinator: ConversationSyncCoordinator
     private let chatRepo: ChatConversationRepository
@@ -72,7 +82,7 @@ public final class ShellLiveBridge {
     /// and polls for the reply. No-op if a send is already in flight.
     public func send(prompt: String, cwd: String) async {
         guard sendState != .working else { return }
-        guard let machine = relayFleetStore.firstConnectedMachine else {
+        guard let machine = await waitForConnectedMachine() else {
             sendState = .failed("No connected machine. Pair one in Settings → Trusted Machines.")
             return
         }
@@ -108,7 +118,7 @@ public final class ShellLiveBridge {
     /// No-op if there's no active conversation or a send is already in flight.
     public func sendFollowUp(prompt: String, conversationID: String, cwd: String) async {
         guard sendState != .working else { return }
-        guard let machine = relayFleetStore.firstConnectedMachine else {
+        guard let machine = await waitForConnectedMachine() else {
             sendState = .failed("No connected machine. Pair one in Settings → Trusted Machines.")
             return
         }
@@ -172,6 +182,28 @@ public final class ShellLiveBridge {
             try? await Task.sleep(nanoseconds: Self.pollInterval)
         }
         sendState = .failed("Timed out waiting for a reply.")
+    }
+
+    /// Bridges the gap between app launch (while `RelayFleetHydration.hydrate`
+    /// is still reconnecting a previously-paired machine) and the first send.
+    /// Without this, opening a live thread immediately after launch/relaunch
+    /// races ahead of reconnection and dead-ends on "No connected machine"
+    /// with no auto-retry (found 2026-07-10 sim dogfood: `firstConnectedMachine`
+    /// was read once, synchronously, at call time). Skips the wait entirely
+    /// when no machine is paired at all, so the true no-host path still fails
+    /// fast instead of stalling for `timeout`.
+    private func waitForConnectedMachine(timeout: TimeInterval = 8) async -> RelayFleetStore.Machine? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !isHydrated, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        if let machine = relayFleetStore.firstConnectedMachine { return machine }
+        guard !relayFleetStore.machines.isEmpty else { return nil }
+        while Date() < deadline {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if let machine = relayFleetStore.firstConnectedMachine { return machine }
+        }
+        return nil
     }
 
     private static func transport(for bridge: E2ERelayBridge) -> ConversationTransport {

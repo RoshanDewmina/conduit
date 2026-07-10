@@ -182,9 +182,9 @@ Paste build result (success / first errors if fail).
 **Files:** Settings views under `AppFeature/Settings/`; wire existing pairing / host / relay stores; reuse patterns from pre-wipe `CursorRelayPairingSheet` / `CursorTrustedMachinesView` **as behavior reference only** (rewrite SwiftUI).
 
 **Acceptance:**
-- [ ] Pair from Settings; machine appears in trusted list
-- [ ] Remove machine works (no ghost Connect)
-- [ ] `build_sim` green
+- [x] Pair from Settings; machine appears in trusted list (2026-07-10 sim dogfood, D4)
+- [x] Remove machine works (no ghost Connect) (2026-07-10 sim dogfood, D8)
+- [x] `build_sim` green
 
 **Verify:** `build_sim` + owner/manual: pair → see machine → remove → gone.
 
@@ -199,9 +199,9 @@ Paste build result (success / first errors if fail).
 **Files:** `AppFeature/Chat/*`, `AppFeature/Bridge/ShellLiveBridge.swift`; Workspaces → thread navigation.
 
 **Acceptance:**
-- [ ] Send prompt on paired host; streamed (or completed) reply visible
-- [ ] Working indicator exclusive with streamed text (Orca rule)
-- [ ] `build_sim` green; unit tests for transcript mapping if restored types warrant them
+- [x] Send prompt on paired host; streamed (or completed) reply visible (2026-07-10 sim dogfood, D5)
+- [x] Working indicator exclusive with streamed text (Orca rule) — structural in `LiveThreadView.replyState`'s `switch`, observed as distinct states
+- [x] `build_sim` green (unit tests for transcript mapping not separately run this session)
 
 **Verify:** `build_sim` + dogfood send/receive. Optional: `cd Packages/LancerKit && swift test` for any new pure tests.
 
@@ -214,10 +214,10 @@ Paste build result (success / first errors if fail).
 **Intent:** Approval card on the work thread wired to `ApprovalIngest` / `ApprovalRelay` / existing decision path.
 
 **Acceptance:**
-- [ ] Pending approval appears in-thread
-- [ ] Approve and Deny both complete the governed step
-- [ ] `build_sim` green
-- [ ] Document manual dogfood steps in Status.md
+- [x] Pending approval appears in-thread (2026-07-10 sim dogfood, D6)
+- [x] Approve and Deny both complete the governed step (2026-07-10 sim dogfood, D7 — both paths, audit-log evidence)
+- [x] `build_sim` green
+- [x] Document manual dogfood steps in Status.md (`docs/plans/2026-07-10-frontend-rebuild-sim-dogfood-Status.md`)
 
 **Verify:** `build_sim` + dogfood: dispatch → approval → Approve/Deny → continue.
 
@@ -229,10 +229,24 @@ Paste build result (success / first errors if fail).
 
 - [x] Scorched wipe committed on `feat/frontend-scorched-wipe` (`80407933`) — not merged to master
 - [x] Plan approved 2026-07-10
-- [ ] M1 — Compile + launch thin 3-root shell
-- [ ] M2 — Settings pairing + trusted machines
-- [ ] M3 — Work thread + composer + stream
-- [ ] M4 — In-thread Approve/Deny
+- [ ] M1 — Compile + launch thin 3-root shell — **spec is stale, not re-verified as written:** this
+      milestone's acceptance criterion (`AppShell.swift` `TabView` roots, "three tabs visible") was
+      superseded by the Cursor-shell IA before this dogfood session — `AGENTS.md` explicitly forbids
+      reintroducing a tab bar, and the app now navigates via `NavigationStack` → `WorkspacesView`
+      directly (`AppRoot.swift`), no `TabView`/`AppShell` exists. App build+launch itself is proven
+      green repeatedly (2026-07-10 sim dogfood, D0), just not against this literal (outdated) bullet.
+      Leaving unchecked for a human to either update the spec or confirm the current shell satisfies intent.
+- [x] M2 — Settings pairing + trusted machines — proven 2026-07-10 sim dogfood: pair via real relay
+      handshake (D4), machine appears connected, Remove works (D8, "gone" confirmed). See
+      `docs/test-runs/2026-07-10-frontend-rebuild-sim-dogfood/README.md`.
+- [x] M3 — Work thread + composer + stream — proven 2026-07-10 sim dogfood: real host-side Claude
+      Code CLI reply rendered in-thread (D5); working-indicator/reply-text mutual exclusivity is
+      structural in `LiveThreadView.replyState`'s `switch` and was observed as two distinct states,
+      never both at once. `build_sim` green throughout.
+- [x] M4 — In-thread Approve/Deny — proven 2026-07-10 sim dogfood: approval card appears in-thread
+      (D6), both Approve and Deny completed the governed step end-to-end with audit-log evidence
+      (D7). `build_sim` green; dogfood steps documented in
+      `docs/plans/2026-07-10-frontend-rebuild-sim-dogfood-Status.md`.
 
 ## Decision log
 

@@ -101,6 +101,25 @@ public struct TrustedMachinesView: View {
             let count = store.invalidMachines.count
             Text("Removes \(count) pairing\(count == 1 ? "" : "s") that failed to restore.")
         }
+        #if DEBUG
+        // Same rationale as the other LANCER_DEBUG_* seams in this build: the
+        // Remove button is tap-gated and Simulator HID taps are unreliable on
+        // this iOS build. Drives the exact same `store.remove(id)` the button
+        // calls — no bypass. Bounded poll (not onChange) because connection
+        // transitions reassign elements in place; the array's identity list
+        // alone doesn't reliably signal that.
+        .task {
+            guard ProcessInfo.processInfo.environment["LANCER_DEBUG_REMOVE_CONNECTED_MACHINE"] == "1" else { return }
+            let deadline = Date().addingTimeInterval(10)
+            while Date() < deadline {
+                if let machine = store.machines.first(where: { store.isConnected($0.id) }) {
+                    store.remove(machine.id)
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
+        }
+        #endif
     }
 
     @ViewBuilder

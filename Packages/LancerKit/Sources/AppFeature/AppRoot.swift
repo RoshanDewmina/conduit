@@ -196,6 +196,10 @@ public struct AppRoot: View {
                 .task {
                     relayApprovalIngest.start()
                     await RelayFleetHydration.hydrate(into: relayFleetStore)
+                    shellLiveBridge.markHydrated()
+                    #if DEBUG
+                    await DebugSeeder.autoPairRelayIfRequested(into: relayFleetStore)
+                    #endif
                 }
             }
         }

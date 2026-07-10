@@ -165,7 +165,9 @@ public struct WorkspacesView: View {
             case "trustedMachines":
                 isTrustedMachinesDirectPresented = true
             case "liveThread":
-                activeLiveThread = LiveThreadIdentifier(prompt: "Can you take a look at the onboarding flow?", cwd: Self.placeholderCwd)
+                let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
+                    ?? "Can you take a look at the onboarding flow?"
+                activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: Self.placeholderCwd)
             case "search":
                 isSearchPresented = true
             default:
