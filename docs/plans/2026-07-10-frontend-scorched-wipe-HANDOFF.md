@@ -67,9 +67,9 @@ Also: `Package.swift` cleaned of DesignSystem / DiffFeature / FilesFeature / Mar
 
 ## Suggested next steps (owner decides)
 
-1. Commit wipe on `feat/frontend-scorched-wipe` if they want it durable
-2. **Rebuild UI** in a new session (owner’s job) — hang new chrome on remaining engines/stores/intents; study Orca at `research-repos/orca` (MIT) + Plan Orca/Apple sections
-3. Optionally restore W0.A dogfood from `checkpoint/w0a-dogfood-pre-scorched-wipe` / `stash@{0}` onto a rebuild branch
+1. ~~Commit wipe on `feat/frontend-scorched-wipe`~~ **DONE** — `80407933` (not merged to master)
+2. **Rebuild UI** — follow `docs/plans/2026-07-10-frontend-rebuild-Plan.md` + Status; start at **M1** with GPT-5.6 Sol (new session)
+3. Optionally restore W0.A dogfood from `checkpoint/w0a-dogfood-pre-scorched-wipe` / `stash@{0}` onto a rebuild branch if needed for reference only
 
 ## Do NOT
 
