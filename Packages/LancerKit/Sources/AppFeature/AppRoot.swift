@@ -134,6 +134,10 @@ public struct KeychainAIKeyStore: AIKeyStoring {
 /// chat, approvals — is rendered yet.
 public struct AppRoot: View {
     @State private var environment: AppEnvironmentResult
+    /// M2: relay pairing / trusted-machines fleet state, hydrated from the
+    /// persisted pairing index on launch and injected via `.environment(_:)`
+    /// so Settings can pair/list/remove real (non-mocked) machines.
+    @State private var relayFleetStore = RelayFleetStore()
 
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
@@ -160,6 +164,10 @@ public struct AppRoot: View {
         case .ready:
             NavigationStack {
                 WorkspacesView()
+            }
+            .environment(relayFleetStore)
+            .task {
+                await RelayFleetHydration.hydrate(into: relayFleetStore)
             }
         }
     }

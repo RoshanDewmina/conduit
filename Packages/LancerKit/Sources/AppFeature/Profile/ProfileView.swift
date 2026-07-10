@@ -10,6 +10,8 @@ import Charts
 /// semantic colors only, no DesignSystem module.
 public struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(RelayFleetStore.self) private var relayFleetStore
+    @State private var isTrustedMachinesPresented = false
 
     public init() {}
 
@@ -46,6 +48,9 @@ public struct ProfileView: View {
                     supportSection
                         .padding(.top, 28)
 
+                    connectionsSection
+                        .padding(.top, 28)
+
                     moreSection
                         .padding(.top, 28)
 
@@ -61,6 +66,10 @@ public struct ProfileView: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .sheet(isPresented: $isTrustedMachinesPresented) {
+            TrustedMachinesView()
+                .environment(relayFleetStore)
+        }
     }
 
     private var header: some View {
@@ -211,6 +220,21 @@ public struct ProfileView: View {
                 ProfileRow(systemImage: "envelope", title: "Contact Sales", accessory: .externalLink)
                 Divider().padding(.leading, 58)
                 ProfileRow(systemImage: "shippingbox", title: "Acknowledgements", accessory: .chevron)
+            }
+        }
+    }
+
+    private var connectionsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ProfileSectionHeader(title: "Connections")
+
+            VStack(spacing: 0) {
+                Button {
+                    isTrustedMachinesPresented = true
+                } label: {
+                    ProfileRow(systemImage: "desktopcomputer", title: "Trusted Machines", accessory: .chevron)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -412,5 +436,6 @@ private struct StreakHeatmapGrid: View {
 
 #Preview {
     ProfileView()
+        .environment(RelayFleetStore())
 }
 #endif

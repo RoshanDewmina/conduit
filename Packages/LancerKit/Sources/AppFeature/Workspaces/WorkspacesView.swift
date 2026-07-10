@@ -8,6 +8,7 @@ import SwiftUI
 /// live wiring. System `SF Symbols` + semantic colors only, no DesignSystem
 /// module.
 public struct WorkspacesView: View {
+    @Environment(RelayFleetStore.self) private var relayFleetStore
     @State private var isProfilePresented = false
     @State private var isComposerPresented = false
     @State private var isAddRepoPresented = false
@@ -19,6 +20,7 @@ public struct WorkspacesView: View {
     @State private var isContextDirectPresented = false
     @State private var isThreadDetailDirectPresented = false
     @State private var isPRDetailDirectPresented = false
+    @State private var isTrustedMachinesDirectPresented = false
     #endif
 
     public init() {}
@@ -76,6 +78,7 @@ public struct WorkspacesView: View {
         }
         .sheet(isPresented: $isProfilePresented) {
             ProfileView()
+                .environment(relayFleetStore)
         }
         .sheet(isPresented: $isComposerPresented) {
             #if DEBUG
@@ -98,6 +101,12 @@ public struct WorkspacesView: View {
         #if DEBUG
         .sheet(isPresented: $isContextDirectPresented) {
             ContextAttachView()
+        }
+        #endif
+        #if DEBUG
+        .sheet(isPresented: $isTrustedMachinesDirectPresented) {
+            TrustedMachinesView()
+                .environment(relayFleetStore)
         }
         #endif
         #if DEBUG
@@ -137,6 +146,8 @@ public struct WorkspacesView: View {
                 isThreadDetailDirectPresented = true
             case "prDetail":
                 isPRDetailDirectPresented = true
+            case "trustedMachines":
+                isTrustedMachinesDirectPresented = true
             case "search":
                 isSearchPresented = true
             default:
@@ -275,5 +286,6 @@ private struct WorkspaceRowView: View {
     NavigationStack {
         WorkspacesView()
     }
+    .environment(RelayFleetStore())
 }
 #endif
