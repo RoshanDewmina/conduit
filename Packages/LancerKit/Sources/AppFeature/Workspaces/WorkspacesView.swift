@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import PersistenceKit
 
 /// Section 1 of the frontend rebuild: a faithful, Apple-native recreation of
 /// the Cursor-mobile "Workspaces" launch screen (owner reference screenshots
@@ -9,10 +10,19 @@ import SwiftUI
 /// module.
 public struct WorkspacesView: View {
     @Environment(RelayFleetStore.self) private var relayFleetStore
+    @Environment(ShellLiveBridge.self) private var shellLiveBridge
     @State private var isProfilePresented = false
     @State private var isComposerPresented = false
     @State private var isAddRepoPresented = false
     @State private var isSearchPresented = false
+    /// M3: set by the composer's send action (`onSend`); presented via
+    /// `.sheet(item:)` to show the new live conversation. `Identifiable` so
+    /// `.sheet(item:)` can key off it; a fresh `UUID` per send keeps repeat
+    /// sends from reusing a stale sheet identity.
+    @State private var activeLiveThread: LiveThreadIdentifier?
+    /// M3: no repo-picker wiring yet — hardcoded placeholder cwd for the
+    /// live send flow (out of scope for this milestone per the brief).
+    private static let placeholderCwd = "~"
     #if DEBUG
     @State private var isComposerRepoPickerPresented = false
     @State private var isRepoPickerDirectPresented = false
@@ -82,9 +92,9 @@ public struct WorkspacesView: View {
         }
         .sheet(isPresented: $isComposerPresented) {
             #if DEBUG
-            NewChatComposerView(initiallyShowsRepoPicker: isComposerRepoPickerPresented)
+            NewChatComposerView(initiallyShowsRepoPicker: isComposerRepoPickerPresented, onSend: handleSend)
             #else
-            NewChatComposerView()
+            NewChatComposerView(onSend: handleSend)
             #endif
         }
         .sheet(isPresented: $isAddRepoPresented) {
@@ -92,6 +102,10 @@ public struct WorkspacesView: View {
         }
         .sheet(isPresented: $isSearchPresented) {
             SearchView()
+        }
+        .sheet(item: $activeLiveThread) { thread in
+            LiveThreadView(prompt: thread.prompt, cwd: thread.cwd)
+                .environment(shellLiveBridge)
         }
         #if DEBUG
         .sheet(isPresented: $isRepoPickerDirectPresented) {
@@ -148,6 +162,8 @@ public struct WorkspacesView: View {
                 isPRDetailDirectPresented = true
             case "trustedMachines":
                 isTrustedMachinesDirectPresented = true
+            case "liveThread":
+                activeLiveThread = LiveThreadIdentifier(prompt: "Can you take a look at the onboarding flow?", cwd: Self.placeholderCwd)
             case "search":
                 isSearchPresented = true
             default:
@@ -155,6 +171,13 @@ public struct WorkspacesView: View {
             }
         }
         #endif
+    }
+
+    /// M3: the composer's `onSend` hand-off — presents `LiveThreadView` via
+    /// `.sheet(item:)`. `ShellLiveBridge.send` is triggered by that view's
+    /// own `.task`, not here, so this stays a pure state-setting hop.
+    private func handleSend(_ prompt: String) {
+        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: Self.placeholderCwd)
     }
 
     private var topBar: some View {
@@ -247,6 +270,15 @@ public struct WorkspacesView: View {
     ]
 }
 
+/// M3: identifies one live-send `LiveThreadView` presentation. A fresh id
+/// per `handleSend` call ensures `.sheet(item:)` always treats a new send as
+/// a new sheet instance, even if the prompt text happens to repeat.
+private struct LiveThreadIdentifier: Identifiable {
+    let id = UUID()
+    let prompt: String
+    let cwd: String
+}
+
 private struct WorkspaceRow: Identifiable {
     let id = UUID()
     let title: String
@@ -283,9 +315,19 @@ private struct WorkspaceRowView: View {
 }
 
 #Preview {
-    NavigationStack {
+    let relayFleetStore = RelayFleetStore()
+    let db = try! PersistenceKit.AppDatabase.inMemory()
+    let chatRepo = ChatConversationRepository(db)
+    let coordinator = ConversationSyncCoordinator(chatRepo: chatRepo)
+    let bridge = ShellLiveBridge(
+        relayFleetStore: relayFleetStore,
+        conversationSyncCoordinator: coordinator,
+        chatRepo: chatRepo
+    )
+    return NavigationStack {
         WorkspacesView()
     }
-    .environment(RelayFleetStore())
+    .environment(relayFleetStore)
+    .environment(bridge)
 }
 #endif

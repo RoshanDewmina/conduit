@@ -11,14 +11,23 @@ import SwiftUI
 /// live wiring. System `SF Symbols` + semantic colors only, no
 /// DesignSystem module.
 public struct NewChatComposerView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var draftText: String = ""
     @FocusState private var isTextFieldFocused: Bool
     @State private var isRepoPickerPresented = false
     @State private var isContextPresented = false
     private let initiallyShowsRepoPicker: Bool
+    /// M3: hands the prompt off to the presenting view (`WorkspacesView`) so
+    /// it can drive the live send flow and present `LiveThreadView`. A
+    /// closure (not `.environment(_:)` injection) keeps this view decoupled,
+    /// matching the existing `onPaired`-style callback pattern used by
+    /// `RelayPairingSheet`. `nil` by default so existing call sites (the
+    /// follow-up pill in `ThreadDetailView`) keep compiling unchanged.
+    private let onSend: ((String) -> Void)?
 
-    public init(initiallyShowsRepoPicker: Bool = false) {
+    public init(initiallyShowsRepoPicker: Bool = false, onSend: ((String) -> Void)? = nil) {
         self.initiallyShowsRepoPicker = initiallyShowsRepoPicker
+        self.onSend = onSend
     }
 
     public var body: some View {
@@ -164,15 +173,37 @@ public struct NewChatComposerView: View {
 
             Spacer()
 
-            Circle()
-                .fill(Color(.tertiarySystemFill))
-                .frame(width: 34, height: 34)
-                .overlay(
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                )
+            let trimmedDraft = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedDraft.isEmpty {
+                Circle()
+                    .fill(Color(.tertiarySystemFill))
+                    .frame(width: 34, height: 34)
+                    .overlay(
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    )
+            } else {
+                Button {
+                    send(trimmedDraft)
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(.tint)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Send"))
+            }
         }
+    }
+
+    /// M3: hands the prompt to the presenting view and dismisses this sheet.
+    /// The presenting view (`WorkspacesView`) is responsible for driving
+    /// `ShellLiveBridge.send` and showing `LiveThreadView` — this view stays
+    /// decoupled from the live bridge entirely.
+    private func send(_ prompt: String) {
+        onSend?(prompt)
+        dismiss()
     }
 
     // MARK: - Static sample data

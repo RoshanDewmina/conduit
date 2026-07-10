@@ -138,6 +138,11 @@ public struct AppRoot: View {
     /// persisted pairing index on launch and injected via `.environment(_:)`
     /// so Settings can pair/list/remove real (non-mocked) machines.
     @State private var relayFleetStore = RelayFleetStore()
+    /// M3: constructed in `init()` (needs `conversationSyncCoordinator`/
+    /// `chatRepo` from `AppEnvironment`, so only non-nil when `environment`
+    /// is `.ready`) and injected via `.environment(_:)` alongside
+    /// `relayFleetStore`, same pattern.
+    @State private var shellLiveBridge: ShellLiveBridge?
 
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
@@ -145,11 +150,23 @@ public struct AppRoot: View {
     }
 
     public init() {
+        let fleetStore = RelayFleetStore()
+        _relayFleetStore = State(initialValue: fleetStore)
         do {
             let env = try AppEnvironment()
             _environment = State(initialValue: .ready(env))
+            // M3: constructed here (not lazily in `body`) because mutating
+            // `@State` during view-body evaluation is disallowed — needs
+            // `env.conversationSyncCoordinator`/`env.chatRepo`, only
+            // available once `AppEnvironment` construction has succeeded.
+            _shellLiveBridge = State(initialValue: ShellLiveBridge(
+                relayFleetStore: fleetStore,
+                conversationSyncCoordinator: env.conversationSyncCoordinator,
+                chatRepo: env.chatRepo
+            ))
         } catch {
             _environment = State(initialValue: .failure(error.localizedDescription))
+            _shellLiveBridge = State(initialValue: nil)
         }
     }
 
@@ -162,12 +179,15 @@ public struct AppRoot: View {
                 description: Text(message)
             )
         case .ready:
-            NavigationStack {
-                WorkspacesView()
-            }
-            .environment(relayFleetStore)
-            .task {
-                await RelayFleetHydration.hydrate(into: relayFleetStore)
+            if let shellLiveBridge {
+                NavigationStack {
+                    WorkspacesView()
+                }
+                .environment(relayFleetStore)
+                .environment(shellLiveBridge)
+                .task {
+                    await RelayFleetHydration.hydrate(into: relayFleetStore)
+                }
             }
         }
     }
