@@ -1,7 +1,6 @@
 import SwiftUI
 import AppFeature
 import LancerCore
-import DesignSystem
 import NotificationsKit
 import PersistenceKit
 import SessionFeature
@@ -31,7 +30,6 @@ struct LancerApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     init() {
-        DesignSystemFonts.register()
         configureSentry()
         // Without a reference to LancerAppShortcuts from the app target itself,
         // Xcode's app-intents metadata merge step silently drops it from the

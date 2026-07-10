@@ -1,5 +1,5 @@
 {
-  "originHash" : "2b5ecfc6e602105b9e9e53c2331f3042a628010e00c92bfc9a8b7326e34eb37f",
+  "originHash" : "5a8af5d9b9d43466fa50d86f0553ed4ecfa23bb5905cdb340ba3329ecef8eeb6",
   "pins" : [
     {
       "identity" : "bigint",
@@ -29,12 +29,12 @@
       }
     },
     {
-      "identity" : "networkimage",
+      "identity" : "sentry-cocoa",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/gonzalezreal/NetworkImage",
+      "location" : "https://github.com/getsentry/sentry-cocoa",
       "state" : {
-        "revision" : "2849f5323265386e200484b0d0f896e73c3411b9",
-        "version" : "6.0.1"
+        "revision" : "f196cbb98e0388381d57908f2f5a9bdc385cde68",
+        "version" : "8.58.4"
       }
     },
     {
@@ -65,15 +65,6 @@
       }
     },
     {
-      "identity" : "swift-cmark",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-cmark",
-      "state" : {
-        "revision" : "924936d0427cb25a61169739a7660230bffa6ea6",
-        "version" : "0.8.0"
-      }
-    },
-    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
@@ -98,15 +89,6 @@
       "state" : {
         "revision" : "a878e7f8f46cfc0e1125e565b5c08e7d5272dc9a",
         "version" : "1.14.0"
-      }
-    },
-    {
-      "identity" : "swift-markdown-ui",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/gonzalezreal/swift-markdown-ui",
-      "state" : {
-        "revision" : "5f613358148239d0292c0cef674a3c2314737f9e",
-        "version" : "2.4.1"
       }
     },
     {
