@@ -1,12 +1,21 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-09 (morning)  
-**Active branch:** `feat/chat-overhaul-w0a` (Wave 0 chat dogfood) — open this file first for current priority, canonical doc map, and branch status.  
-**`master` tip (stale vs active work):** `732071a7` — re-check `git rev-parse HEAD` / `gh pr list` before citing.
+**Last updated:** 2026-07-10  
+**Active branch:** `master` @ `77488c11` is the current baseline; new work happens on `feat/in-thread-questions` (cut from `master`) — open this file first for current priority, canonical doc map, and branch status.  
+**`master` tip:** `77488c11` — re-check `git rev-parse HEAD` / `gh pr list` before citing.
 
+> **Superseded 2026-07-10:** the Wave 0 chat-overhaul work (`feat/chat-overhaul-w0a`) and the old
+> `AppFeature/CursorStyle/` live-bridge shell it depended on were replaced by a **scorched-earth
+> frontend wipe + rebuild** (`80407933` onward) — `CursorStyle`/`DesignSystem` no longer exist in the
+> tree. Do **not** resurrect Wave 0 or cite `CursorStyle` as current; `AGENT_READ_FIRST.md`'s mention
+> of it is stale pending its own refresh. The rebuild (Cursor-visual Workspaces-root shell, M2 pairing,
+> M3 live send/poll, M4 in-thread approve/deny) landed directly on `master` through `77488c11` and is
+> the current source of truth — see `docs/plans/2026-07-10-frontend-rebuild-Plan.md` +
+> `docs/plans/2026-07-10-frontend-rebuild-Status.md`.
+>
 > **Sidebar/Command Home IA refs scrubbed from active docs 2026-07-08** (A2 audit, PR #53); historical
 > evidence files may still mention the old shell. Cross-check any "Fixed"/"Shipped"/"PASS" claim here
-> against `git log` / `gh pr list` — this ledger was refreshed 2026-07-09 against live branch tip.
+> against `git log` / `gh pr list`.
 
 Living trackers (update these when code or tests change):
 
@@ -23,36 +32,51 @@ Living trackers (update these when code or tests change):
 
 ## Current priority (engineering)
 
-**Wave 0 dogfood (2026-07-09):** chat multi-turn on device is the #1 blocker. Active work on `feat/chat-overhaul-w0a`.
+**Frontend scorched wipe + rebuild + sim dogfood (2026-07-10):** the iOS UI was rebuilt from scratch as
+a thin Apple-native Cursor-visual shell (Workspaces-root IA, no tab bar, no `DesignSystem` module) on
+top of surviving engines (`SessionFeature` / relay / GRDB). All of the following landed **directly on
+`master`** through `77488c11` (not a long-lived side branch):
 
-| Slice | Status | Notes |
-|-------|--------|-------|
-| W0.A chat identity / sync / errors / discovery | **Landed on branch** | conversationID routing, conflict refetch, vendor-error + ledger poll, host-ledger thread discovery |
-| W0.A Slice 1 chat polish | **Landed on branch** (`fa04426f`) | MarkdownUI + streaming smoother + jump-to-latest (Orca/Happier/Omnara port map); unit tests + app-target build green |
-| W0.B cross-device continue | **Partial** | Discovery wired; two-device QA script in continuity study §4 — needs second device |
-| W0.C/D/E | **Landed on branch** | Trusted machines, search polish, honest add-repo |
+| Stage | Status | Evidence |
+|-------|--------|----------|
+| Scorched wipe (`80407933`) | **Landed** | deleted `CursorStyle`, `DesignSystem`, old chat UI |
+| Visual rebuild Sections 1–7 (Workspaces, Profile, Composer, RepoPicker/AddRepo, ThreadList/Search, Context, ThreadDetail/PR) | **Landed** (`2c44728d`) | `build_sim` green each section |
+| M2 — Settings pairing + trusted machines | **Landed** (`97071246`) | real relay pairing/list/remove |
+| M3 — live thread send + poll-until-reply | **Landed** (`be2e1650`) | real `ShellLiveBridge` → `ConversationSyncCoordinator` |
+| M4 — in-thread Approve/Deny | **Landed** (`d1d5f218`) | real `RelayApprovalIngest` → `ApprovalRelay` |
+| Sim/Device-Hub dogfood D0–D8 | **ALL PASS** (`77488c11`) | [`docs/test-runs/2026-07-10-frontend-rebuild-sim-dogfood/README.md`](test-runs/2026-07-10-frontend-rebuild-sim-dogfood/README.md) — pair, send/reply, approval card, approve/deny (audit-logged), remove-machine, all proven live against a real local `lancerd` + relay, Simulator only |
+
+Full detail: [`docs/plans/2026-07-10-frontend-rebuild-Plan.md`](plans/2026-07-10-frontend-rebuild-Plan.md) +
+[`docs/plans/2026-07-10-frontend-rebuild-Status.md`](plans/2026-07-10-frontend-rebuild-Status.md).
+
+**Active next slice:** in-thread agent **Question** cards (answer / multi-choice) on `LiveThreadView`,
+mirroring the M4 approval-ingest discipline — see
+[`docs/plans/2026-07-10-in-thread-questions-Plan.md`](plans/2026-07-10-in-thread-questions-Plan.md).
+Branch: `feat/in-thread-questions`.
+
+**Physical-device work is explicitly DEFERRED by owner** — do not ask for phone time; prove features on
+Simulator + a real local `lancerd`/relay instead (the sim-dogfood pattern above). Deferred items, no
+urgency:
+
+- Physical-phone re-proof of the rebuild (pair → send → approve/deny by real finger-tap, not code review)
+- APNs push while the app is closed/backgrounded (Simulator cannot receive production push at all)
+- Dynamic Island / Live Activity for the relay-dispatch approval card
 
 **Ranked next (confirm with owner before starting):**
 
-1. **Owner phone retest** of Slice 1 + multi-turn script (markdown, no hung Working…, host-ledger threads visible).
-2. **Slice 1b** — stop-while-generating + thinking indicator (parity plan; out of Slice 1).
-3. **W0.B two-device QA** — continuity study §4; optionally wire/delete `.streamingElsewhere`.
-4. **Production P0s** from burn list — GCS `lancerd` publish, VPS C1, CloudKit Production schema (D2) — owner-gated.
-5. Away Launch Composer remains deferred until chat green.
+1. In-thread Question cards (active — see Plan above).
+2. Clear the 2 pre-existing stale "Relay host" dead pairings surfaced during dogfood (cosmetic, not urgent).
+3. Production P0s from burn list — GCS `lancerd` publish, VPS C1, CloudKit Production schema (D2) — owner-gated.
+4. Away Launch Composer remains deferred until owner asks.
 
-**Tier 0 exit bar** (still the live-loop foundation; Codex `019f3763`, 2026-07-06):
+**Tier 0 exit bar** (historical — superseded by the rebuild's own D0–D8 sim-dogfood proof above, kept for context):
 
 > pair → dispatch prompt → receive approval → approve/deny → follow-up/continue
 
-| Step | Status (2026-07-08) | Evidence |
-|------|---------------------|----------|
-| Live shell wiring | **Shipped** — `LANCER_CURSOR_SHELL_LIVE=1` + `CursorShellLiveBridge`; Layers 0–3 merged (#34) | gap matrix, `ARCHITECTURE.md` §0.1 |
-| Simulator UI test | PASS | `codex/tier-0-live-cursor-shell`, wave merges #28–#32 |
-| Relay E2E harness | **PASS** — `relay-approval-e2e.sh` through live Cursor shell | [`test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md`](test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md) |
-| Physical device governed loop (D0.2) | **Historical PASS** (owner, 2026-07-08 evening on `732071a7`); **current tip re-proof PENDING** | Evening: [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); morning FAIL [`test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md); fresh run → [`test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md) |
-| APNs lock-screen approve (5c) | **Historical PASS** — force-quit + lock Approve (`79137ae4…`) / Reject (`461bc3e0…`) on `732071a7`; **current tip re-proof PENDING** | [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); #52 + `732071a7`; tip moved (`b18f519d`+) — Layer 0 CLOSED only after [`test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md) |
-
-**Unfrozen by D0.2 / 5c PASS:** Away Launch Composer (deferred until chat green). Watch embed **cut** by owner Jul 8 — do not schedule. A3 R1–R4 **merged** (#63–#66).
+This bar was previously tracked against the old `CursorStyle` shell (Codex `019f3763`, 2026-07-06) and
+its physical-device re-proof was left PENDING as of the last ledger refresh. That shell no longer
+exists — the bar is now satisfied by the rebuild's Simulator-only D0–D8 pass above. Physical-device
+re-proof of the **new** shell is deferred per owner instruction (2026-07-10), not pending as a gap.
 
 **Unfrozen / merged (2026-07-07–08):** proof receipts + home attention (Layers 0–3, #34); approve-and-remember (#47); deep-link auth/billing paths (#48); Siri entity intents D2/D3 (#46), I1 (#38), I2 (#41), I3 (#43), E3 voice-answer (#45); question/Ladder pipeline E1 (#49) + QuestionCardView E2 (#44); gated git/PR ship actions G (#50); Proof Reel H1 (#51); 5c lock-screen delivery fix (#52); A2 dead-code cleanup (#55); settings feedback rows (#56); A3 design tokens (#57); observed sessions J1–J2 (#54, #58); Return-to-Desk J3 (#59); push `/secret-request` + `/question` routes (#62); append-retry offline fix (#19); daemon/conn test deflake (#60, #61).
 
@@ -145,7 +169,7 @@ From Codex `019f2dec` (2026-07-04), confirmed unrun by `019f2f6d`:
 
 | Item | State |
 |------|-------|
-| `master` (`732071a7`) | Layers 0–4 + A3 R1–R4 merged (Jul 7–8 batch); iOS **26.0** deployment target; live Cursor shell + Siri I1–I3 on tree |
+| `master` (`77488c11`) | Current tip. Includes everything below plus the 2026-07-10 scorched wipe + Cursor Workspaces-root rebuild (M2–M4) + sim dogfood D0–D8 PASS (see Current priority above). iOS **26.0** deployment target. The old live-Cursor-shell / `CursorStyle` referenced in the rows below was deleted by the wipe — historical only. |
 | Layers 0–3 integration | **Merged** — PR #34 (`2e33b434`…`c626e29a` stack): proof receipts, home attention, Siri D1 entities, relay delivery fixes |
 | Tier 0 wave (#27–#32) | **Merged** — Cursor shell polish, live approval sync (#32), UITest stabilization |
 | Layer 4 lanes | **Merged** — #44–#51 (E1/E2/G/H1), #45 (E3), #46–#48 (D2/D3, A4, deeplink), #52 (5c fix) |
@@ -167,7 +191,7 @@ From master plan §7 + gap matrix + Codex `019f2f6d`:
 |-----|----------|--------|
 | BiometricGate fail-open (no passcode) | P0 | **Moot — removed entirely** on `master` 2026-07-07; nothing left to validate |
 | Emergency stop non-atomic | P0 | **Fixed** — daemon latch + RPC (tier-0 branch, merged via #28/#34) |
-| Tier 0 D0.2 / 5c physical-device gate | P0 | **Historical PASS** 2026-07-08 evening on `732071a7` — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); **current tip re-proof PENDING** → [`test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md) |
+| Tier 0 D0.2 / 5c physical-device gate | P0 | **Historical PASS** 2026-07-08 evening on `732071a7` (pre-wipe shell) — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md); Simulator-only equivalent re-proven post-wipe 2026-07-10 (D0–D8, see Current priority); **physical-device re-proof of the new shell DEFERRED by owner** (2026-07-10), not pending as a gap |
 | JWT HS256-only | P1 | Open |
 | StoreKit IAP dormant vs Stripe cloud entitlement | P1 | Open — billing reconciliation needed |
 | Watch app not embedded in iOS target | P1 | **Cut** — owner decision Jul 8; do not schedule |
@@ -178,10 +202,10 @@ From master plan §7 + gap matrix + Codex `019f2f6d`:
 
 ## Owner-gated checklist
 
-1. **Tier 0 live loop** on physical iPhone + running `lancerd` — [`docs/LIVE_LOOP_RUNBOOK.md`](LIVE_LOOP_RUNBOOK.md) — **Historical PASS** (2026-07-08 evening on `732071a7`); **current tip re-proof PENDING** → [`test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md)
-2. **APNs lock-screen approve (5c)** — **Historical PASS** — [`test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md) (`732071a7`); **current tip re-proof PENDING** (tip `b18f519d`+)
+1. **Tier 0 live loop** on physical iPhone + running `lancerd` — [`docs/LIVE_LOOP_RUNBOOK.md`](LIVE_LOOP_RUNBOOK.md) — **Historical PASS** (2026-07-08 evening on `732071a7`, pre-wipe shell); Simulator-only equivalent re-proven post-wipe (D0–D8, 2026-07-10); **physical re-proof DEFERRED by owner**, no rush
+2. **APNs lock-screen approve (5c)** — **Historical PASS** (`732071a7`, pre-wipe shell); **DEFERRED by owner** on the new shell — Simulator cannot receive production push at all, needs a real device when the owner has time
 3. **Jul 21 validation gate** — run or explicitly descope
-4. **Away Launch Composer** — next product lane (wireframes `04-launch-setup.html`)
+4. **Away Launch Composer** — next product lane (wireframes `04-launch-setup.html`), deferred until owner asks
 
 ---
 

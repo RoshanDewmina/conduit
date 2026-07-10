@@ -2,6 +2,7 @@
 import SwiftUI
 import LancerCore
 import Foundation
+import SessionFeature
 
 /// M3: the real, live conversation view — reached only from the New Chat
 /// composer's send action (a brand-new conversation flow). This is
@@ -18,6 +19,8 @@ public struct LiveThreadView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ShellLiveBridge.self) private var bridge
     @Environment(RelayApprovalIngest.self) private var approvalIngest
+    @Environment(RelayQuestionIngest.self) private var questionIngest
+    @Environment(RelayFleetStore.self) private var relayFleetStore
 
     let prompt: String
     let cwd: String
@@ -46,6 +49,12 @@ public struct LiveThreadView: View {
 
                 if let machineID = bridge.activeMachineID, let pendingApproval {
                     approvalCard(pendingApproval, machineID: machineID)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
+                }
+
+                if let machineID = bridge.activeMachineID, let pendingQuestion {
+                    questionCard(pendingQuestion, machineID: machineID)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 12)
                 }
@@ -80,6 +89,26 @@ public struct LiveThreadView: View {
             else { return }
             let decision: Approval.Decision = decisionRaw == "deny" ? .rejected : .approved
             Task { await approvalIngest.decide(approval, decision: decision, machineID: machineID) }
+        }
+        // Same rationale as the approval seam above, for the question card's
+        // Submit button. Gated on LANCER_DEBUG_QUESTION_ANSWER (the free-text/
+        // option text to answer with — applied to every item via the same
+        // fuzzy-match-or-free-text rule `AnswerQuestionResolver` already uses),
+        // drives the exact same `RelayQuestionIngest.submit` path the Submit
+        // button calls.
+        .onChange(of: pendingQuestion) { _, newValue in
+            guard let question = newValue,
+                  let machineID = bridge.activeMachineID,
+                  let answerText = ProcessInfo.processInfo.environment["LANCER_DEBUG_QUESTION_ANSWER"]
+            else { return }
+            for idx in question.items.indices {
+                if let matched = QuestionCardModel.fuzzyMatchOption(answerText, in: question.items[idx]) {
+                    questionIngest.toggleOption(machineID: machineID, itemIndex: idx, label: matched)
+                } else {
+                    questionIngest.setFreeText(machineID: machineID, itemIndex: idx, text: answerText)
+                }
+            }
+            Task { await questionIngest.submit(machineID: machineID, relayFleetStore: relayFleetStore) }
         }
         #endif
     }
@@ -192,6 +221,106 @@ public struct LiveThreadView: View {
         return Text(text)
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(color)
+    }
+
+    // MARK: - Pending question card (in-thread questions)
+
+    /// The most recent pending question that arrived from the same paired
+    /// machine this thread is talking to — see `RelayQuestionIngest`'s doc
+    /// comment for why this is machine-scoped, not strictly run-scoped.
+    /// Orthogonal to `SendState` and `pendingApproval`, same rule M4
+    /// established for the approval card: any combination can be visible at once.
+    private var pendingQuestion: QuestionCardModel.PresentationState? {
+        guard let machineID = bridge.activeMachineID,
+              let question = questionIngest.latestPendingQuestion[machineID],
+              !question.isAnswered
+        else { return nil }
+        return question
+    }
+
+    private func questionCard(_ question: QuestionCardModel.PresentationState, machineID: RelayMachineID) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "questionmark.circle")
+                    .foregroundStyle(.blue)
+                Text("Question")
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+                if let caption = QuestionCardModel.confidenceCaption(question.confidence) {
+                    Text(caption)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            ForEach(Array(question.items.enumerated()), id: \.offset) { index, item in
+                questionItem(item, itemIndex: index, allowFreeText: question.allowFreeText, machineID: machineID)
+            }
+
+            Button("Submit") {
+                Task { await questionIngest.submit(machineID: machineID, relayFleetStore: relayFleetStore) }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!QuestionCardModel.isReadyToAnswer(question))
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    private func questionItem(
+        _ item: QuestionCardModel.ItemState,
+        itemIndex: Int,
+        allowFreeText: Bool,
+        machineID: RelayMachineID
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let header = item.header {
+                Text(header)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(item.question)
+                .font(.system(size: 15))
+                .foregroundStyle(.primary)
+
+            ForEach(item.options, id: \.label) { option in
+                Button {
+                    questionIngest.toggleOption(machineID: machineID, itemIndex: itemIndex, label: option.label)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: item.isSelected(option.label) ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(item.isSelected(option.label) ? Color.blue : Color.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.label)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.primary)
+                            if let description = option.description {
+                                Text(description)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+
+            if item.options.isEmpty || allowFreeText {
+                TextField(
+                    item.options.isEmpty ? "Type your answer…" : "Or type a free-text answer…",
+                    text: Binding(
+                        get: { item.freeText },
+                        set: { questionIngest.setFreeText(machineID: machineID, itemIndex: itemIndex, text: $0) }
+                    )
+                )
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 14))
+            }
+        }
     }
 
     private func userBubble(_ text: String) -> some View {
