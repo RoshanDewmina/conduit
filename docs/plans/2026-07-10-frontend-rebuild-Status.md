@@ -1,8 +1,9 @@
 # Frontend rebuild — Status
 
-**Updated:** 2026-07-10T17:45:00Z  
+**Updated:** 2026-07-10T18:05:00Z  
 **Plan:** `docs/plans/2026-07-10-frontend-rebuild-Plan.md`  
-**Branch / worktree:** `feat/frontend-rebuild-m1` @ `be2e1650` in `/Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe`
+**Branch / worktree:** `feat/frontend-rebuild-m1` @ `d1d5f218` in `/Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe`  
+**M1–M4 all complete and build-verified.** Merge to `master` is an owner decision — not made in any of these sessions.
 
 ## Done
 
@@ -54,6 +55,19 @@
 - **Scope held to the Plan:** vendor hardcoded `"claudeCode"` (no picker UI), placeholder `cwd = "~"` (no repo-picker wiring), no markdown rendering (plain `Text`), no in-thread approval card (M4), `ThreadDetailView`/`PRDetailView` untouched, no daemon changes.
 - Committed as `be2e1650` on `feat/frontend-rebuild-m1`. 5 files, 429 insertions.
 - **M3 acceptance status:** send/poll/display plumbing is real, build-verified, and the failure path is confirmed live; the success-path round-trip against an actual running host is the one remaining gap before this milestone is fully proven end-to-end.
+
+## M4 — In-thread Approve/Deny (2026-07-10, Claude Code Opus plan/dispatch/verify, Sonnet 5 implement)
+
+- **Owner said "continue and start m4"** — explicit, unambiguous, no clarification needed this time (unlike M2/M3 which started from an ambiguous "continue").
+- **Explored first (Opus, read-only) and found two real gaps** that would have made an "in-thread approval card" cosmetic rather than functional:
+  1. **Nothing ingested relay-delivered approvals.** `ApprovalIngest.swift`'s `ApprovalIngest` actor only subscribes to `DaemonChannel.events` (SSH-only; this app has no SSH fleet). Separately, `E2ERelayBridge.handleRelayMessage`'s `"approvalPending"` case already posts a `lancerE2EApprovalReceived` `NotificationCenter` notification — confirmed via `grep -rn "lancerE2EApprovalReceived"` that **nothing subscribed to it**, posted into the void.
+  2. **`E2ERelayMessage.ApprovalData` (the relay wire type) carries no `runId`/`sessionId`**, unlike the SSH-side `ApprovalPendingParams` — a relay-delivered approval cannot be correlated to a specific conversation/run, only to the machine it arrived from. Confirmed this matches actual product direction ("Inbox remains the system of record for approvals" — the in-thread card is a convenience surface, not the sole approval UI) rather than treating it as a bug to route around.
+  3. **Also found a real M3 bug while reading the same code path:** `ShellLiveBridge.pollUntilTerminal` only re-read the local GRDB mirror, which nothing updates after the initial append except a host fetch (`refreshConversation`/`mergeFetchResponse`) — meaning M3's poll loop would silently time out after 90s on every real host, always. Folded the fix into this milestone's brief since it's the same file/method M4 needed to touch anyway.
+- **Implemented by Claude Code Sonnet:** new `AppFeature/Bridge/RelayApprovalIngest` — subscribes to the notification, builds an `Approval` (same rawValue-fallback conversion pattern as the SSH-side `ApprovalPendingParams`), persists via `ApprovalRepository.upsert`, and — the single most important call in this milestone — registers with `ApprovalRelay.shared.registerRelayOrigin(approvalID:machineID:)` so a later Approve/Deny actually routes back to the right machine (`ApprovalRelay.forwardDecisionOnly` is fail-closed without this; skipping it would have made Approve/Deny silently park in the redelivery queue forever — a bug that would have looked like "the buttons don't do anything" with no error). Publishes `latestPendingApproval[RelayMachineID: Approval]`. `decide(_:decision:machineID:)` forwards through `ApprovalRelay.shared.enqueue` (persist, audit, forward) and clears the card. `ShellLiveBridge` gained the poll-loop host-fetch fix plus `activeMachineID` tracking. `LiveThreadView` renders the approval card (kind/command-or-patch/risk/Approve/Deny) as UI state fully orthogonal to `SendState` — a pending approval can appear regardless of whether the turn is working or completed.
+- **Independently re-verified (Opus):** reviewed every diff by hand — confirmed the `registerRelayOrigin` call and the `pollUntilTerminal` host-fetch fix were both present and correct, matching the spec exactly. Fresh clean `build_run_sim`: **SUCCEEDED**, 58.7s, 0 errors, 0 new warnings (same 25 pre-existing `SiriRelevanceCoordinator.swift` warnings). Launched via the existing `liveThread` DEBUG seam — no crash with `RelayApprovalIngest` added as a third required environment object through the sheet chain (an unsatisfied `@Environment` would fatal-error; it didn't).
+- **Not verified:** an actual approval card render + tap-to-decide against a real pending approval — would need either a live daemon delivering a real relay approval, or a synthetic notification posted through a fake connected machine plumbed through `RelayFleetStore`/`ShellLiveBridge`/`RelayApprovalIngest` — assessed as not worth the complexity given no live daemon exists in this session to test the happy path either way (same constraint M3 had). Code review confirms the logic against the exact same verified API patterns already proven correct in M2 (`registerRelayOrigin`-equivalent pairing wiring) and M3 (poll/refresh pattern).
+- Committed as `d1d5f218` on `feat/frontend-rebuild-m1`. 5 files, 233 insertions.
+- **M4 acceptance status, and overall M1–M4 status:** the approval-card UI, real ingestion, and real decision-forwarding are all in place and build-verified; the live round-trip (relay delivers a real approval → card renders → Approve/Deny reaches the daemon) has not been dogfooded end-to-end, matching M3's same open gap for the send/reply round-trip. **This closes M1–M4 of the Plan.** Next real step is a live dogfood session against a running `lancerd` to prove the M3 send/reply and M4 approve/deny round-trips that unit/build verification can't reach — then an owner decision on merging to `master`.
 
 ## Closeout (2026-07-10, Claude Code Opus — advisor/delegator, plan/dispatch/verify)
 
@@ -228,6 +242,31 @@ git add Packages/LancerKit/Sources/AppFeature/AppRoot.swift \
   Packages/LancerKit/Sources/AppFeature/Chat
 git commit -m "feat(ios): M3 — live thread send + poll-until-reply on real relay state"
 # → [feat/frontend-rebuild-m1 be2e1650] 5 files changed, 429 insertions(+), 20 deletions(-)
+
+# M4: single Agent dispatch (Claude Code Sonnet), no session-limit interruption
+# this time. Subagent self-reported build_sim green.
+
+# Opus independent re-verification (fresh clean build):
+git status --short   # confirmed exact file set matched the subagent's report
+git diff --stat       # 4 modified + 1 new file, matched report
+# Hand-reviewed every diff: confirmed ApprovalRelay.shared.registerRelayOrigin
+#   call present (the critical one — without it, decisions park forever) and
+#   the pollUntilTerminal host-fetch fix present, both matching spec exactly
+# XcodeBuildMCP: clean → build_run_sim → SUCCEEDED, 58721ms, 0 errors, 25
+#   pre-existing SiriRelevanceCoordinator.swift warnings, 0 new
+# stop_app_sim → launch_app_sim with LANCER_DESTINATION=liveThread →
+#   screenshot: no crash with RelayApprovalIngest added as a third required
+#   environment object through the sheet chain (unsatisfied @Environment
+#   would fatal-error; it didn't). No approval card shown — correct, since
+#   no relay approval was ever received in this session.
+
+git add Packages/LancerKit/Sources/AppFeature/AppRoot.swift \
+  Packages/LancerKit/Sources/AppFeature/Bridge/ShellLiveBridge.swift \
+  Packages/LancerKit/Sources/AppFeature/Bridge/RelayApprovalIngest.swift \
+  Packages/LancerKit/Sources/AppFeature/Chat/LiveThreadView.swift \
+  Packages/LancerKit/Sources/AppFeature/Workspaces/WorkspacesView.swift
+git commit -m "feat(ios): M4 — in-thread Approve/Deny on real relay approvals"
+# → [feat/frontend-rebuild-m1 d1d5f218] 5 files changed, 233 insertions(+), 4 deletions(-)
 ```
 
 ## Blockers
@@ -239,17 +278,18 @@ git commit -m "feat(ios): M3 — live thread send + poll-until-reply on real rel
 
 ## Next agent instruction
 
-**M3 complete, build-verified.** Signed `build_sim` is green through the visual-rebuild closeout (`2c44728d`), M2 (`97071246`), and M3 (`be2e1650`) on `feat/frontend-rebuild-m1`. Status is up to date. This session stops here — **do not start M4 without explicit owner OK.**
+**M1–M4 all complete, build-verified.** Signed `build_sim` is green through the visual-rebuild closeout (`2c44728d`), M2 (`97071246`), M3 (`be2e1650`), and M4 (`d1d5f218`) on `feat/frontend-rebuild-m1`. Status is up to date. This session stops here — **the Plan has no M5; do not invent new milestone scope without an explicit owner ask.**
 
-**Open manual-check items (carried forward, none blocking):**
+**Open manual-check items (carried forward, none blocking a build, all real dogfood gaps):**
 1. From M2: the interactive pair → trusted-list → remove tap sequence hasn't been exercised end-to-end by automation (HID taps don't reliably fire SwiftUI actions on this simulator — same limitation as Sections 2/4/7).
-2. From M3: the send → real host reply round-trip hasn't been exercised against a running `lancerd` (none was running in either session). Only the failure path (`firstConnectedMachine == nil`) is live-confirmed. The happy path is architecturally identical, not separately proven.
-Both are real-device/live-daemon dogfood items, not build or code-review gaps — worth a manual pass when a host is available.
+2. From M3: the send → real host reply round-trip hasn't been exercised against a running `lancerd`. Only the failure path (`firstConnectedMachine == nil`) is live-confirmed; the M4 session also fixed a real bug in this path (`pollUntilTerminal` wasn't fetching from the host, so it would have timed out on every real host) — the happy path is now architecturally sound but still not separately proven against a live daemon.
+3. From M4: the approval card's render + Approve/Deny tap flow hasn't been exercised against a real relay-delivered approval, for the same reason (no live daemon in any of these sessions).
+All three need a live `lancerd` + (for #1/#3) either a real device or a working simulator HID path — genuine dogfood work, not something further code review or build verification can close.
 
-**M4 brief for the next session** (in-thread Approve/Deny — scope only, no code):
-- Goal: surface a pending approval on `LiveThreadView` (M3's new live conversation view — not `ThreadDetailView`, which stays static/out of scope per M3's own boundary decision) and let Approve/Deny complete the governed step, wired to `ApprovalIngest`/`ApprovalRelay`/the existing decision path.
-- `ApprovalRelay.shared` and its `relayBridges` map are already wired (M2 registers every machine's bridge there on pair/hydrate). Check `ApprovalRelay.swift`'s existing decision-forwarding methods before inventing new plumbing — M2/M3 both found the "real" pattern already existed and just needed UI wiring, likely true here too.
-- `SessionFeature/Chat/QuestionCardModel.swift`/`AnswerQuestionResolver.swift` (restored pre-M2, unused so far) look relevant for in-thread question/approval card rendering — read them before designing new types.
-- Acceptance: a pending approval appears in `LiveThreadView`; both Approve and Deny complete the governed step; `build_sim` green; document manual dogfood steps (this needs a live daemon + an actual pending approval to prove end-to-end, same gap as M3's happy path above).
-- After M4: owner decides on merge to `master` (wipe + rebuild still not auto-merged) — do not merge without being asked.
-- Same cadence: Opus plans/dispatches/verifies (explore real APIs before spec'ing — this has been the single highest-leverage step in M2 and M3 alike), Sonnet 5 subagents implement via `Agent` tool with `model: sonnet`, independently re-verify with a fresh clean build + hand-reviewed diff before committing, one milestone → verify → stop for owner review.
+**Recommended next step:** a live dogfood session — pair a real host via Settings, send a prompt from Workspaces' composer, trigger a real approval-requiring action on that host, and walk the full send → reply → approve/deny loop on a real device. This is the one thing that would actually upgrade M2/M3/M4 from "build-verified, code-reviewed, partially live-confirmed" to "proven." Not build/plan work — needs a person with a device and a running daemon.
+
+**After dogfooding (or if the owner decides to skip straight to it):** merge to `master` is an owner decision — the wipe + rebuild branch (`feat/frontend-rebuild-m1`) has never been auto-merged by any session in this track and should not be without being explicitly asked.
+
+**Noted but explicitly out of scope for M1–M4:** `SessionFeature/Chat/QuestionCardModel.swift`/`AnswerQuestionResolver.swift` (restored pre-M2, still unused) look like they'd support an in-thread *question* card (distinct from the approval card M4 just built) — the Plan's M1–M4 scope never included this, so it wasn't built. Worth a future milestone if the owner wants it, not implied by anything above.
+
+**If further milestone work is authorized:** same cadence that worked for M2/M3/M4 — Opus explores the real APIs *before* writing the dispatch brief (this was consistently the single highest-leverage step — both M3 and M4 turned up real, non-obvious gaps this way that a naive UI-only brief would have missed), Sonnet 5 subagents implement via the `Agent` tool with `model: sonnet`, Opus independently re-verifies with a fresh clean build + hand-reviewed diff (never trust a subagent's self-report) before committing, one milestone → verify → stop for owner review.
