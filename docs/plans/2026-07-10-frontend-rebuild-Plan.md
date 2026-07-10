@@ -12,7 +12,97 @@
 
 **Tech stack / areas:** `AppFeature`, `SessionFeature` (engines only), `SettingsFeature` VMs, `Lancer/` app target, XcodeGen `project.yml`. Deployment target **iOS 26.0**.
 
-**Model for implement sessions:** GPT-5.6 **Sol** (Cursor). One milestone per session.
+**Orchestration (owner 2026-07-10):** GPT-5.6 **Sol** in Cursor is the **advisor / delegator only** — it does **not** write product code. Implementation is done by **Claude Code CLI** with **`--model sonnet`** (Sonnet 5). One Plan milestone per Sol session. Sol stays token-efficient: short briefs, no transcript dumps, no re-deriving the Plan.
+
+---
+
+## Orchestration — Sol delegates; Claude Code CLI (Sonnet) implements
+
+### Roles
+
+| Role | Who | Does | Does not |
+|---|---|---|---|
+| Advisor / delegator | GPT-5.6 Sol (this Cursor chat) | Read Plan/Status; write a tight Claude brief; run `claude -p …`; re-verify build; update Status; stop | Edit Swift/Go/UI; large file dumps; implement “just this one fix” itself |
+| Implementer | Claude Code CLI `--model sonnet` | Edit code in the rebuild worktree; run builds/tests as asked; report files changed + evidence | Expand past the milestone; touch `daemon/**`; merge to master |
+
+### Token-efficiency rules for Sol
+
+1. **Do not code.** No `ApplyPatch` / Write on `Packages/`, `Lancer/`, or `project.yml`. Exception: Status.md / Plan Progress checkboxes only.
+2. **Do not re-read the whole repo.** Point Claude at Plan paths + 3–8 concrete files max per dispatch.
+3. **One Claude dispatch per attempt.** Brief = Goal + write-set + constraints + Done-when. No chat history paste.
+4. **Verify yourself** after Claude returns (distrust self-report): `git status` / `git diff --stat` + XcodeBuildMCP `build_sim` (or xcodebuild).
+5. **Max 3 Claude fix rounds** for the milestone; then STOP and ask the owner.
+6. Prefer `--output-format text` for summaries; use `json` only when parsing programmatically.
+
+### Claude Code CLI — how to use (verified on this machine)
+
+Binary: `/opt/homebrew/bin/claude` · version **2.1.205**. Always `cd` the rebuild worktree first.
+
+```bash
+cd /Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe
+# confirm branch
+git branch --show-current   # expect: feat/frontend-rebuild-m1
+```
+
+**Flags that matter:**
+
+| Flag | Use |
+|---|---|
+| `-p` / `--print` | Non-interactive: run prompt, print result, exit (required for Sol delegation) |
+| `--model sonnet` | Sonnet 5 implementer (alias; do **not** use opus/fable for routine M1–M4 impl) |
+| `--permission-mode acceptEdits` | Allow file edits without interactive prompts (implement) |
+| `--permission-mode plan` | Read-only / no edits (scout / answer questions) |
+| `--output-format text` | Human summary (default for Sol) |
+| `--output-format json` | Machine-parseable when needed |
+| `< /dev/null` | Avoid CLI waiting on stdin when run from agents/scripts |
+
+**Scout (read-only) — verified 2026-07-10:**
+
+```bash
+cd /Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe
+claude -p --model sonnet --output-format text --permission-mode plan \
+  "Reply with exactly three lines: (1) git branch --show-current output, (2) whether Packages/LancerKit/Sources/AppFeature/CursorStyle exists (yes/no), (3) first line of docs/plans/2026-07-10-frontend-rebuild-Plan.md. Do not edit any files." \
+  < /dev/null
+# Observed stdout:
+# feat/frontend-rebuild-m1
+# no
+# # Frontend rebuild — Implementation Plan
+```
+
+**Implement (edits allowed) — template Sol must use:**
+
+```bash
+cd /Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe
+claude -p --model sonnet --permission-mode acceptEdits --output-format text \
+  "$(cat <<'EOF'
+Implement Plan milestone M1 ONLY.
+Read: docs/plans/2026-07-10-frontend-rebuild-Plan.md (M1 section).
+Write-set: AppFeature AppShell + Home/Workspaces/Settings stubs; rewire AppRoot; drop DesignSystem/Cursor* UI deps; restore minimal non-UI contracts from 80407933^ only if required to compile.
+Constraints: no DesignSystem module; no daemon/**; no M2–M4; thin Apple-native TabView; no Face ID; no Siri Approve.
+Done when: iOS app-target build_sim (or xcodebuild scheme Lancer) succeeds; three tabs launch; list files changed + build evidence.
+EOF
+)" < /dev/null
+```
+
+**Continue a prior Claude session** (same cwd) if a fix round is needed:
+
+```bash
+claude -p --model sonnet --permission-mode acceptEdits -c \
+  "Fix remaining build errors only. Do not start M2. Paste xcodebuild/build_sim result." \
+  < /dev/null
+```
+
+**Permission modes (from `claude --help`):** `acceptEdits` | `auto` | `bypassPermissions` | `manual` | `dontAsk` | `plan`.  
+Prefer `acceptEdits` for implement; `plan` for scout. Avoid `bypassPermissions` unless owner says so.
+
+### Sol session checklist (every milestone)
+
+1. Confirm cwd + branch (`feat/frontend-rebuild-m1`).
+2. Optional scout with `--permission-mode plan` (broken refs only).
+3. Dispatch implement brief via `claude -p --model sonnet --permission-mode acceptEdits`.
+4. Independently re-run Plan verify command; paste evidence into Status.md.
+5. If red: one tighter fix brief (errors only) — max 3 rounds.
+6. STOP for owner OK — do not start the next milestone.
 
 ---
 
@@ -20,6 +110,7 @@
 
 - Follow `AGENTS.md` / `docs/agent-contract.md` / `docs/AGENT_READ_FIRST.md`.
 - Small diffs; **one milestone → verify → stop**. Do not batch M2–M4 in the same session as M1.
+- **Sol does not implement product code** — Claude Code CLI `--model sonnet` does (see Orchestration).
 - Study competitors before inventing UX: `research-repos/{orca,happier,omnara}` + `docs/product/2026-07-09-chat-ui-port-map.md`. Patterns/state machines only; MIT/Apache with attribution; **never** commit competitor code.
 - Apple-native minimal UI: system `TabView` + `NavigationStack` + `List` / `TextField` / standard buttons. No custom DesignSystem, no Cursor token module, no glass chrome kits.
 - Security: fail-closed; no Face ID reintroduction; **no Siri Approve intent**; never log secrets.
@@ -152,7 +243,7 @@ Paste build result (success / first errors if fail).
 - 2026-07-10: Apple-native minimal look (A) for M1–M4.
 - 2026-07-10: Full Settings pairing + trusted machines (C) — plan **M2**.
 - 2026-07-10: Approach 2 — four verify-gated milestones; owner APPROVED.
-- 2026-07-10: Implement with GPT-5.6 Sol; one milestone per session.
+- 2026-07-10: GPT-5.6 Sol = advisor/delegator only (token-efficient); Claude Code CLI `--model sonnet` implements. CLI smoke-tested (`claude` 2.1.205).
 
 ## Related docs
 
