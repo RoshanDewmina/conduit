@@ -65,9 +65,23 @@ public final class RelayQuestionIngest {
 
     private func handle(_ notification: Notification) async {
         guard
-            let params = notification.userInfo?["questionParams"] as? QuestionPendingParams,
+            let wire = notification.userInfo?["questionData"] as? E2ERelayMessage.QuestionData,
             let machineID = notification.userInfo?["machineID"] as? RelayMachineID
         else { return }
+
+        // Relay wire shape → the SSH-path's QuestionPendingParams, same
+        // field-by-field conversion pattern RelayApprovalIngest.handle uses
+        // for E2ERelayMessage.ApprovalData → Approval (the relay's payload is
+        // keyed `questionID`, not `id`, and carries no toolUseID/timestamp).
+        let params = QuestionPendingParams(
+            id: wire.questionID,
+            agent: wire.agent,
+            runId: wire.runId,
+            cwd: wire.cwd,
+            questions: wire.questions,
+            allowFreeText: wire.allowFreeText,
+            confidence: wire.confidence
+        )
 
         guard let payloadData = try? JSONEncoder().encode(QuestionArtifactPayload(event: params)),
               let payloadJSON = String(data: payloadData, encoding: .utf8)

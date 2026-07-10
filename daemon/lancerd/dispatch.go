@@ -53,7 +53,26 @@ func normalizeClaudeModel(model string) string {
 func agentArgv(agent, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
-		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "-p", prompt}
+		// --permission-prompt-tool stdio is required for the AskUserQuestion
+		// tool to exist at all in one-shot -p dispatch — verified live
+		// 2026-07-10: without it, AskUserQuestion is absent from both the
+		// built-in and deferred/MCP tool registries (ToolSearch reports "no
+		// matching deferred tools" out of 175) and the model cannot call it
+		// under any --allowedTools/--tools combination. With the flag, the
+		// tool appears and the model calls it with its real structured input,
+		// streaming through the ordinary tool_use content_block_start/delta/
+		// stop sequence question.go's extractQuestionEvent already parses — no
+		// other dispatch.go change was needed. Caveat (see
+		// registerAndWaitForQuestion's doc comment): this flag does not open a
+		// live stdin channel back into the process, so the CLI's own
+		// permission-prompt-tool protocol auto-denies the call (no interactive
+		// responder is attached) and the run continues past it — the daemon's
+		// existing hold mechanism pauses this run's output until a human
+		// answers, but the answer content itself never reaches that same
+		// turn's reasoning. Turning an answer into real continuation is a
+		// follow-up send through the ordinary continue path, not a live
+		// tool-result injection.
+		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "-p", prompt}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -93,7 +112,9 @@ func agentArgv(agent, prompt, model string) ([]string, bool) {
 func continueArgv(agent, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
-		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--continue", "-p", prompt}
+		// --permission-prompt-tool stdio: see agentArgv's doc comment — same
+		// AskUserQuestion-unlock reasoning applies to a continued turn.
+		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue", "-p", prompt}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -148,7 +169,9 @@ func continueArgv(agent, prompt, model string) ([]string, bool) {
 func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
-		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--resume", sessionID, "-p", prompt}
+		// --permission-prompt-tool stdio: see agentArgv's doc comment — same
+		// AskUserQuestion-unlock reasoning applies to a resumed turn.
+		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", sessionID, "-p", prompt}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}

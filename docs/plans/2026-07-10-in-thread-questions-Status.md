@@ -1,6 +1,6 @@
 # In-thread agent Question cards — Status
 
-**Updated:** 2026-07-10 (M1 implemented + verified)
+**Updated:** 2026-07-10 (M2: AskUserQuestion unblocked, real live round trip proven)
 **Plan:** `docs/plans/2026-07-10-in-thread-questions-Plan.md`
 **Branch / worktree:** `feat/in-thread-questions` @ `77488c11` (cut from `master`) in
 `/Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe`
@@ -101,12 +101,77 @@
   fixable (e.g. a different `claude` CLI invocation flag) is worth a follow-up investigation, not
   assumed to be a real gap yet.
 
+## M2 — unblock AskUserQuestion + live dogfood round-trip (2026-07-10)
+
+**Owner ask:** unblock `AskUserQuestion` for headless `lancerd` dispatch, then dogfood the full M2
+round trip on Simulator + local `lancerd`/relay, no physical device.
+
+**Investigated first (no code):** live `claude` CLI probes in a scratch dir proved
+`AskUserQuestion` is completely absent from headless `-p` dispatch (any `--tools`/`--allowedTools`
+combination) — confirmed against `code.claude.com/docs/en/agent-sdk/user-input` that it's gated
+behind the Agent SDK's `canUseTool` callback, not a CLI flag. Found the actual unlock live:
+`--permission-prompt-tool stdio` (the same hidden flag the Agent SDK passes under the hood) makes
+the tool appear and callable, with the caveat that a one-shot `-p` process with no bidirectional
+stdio responder gets an instant auto-deny from the CLI's own protocol — which is fine, because
+`daemon/lancerd/question.go`'s `registerAndWaitForQuestion`/`waitForAnswer` hold mechanism was
+already built (pre-existing, unused until now) with exactly this constraint in mind.
+
+**Minimal fix implemented:** `daemon/lancerd/dispatch.go` — added `--permission-prompt-tool stdio`
+to `agentArgv`/`continueArgv`/`resumeArgv`'s `claudeCode` case only. Verified live that dispatch.go's
+existing stream-json parser needs zero changes (AskUserQuestion streams through the ordinary
+tool_use content_block sequence `question.go`'s `extractQuestionEvent` already recognizes). Added
+`TestAgentArgv` + updated `TestContinueArgv`/`TestResumeArgv`'s want= slices in `dispatch_test.go`.
+`go build && go vet && go test ./...` from `daemon/lancerd`: **PASS** (`ok lancer/lancerd 41.987s`,
+`ok lancer/lancerd/policy`). Installed the fixed binary (stop launchd service, `mv` not cp-in-place,
+restart — per established gotcha) and dogfooded.
+
+**Two more real, pre-existing bugs found by dogfooding (documented in full in
+`docs/test-runs/2026-07-10-in-thread-questions-dogfood/README.md`):**
+
+1. **Relay wire-type mismatch** (daemon `e2e_router.go`'s `sendQuestion` sends `"type":
+   "agentQuestion"` with a `questionID`-keyed payload; iOS's `E2ERelayBridge.swift` only matched
+   `"questionPending"` and expected `QuestionPendingParams`'s `id` key) — the message was silently
+   dropped end-to-end, undetected until today because nothing had ever exercised a real relay
+   question before. Fixed on the iOS side only: added `E2ERelayMessage.QuestionData` (a
+   relay-specific wire type mirroring `ApprovalData`'s established pattern), changed the switch case
+   to `"agentQuestion"`, and `RelayQuestionIngest.handle` now converts it to `QuestionPendingParams`
+   field-by-field (same discipline `RelayApprovalIngest.handle` already uses for `ApprovalData`).
+2. **This session's own DEBUG-seam bug** (caught before commit, not shipped): the
+   `LANCER_DEBUG_QUESTION_ANSWER` seam called `toggleOption` inside an ungated `onChange`, which
+   re-triggers itself and flip-flops the selection forever (`toggleOption` is a toggle, not a set) —
+   never reached `submit`. Fixed with a `hasAutoAnsweredQuestion` one-shot guard.
+
+**Live dogfood result — clean, unambiguous, single round trip (final attempt, after clearing
+accumulated debug backlog via a daemon restart):**
+- `audit.log`: `question-pending` (22:58:02) → `question-answered` (22:58:03), same approval ID, one
+  second apart.
+- Screenshot evidence: real question card renders live relay data (question text, header, both real
+  options with descriptions, free-text field, Submit) — `s1-question-card-real-data.jpg`. After the
+  answer resolves the daemon's hold, the underlying run's buffered output flushes through —
+  `s2-post-answer-resumed-output.jpg` — proving the "continue" mechanism works as designed.
+- **Honest continuation-semantics finding, not a defect:** the flushed output is the CLI's own
+  instant auto-deny message ("stream closed on the tool call... want me to retry?"), not text that
+  incorporates the real answer — there is no stdin/tool-result injection channel into an
+  already-launched one-shot CLI process (documented in `question.go`'s own pre-existing doc comment).
+  The human's answer is genuinely delivered and resolved (audited), but turning it into real
+  conversational continuation is a follow-up **send** through the existing composer mechanism (M3),
+  not a live tool-result injection. Flagged as an owner-level product/architecture decision, not
+  something this milestone's write-set should silently paper over.
+- A DEBUG-only `LANCER_DEBUG_REMOVE_ALL_MACHINES` seam was added to `TrustedMachinesView.swift`
+  (frees fleet-cap slots blocked by `.hostOffline` — not `.pairingInvalid` — stale pairings; needed
+  purely to unblock re-pairing given the established HID-tap-dead simulator limitation).
+
+**Final verification before commit:** `go test ./...` (daemon/lancerd) — PASS. `build_sim` (iOS) —
+SUCCEEDED, 0 errors, 0 new warnings. `git status --short` matched the intended 7-file write-set
+exactly.
+
 ## Remaining
 
-- M2+ (dogfood round-trip proof once `AskUserQuestion` availability is resolved on the daemon side;
-  polish) — **not started, needs owner OK** before starting (see Plan). Specifically worth raising to
-  the owner: is `AskUserQuestion` expected to work through `lancerd`'s current headless dispatch mode
-  at all, or does question-asking need a different CLI invocation shape?
+- **Owner decision needed:** invest in a real bidirectional `--permission-prompt-tool stdio`
+  responder in `lancerd` (genuine new protocol work, not a minimal fix) so an answer can inject its
+  content into the *same* live turn — versus keeping the current "hold resolves + a separate
+  follow-up send carries the answer forward" model. Not decided in this session.
+- Polish (multi-item layout, free-text keyboard-avoidance, etc.) — **not started, needs owner OK**.
 
 ## Commands run
 

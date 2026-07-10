@@ -119,6 +119,27 @@ public struct TrustedMachinesView: View {
                 try? await Task.sleep(nanoseconds: 300_000_000)
             }
         }
+        // Same rationale, for freeing fleet-cap slots blocked by stale
+        // "host offline" pairings (not `.pairingInvalid`, so "Clear all dead
+        // pairings" doesn't touch them) left over from a prior daemon
+        // session — drives the exact same `store.remove(id)` the per-row
+        // Remove button calls, for every currently listed machine. Bounded
+        // poll for the FULL window (never breaks early on an empty read)
+        // because this view's `.task` can start before `AppRoot`'s
+        // `RelayFleetHydration.hydrate` has populated `store.machines` —
+        // breaking out on an empty FIRST read raced ahead of hydration and
+        // was a silent no-op (found live 2026-07-10, same class of ordering
+        // bug ShellLiveBridge.waitForConnectedMachine already documents).
+        .task {
+            guard ProcessInfo.processInfo.environment["LANCER_DEBUG_REMOVE_ALL_MACHINES"] == "1" else { return }
+            let deadline = Date().addingTimeInterval(10)
+            while Date() < deadline {
+                for machine in store.machines {
+                    store.remove(machine.id)
+                }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
+        }
         #endif
     }
 

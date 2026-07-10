@@ -29,12 +29,26 @@ func TestDispatchStoresCWDAndModel(t *testing.T) {
 	}
 }
 
+func TestAgentArgv(t *testing.T) {
+	claude, ok := agentArgv("claudeCode", "start", "")
+	if !ok {
+		t.Fatal("claude should be supported")
+	}
+	want := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "-p", "start"}
+	if !reflect.DeepEqual(claude, want) {
+		t.Fatalf("claude argv mismatch:\n got %v\nwant %v", claude, want)
+	}
+	if _, ok := agentArgv("bogus", "x", ""); ok {
+		t.Fatal("unknown agent must be unsupported")
+	}
+}
+
 func TestContinueArgv(t *testing.T) {
 	claude, ok := continueArgv("claudeCode", "next step", "")
 	if !ok {
 		t.Fatal("claude continue should be supported")
 	}
-	want := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--continue", "-p", "next step"}
+	want := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue", "-p", "next step"}
 	if !reflect.DeepEqual(claude, want) {
 		t.Fatalf("claude argv mismatch:\n got %v\nwant %v", claude, want)
 	}
@@ -95,7 +109,7 @@ func TestContinueRunDeniedDoesNotLaunch(t *testing.T) {
 
 func TestResumeArgv(t *testing.T) {
 	claude, ok := resumeArgv("claudeCode", "sess-123", "next step", "")
-	want := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--resume", "sess-123", "-p", "next step"}
+	want := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", "sess-123", "-p", "next step"}
 	if !ok || !reflect.DeepEqual(claude, want) {
 		t.Fatalf("claude resume argv mismatch:\n got %v (ok=%v)\nwant %v", claude, ok, want)
 	}

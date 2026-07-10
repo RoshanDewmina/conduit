@@ -28,6 +28,9 @@ public struct LiveThreadView: View {
     @State private var hasSentInitialPrompt = false
     @State private var followUpText: String = ""
     @FocusState private var isFollowUpFocused: Bool
+    #if DEBUG
+    @State private var hasAutoAnsweredQuestion = false
+    #endif
 
     public init(prompt: String, cwd: String) {
         self.prompt = prompt
@@ -95,12 +98,20 @@ public struct LiveThreadView: View {
         // option text to answer with — applied to every item via the same
         // fuzzy-match-or-free-text rule `AnswerQuestionResolver` already uses),
         // drives the exact same `RelayQuestionIngest.submit` path the Submit
-        // button calls.
+        // button calls. `hasAutoAnsweredQuestion` gates this to fire exactly
+        // once: `toggleOption` mutating `latestPendingQuestion` re-triggers
+        // this same onChange (the value it observes changed), and toggling
+        // the SAME label a second time flips it back off (toggleOption is a
+        // toggle, not a set) — an ungated version live-locked into flipping
+        // the selection on/off forever and never reached `submit` (found live
+        // 2026-07-10).
         .onChange(of: pendingQuestion) { _, newValue in
-            guard let question = newValue,
+            guard !hasAutoAnsweredQuestion,
+                  let question = newValue,
                   let machineID = bridge.activeMachineID,
                   let answerText = ProcessInfo.processInfo.environment["LANCER_DEBUG_QUESTION_ANSWER"]
             else { return }
+            hasAutoAnsweredQuestion = true
             for idx in question.items.indices {
                 if let matched = QuestionCardModel.fuzzyMatchOption(answerText, in: question.items[idx]) {
                     questionIngest.toggleOption(machineID: machineID, itemIndex: idx, label: matched)
