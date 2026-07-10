@@ -1,8 +1,8 @@
 # Frontend rebuild — Status
 
-**Updated:** 2026-07-10T16:47:49Z  
+**Updated:** 2026-07-10T17:20:00Z  
 **Plan:** `docs/plans/2026-07-10-frontend-rebuild-Plan.md`  
-**Branch / worktree:** `feat/frontend-rebuild-m1` @ `2c44728d` in `/Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe`
+**Branch / worktree:** `feat/frontend-rebuild-m1` @ `97071246` in `/Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe`
 
 ## Done
 
@@ -30,6 +30,18 @@
 - **Add Repo screenshot** captured directly (single-level DEBUG seam, same reliable pattern as Section 2/3) and confirmed to closely match `IMG_2414`.
 - **Repo picker screenshot:** the natural production trigger is 3 sheet-levels deep (Workspaces → composer → repo picker). Chaining that via the DEBUG launch seam proved unreliable — SwiftUI coalesced/dropped the third-level `.sheet` presentation across three separate build+screenshot verification rounds (confirmed not a build-caching issue by inspecting the compiled binary's symbol table). This is a DEBUG-seam limitation, not a production bug — real usage taps the repo chevron seconds after the composer has already settled, not in the same launch transaction. Added an independent single-level `repoPickerDirect` capture path (same reliable pattern as `profile`/`addRepo`) purely for verification; the real production tap path (`repoSelector` button inside the already-open composer) is unchanged and untested by automation on this simulator (known iOS 27 HID/accessibility limitation, same caveat as Section 2's avatar-tap). Screenshot via the direct path confirmed close match to `IMG_2416`.
 - Final rebuild after the seam fixes: build succeeded in 85.3s, 0 errors, 0 new warnings.
+
+## M2 — Settings pairing + trusted machines (2026-07-10, Claude Code Opus plan/dispatch/verify, Sonnet 5 implement)
+
+- **Owner approved starting M2** in the same session as the visual-rebuild closeout.
+- **Explored first (Opus, read-only):** confirmed `RelayFleetStore`, `E2ERelayClient`, `E2ERelayBridge`, `ConnectionStateStore`, `RelayMachineMigration`, `RelaySettings`, `PairingCrypto` all survived the scorched wipe untouched (they're engine/business-logic, not SwiftUI) but were **not wired into the app at all** — `AppRoot` never constructed a `RelayFleetStore`. Found the real (non-mocked) pre-wipe pairing implementation via `git show 3789aa5f:…/CursorRelayPairingSheet.swift` and `…/AppRoot.swift` (`hydrateRelayFleetStore`/`addRelayMachine`, ~line 2234) — confirmed this was the actual battle-tested protocol (manual 6-digit code → `E2ERelayClient.connect()` → `pairingState == .paired` → build `RelayMachineRecord` → add to store), not the earlier fake-demo `CursorRelayPairingSheet` from commit `a34edad3` which only simulated fake log lines and never called the relay. Wrote a precise, API-verified implementation brief citing exact signatures so the dispatched agent didn't have to rediscover or guess at the protocol.
+- **Implemented by Claude Code Sonnet** (dispatched via `Agent` tool, `model: sonnet`, per this repo's execution model): new `AppFeature/Settings/` directory — `RelayFleetHydration` (launch hydration: migrate legacy pairing, restore each persisted machine, reconnect if restore succeeded; shared `addMachine` used by both hydration and live pairing), `RelayPairingSheet` (real pairing sheet — plain `Form`/`NavigationStack`, 6-digit code entry, `E2ERelayClient.connect()`, humanized failure reasons, at-cap messaging), `TrustedMachinesView` (paired/dead-pairing lists with live connection status, remove-with-confirmation, "Pair a machine" entry point). `AppRoot` now owns a `RelayFleetStore`, hydrates it in `.task`, injects via `.environment(_:)` through Workspaces → Profile → Trusted Machines (explicit re-injection at each `.sheet` boundary, since SwiftUI environment doesn't reliably auto-propagate across sheet presentations). `ProfileView` gets a new "Connections" section routing to Trusted Machines.
+- **Independently re-verified (Opus — did not trust the subagent's self-report):** reviewed every file's diff by hand against the verified API surface, then ran a fresh `clean` → `build_run_sim` myself (not reused from the subagent's run): **SUCCEEDED**, 0 errors, 0 new warnings (same 25 pre-existing `SiriRelevanceCoordinator.swift` warnings). Added one small DEBUG capture seam (`LANCER_DESTINATION=trustedMachines`, matching the established `repoPickerDirect`/`prDetail` pattern) to get a direct screenshot rather than relying on code review alone.
+- **Screenshot evidence exceeded expectations:** the Trusted Machines screen rendered **two real machines restored from this simulator's actual persisted Keychain pairing state** (`0842B353`, `A39449CE` — leftover from earlier live-relay-loop testing sessions on this same simulator, see `[[project_live_loop_c2_passed]]`/`[[project_relay_decision_return_path_fixed]]` history), each correctly showing "host offline" (no daemon currently running) — proof the hydration path exercises the real Keychain/UserDefaults persistence and `ConnectionStateStore`, not sample data.
+- Attempted an HID tap on "Remove" to check the confirmation-alert flow interactively — no visible change, consistent with this project's long-documented simulator limitation ("idb/ios-simulator-mcp HID taps land but DON'T fire SwiftUI Button actions on this headless sim" — same caveat hit in Sections 2, 4, and 7). Not a regression; verified the removal/confirmation code path by direct code review instead, same standard applied throughout this rebuild.
+- **Scope held to the Plan:** manual code entry only (no QR/camera scan), plain confirmation alert on remove (no pending-approval-count fail-closed warning — that reference behavior depended on `ApprovalRepository` queries out of scope for this milestone), no daemon changes, no chat/dispatch/approval wiring (M3/M4).
+- Committed as `97071246` on `feat/frontend-rebuild-m1`. 6 files, 359 insertions. Not pushed, not merged to master.
+- **M2 acceptance status:** pairing UI is real and build-verified; hydration against real persisted state is confirmed; the interactive pair→list→remove tap sequence could not be exercised end-to-end by automation on this simulator (same documented HID limitation as every prior section) — a manual on-device or Xcode-attached-debugger check is the one remaining gap, consistent with the open manual-check items already carried from Sections 2/4/7 below.
 
 ## Closeout (2026-07-10, Claude Code Opus — advisor/delegator, plan/dispatch/verify)
 
@@ -138,6 +150,41 @@ git add Lancer/LancerApp.swift LancerLiveActivityWidget LancerWidget \
   Packages/LancerKit/Sources/SessionFeature/Chat project.yml
 git commit -m "feat(ios): Cursor-style visual shell (Workspaces root + sheets) after scorched wipe"
 # → [feat/frontend-rebuild-m1 2c44728d] 21 files changed, 2835 insertions(+), 2332 deletions(-)
+
+# M2: dispatched Claude Code Sonnet (Agent tool, model: sonnet) to implement
+# Settings pairing + trusted machines per an API-verified brief. Subagent's own
+# build_sim/build_run_sim reported green — independently re-verified below.
+
+# Opus independent re-verification (fresh clean build, not reused from subagent):
+git status --short   # confirmed exact file set matched the subagent's report
+git diff --stat       # 3 modified + 3 new files, matched report
+# XcodeBuildMCP: clean → build_sim → SUCCEEDED, 4620ms (incremental, first pass)
+# XcodeBuildMCP: clean → build_run_sim → SUCCEEDED, 62705ms, 0 errors, 25 pre-existing
+#   SiriRelevanceCoordinator.swift warnings, 0 new
+# stop_app_sim → launch_app_sim with LANCER_DESTINATION=profile → Profile sheet
+#   captured; renders cleanly (an unsatisfied @Environment(RelayFleetStore.self)
+#   would fatal-error — it did not, confirming environment propagation works)
+# ui_swipe attempted to scroll to the new "Connections" section → no effect
+#   (known simulator HID-scroll limitation, same as Sections 2/7)
+
+# Added DEBUG capture seam (LANCER_DESTINATION=trustedMachines) for direct
+# verification, matching the repoPickerDirect/prDetail precedent:
+# clean → build_run_sim → SUCCEEDED, 16533ms, 0 errors, 0 new warnings
+# stop_app_sim → launch_app_sim with LANCER_DESTINATION=trustedMachines →
+#   Trusted Machines screen captured — showed TWO real machines restored from
+#   this simulator's actual persisted Keychain pairing state (0842B353,
+#   A39449CE, leftover from earlier live-relay-loop sessions), both correctly
+#   "host offline" (no daemon running) — proof of real hydration, not sample data
+# ui_tap on "Remove" (x:312,y:242) → no visible change (known HID-tap-doesn't-
+#   fire-SwiftUI-actions limitation, same as Sections 2/4/7) — removal/confirm
+#   flow verified by code review instead
+
+git add Packages/LancerKit/Sources/AppFeature/AppRoot.swift \
+  Packages/LancerKit/Sources/AppFeature/Profile/ProfileView.swift \
+  Packages/LancerKit/Sources/AppFeature/Workspaces/WorkspacesView.swift \
+  Packages/LancerKit/Sources/AppFeature/Settings
+git commit -m "feat(ios): M2 — Settings pairing + trusted machines on real relay state"
+# → [feat/frontend-rebuild-m1 97071246] 6 files changed, 359 insertions(+)
 ```
 
 ## Blockers
@@ -149,11 +196,14 @@ git commit -m "feat(ios): Cursor-style visual shell (Workspaces root + sheets) a
 
 ## Next agent instruction
 
-**Closeout complete.** Signed `build_sim` is green (widget-target fix), the visual Cursor-shell rebuild (Sections 1-7) is committed as `2c44728d` on `feat/frontend-rebuild-m1`, and Status is up to date. This session stops here per owner instruction — **do not start Plan M2/M3/M4 live wiring**.
+**M2 complete, build-verified.** Signed `build_sim` is green through both the visual-rebuild closeout (`2c44728d`) and M2 (`97071246`) on `feat/frontend-rebuild-m1`. Status is up to date. This session stops here — **do not start M3 without explicit owner OK**, and do not attempt M4 at all yet.
 
-**M2 brief for the next session** (pairing + trusted machines + live bridge — scope only, no code):
-- Goal: Settings pairing flow + list/remove trusted machines wired to real relay state (Plan owner lock C), replacing the current static Settings.
-- Reuse pre-wipe `CursorRelayPairingSheet` / `CursorTrustedMachinesView` as **behavior reference only** — rewrite the SwiftUI, don't restore it verbatim.
-- Wire existing pairing/host/relay stores (do not reinvent transport/state — `E2ERelayBridge` and friends already exist in `SessionFeature`).
-- Acceptance: pair from Settings → machine appears in trusted list; remove → machine disappears, no ghost "Connect"; `build_sim` stays green.
-- Same orchestration as Sections 1-7: Opus plans/dispatches/verifies, Sonnet 5 subagents implement via the `Agent` tool, one milestone → verify → stop for owner review before M3.
+**Open manual-check item (carry forward):** the interactive pair → trusted-list → remove tap sequence has not been exercised end-to-end by automation — HID taps land but don't reliably fire SwiftUI Button actions on this simulator (same limitation noted for Sections 2/4/7). Worth a real-device or Xcode-attached-debugger pass before M2 is considered fully proven, though the code path, real hydration, and build are all independently verified.
+
+**M3 brief for the next session** (work thread + composer + stream — scope only, no code):
+- Goal: open/create a thread, send a prompt, stream the assistant's reply via a **new** `ShellLiveBridge` onto the now-wired `E2ERelayBridge` (from M2) / `RunDispatchService` / `ConversationSyncCoordinator`.
+- Restore transcript **contracts** (data types) from `80407933^` if needed for compile — **not** SwiftUI; rewrite the chat views fresh against the existing `ThreadDetailView`/`NewChatComposerView` static shells from Sections 3/7.
+- Files: `AppFeature/Chat/*`, `AppFeature/Bridge/ShellLiveBridge.swift`; wire Workspaces → thread navigation to a live (not static-sample) thread.
+- Acceptance: send a prompt on a paired host (M2's Trusted Machines now provides real paired machines) → streamed or completed reply visible; working indicator mutually exclusive with visible streamed text (Orca rule, per Plan's competitor notes); `build_sim` green; unit tests for transcript mapping if new pure types warrant them.
+- Stop: no in-thread approval card yet (that's M4).
+- Same cadence: Opus plans/dispatches/verifies, Sonnet 5 subagents implement via `Agent` tool with `model: sonnet`, one milestone → verify → stop for owner review before M4.
