@@ -11,6 +11,7 @@ import PersistenceKit
 public struct WorkspacesView: View {
     @Environment(RelayFleetStore.self) private var relayFleetStore
     @Environment(ShellLiveBridge.self) private var shellLiveBridge
+    @Environment(RelayApprovalIngest.self) private var relayApprovalIngest
     @State private var isProfilePresented = false
     @State private var isComposerPresented = false
     @State private var isAddRepoPresented = false
@@ -106,6 +107,7 @@ public struct WorkspacesView: View {
         .sheet(item: $activeLiveThread) { thread in
             LiveThreadView(prompt: thread.prompt, cwd: thread.cwd)
                 .environment(shellLiveBridge)
+                .environment(relayApprovalIngest)
         }
         #if DEBUG
         .sheet(isPresented: $isRepoPickerDirectPresented) {
@@ -324,10 +326,12 @@ private struct WorkspaceRowView: View {
         conversationSyncCoordinator: coordinator,
         chatRepo: chatRepo
     )
+    let approvalIngest = RelayApprovalIngest(database: db)
     return NavigationStack {
         WorkspacesView()
     }
     .environment(relayFleetStore)
     .environment(bridge)
+    .environment(approvalIngest)
 }
 #endif

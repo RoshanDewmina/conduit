@@ -42,6 +42,12 @@ public final class ShellLiveBridge {
 
     public private(set) var sendState: SendState = .idle
     public private(set) var activeConversationID: String?
+    /// M4: the machine the most recent send/follow-up resolved via
+    /// `RelayFleetStore.firstConnectedMachine`. `LiveThreadView` reads this to
+    /// look up `RelayApprovalIngest.latestPendingApproval[activeMachineID]` —
+    /// see that type's doc comment for why this is machine-scoped, not
+    /// run-scoped.
+    public private(set) var activeMachineID: RelayMachineID?
 
     private let relayFleetStore: RelayFleetStore
     private let conversationSyncCoordinator: ConversationSyncCoordinator
@@ -70,6 +76,7 @@ public final class ShellLiveBridge {
             sendState = .failed("No connected machine. Pair one in Settings → Trusted Machines.")
             return
         }
+        activeMachineID = machine.id
 
         sendState = .working
         activeConversationID = nil
@@ -90,7 +97,7 @@ public final class ShellLiveBridge {
         switch outcome {
         case .started(let started):
             activeConversationID = started.conversationID
-            await pollUntilTerminal(runID: started.runID)
+            await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
         case .blocked(let message):
             sendState = .failed(message)
         }
@@ -105,6 +112,7 @@ public final class ShellLiveBridge {
             sendState = .failed("No connected machine. Pair one in Settings → Trusted Machines.")
             return
         }
+        activeMachineID = machine.id
 
         let baseSeq = (try? await chatRepo.conversation(id: conversationID))?.lastHostSeq ?? 0
 
@@ -124,15 +132,32 @@ public final class ShellLiveBridge {
         switch outcome {
         case .started(let started):
             activeConversationID = started.conversationID
-            await pollUntilTerminal(runID: started.runID)
+            await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
         case .blocked(let message):
             sendState = .failed(message)
         }
     }
 
-    private func pollUntilTerminal(runID: String) async {
+    /// Polls the local GRDB mirror until the turn leaves `.running`, up to
+    /// `pollTimeout`. A plain local re-read alone is NOT enough: nothing
+    /// updates the mirror's turn status after the initial append
+    /// (`persistStartedTurn` in `ConversationSyncCoordinator` writes it once,
+    /// at append time) until a host fetch happens
+    /// (`refreshConversation`/`mergeFetchResponse`). Without periodically
+    /// re-fetching from the host here, this loop would silently time out
+    /// after `pollTimeout` on every real host, always — the local row simply
+    /// never changes on its own. Fetches every 2nd tick (~3s) rather than
+    /// every tick (1.5s) to avoid excessive network chatter.
+    private func pollUntilTerminal(runID: String, conversationID: String, transport: ConversationTransport) async {
         let deadline = Date().addingTimeInterval(Self.pollTimeout)
+        var tick = 0
         while Date() < deadline {
+            tick += 1
+            if tick % 2 == 0 {
+                _ = try? await conversationSyncCoordinator.refreshConversation(
+                    conversationID: conversationID, transport: transport
+                )
+            }
             if let turn = try? await chatRepo.turnByRunID(runID), turn.status != .running {
                 switch turn.status {
                 case .completed:

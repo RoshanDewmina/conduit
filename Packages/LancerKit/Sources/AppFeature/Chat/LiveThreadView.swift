@@ -8,9 +8,15 @@ import LancerCore
 /// owner-approved PR-review-style mockup for browsing sample thread rows) —
 /// see the M3 brief's scope boundary. Apple-native `NavigationStack` /
 /// `ScrollView` / `TextField` only, no DesignSystem module.
+///
+/// M4: also renders a pending-approval card (see `approvalCard`) — a fully
+/// separate, orthogonal piece of UI state from `SendState` below. A pending
+/// approval can appear at any point regardless of whether the current turn
+/// is still working or already completed.
 public struct LiveThreadView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ShellLiveBridge.self) private var bridge
+    @Environment(RelayApprovalIngest.self) private var approvalIngest
 
     let prompt: String
     let cwd: String
@@ -35,6 +41,12 @@ public struct LiveThreadView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
+                }
+
+                if let machineID = bridge.activeMachineID, let pendingApproval {
+                    approvalCard(pendingApproval, machineID: machineID)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
                 }
 
                 Divider()
@@ -103,6 +115,66 @@ public struct LiveThreadView: View {
             }
             .font(.system(size: 14, weight: .medium))
         }
+    }
+
+    // MARK: - Pending approval card (M4)
+
+    /// The most recent pending approval that arrived from the same paired
+    /// machine this thread is talking to — see `RelayApprovalIngest`'s doc
+    /// comment for why this is machine-scoped, not strictly run-scoped.
+    private var pendingApproval: Approval? {
+        guard let machineID = bridge.activeMachineID,
+              let approval = approvalIngest.latestPendingApproval[machineID],
+              approval.isPending
+        else { return nil }
+        return approval
+    }
+
+    private func approvalCard(_ approval: Approval, machineID: RelayMachineID) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.shield")
+                    .foregroundStyle(.blue)
+                Text(approval.kind.rawValue.capitalized)
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+                riskLabel(approval.risk)
+            }
+            Text(approval.command ?? approval.patch ?? "(no detail)")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(6)
+            HStack(spacing: 12) {
+                Button("Deny", role: .destructive) {
+                    Task { await approvalIngest.decide(approval, decision: .rejected, machineID: machineID) }
+                }
+                .buttonStyle(.bordered)
+
+                Button("Approve") {
+                    Task { await approvalIngest.decide(approval, decision: .approved, machineID: machineID) }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    private func riskLabel(_ risk: Approval.Risk) -> some View {
+        let (text, color): (String, Color) = {
+            switch risk {
+            case .low: return ("Low", .secondary)
+            case .medium: return ("Medium", .secondary)
+            case .high: return ("High", .orange)
+            case .critical: return ("Critical", .red)
+            }
+        }()
+        return Text(text)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(color)
     }
 
     private func userBubble(_ text: String) -> some View {

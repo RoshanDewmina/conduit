@@ -143,6 +143,11 @@ public struct AppRoot: View {
     /// is `.ready`) and injected via `.environment(_:)` alongside
     /// `relayFleetStore`, same pattern.
     @State private var shellLiveBridge: ShellLiveBridge?
+    /// M4: listens for relay-delivered pending approvals and publishes them
+    /// for `LiveThreadView`'s approval card. Same construction constraint as
+    /// `shellLiveBridge` — needs `env.database`, so only non-nil once
+    /// `AppEnvironment` construction has succeeded.
+    @State private var relayApprovalIngest: RelayApprovalIngest?
 
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
@@ -164,9 +169,11 @@ public struct AppRoot: View {
                 conversationSyncCoordinator: env.conversationSyncCoordinator,
                 chatRepo: env.chatRepo
             ))
+            _relayApprovalIngest = State(initialValue: RelayApprovalIngest(database: env.database))
         } catch {
             _environment = State(initialValue: .failure(error.localizedDescription))
             _shellLiveBridge = State(initialValue: nil)
+            _relayApprovalIngest = State(initialValue: nil)
         }
     }
 
@@ -179,13 +186,15 @@ public struct AppRoot: View {
                 description: Text(message)
             )
         case .ready:
-            if let shellLiveBridge {
+            if let shellLiveBridge, let relayApprovalIngest {
                 NavigationStack {
                     WorkspacesView()
                 }
                 .environment(relayFleetStore)
                 .environment(shellLiveBridge)
+                .environment(relayApprovalIngest)
                 .task {
+                    relayApprovalIngest.start()
                     await RelayFleetHydration.hydrate(into: relayFleetStore)
                 }
             }
