@@ -18,6 +18,22 @@ as superseded. Re-queue lanes against the restored shell:
   the docs were wrong about which shell the owner meant. When a directive names a branch,
   attach a screenshot of what it looks like before acting on delete/keep decisions.
 
+## Dogfood round 1 (owner, 2026-07-11 evening) — pairing WORKED; 3 findings → lanes
+
+1. **P0 composer bug** (root-caused by Fable): `NewChatComposerView.send()` = `onSend?();dismiss()`;
+   ThreadListView:86 + ThreadDetailView:83 pass NO onSend → silent dismiss. Lane F
+   (`fix/p1-composer-onsend`, Grok) makes onSend required + repo-scoped cwd.
+2. **Chat UI "looks horrible"** → Lane H (`feat/p1-chat-polish`, Grok): LiveThreadView/
+   ThreadDetail/PRDetail to cursor-reference quality, native AttributedString markdown.
+3. **Mock data everywhere** → Lane G spec ready (scratchpad/laneG-SPEC.md): real repos from
+   chatRepo + AddRepo persistence, real threads, honest empty states, kill placeholderCwd.
+   Dispatch AFTER F merges (shared files: WorkspacesView, ThreadList, Composer).
+
+**Cursor CLI MCP-limit gotcha (recurring):** headless `agent -p` dies with "Too many MCP tools"
+since ~/.cursor/mcp.json grew. Project-level empty .cursor/mcp.json does NOT override. Current
+workaround: `mv ~/.cursor/mcp.json ~/.cursor/mcp.json.headless-hold` during dispatches —
+**RESTORE IT after lanes finish** (owner's IDE loses MCP servers while held).
+
 ## Phase 1 lanes (dispatched 2026-07-11, Grok 4.5 xhigh via cursor-agent)
 
 | Lane | Branch / worktree | Scope | Write-set | Status |
