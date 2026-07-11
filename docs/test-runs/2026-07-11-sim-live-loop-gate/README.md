@@ -33,3 +33,10 @@ Code 031817 (temp slot, owner pairing restored after). Evidence:
 | Streaming reveal | PASS — Working… → progressive text (haiku-markdown-stream-complete.jpg = completed transcript) |
 | Markdown block spacing | PASS in visible region; details/summary conversion locked by preprocessor fixtures (owner screenshot text) |
 | #83 wedge guards | Deployed; gate dispatch processed normally after redeploy |
+
+## Addendum 3 — Agents section (running/observed sessions)
+
+Code 313499 (temp slot, owner pairing restored). agents-section-live-sessions.jpg: Workspaces
+root lists three REAL observed Claude Code sessions (the orchestrator session itself,
+lancer-orchestration, and a live test run) with vendor + cwd + recency via
+agent.sessions.list. Transcript/continue paths unit-tested (HID dead on sim).
