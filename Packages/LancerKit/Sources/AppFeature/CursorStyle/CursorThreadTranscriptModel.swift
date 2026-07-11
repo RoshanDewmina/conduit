@@ -87,10 +87,16 @@ final class CursorThreadTranscriptModel {
         isActiveThread: Bool
     ) -> CursorTranscriptMapper.LiveOverlayInput? {
         guard let bridge, isActiveThread else { return nil }
+        // When working, pass "" (not nil) so the indicator can distinguish
+        // "stream connected, awaiting first token" (streaming) from thinking.
+        let response: String? = {
+            if bridge.activeThreadIsWorking { return bridge.activeThreadResponse }
+            return bridge.activeThreadResponse.isEmpty ? nil : bridge.activeThreadResponse
+        }()
         return CursorTranscriptMapper.liveOverlayInput(
             isRoutedThreadActive: true,
             prompt: bridge.activeThreadPrompt,
-            response: bridge.activeThreadResponse.isEmpty ? nil : bridge.activeThreadResponse,
+            response: response,
             isWorking: bridge.activeThreadIsWorking
         )
     }
@@ -100,10 +106,14 @@ final class CursorThreadTranscriptModel {
         bridgeError: String? = nil
     ) -> [CursorTranscriptRow] {
         guard let bridge else { return [] }
+        let response: String? = {
+            if bridge.activeThreadIsWorking { return bridge.activeThreadResponse }
+            return bridge.activeThreadResponse.isEmpty ? nil : bridge.activeThreadResponse
+        }()
         let overlay = CursorTranscriptMapper.liveOverlayInput(
             isRoutedThreadActive: true,
             prompt: bridge.activeThreadPrompt,
-            response: bridge.activeThreadResponse.isEmpty ? nil : bridge.activeThreadResponse,
+            response: response,
             isWorking: bridge.activeThreadIsWorking
         )
         return CursorTranscriptMapper.makeRows(

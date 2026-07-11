@@ -254,5 +254,110 @@ struct CursorTranscriptMapperTests {
         }
         #expect(section.liveOverlay?.isWorking == false)
         #expect(section.liveOverlay?.response == "Done.")
+        #expect(section.liveOverlay?.workingIndicator == nil)
+    }
+
+    @Test("tool artifacts fold into toolCallGroup and leave other artifacts alone")
+    func toolArtifactsBecomeGroup() {
+        let turns = [turn(id: "t1", ordinal: 0, prompt: "Run", assistantText: "ok", runID: "r1")]
+        let tools = [
+            ChatArtifact(
+                id: "tool-a",
+                conversationID: conversationID,
+                turnID: "t1",
+                runID: "r1",
+                kind: .tool,
+                title: "Bash",
+                payloadJSON: #"{"command":"ls"}"#,
+                status: .done
+            ),
+            ChatArtifact(
+                id: "tool-b",
+                conversationID: conversationID,
+                turnID: "t1",
+                runID: "r1",
+                kind: .tool,
+                title: "Read",
+                payloadJSON: #"{"path":"a.swift"}"#,
+                status: .running
+            ),
+            ChatArtifact(
+                id: "q1",
+                conversationID: conversationID,
+                turnID: "t1",
+                runID: "r1",
+                kind: .question,
+                title: "Question",
+                payloadJSON: "{}"
+            ),
+        ]
+        let rows = CursorTranscriptMapper.makeRows(
+            turns: turns,
+            artifacts: tools,
+            liveOverlay: nil,
+            bridgeError: nil
+        )
+        guard case .turnSection(let section) = rows[0] else {
+            Issue.record("Expected turn section")
+            return
+        }
+        #expect(section.toolCallGroup?.cards.count == 2)
+        #expect(section.artifacts.count == 1)
+        #expect(section.artifacts[0].kind == .question)
+        #expect(section.toolCallGroup?.cards.contains(where: { $0.state == .running }) == true)
+    }
+
+    @Test("live overlay resolves toolRunning indicator when a tool is in flight")
+    func liveOverlayToolRunningIndicator() {
+        let turns = [turn(id: "t1", ordinal: 0, prompt: "Run", assistantText: "", runID: "r1")]
+        let tool = ChatArtifact(
+            id: "tool-1",
+            conversationID: conversationID,
+            turnID: "t1",
+            runID: "r1",
+            kind: .tool,
+            title: "Bash",
+            payloadJSON: #"{"command":"ls"}"#,
+            status: .running
+        )
+        let overlay = CursorTranscriptMapper.LiveOverlayInput(
+            isActive: true,
+            prompt: "Run",
+            response: "",
+            isWorking: true
+        )
+        let rows = CursorTranscriptMapper.makeRows(
+            turns: turns,
+            artifacts: [tool],
+            liveOverlay: overlay,
+            bridgeError: nil
+        )
+        guard case .turnSection(let section) = rows[0] else {
+            Issue.record("Expected turn section")
+            return
+        }
+        #expect(section.liveOverlay?.workingIndicator == .toolRunning(name: "Bash"))
+    }
+
+    @Test("visible streamed text suppresses working indicator")
+    func visibleTextSuppressesIndicator() {
+        let turns = [turn(id: "t1", ordinal: 0, prompt: "Hi", assistantText: "")]
+        let overlay = CursorTranscriptMapper.LiveOverlayInput(
+            isActive: true,
+            prompt: "Hi",
+            response: "Hello there",
+            isWorking: true
+        )
+        let rows = CursorTranscriptMapper.makeRows(
+            turns: turns,
+            artifacts: [],
+            liveOverlay: overlay,
+            bridgeError: nil
+        )
+        guard case .turnSection(let section) = rows[0] else {
+            Issue.record("Expected turn section")
+            return
+        }
+        #expect(section.liveOverlay?.workingIndicator == nil)
     }
 }

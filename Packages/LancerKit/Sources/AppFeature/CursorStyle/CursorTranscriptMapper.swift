@@ -11,14 +11,44 @@ public enum CursorTranscriptRow: Identifiable, Sendable {
         public let assistantText: String
         public let turnError: String?
         public let artifacts: [ChatArtifact]
+        public let toolCallGroup: CursorToolCallGroup?
         public let liveOverlay: LiveOverlay?
 
         public struct LiveOverlay: Sendable {
             public let response: String?
             public let isWorking: Bool
+            public let workingIndicator: CursorWorkingIndicator?
+
+            public init(
+                response: String?,
+                isWorking: Bool,
+                workingIndicator: CursorWorkingIndicator? = nil
+            ) {
+                self.response = response
+                self.isWorking = isWorking
+                self.workingIndicator = workingIndicator
+            }
         }
 
         public var id: String { turnID }
+
+        public init(
+            turnID: String,
+            prompt: String,
+            assistantText: String,
+            turnError: String?,
+            artifacts: [ChatArtifact],
+            toolCallGroup: CursorToolCallGroup? = nil,
+            liveOverlay: LiveOverlay?
+        ) {
+            self.turnID = turnID
+            self.prompt = prompt
+            self.assistantText = assistantText
+            self.turnError = turnError
+            self.artifacts = artifacts
+            self.toolCallGroup = toolCallGroup
+            self.liveOverlay = liveOverlay
+        }
     }
 
     public var id: String {
@@ -78,54 +108,64 @@ public enum CursorTranscriptMapper {
 
         if sortedTurns.isEmpty {
             if let overlay = liveOverlay, overlay.isActive {
-                rows.append(.turnSection(.init(
+                rows.append(.turnSection(makeSection(
                     turnID: "live-pending",
                     prompt: overlay.prompt,
                     assistantText: "",
                     turnError: nil,
                     artifacts: [],
-                    liveOverlay: .init(response: overlay.response, isWorking: overlay.isWorking)
+                    liveOverlayInput: overlay
                 )))
             }
         } else {
             for (index, turn) in sortedTurns.enumerated() {
                 let isLast = index == sortedTurns.count - 1
-                let overlay: CursorTranscriptRow.TurnSection.LiveOverlay?
+                let overlayInput: LiveOverlayInput?
                 if isLast, !overlayIsNewPendingTurn, let live = liveOverlay, live.isActive {
-                    overlay = .init(response: live.response, isWorking: live.isWorking)
+                    overlayInput = live
                 } else {
-                    overlay = nil
+                    overlayInput = nil
                 }
-                rows.append(.turnSection(.init(
+                let turnArtifacts = artifactsForTurn(turn, in: artifacts)
+                rows.append(.turnSection(makeSection(
                     turnID: turn.id,
                     prompt: turn.prompt,
                     assistantText: turn.assistantText,
                     turnError: turn.status == .failed ? turn.errorMessage : nil,
-                    artifacts: artifactsForTurn(turn, in: artifacts),
-                    liveOverlay: overlay
+                    artifacts: turnArtifacts,
+                    liveOverlayInput: overlayInput
                 )))
             }
 
             if overlayIsNewPendingTurn, let live = liveOverlay {
-                rows.append(.turnSection(.init(
+                rows.append(.turnSection(makeSection(
                     turnID: "live-pending",
                     prompt: live.prompt,
                     assistantText: "",
                     turnError: nil,
                     artifacts: [],
-                    liveOverlay: .init(response: live.response, isWorking: live.isWorking)
+                    liveOverlayInput: live
                 )))
             }
         }
 
         if !unmatchedArtifacts.isEmpty, let lastTurn = sortedTurns.last {
             if case .turnSection(let section) = rows.last, section.turnID == lastTurn.id {
+                let extraNonTool = unmatchedArtifacts.filter { $0.kind != .tool }
+                let extraTools = unmatchedArtifacts.filter { $0.kind == .tool }
+                let existingToolCards = section.toolCallGroup?.cards ?? []
+                let mergedToolCards = existingToolCards
+                    + CursorToolCallPresentation.cardsFromArtifacts(extraTools)
+                let mergedGroup: CursorToolCallGroup? = mergedToolCards.isEmpty
+                    ? nil
+                    : CursorToolCallPresentation.makeGroup(cards: mergedToolCards)
                 let updated = CursorTranscriptRow.TurnSection(
                     turnID: section.turnID,
                     prompt: section.prompt,
                     assistantText: section.assistantText,
                     turnError: section.turnError,
-                    artifacts: section.artifacts + unmatchedArtifacts,
+                    artifacts: section.artifacts + extraNonTool,
+                    toolCallGroup: mergedGroup,
                     liveOverlay: section.liveOverlay
                 )
                 rows[rows.count - 1] = .turnSection(updated)
@@ -151,6 +191,69 @@ public enum CursorTranscriptMapper {
             prompt: prompt,
             response: response,
             isWorking: isWorking
+        )
+    }
+
+    // MARK: - Section assembly
+
+    private static func makeSection(
+        turnID: String,
+        prompt: String,
+        assistantText: String,
+        turnError: String?,
+        artifacts: [ChatArtifact],
+        liveOverlayInput: LiveOverlayInput?
+    ) -> CursorTranscriptRow.TurnSection {
+        let toolArtifacts = artifacts.filter { $0.kind == .tool }
+        let otherArtifacts = artifacts.filter { $0.kind != .tool }
+        let group = toolGroup(from: toolArtifacts)
+        let overlay = liveOverlayInput.map { live in
+            resolveLiveOverlay(
+                live: live,
+                assistantText: assistantText,
+                toolGroup: group
+            )
+        }
+        return .init(
+            turnID: turnID,
+            prompt: prompt,
+            assistantText: assistantText,
+            turnError: turnError,
+            artifacts: otherArtifacts,
+            toolCallGroup: group,
+            liveOverlay: overlay
+        )
+    }
+
+    private static func toolGroup(from artifacts: [ChatArtifact]) -> CursorToolCallGroup? {
+        let cards = CursorToolCallPresentation.cardsFromArtifacts(artifacts)
+        guard !cards.isEmpty else { return nil }
+        return CursorToolCallPresentation.makeGroup(cards: cards)
+    }
+
+    /// Resolve the live overlay's mutually exclusive working indicator.
+    /// Visible streamed text suppresses the indicator (Orca rule).
+    private static func resolveLiveOverlay(
+        live: LiveOverlayInput,
+        assistantText: String,
+        toolGroup: CursorToolCallGroup?
+    ) -> CursorTranscriptRow.TurnSection.LiveOverlay {
+        let runningName = toolGroup?.cards.first(where: { $0.state == .running })?.name
+        // Mutual exclusivity: if the smoother would show any text, hide the indicator.
+        let displayText = CursorStreamingTextSmoother.resolvedDisplayText(
+            overlayResponse: live.response,
+            persistedAssistantText: assistantText
+        )
+        let indicator = CursorWorkingIndicator.resolve(
+            isWorking: live.isWorking,
+            hasVisibleText: !displayText.isEmpty,
+            runningToolName: runningName,
+            streamConnected: live.response != nil
+        )
+        return .init(
+            response: live.response,
+            isWorking: live.isWorking,
+            workingIndicator: indicator
         )
     }
 
