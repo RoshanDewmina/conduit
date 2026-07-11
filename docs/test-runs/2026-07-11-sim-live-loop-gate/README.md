@@ -23,3 +23,13 @@ Stack: daemon rebuilt from master post-#80 (read-deadline keepalive), fresh code
 | Initial pair (stable identity key) | PASS | lancerd.stderr.log "paired with phone (code: 547438)" ×1 |
 | **Relaunch WITHOUT pair code → auto-restore reconnect** | PASS | daemon log ×2; backend log "phone connected with code 547438 (paired)" — pin matched the persisted Keychain identity |
 | Stale-daemon reproduction (old binary) | Captured pre-deploy: backend reaped session while daemon logged connected — exact #80 root cause observed live | backend "expired unconfirmed" 21:02Z vs daemon "connected" 20:35Z |
+
+## Addendum 2 — model picker + markdown/streaming wave (post #82/#83 daemon)
+
+Code 031817 (temp slot, owner pairing restored after). Evidence:
+| Check | Result |
+|---|---|
+| Haiku default reaches daemon | PASS — receipt `"model":"haiku"`; post-#82 the run LAUNCHES (process observed) instead of instant-exit |
+| Streaming reveal | PASS — Working… → progressive text (haiku-markdown-stream-complete.jpg = completed transcript) |
+| Markdown block spacing | PASS in visible region; details/summary conversion locked by preprocessor fixtures (owner screenshot text) |
+| #83 wedge guards | Deployed; gate dispatch processed normally after redeploy |

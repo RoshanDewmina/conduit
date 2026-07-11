@@ -10,12 +10,19 @@ public struct NewChatComposerView: View {
     @State private var draftText: String = ""
     @FocusState private var isTextFieldFocused: Bool
     @State private var isRepoPickerPresented = false
+    @State private var isModelPickerPresented = false
     @State private var isContextPresented = false
     @State private var selectedRepo: WorkspaceRepo?
+    @AppStorage(DispatchModelSelection.storageKey) private var selectedModelSlug: String =
+        DispatchModelSelection.default.rawValue
     private let initiallyShowsRepoPicker: Bool
     /// Hands (prompt, cwd) to the presenting view. Cwd is always the selected
     /// repo's real path — missing selection blocks send.
     private let onSend: (_ prompt: String, _ cwd: String) -> Void
+
+    private var selectedModel: DispatchModelSelection {
+        DispatchModelSelection.resolve(selectedModelSlug)
+    }
 
     public init(
         initiallyShowsRepoPicker: Bool = false,
@@ -74,6 +81,11 @@ public struct NewChatComposerView: View {
                 }
             )
         }
+        .sheet(isPresented: $isModelPickerPresented) {
+            ModelPickerView(selected: selectedModel) { model in
+                selectedModelSlug = model.rawValue
+            }
+        }
         .sheet(isPresented: $isContextPresented) {
             ContextAttachView()
         }
@@ -89,7 +101,6 @@ public struct NewChatComposerView: View {
     private var selectorRow: some View {
         HStack(spacing: 18) {
             repoSelector
-            cloudSelector
             Spacer()
         }
     }
@@ -101,22 +112,6 @@ public struct NewChatComposerView: View {
             HStack(spacing: 4) {
                 Text(repoBranchLabel)
                     .font(.system(size: 15, weight: .medium))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var cloudSelector: some View {
-        Button {
-            // Deferred to a later section.
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "cloud")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.secondary)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
@@ -164,10 +159,10 @@ public struct NewChatComposerView: View {
             .accessibilityLabel(Text("Add context"))
 
             Button {
-                // Model picker sub-sheet deferred to a later section.
+                isModelPickerPresented = true
             } label: {
                 HStack(spacing: 4) {
-                    Text("Model")
+                    Text(selectedModel.displayName)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.secondary)
                     Image(systemName: "chevron.down")
@@ -176,6 +171,7 @@ public struct NewChatComposerView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("Model, \(selectedModel.displayName)"))
 
             Spacer()
 

@@ -27,6 +27,7 @@ public struct LiveThreadView: View {
 
     @State private var hasSentInitialPrompt = false
     @State private var followUpText: String = ""
+    @State private var streamingPacer = ChatStreamingTextPacer()
     @FocusState private var isFollowUpFocused: Bool
     #if DEBUG
     @State private var hasAutoAnsweredQuestion = false
@@ -66,7 +67,13 @@ public struct LiveThreadView: View {
                     .onChange(of: bridge.transcriptTurns.count) { _, _ in
                         scrollToTail(proxy)
                     }
-                    .onChange(of: streamingAssistantText) { _, _ in
+                    .onChange(of: streamingAssistantText) { _, newValue in
+                        if !newValue.isEmpty {
+                            streamingPacer.ingest(newValue)
+                        }
+                        scrollToTail(proxy)
+                    }
+                    .onChange(of: streamingPacer.displayText) { _, _ in
                         scrollToTail(proxy)
                     }
                 }
@@ -251,25 +258,70 @@ public struct LiveThreadView: View {
             EmptyView()
         case .working:
             workingIndicator
+                .onAppear { streamingPacer.reset() }
         case .streaming(let turn):
-            ChatMarkdownBody(markdown: turn.assistantText)
+            streamingAssistantBody(target: turn.assistantText)
         case .completed(let turn):
             if turn.status == .failed {
                 errorState(turn.errorMessage ?? "Run failed")
             } else {
                 let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
                 ChatMarkdownBody(markdown: body)
+                    .onAppear { streamingPacer.reset(to: turn.assistantText) }
             }
         case .failed(let message):
             errorState(message)
+                .onAppear { streamingPacer.reset() }
         case .degraded(let message, let turn):
             VStack(alignment: .leading, spacing: 12) {
                 if let turn, !turn.assistantText.isEmpty {
-                    ChatMarkdownBody(markdown: turn.assistantText)
+                    // Keep paced text if we were mid-reveal; otherwise show persisted.
+                    let body = streamingPacer.displayText.isEmpty
+                        ? turn.assistantText
+                        : ChatStreamingTextSmoother.resolvedDisplayText(
+                            overlayResponse: streamingPacer.displayText,
+                            persistedAssistantText: turn.assistantText
+                        )
+                    if streamingPacer.isSettled {
+                        ChatMarkdownBody(markdown: body)
+                    } else {
+                        streamingPlainText(streamingPacer.displayText.isEmpty ? body : streamingPacer.displayText)
+                    }
                 }
                 degradedBanner(message)
             }
         }
+    }
+
+    /// Character/word-paced reveal between poll deltas; markdown only after settle.
+    @ViewBuilder
+    private func streamingAssistantBody(target: String) -> some View {
+        Group {
+            if streamingPacer.isSettled, !streamingPacer.markdownText.isEmpty {
+                ChatMarkdownBody(markdown: streamingPacer.markdownText)
+            } else if !streamingPacer.displayText.isEmpty {
+                streamingPlainText(streamingPacer.displayText)
+            } else if !target.isEmpty {
+                streamingPlainText(target)
+            } else {
+                EmptyView()
+            }
+        }
+        .onAppear { streamingPacer.ingest(target) }
+        .onChange(of: target) { _, newValue in
+            streamingPacer.ingest(newValue)
+        }
+    }
+
+    private func streamingPlainText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 16))
+            .foregroundStyle(.primary)
+            .lineSpacing(4)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentTransition(.interpolate)
+            .animation(.easeOut(duration: 0.08), value: text)
     }
 
     private var workingIndicator: some View {
