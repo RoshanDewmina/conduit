@@ -13,27 +13,39 @@ import SessionFeature
 /// owns the send → poll-until-terminal → publish state machine.
 ///
 /// Hardcodes vendor `"claudeCode"` (no vendor picker UI exists yet — see the
-/// M3 brief) and polls `ChatConversationRepository.turnByRunID` rather than
-/// consuming a token-level stream: the Plan's M3 acceptance explicitly
-/// allows "streamed (or completed) reply visible," and true token streaming
-/// is out of scope for this milestone.
+/// M3 brief). Polls `ChatConversationRepository.turnByRunID` after each host
+/// refresh and publishes partial `assistantText` while the turn is still
+/// `.running` (daemon ledger already streams stdout chunks; this bridge was
+/// the missing mid-run publisher — 2026-07-11 dogfood).
 @MainActor
 @Observable
 public final class ShellLiveBridge {
     public enum SendState: Equatable {
         case idle
+        /// Run in flight, no assistant text yet.
         case working
+        /// Run in flight with accumulating `assistantText` from host refresh.
+        case streaming(LancerCore.ChatTurn)
         case completed(LancerCore.ChatTurn)
         case failed(String)
+        /// Host refreshes failing; keep polling in background. Never claim
+        /// "Working…" over stale data — `message` carries data age.
+        case degraded(message: String, turn: LancerCore.ChatTurn?)
 
         public static func == (lhs: SendState, rhs: SendState) -> Bool {
             switch (lhs, rhs) {
             case (.idle, .idle), (.working, .working):
                 return true
-            case (.completed(let l), .completed(let r)):
+            case (.streaming(let l), .streaming(let r)),
+                 (.completed(let l), .completed(let r)):
                 return l.id == r.id && l.status == r.status && l.assistantText == r.assistantText
             case (.failed(let l), .failed(let r)):
                 return l == r
+            case (.degraded(let lm, let lt), .degraded(let rm, let rt)):
+                return lm == rm
+                    && lt?.id == rt?.id
+                    && lt?.assistantText == rt?.assistantText
+                    && lt?.status == rt?.status
             default:
                 return false
             }
@@ -57,6 +69,17 @@ public final class ShellLiveBridge {
     /// nothing is paired (found 2026-07-10 sim dogfood).
     public private(set) var isHydrated = false
 
+    /// True while a send/follow-up is still awaiting a terminal turn
+    /// (including degraded unreachable polling). Composer must stay disabled.
+    public var isSendInFlight: Bool {
+        switch sendState {
+        case .working, .streaming, .degraded:
+            return true
+        case .idle, .completed, .failed:
+            return false
+        }
+    }
+
     public func markHydrated() { isHydrated = true }
 
     private let relayFleetStore: RelayFleetStore
@@ -65,8 +88,6 @@ public final class ShellLiveBridge {
 
     /// This milestone hardcodes the vendor CLI — no picker UI exists yet.
     private static let vendor = "claudeCode"
-    private static let pollInterval: UInt64 = 1_500_000_000
-    private static let pollTimeout: TimeInterval = 90
 
     public init(
         relayFleetStore: RelayFleetStore,
@@ -81,7 +102,7 @@ public final class ShellLiveBridge {
     /// Starts a brand-new conversation on the first connected paired machine
     /// and polls for the reply. No-op if a send is already in flight.
     public func send(prompt: String, cwd: String) async {
-        guard sendState != .working else { return }
+        guard !isSendInFlight else { return }
         guard let machine = await waitForConnectedMachine() else {
             sendState = .failed("No connected machine. Pair one in Settings → Trusted Machines.")
             return
@@ -109,6 +130,8 @@ public final class ShellLiveBridge {
             activeConversationID = started.conversationID
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
         case .blocked(let message):
+            // Blocked reasons from startConversation (policy / approval /
+            // budget / transport) are surfaced via `.failed` — not silent.
             sendState = .failed(message)
         }
     }
@@ -116,8 +139,19 @@ public final class ShellLiveBridge {
     /// Appends a follow-up turn to the active conversation and polls for the
     /// reply. Reads the conversation's current `lastHostSeq` as `baseSeq`.
     /// No-op if there's no active conversation or a send is already in flight.
+    ///
+    /// Follow-up "broken" findings (2026-07-11):
+    /// - `continueConversation` `.blocked` paths already map to `.failed(message)`
+    ///   here (policy / approval / budget / conflict / transport) — those strings
+    ///   reach `LiveThreadView.errorState`. They were not silent.
+    /// - The dogfood "can't continue" feel was dominated by the old 90s poll
+    ///   timeout: false `.failed("Timed out…")` while the host turn was still
+    ///   `.running`, so a follow-up raced a live run (conflict / transport
+    ///   blip) or Retry started a brand-new conversation instead of continuing.
+    /// - Composer now keys off `isSendInFlight` (working/streaming/degraded)
+    ///   so follow-up can't fire mid-run / mid-degrade.
     public func sendFollowUp(prompt: String, conversationID: String, cwd: String) async {
-        guard sendState != .working else { return }
+        guard !isSendInFlight else { return }
         guard let machine = await waitForConnectedMachine() else {
             sendState = .failed("No connected machine. Pair one in Settings → Trusted Machines.")
             return
@@ -144,44 +178,75 @@ public final class ShellLiveBridge {
             activeConversationID = started.conversationID
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
         case .blocked(let message):
+            // Surface blocked reason in the UI (same `.failed` path as send).
             sendState = .failed(message)
         }
     }
 
-    /// Polls the local GRDB mirror until the turn leaves `.running`, up to
-    /// `pollTimeout`. A plain local re-read alone is NOT enough: nothing
-    /// updates the mirror's turn status after the initial append
+    /// Polls the local GRDB mirror until the turn leaves `.running`.
+    ///
+    /// A plain local re-read alone is NOT enough: nothing updates the
+    /// mirror's turn status after the initial append
     /// (`persistStartedTurn` in `ConversationSyncCoordinator` writes it once,
     /// at append time) until a host fetch happens
     /// (`refreshConversation`/`mergeFetchResponse`). Without periodically
-    /// re-fetching from the host here, this loop would silently time out
-    /// after `pollTimeout` on every real host, always — the local row simply
-    /// never changes on its own. Fetches every 2nd tick (~3s) rather than
-    /// every tick (1.5s) to avoid excessive network chatter.
+    /// re-fetching from the host here, the local row never changes on its own.
+    ///
+    /// While the host reports `.running` and refreshes succeed, this loops
+    /// indefinitely (no wall-clock timeout). Partial `assistantText` is
+    /// published every tick. N consecutive refresh failures → degraded
+    /// (honest data-age copy) while retries continue in the background.
     private func pollUntilTerminal(runID: String, conversationID: String, transport: ConversationTransport) async {
-        let deadline = Date().addingTimeInterval(Self.pollTimeout)
-        var tick = 0
-        while Date() < deadline {
-            tick += 1
-            if tick % 2 == 0 {
-                _ = try? await conversationSyncCoordinator.refreshConversation(
+        var tracker = LivePollPolicy.Tracker()
+        while true {
+            let now = Date()
+            do {
+                _ = try await conversationSyncCoordinator.refreshConversation(
                     conversationID: conversationID, transport: transport
                 )
+                _ = LivePollPolicy.recordRefreshSuccess(&tracker, at: now)
+            } catch {
+                let result = LivePollPolicy.recordRefreshFailure(&tracker, at: now)
+                switch result {
+                case .enteredDegraded, .stillDegraded:
+                    let turn = try? await chatRepo.turnByRunID(runID)
+                    let message = LivePollPolicy.degradedMessage(
+                        lastSuccessfulRefreshAt: tracker.lastSuccessfulRefreshAt,
+                        now: now
+                    )
+                    sendState = .degraded(message: message, turn: turn)
+                case .failing, .healthy, .recovered:
+                    break
+                }
             }
-            if let turn = try? await chatRepo.turnByRunID(runID), turn.status != .running {
+
+            if let turn = try? await chatRepo.turnByRunID(runID) {
                 switch turn.status {
                 case .completed:
                     sendState = .completed(turn)
+                    return
                 case .failed:
                     sendState = .failed(turn.errorMessage ?? "Run failed")
+                    return
                 case .running:
-                    break
+                    if !tracker.isDegraded {
+                        switch LivePollPolicy.runningPublish(assistantText: turn.assistantText) {
+                        case .working:
+                            sendState = .working
+                        case .streaming:
+                            sendState = .streaming(turn)
+                        }
+                    }
                 }
+            }
+
+            do {
+                try await Task.sleep(nanoseconds: LivePollPolicy.pollIntervalNanoseconds)
+            } catch {
+                // Task cancelled (sheet dismissed) — stop polling.
                 return
             }
-            try? await Task.sleep(nanoseconds: Self.pollInterval)
         }
-        sendState = .failed("Timed out waiting for a reply.")
     }
 
     /// Bridges the gap between app launch (while `RelayFleetHydration.hydrate`

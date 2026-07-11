@@ -30,6 +30,7 @@ public struct LiveThreadView: View {
     @FocusState private var isFollowUpFocused: Bool
     #if DEBUG
     @State private var hasAutoAnsweredQuestion = false
+    @State private var hasAutoFollowedUp = false
     #endif
 
     public init(prompt: String, cwd: String) {
@@ -66,7 +67,7 @@ public struct LiveThreadView: View {
                 ChatFollowUpComposerBar(
                     text: $followUpText,
                     isFocused: $isFollowUpFocused,
-                    isDisabled: bridge.sendState == .working,
+                    isDisabled: bridge.isSendInFlight,
                     canSend: canSendFollowUp,
                     onSend: sendFollowUp
                 )
@@ -128,17 +129,32 @@ public struct LiveThreadView: View {
             }
             Task { await questionIngest.submit(machineID: machineID, relayFleetStore: relayFleetStore) }
         }
+        // Follow-up seam for the sim live-loop gate (HID taps dead on sim).
+        // After the first terminal reply, auto-sends `LANCER_LIVETHREAD_FOLLOWUP`
+        // through the exact production `bridge.sendFollowUp` path — mirrors
+        // `LANCER_LIVETHREAD_PROMPT` / DebugSeeder-style env gating. Fires once.
+        .onChange(of: bridge.sendState) { _, newValue in
+            guard !hasAutoFollowedUp,
+                  case .completed = newValue,
+                  let followUp = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_FOLLOWUP"]
+            else { return }
+            let trimmed = followUp.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, let conversationID = bridge.activeConversationID else { return }
+            hasAutoFollowedUp = true
+            Task { await bridge.sendFollowUp(prompt: trimmed, conversationID: conversationID, cwd: cwd) }
+        }
         #endif
     }
 
     private var canSendFollowUp: Bool {
         !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && bridge.sendState != .working
+            && !bridge.isSendInFlight
             && bridge.activeConversationID != nil
     }
 
     // MARK: - Reply state (Orca rule: working indicator and visible reply text
-    // are mutually exclusive on screen)
+    // are mutually exclusive on screen — except degraded, which never claims
+    // "Working…" over stale data)
 
     @ViewBuilder
     private var replyState: some View {
@@ -147,6 +163,8 @@ public struct LiveThreadView: View {
             EmptyView()
         case .working:
             workingIndicator
+        case .streaming(let turn):
+            ChatMarkdownBody(markdown: turn.assistantText)
         case .completed(let turn):
             if turn.status == .failed {
                 errorState(turn.errorMessage ?? "Run failed")
@@ -156,6 +174,13 @@ public struct LiveThreadView: View {
             }
         case .failed(let message):
             errorState(message)
+        case .degraded(let message, let turn):
+            VStack(alignment: .leading, spacing: 12) {
+                if let turn, !turn.assistantText.isEmpty {
+                    ChatMarkdownBody(markdown: turn.assistantText)
+                }
+                degradedBanner(message)
+            }
         }
     }
 
@@ -164,6 +189,16 @@ public struct LiveThreadView: View {
             ProgressView()
             Text("Working…")
                 .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func degradedBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "wifi.slash")
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.system(size: 14))
                 .foregroundStyle(.secondary)
         }
     }
