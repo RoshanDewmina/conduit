@@ -18,6 +18,16 @@ as superseded. Re-queue lanes against the restored shell:
   the docs were wrong about which shell the owner meant. When a directive names a branch,
   attach a screenshot of what it looks like before acting on delete/keep decisions.
 
+## Dogfood round 2: PR #79 MERGED (2026-07-11 late) — streaming/timeout/transcript
+
+Owner findings → fixes, all sim-gate-proven (evidence `docs/test-runs/2026-07-11-sim-live-loop-gate/`):
+streaming mid-run PASS · false 90s timeout removed (LivePollPolicy) · follow-up round-trip
+PASS · full-transcript bug (follow-ups wiped prior turns) found BY the new gate, fixed.
+New build installed+launched on phone from `e7619069`; owner re-pairs with code 221157.
+**Open:** artifacts surface lane (LiveThreadView freed up) · streamed-markdown newline
+cosmetic · **notifications = device-only, owner co-test pending (APNs diagnosis prepped
+next)** · SiriRelevanceCoordinator warnings redo.
+
 ## Dogfood round 1: ALL THREE FINDINGS FIXED AND MERGED (2026-07-11 night)
 
 PR #76 (composer onSend required, repo-scoped send) · #77 (chat/PR polish to reference) ·
