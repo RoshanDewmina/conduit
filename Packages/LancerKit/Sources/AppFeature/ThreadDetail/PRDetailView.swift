@@ -16,7 +16,7 @@ public struct PRDetailView: View {
 
     public var body: some View {
         ZStack {
-            Color(.systemGroupedBackground)
+            Color(.systemBackground)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -126,8 +126,8 @@ public struct PRDetailView: View {
                 .padding(.vertical, 4)
                 .background(Capsule().fill(Color.green.opacity(0.15)))
 
-            diffStatText(added: Self.prAdded, removed: Self.prRemoved)
-                .font(.system(size: 14))
+            chatDiffStatText(added: Self.prAdded, removed: Self.prRemoved)
+                .font(.system(size: 14, design: .monospaced))
 
             Text("· \(Self.changedFiles.count) File · \(Self.commitCount) Commits")
                 .font(.system(size: 14))
@@ -177,9 +177,10 @@ public struct PRDetailView: View {
 
     private func fileRow(_ file: ChangedFile) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color(.tertiaryLabel))
+            Image(systemName: "doc.text")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
 
             Text(file.name)
                 .font(.system(size: 15))
@@ -189,8 +190,8 @@ public struct PRDetailView: View {
 
             Spacer(minLength: 8)
 
-            diffStatText(added: file.added, removed: file.removed)
-                .font(.system(size: 14))
+            chatDiffStatText(added: file.added, removed: file.removed)
+                .font(.system(size: 14, design: .monospaced))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

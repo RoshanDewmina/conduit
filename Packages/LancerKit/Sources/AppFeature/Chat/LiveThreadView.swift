@@ -42,12 +42,13 @@ public struct LiveThreadView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        userBubble(prompt)
+                        ChatUserBubble(text: prompt)
 
                         replyState
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
+                    .padding(.bottom, 12)
                 }
 
                 if let machineID = bridge.activeMachineID, let pendingApproval {
@@ -62,9 +63,15 @@ public struct LiveThreadView: View {
                         .padding(.bottom, 12)
                 }
 
-                Divider()
-                followUpBar
+                ChatFollowUpComposerBar(
+                    text: $followUpText,
+                    isFocused: $isFollowUpFocused,
+                    isDisabled: bridge.sendState == .working,
+                    canSend: canSendFollowUp,
+                    onSend: sendFollowUp
+                )
             }
+            .background(Color(.systemBackground))
             .navigationTitle("Chat")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -124,6 +131,12 @@ public struct LiveThreadView: View {
         #endif
     }
 
+    private var canSendFollowUp: Bool {
+        !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && bridge.sendState != .working
+            && bridge.activeConversationID != nil
+    }
+
     // MARK: - Reply state (Orca rule: working indicator and visible reply text
     // are mutually exclusive on screen)
 
@@ -138,9 +151,8 @@ public struct LiveThreadView: View {
             if turn.status == .failed {
                 errorState(turn.errorMessage ?? "Run failed")
             } else {
-                Text(turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText)
-                    .font(.system(size: 16))
-                    .foregroundStyle(.primary)
+                let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+                ChatMarkdownBody(markdown: body)
             }
         case .failed(let message):
             errorState(message)
@@ -334,45 +346,7 @@ public struct LiveThreadView: View {
         }
     }
 
-    private func userBubble(_ text: String) -> some View {
-        HStack {
-            Spacer(minLength: 40)
-            Text(text)
-                .font(.system(size: 16))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(.secondarySystemBackground))
-                )
-        }
-    }
-
-    // MARK: - Follow-up composer (plain field, not the ornate composer sheet)
-
-    private var followUpBar: some View {
-        HStack(spacing: 10) {
-            TextField("Reply…", text: $followUpText)
-                .textFieldStyle(.roundedBorder)
-                .focused($isFollowUpFocused)
-                .disabled(bridge.sendState == .working)
-
-            Button {
-                sendFollowUp()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28))
-            }
-            .disabled(
-                followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    || bridge.sendState == .working
-                    || bridge.activeConversationID == nil
-            )
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
+    // MARK: - Follow-up composer (Cursor docked bar chrome; same send path)
 
     private func sendFollowUp() {
         let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
