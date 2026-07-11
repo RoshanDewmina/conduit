@@ -1,7 +1,31 @@
 # Orchestrator state — Fable swarm dashboard
 
-**Updated:** 2026-07-11 (update after every merge or blocker; this file is compaction insurance)
-**Phase:** 0 — git hygiene (complete pending push + owner digest) → Phase 1 dogfood MVP next
+**Updated:** 2026-07-11 PM (update after every merge or blocker; this file is compaction insurance)
+**Phase:** 1 — dogfood MVP. Phase 0 CLOSED: PR #69 merged (`fd7b56d5`); stashes + checkpoint/backup refs dropped; w0a branch deleted.
+
+## Phase 1 lanes (dispatched 2026-07-11, Grok 4.5 xhigh via cursor-agent)
+
+| Lane | Branch / worktree | Scope | Write-set | Status |
+|---|---|---|---|---|
+| A | `feat/p1-tool-cards` / `.worktrees/p1-tool-cards` | Tool-call cards + working-indicator enum (§1.1 step 3) | CursorThreadTranscriptModel/Mapper, CursorWorkThreadView, new CursorToolCall* | dispatched |
+| B | `feat/p1-policy-matrix` / `.worktrees/p1-policy-matrix` | Happier permission-matrix SHAPE → Go policy tests (§1.2) | daemon/lancerd `*_test.go` only | dispatched |
+| D | `feat/p1-thread-order` / `.worktrees/p1-thread-order` | Thread-list ordering by AttentionReason (§1.3) | CursorThreadAttention, CursorWorkspaceThreadListView | dispatched |
+| C (queued) | — | Re-port master-line M1 question card onto W0.A shell (from #69 integration) | CursorWorkThreadView + new card file | blocked by A (same write-set) |
+| queued | — | Stop ladder + derived-offline (§1.1 step 5) | chat internals | after A |
+| queued | — | Unread read-cursor (§1.3) | thread view + list | after A+D |
+| queued | — | SiriRelevanceCoordinator warning cleanup (25 warnings) | Lancer/SiriRelevanceCoordinator.swift | Composer, anytime |
+
+**Integration decision #69 (see STATUS_LEDGER):** W0.A owns the iOS UI; master's parallel
+Workspaces-shell line dropped from tree (git history keeps it); master backend kept incl.
+questions M3 daemon + relay wire fixes; dispatch-cwd fix re-applied.
+
+**Tier 0 re-proof prep:** daemon redeployed from tip (running); signed device build SUCCEEDED;
+checklist `docs/test-runs/2026-07-11-tier0-owner-checklist.md`; **blocked: phone 557A7877
+unavailable — owner must connect it, then install + ping.**
+
+**CI reviewer:** cursor-agent headless, `claude-opus-4-8-thinking-high`, prompt via stdin
+(first run failed on MAX_ARG_STRLEN, fixed `a8101d9c`). After first successful run, verify
+Cursor dashboard shows plan usage, not metered — if metered, STOP CI reviews and tell owner.
 **Roadmap SSOT:** `docs/product/2026-07-10-lancer-agent-build-roadmap.md` · direction:
 `docs/product/2026-07-10-lancer-daily-driver-definition.md`
 
