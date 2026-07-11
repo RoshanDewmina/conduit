@@ -120,9 +120,8 @@ public struct CursorWorkspaceThreadListView: View {
         where !needsYouIDs.contains(row.id) {
             if grouped[row.repoName] == nil {
                 order.append(row.repoName)
-                grouped[row.repoName] = []
             }
-            grouped[row.repoName]!.append(row)
+            grouped[row.repoName, default: []].append(row)
         }
         return order.compactMap { repo in
             guard let threads = grouped[repo], !threads.isEmpty else { return nil }
