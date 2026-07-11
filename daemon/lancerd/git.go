@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -55,18 +57,39 @@ type gitShipResult struct {
 
 // ── git command runner ────────────────────────────────────────────────────
 
+// gitCommandTimeout bounds every realGitRunner subprocess. A hung git (NFS,
+// credential helper, lock wait) must not wedge the relay messageLoop forever.
+// Tests may lower this to assert the deadline path without sleeping for 10s.
+var gitCommandTimeout = 10 * time.Second
+
 // gitRunner runs a git/gh subcommand in workdir and returns combined output.
 // Injectable for tests so the RPC handlers can be exercised without a real repo.
 type gitRunner func(workdir, tool string, args ...string) (string, error)
 
 func realGitRunner(workdir, tool string, args ...string) (string, error) {
-	cmd := exec.Command(tool, args...) // explicit argv — no shell interpolation
+	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, tool, args...) // explicit argv — no shell interpolation
 	cmd.Dir = workdir
+	// Own process group so a deadline kill reaps grandchildren (credential
+	// helpers, pager children) — CommandContext alone only signals the root.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	err := cmd.Run()
 	out := buf.String()
+
+	if ctx.Err() == context.DeadlineExceeded {
+		if proc := cmd.Process; proc != nil {
+			_ = syscall.Kill(-proc.Pid, syscall.SIGKILL)
+		}
+		return out, &gitCmdError{
+			exitCode: -1,
+			output:   fmt.Sprintf("git command timed out after %s", gitCommandTimeout),
+		}
+	}
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {

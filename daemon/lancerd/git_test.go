@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -391,6 +392,31 @@ func TestRunDispatchWorktreeRetention(t *testing.T) {
 	case <-removedCh:
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected successful run to remove managed worktree")
+	}
+}
+
+// TestRealGitRunnerTimesOut: a forever-blocking subprocess must not hang
+// realGitRunner — short injectable timeout + process-group kill.
+func TestRealGitRunnerTimesOut(t *testing.T) {
+	prev := gitCommandTimeout
+	gitCommandTimeout = 80 * time.Millisecond
+	t.Cleanup(func() { gitCommandTimeout = prev })
+
+	start := time.Now()
+	_, err := realGitRunner(t.TempDir(), "sleep", "30")
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected timeout error from hung sleep")
+	}
+	var ce *gitCmdError
+	if !errors.As(err, &ce) {
+		t.Fatalf("err type = %T (%v), want *gitCmdError", err, err)
+	}
+	if !strings.Contains(strings.ToLower(ce.Error()), "timed out") {
+		t.Fatalf("error = %q, want timed out", ce.Error())
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("realGitRunner took %v, want bounded by short timeout", elapsed)
 	}
 }
 
