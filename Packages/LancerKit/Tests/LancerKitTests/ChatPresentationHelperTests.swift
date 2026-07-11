@@ -37,6 +37,77 @@ import Foundation
         #expect(out.contains("**bold stays**"))
     }
 
+    @Test func preprocessConvertsDetailsSummaryToBoldVisibleBody() {
+        let input = """
+        <details><summary>Answers</summary>
+        13 ✓
+        **Quick vocabulary**
+        **Variable** — a symbol for a number
+        **Coefficient** — number multiplying a variable
+        </details>
+        """
+        let out = ChatMarkdownPreprocessor.preprocess(input)
+        #expect(!out.contains("<details"))
+        #expect(!out.contains("<summary"))
+        #expect(!out.contains("</details>"))
+        #expect(out.contains("**Answers**"))
+        #expect(out.contains("13 ✓"))
+        #expect(out.contains("**Quick vocabulary**"))
+        #expect(out.contains("**Variable**"))
+        #expect(out.contains("**Coefficient**"))
+    }
+
+    @Test func preprocessConvertsCommonHTMLTags() {
+        let input = #"<b>Bold</b> <i>Italic</i><br>line<code>x</code><pre>a = 1</pre>"#
+        let out = ChatMarkdownPreprocessor.preprocess(input)
+        #expect(out.contains("**Bold**"))
+        #expect(out.contains("*Italic*"))
+        #expect(out.contains("`x`"))
+        #expect(out.contains("```"))
+        #expect(out.contains("a = 1"))
+        #expect(!out.contains("<b>"))
+        #expect(!out.contains("<br"))
+    }
+
+    @Test func preprocessStripsUnknownTagsKeepsContent() {
+        let out = ChatMarkdownPreprocessor.preprocess(#"Hello <span class="x">world</span>!"#)
+        #expect(out.contains("Hello world!"))
+        #expect(!out.contains("<span"))
+    }
+
+    @Test func preprocessInsertsBlankLinesBetweenHeadingsAndBoldLeads() {
+        // Owner dogfood fixture: adjacent headings / bold terms collapsed visually.
+        let input = """
+        ## Systems
+        ## Beginnings:
+        13 ✓
+        **Quick vocabulary**
+        **Variable** — symbol
+        **Coefficient** — multiplier
+        """
+        let out = ChatMarkdownPreprocessor.preprocess(input)
+        #expect(out.contains("## Systems\n\n## Beginnings:"))
+        #expect(out.contains("**Quick vocabulary**\n\n**Variable**"))
+        #expect(out.contains("**Variable** — symbol\n\n**Coefficient**"))
+    }
+
+    @Test func attributedStringPreservesBlockSeparationFromOwnerFixture() {
+        let input = """
+        ## Systems
+        ## Beginnings:
+        **Quick vocabulary**
+        **Variable** — symbol
+        """
+        let attr = ChatMarkdownAttributedString.make(from: input)
+        let plain = String(attr.characters)
+        #expect(plain.contains("Systems"))
+        #expect(plain.contains("Beginnings:"))
+        // Must not glue heading text the way raw Foundation markdown does.
+        #expect(!plain.contains("SystemsBeginnings"))
+        #expect(!plain.contains("vocabularyVariable"))
+        #expect(plain.contains("\n"))
+    }
+
     // MARK: - ChatMarkdownBlockParser
 
     @Test func parseSplitsProseAndFences() {
