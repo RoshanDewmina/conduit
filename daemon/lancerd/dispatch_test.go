@@ -13,6 +13,20 @@ func denyEval(ApprovalEvent) (string, string, bool)  { return "deny", "deny-netw
 
 func noAudit(AuditEntry) {}
 
+func TestResolveDispatchCWDRejectsMissingRelative(t *testing.T) {
+	if _, err := resolveDispatchCWD("command-center"); err == nil {
+		t.Fatal("expected error for bare relative cwd")
+	}
+	abs := t.TempDir()
+	got, err := resolveDispatchCWD(abs)
+	if err != nil {
+		t.Fatalf("absolute existing cwd: %v", err)
+	}
+	if got != abs {
+		t.Fatalf("got %q want %q", got, abs)
+	}
+}
+
 func TestDispatchStoresCWDAndModel(t *testing.T) {
 	d := newDispatcher()
 	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {

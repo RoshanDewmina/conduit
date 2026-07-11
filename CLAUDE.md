@@ -23,30 +23,28 @@ Area-specific detail lives in `.claude/rules/` and loads only when you open a ma
 
 Project **skills** are in `.claude/skills/` (invoke with the `Skill` tool): start a non-trivial
 task with `lancer-context-onboarding`; gate "done" with `lancer-verification-gate`; touching
-`daemon/lancerd/dispatch.go` → `vendor-cli-adapter-audit`; parallel work → `lancer-parallel-handoff`.
+`daemon/lancerd/dispatch.go` → `vendor-cli-adapter-audit`; parallel work → `lancer-parallel-handoff`;
+owner asks "what's next?" / wants a paste-ready brief → `agent-next-prompt`; new/fuzzy feature →
+`agent-feature-loop`; tool-hop or dying context → `agent-session-handoff`.
 
-## Execution model — Opus plans & verifies, Sonnet 5 executes, Fable is the escalation path
+## Execution model — Fable orchestrates, Cursor CLI codes, Sonnet 5 is fallback + sensitive paths
 
-**Owner's standing directive (2026-07-06): the opencode/deepseek execution path is retired
-entirely.** Do not invoke `opencode` or any `deepseek` model for this repo under any circumstance.
-Subagent dispatch now uses Claude models exclusively, via the `Agent` tool.
+**Owner's standing directive (2026-07-10, supersedes 2026-07-06 tiers):** full policy in
+[`docs/ENGINEERING_PROCESS.md`](docs/ENGINEERING_PROCESS.md); orchestrator brief in
+[`docs/plans/2026-07-10-fable-orchestrator-PASTE.md`](docs/plans/2026-07-10-fable-orchestrator-PASTE.md)
+(+ `swarm-orchestrator` skill). opencode/deepseek remain retired. Summary:
 
-**Three tiers, in order:**
-
-1. **Opus (the main session model) plans, decomposes, and verifies.** Understand the code, write
-   precise specs, dispatch, then check the result yourself — this does not change from before.
-   (Meta / config / planning-doc edits the owner asks Claude to make directly — like this file —
-   are done by Opus directly, not dispatched.)
-2. **Sonnet 5 executes.** All routine subagent work — implementation from a precise spec, research,
-   file edits, test-writing — dispatches via the `Agent` tool with `model: "sonnet"`. This is the
-   default for every subagent call in this repo; do not omit the model parameter and let it default
-   to something else, and do not reach for opencode/deepseek instead.
-3. **Fable is the escalation path for tasks Opus itself cannot resolve** — not a default, not a
-   routine executor tier. Escalate to Fable only after Opus (possibly after reviewing failed Sonnet-5
-   attempts) has genuinely tried and gotten stuck: a subtle concurrency bug, an architecture
-   tradeoff with no clearly-correct answer, a correctness issue that survived a normal review pass,
-   or a problem where Sonnet-5 output has been checked and is repeatedly wrong. Dispatch via the
-   `Agent` tool with `model: "fable"`.
+1. **Fable 5 (main session) orchestrates**: specs, decomposition, routing, arbitration,
+   integration debugging, full-diff review of sensitive paths. Token conservation is an owner
+   priority — Fable thinks, cheaper models type. (Meta/config/doc edits the owner asks for
+   directly are done in-session, not dispatched.)
+2. **Cursor CLI is the coder**: `agent -p "<spec>" --model <slug> --output-format json --force`
+   in the task's worktree. **Grok 4.5 high** = default implementer; **Composer 2.5** =
+   mechanical edits + first-pass diff-review summaries. Verify slugs with `agent models` first.
+3. **Claude Sonnet 5 (high) via the `Agent` tool** only for: tasks Cursor failed twice; work
+   needing repo skills / XcodeBuildMCP (simulator screenshots, UI-test evidence, device builds);
+   security-sensitive implementation (`dispatch.go`, `policy/`, approval/content-hash, Security*,
+   relay protocol) — which also always gets Sonnet-or-Fable full-diff review.
 
 **When escalating to Fable, the prompt must be unambiguous and evidence-backed — never a vague
 "figure this out":**

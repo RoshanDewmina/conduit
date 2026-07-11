@@ -1,0 +1,170 @@
+import SwiftUI
+
+// MARK: - Font helpers
+// The app mirrors the approved editorial system: expressive display, readable
+// body, restrained serif accents, and explicit mono for technical context.
+
+public extension Font {
+    /// Bricolage Grotesque for headlines and strong hierarchy.
+    static func dsDisplay(_ style: TextStyle, weight: Weight = .semibold) -> Font {
+        .custom(displayFaceName(weight), size: dsSize(style), relativeTo: style)
+    }
+
+    /// Bricolage Grotesque at an exact point size.
+    static func dsDisplayPt(_ size: CGFloat, weight: Weight = .semibold) -> Font {
+        .custom(displayFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
+    }
+
+    /// Hanken Grotesk for body copy and controls.
+    static func dsSans(_ style: TextStyle, weight: Weight = .regular) -> Font {
+        .custom(sansFaceName(weight), size: dsSize(style), relativeTo: style)
+    }
+
+    /// SF Rounded system face for Cursor-style chrome (section labels, list rows).
+    static func dsRounded(_ style: TextStyle, weight: Weight = .regular) -> Font {
+        .system(size: dsSize(style), weight: weight, design: .rounded)
+    }
+
+    /// SF Rounded at an exact point size.
+    static func dsRoundedPt(_ size: CGFloat, weight: Weight = .regular) -> Font {
+        .system(size: size, weight: weight, design: .rounded)
+    }
+
+    /// JetBrains Mono for technical context.
+    static func dsMono(_ style: TextStyle, weight: Weight = .regular) -> Font {
+        .custom(monoFaceName(weight), size: dsSize(style), relativeTo: style)
+    }
+
+    /// Hanken Grotesk at an exact point size.
+    static func dsSansPt(_ size: CGFloat, weight: Weight = .regular) -> Font {
+        .custom(sansFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
+    }
+
+    /// JetBrains Mono at an exact point size, scaled relative to the nearest TextStyle.
+    static func dsMonoPt(_ size: CGFloat, weight: Weight = .regular) -> Font {
+        .custom(monoFaceName(weight), size: size, relativeTo: nearestTextStyle(size))
+    }
+
+    /// Instrument Serif is deliberately reserved for short, italic editorial cues.
+    static func dsEditorial(_ style: TextStyle) -> Font {
+        .custom("InstrumentSerif-Italic", size: dsSize(style), relativeTo: style)
+    }
+
+    static func dsEditorialPt(_ size: CGFloat) -> Font {
+        .custom("InstrumentSerif-Italic", size: size, relativeTo: nearestTextStyle(size))
+    }
+}
+
+// MARK: - Caps View modifier (uppercase + letter-spacing used by section labels)
+public struct DSCapsStyle: ViewModifier {
+    let size: CGFloat
+    // Use @ScaledMetric so letter-spacing grows with Dynamic Type.
+    @ScaledMetric private var scaledTracking: CGFloat
+
+    public init(size: CGFloat, tracking: CGFloat) {
+        self.size = size
+        self._scaledTracking = ScaledMetric(wrappedValue: tracking)
+    }
+
+    public func body(content: Content) -> some View {
+        content
+            .font(.dsMonoPt(size))
+            .tracking(scaledTracking)
+            .textCase(.uppercase)
+    }
+}
+
+public struct DSRoundedCapsStyle: ViewModifier {
+    let size: CGFloat
+    @ScaledMetric private var scaledTracking: CGFloat
+
+    public init(size: CGFloat, tracking: CGFloat) {
+        self.size = size
+        self._scaledTracking = ScaledMetric(wrappedValue: tracking)
+    }
+
+    public func body(content: Content) -> some View {
+        content
+            .font(.dsRoundedPt(size, weight: .medium))
+            .tracking(scaledTracking)
+            .textCase(.uppercase)
+    }
+}
+
+public extension View {
+    func dsCapsStyle(size: CGFloat = 11, trackingMultiplier: CGFloat = 0.08) -> some View {
+        modifier(DSCapsStyle(size: size, tracking: size * trackingMultiplier))
+    }
+
+    /// Uppercase section label using SF Rounded instead of mono.
+    func dsRoundedCapsStyle(size: CGFloat = 11, trackingMultiplier: CGFloat = 0.06) -> some View {
+        modifier(DSRoundedCapsStyle(size: size, tracking: size * trackingMultiplier))
+    }
+}
+
+// MARK: - Point size → TextStyle mapping (for relativeTo: in Pt helpers)
+// Maps a raw point size to the nearest system TextStyle so .custom(face, size:, relativeTo:)
+// scales the font in proportion to the user's preferred content size.
+private func nearestTextStyle(_ size: CGFloat) -> Font.TextStyle {
+    switch size {
+    case ..<12: return .caption2
+    case ..<13: return .caption
+    case ..<14: return .footnote
+    case ..<15: return .callout
+    case ..<16: return .body
+    case ..<17: return .headline
+    case ..<19: return .title3
+    case ..<21: return .title2
+    case ..<25: return .title
+    default:    return .largeTitle
+    }
+}
+
+// MARK: - Design type scale (from tokens.css --fz-* values)
+private func dsSize(_ style: Font.TextStyle) -> CGFloat {
+    // BLOCKS scale: display 48 / title 34 / heading 22 / body 16 / callout 14 / caption 12 / micro 10.
+    switch style {
+    case .largeTitle:   return 34
+    case .title:        return 28
+    case .title2:       return 24
+    case .title3:       return 22
+    case .headline:     return 18
+    case .body:         return 16
+    case .callout:      return 14
+    case .subheadline:  return 14
+    case .footnote:     return 13
+    case .caption:      return 12
+    case .caption2:     return 11
+    @unknown default:   return 14
+    }
+}
+
+// MARK: - Face name helpers
+
+private func monoFaceName(_ weight: Font.Weight) -> String {
+    switch weight {
+    case .black, .heavy, .bold:          return "JetBrainsMono-Bold"
+    case .semibold, .medium:             return "JetBrainsMono-Medium"
+    default:                             return "JetBrainsMono-Regular"
+    }
+}
+
+private func sansFaceName(_ weight: Font.Weight) -> String {
+    switch weight {
+    case .black, .heavy:                 return "HankenGrotesk-Black"
+    case .bold:                          return "HankenGrotesk-Bold"
+    case .semibold:                      return "HankenGrotesk-SemiBold"
+    case .medium:                        return "HankenGrotesk-Medium"
+    default:                             return "HankenGrotesk-Regular"
+    }
+}
+
+private func displayFaceName(_ weight: Font.Weight) -> String {
+    switch weight {
+    case .black, .heavy:        return "BricolageGrotesque-ExtraBold"
+    case .bold:                 return "BricolageGrotesque-Bold"
+    case .semibold:             return "BricolageGrotesque-SemiBold"
+    case .medium:               return "BricolageGrotesque-Medium"
+    default:                    return "BricolageGrotesque-Regular"
+    }
+}

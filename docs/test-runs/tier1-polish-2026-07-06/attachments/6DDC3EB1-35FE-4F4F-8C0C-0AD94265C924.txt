@@ -1,4 +1,0 @@
-Query chain:
- →Find: Target Application 'dev.lancer.mobile'
-  ↪︎Find: Descendants matching type StaticText
-    ↪︎Find: Elements matching predicate '"Profile" IN identifiers'

@@ -1,9 +1,9 @@
 # Lancer feature backlog
 
 **Living tracker** — update status when code or tests change.  
-**Scope decisions:** [`2026-07-05-lancer-feature-master-plan.md`](2026-07-05-lancer-feature-master-plan.md)  
-**Implementation gaps:** [`2026-07-06-feature-implementation-gap-matrix.md`](2026-07-06-feature-implementation-gap-matrix.md)  
-**Owner hub:** [`../STATUS_LEDGER.md`](../STATUS_LEDGER.md)
+**Scope decisions (SSOT since 2026-07-10):** [`2026-07-10-lancer-daily-driver-definition.md`](2026-07-10-lancer-daily-driver-definition.md) · build detail in [`2026-07-10-lancer-agent-build-roadmap.md`](2026-07-10-lancer-agent-build-roadmap.md)  
+**Owner hub:** [`../STATUS_LEDGER.md`](../STATUS_LEDGER.md)  
+*(Pre–07-10 scope docs cited in rows below were purged 2026-07-10 — git history only. Where a row's tier conflicts with the 07-10 definition, the definition wins.)*
 
 Columns: **Feature | Tier | Status | Source session(s) | Wireframe | Evidence | Owner-gated?**
 

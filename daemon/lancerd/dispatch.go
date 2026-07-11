@@ -28,6 +28,29 @@ func expandHome(cwd string) string {
 	return cwd
 }
 
+// resolveDispatchCWD expands "~" then insists the directory exists. A relative
+// or missing Dir makes Darwin's exec report
+// `fork/exec <claude>: no such file or directory` even when the binary is
+// present — which the phone previously surfaced as a hung "Starting…"
+// (2026-07-09). Return a clear error instead of launching.
+func resolveDispatchCWD(cwd string) (string, error) {
+	resolved := expandHome(cwd)
+	if resolved == "" {
+		return "", nil
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("cwd does not exist: %s", resolved)
+		}
+		return "", fmt.Errorf("cwd not accessible: %s (%w)", resolved, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("cwd is not a directory: %s", resolved)
+	}
+	return resolved, nil
+}
+
 // normalizeClaudeModel maps phone/OpenRouter-style model slugs onto Claude Code
 // CLI aliases. The iOS ManagedModel enum historically sent values like
 // "anthropic/claude-haiku-4", which Claude Code 2.x rejects with model_not_found
@@ -504,8 +527,12 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 			bin = resolved
 		}
 	}
+	resolvedCWD, err := resolveDispatchCWD(cwd)
+	if err != nil {
+		return nil, err
+	}
 	cmd := exec.Command(bin, execArgv[1:]...) // explicit argv, no shell
-	cmd.Dir = expandHome(cwd)
+	cmd.Dir = resolvedCWD
 	cmd.Env = env
 	// Run the agent in its own process group so we can reap its whole subtree.
 	// Agents like Claude Code spawn MCP server subprocesses that inherit our
