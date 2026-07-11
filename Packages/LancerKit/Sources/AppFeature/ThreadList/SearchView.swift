@@ -1,19 +1,24 @@
 #if os(iOS)
 import SwiftUI
+import PersistenceKit
 
-/// Section 5 of the frontend rebuild: a faithful, Apple-native recreation of
-/// the Cursor-mobile "Search" sheet (owner reference screenshot `IMG_2417`).
-/// Presented from the Workspaces root's magnifying-glass button (and from
-/// `ThreadListView`'s top-bar search icon). Visual-only for this milestone —
-/// the search field accepts typing but doesn't filter, and the filter chips
-/// are selectable but don't affect the (static) result list.
-/// System `SF Symbols` + semantic colors only, no DesignSystem module.
+/// Search sheet over real `ChatConversationRepository` conversations.
 public struct SearchView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(WorkspaceDataStore.self) private var workspaceData
     @State private var searchText = ""
-    @State private var selectedFilter: SearchFilter = .all
+    @State private var selectedFilterCwd: String? = nil
+    @State private var results: [ThreadListItem] = []
 
     public init() {}
+
+    private var filterRepos: [WorkspaceRepo] { workspaceData.repos }
+
+    private var filteredResults: [ThreadListItem] {
+        guard let selectedFilterCwd else { return results }
+        let needle = WorkspaceRepoCatalog.normalizeCwd(selectedFilterCwd)
+        return results.filter { WorkspaceRepoCatalog.normalizeCwd($0.cwd) == needle }
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -32,21 +37,42 @@ public struct SearchView: View {
 
             Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Self.results) { thread in
-                        ThreadListRow(thread: thread, showsRepoName: true)
-                        Divider()
-                            .padding(.leading, 40)
+            if filteredResults.isEmpty {
+                Text(searchText.isEmpty ? "No threads yet" : "No matching threads")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                Spacer(minLength: 0)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(filteredResults) { thread in
+                            ThreadListRow(thread: thread, showsRepoName: true)
+                            Divider()
+                                .padding(.leading, 40)
+                        }
                     }
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                 }
-                .padding(.top, 8)
-                .padding(.bottom, 24)
             }
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .task {
+            await workspaceData.refresh()
+            await runSearch()
+        }
+        .onChange(of: searchText) { _, _ in
+            Task { await runSearch() }
+        }
+    }
+
+    private func runSearch() async {
+        results = await workspaceData.search(searchText)
     }
 
     private var searchField: some View {
@@ -77,62 +103,37 @@ public struct SearchView: View {
     }
 
     private var filterChips: some View {
-        HStack(spacing: 10) {
-            ForEach(SearchFilter.allCases) { filter in
-                filterChip(filter)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                filterChip(title: "All", cwd: nil)
+                ForEach(filterRepos) { repo in
+                    filterChip(title: repo.name, cwd: repo.cwd)
+                }
             }
-            Spacer(minLength: 0)
         }
     }
 
-    private func filterChip(_ filter: SearchFilter) -> some View {
-        Button {
-            selectedFilter = filter
+    private func filterChip(title: String, cwd: String?) -> some View {
+        let isSelected = selectedFilterCwd == cwd
+        return Button {
+            selectedFilterCwd = cwd
         } label: {
-            Text(filter.title)
+            Text(title)
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(selectedFilter == filter ? Color(.systemBackground) : .primary)
+                .foregroundStyle(isSelected ? Color(.systemBackground) : .primary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
-                    Capsule().fill(selectedFilter == filter ? Color.primary : Color(.secondarySystemBackground))
+                    Capsule().fill(isSelected ? Color.primary : Color(.secondarySystemBackground))
                 )
         }
         .buttonStyle(.plain)
     }
-
-    // MARK: - Static sample data
-
-    fileprivate static let results: [ThreadRow] = [
-        ThreadRow(title: "Fix onboarding flow", status: .checksPassed, diffStat: "+142 -18", repoName: "conduit"),
-        ThreadRow(title: "Update README", status: .merged, diffStat: nil, repoName: "conduit"),
-        ThreadRow(title: "Refactor auth module", status: .merged, diffStat: "+89 -34", repoName: "conduit"),
-        ThreadRow(title: "Add dark mode toggle", status: .checksPassed, diffStat: "+212 -6", repoName: "personal-web"),
-        ThreadRow(title: "Investigate flaky CI job", status: .noChanges, diffStat: nil, repoName: "conduit"),
-        ThreadRow(title: "Clean up test fixtures", status: .merged, diffStat: "+54 -201", repoName: "personal-web"),
-        ThreadRow(title: "Optimize image loading", status: .noChanges, diffStat: nil, repoName: "personal-web"),
-    ]
-}
-
-/// Filter chip state — visually selectable, has no effect on the (static)
-/// result list.
-enum SearchFilter: CaseIterable, Identifiable {
-    case all
-    case conduit
-    case personalWeb
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .all: return "All"
-        case .conduit: return "conduit"
-        case .personalWeb: return "personal-web"
-        }
-    }
 }
 
 #Preview {
+    let db = try! PersistenceKit.AppDatabase.inMemory()
     SearchView()
+        .environment(WorkspaceDataStore(chatRepo: ChatConversationRepository(db)))
 }
 #endif

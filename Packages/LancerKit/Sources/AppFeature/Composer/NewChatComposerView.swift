@@ -1,32 +1,30 @@
 #if os(iOS)
 import SwiftUI
+import PersistenceKit
 
-/// Section 3 of the frontend rebuild: a faithful, Apple-native recreation of
-/// the Cursor-mobile "New Chat composer" bottom sheet (owner reference
-/// screenshots `IMG_2413`/`IMG_2415` — a rounded floating card over the
-/// dimmed Workspaces background with the keyboard raised). Presented from
-/// the Workspaces `+` button and the bottom composer pill. Visual-only for
-/// this milestone — the repo/branch selector, cloud toggle, and model
-/// picker are static sample data with no sub-sheets, no send action, and no
-/// live wiring. System `SF Symbols` + semantic colors only, no
-/// DesignSystem module.
+/// New Chat composer — repo picker uses the real workspace list; send
+/// requires a selected repo cwd (never a guessed `~/name`).
 public struct NewChatComposerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(WorkspaceDataStore.self) private var workspaceData
     @State private var draftText: String = ""
     @FocusState private var isTextFieldFocused: Bool
     @State private var isRepoPickerPresented = false
     @State private var isContextPresented = false
+    @State private var selectedRepo: WorkspaceRepo?
     private let initiallyShowsRepoPicker: Bool
-    /// M3: hands the prompt off to the presenting view so it can drive the
-    /// live send flow and present `LiveThreadView`. A closure (not
-    /// `.environment(_:)` injection) keeps this view decoupled, matching the
-    /// existing `onPaired`-style callback pattern used by `RelayPairingSheet`.
-    /// Required so a missing handler cannot silently dismiss on send.
-    private let onSend: (String) -> Void
+    /// Hands (prompt, cwd) to the presenting view. Cwd is always the selected
+    /// repo's real path — missing selection blocks send.
+    private let onSend: (_ prompt: String, _ cwd: String) -> Void
 
-    public init(initiallyShowsRepoPicker: Bool = false, onSend: @escaping (String) -> Void) {
+    public init(
+        initiallyShowsRepoPicker: Bool = false,
+        initialRepo: WorkspaceRepo? = nil,
+        onSend: @escaping (_ prompt: String, _ cwd: String) -> Void
+    ) {
         self.initiallyShowsRepoPicker = initiallyShowsRepoPicker
         self.onSend = onSend
+        _selectedRepo = State(initialValue: initialRepo)
     }
 
     public var body: some View {
@@ -54,6 +52,9 @@ public struct NewChatComposerView: View {
         .presentationDragIndicator(.hidden)
         .presentationBackground(.clear)
         .onAppear {
+            if selectedRepo == nil {
+                selectedRepo = workspaceData.repos.first
+            }
             if initiallyShowsRepoPicker {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     isRepoPickerPresented = true
@@ -65,7 +66,13 @@ public struct NewChatComposerView: View {
             }
         }
         .sheet(isPresented: $isRepoPickerPresented) {
-            RepoPickerView()
+            RepoPickerView(
+                repos: workspaceData.repos,
+                selectedCwd: selectedRepo?.cwd,
+                onSelect: { repo in
+                    selectedRepo = repo
+                }
+            )
         }
         .sheet(isPresented: $isContextPresented) {
             ContextAttachView()
@@ -92,7 +99,7 @@ public struct NewChatComposerView: View {
             isRepoPickerPresented = true
         } label: {
             HStack(spacing: 4) {
-                Text(Self.repoBranchLabel)
+                Text(repoBranchLabel)
                     .font(.system(size: 15, weight: .medium))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 11, weight: .semibold))
@@ -160,9 +167,9 @@ public struct NewChatComposerView: View {
                 // Model picker sub-sheet deferred to a later section.
             } label: {
                 HStack(spacing: 4) {
-                    Text(Self.sampleModelName)
+                    Text("Model")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.secondary)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
@@ -173,18 +180,10 @@ public struct NewChatComposerView: View {
             Spacer()
 
             let trimmedDraft = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmedDraft.isEmpty {
-                Circle()
-                    .fill(Color(.tertiarySystemFill))
-                    .frame(width: 34, height: 34)
-                    .overlay(
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    )
-            } else {
+            let canSend = !trimmedDraft.isEmpty && selectedRepo != nil
+            if canSend, let cwd = selectedRepo?.cwd {
                 Button {
-                    send(trimmedDraft)
+                    send(trimmedDraft, cwd: cwd)
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 34))
@@ -192,42 +191,45 @@ public struct NewChatComposerView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Send"))
+            } else {
+                Circle()
+                    .fill(Color(.tertiarySystemFill))
+                    .frame(width: 34, height: 34)
+                    .overlay(
+                        Image(systemName: trimmedDraft.isEmpty ? "mic.fill" : "arrow.up")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    )
             }
         }
     }
 
-    /// M3: hands the prompt to the presenting view and dismisses this sheet.
-    /// The presenting view is responsible for driving `ShellLiveBridge.send`
-    /// and showing `LiveThreadView` — this view stays decoupled from the
-    /// live bridge entirely.
-    private func send(_ prompt: String) {
-        onSend(prompt)
+    private func send(_ prompt: String, cwd: String) {
+        onSend(prompt, cwd)
         dismiss()
     }
 
-    // MARK: - Static sample data
-
-    private static let sampleRepoName = "conduit"
-    private static let sampleBranchName = "master"
-    private static let sampleModelName = "Composer 2.5"
-
-    /// Single `Text` built from an `AttributedString` so the repo name
-    /// (primary) and branch name (secondary) keep distinct colors without
-    /// the deprecated `Text` `+` concatenation operator.
-    private static var repoBranchLabel: AttributedString {
-        var repo = AttributedString("\(sampleRepoName) ")
-        repo.foregroundColor = Color.primary
-        var branch = AttributedString(sampleBranchName)
-        branch.foregroundColor = Color.secondary
-        return repo + branch
+    private var repoBranchLabel: AttributedString {
+        if let selectedRepo {
+            var repo = AttributedString(selectedRepo.name)
+            repo.foregroundColor = Color.primary
+            return repo
+        }
+        var placeholder = AttributedString(
+            workspaceData.repos.isEmpty ? "Add a repo first" : "Select a repo"
+        )
+        placeholder.foregroundColor = Color.secondary
+        return placeholder
     }
 }
 
 #Preview {
+    let db = try! PersistenceKit.AppDatabase.inMemory()
     Color(.systemGroupedBackground)
         .ignoresSafeArea()
         .sheet(isPresented: .constant(true)) {
-            NewChatComposerView(onSend: { _ in })
+            NewChatComposerView(onSend: { _, _ in })
+                .environment(WorkspaceDataStore(chatRepo: ChatConversationRepository(db)))
         }
 }
 #endif

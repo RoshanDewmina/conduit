@@ -2,20 +2,15 @@
 import SwiftUI
 import PersistenceKit
 
-/// Section 1 of the frontend rebuild: a faithful, Apple-native recreation of
-/// the Cursor-mobile "Workspaces" launch screen (owner reference screenshots
-/// `IMG_2408`/`IMG_2423`). Visual-only for this milestone — rows and the
-/// composer are static sample data with no navigation, no sheets, and no
-/// live wiring. System `SF Symbols` + semantic colors only, no DesignSystem
-/// module.
+/// Workspaces launch screen — real repos derived from conversations +
+/// user-added paths; honest empty state when none exist.
 public struct WorkspacesView: View {
     @Environment(RelayFleetStore.self) private var relayFleetStore
+    @Environment(WorkspaceDataStore.self) private var workspaceData
     @State private var isProfilePresented = false
     @State private var isComposerPresented = false
     @State private var isAddRepoPresented = false
     @State private var isSearchPresented = false
-    /// M3: set by the composer's send action (`onSend`); presented via
-    /// `.liveThreadPresentation` to show the new live conversation.
     @State private var activeLiveThread: LiveThreadIdentifier?
     #if DEBUG
     @State private var isComposerRepoPickerPresented = false
@@ -28,6 +23,8 @@ public struct WorkspacesView: View {
     #endif
 
     public init() {}
+
+    private var repos: [WorkspaceRepo] { workspaceData.repos }
 
     public var body: some View {
         ZStack(alignment: .bottom) {
@@ -45,29 +42,65 @@ public struct WorkspacesView: View {
                     .padding(.top, 28)
                     .padding(.bottom, 8)
 
-                VStack(spacing: 0) {
-                    ForEach(Self.rows) { row in
-                        if row.title == "Add Repo" {
-                            Button {
-                                isAddRepoPresented = true
-                            } label: {
-                                WorkspaceRowView(row: row)
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            NavigationLink {
-                                ThreadListView(workspaceName: row.title)
-                            } label: {
-                                WorkspaceRowView(row: row)
-                            }
-                            .buttonStyle(.plain)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        NavigationLink {
+                            ThreadListView(workspace: .allRepos)
+                        } label: {
+                            WorkspaceRowView(
+                                title: "All Repos",
+                                systemImage: "square.stack",
+                                subtitle: repos.isEmpty ? nil : "\(workspaceData.conversations.count)",
+                                showsChevron: true
+                            )
                         }
+                        .buttonStyle(.plain)
+                        Divider()
+                            .padding(.leading, 58)
+
+                        if repos.isEmpty {
+                            Text("Add a repo to get started")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 20)
+                            Divider()
+                                .padding(.leading, 58)
+                        } else {
+                            ForEach(repos) { repo in
+                                NavigationLink {
+                                    ThreadListView(workspace: .repo(repo))
+                                } label: {
+                                    WorkspaceRowView(
+                                        title: repo.name,
+                                        systemImage: "folder",
+                                        subtitle: repo.threadCount > 0 ? "\(repo.threadCount)" : nil,
+                                        showsChevron: true
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                Divider()
+                                    .padding(.leading, 58)
+                            }
+                        }
+
+                        Button {
+                            isAddRepoPresented = true
+                        } label: {
+                            WorkspaceRowView(
+                                title: "Add Repo",
+                                systemImage: "folder.badge.plus",
+                                subtitle: nil,
+                                showsChevron: false
+                            )
+                        }
+                        .buttonStyle(.plain)
                         Divider()
                             .padding(.leading, 58)
                     }
+                    .padding(.bottom, 90)
                 }
-
-                Spacer(minLength: 0)
             }
 
             Button {
@@ -80,19 +113,28 @@ public struct WorkspacesView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
         }
+        .task {
+            await workspaceData.refresh()
+        }
         .sheet(isPresented: $isProfilePresented) {
             ProfileView()
                 .environment(relayFleetStore)
         }
         .sheet(isPresented: $isComposerPresented) {
             #if DEBUG
-            NewChatComposerView(initiallyShowsRepoPicker: isComposerRepoPickerPresented, onSend: handleSend)
+            NewChatComposerView(
+                initiallyShowsRepoPicker: isComposerRepoPickerPresented,
+                initialRepo: repos.first,
+                onSend: handleSend
+            )
             #else
-            NewChatComposerView(onSend: handleSend)
+            NewChatComposerView(initialRepo: repos.first, onSend: handleSend)
             #endif
         }
         .sheet(isPresented: $isAddRepoPresented) {
-            AddRepoView()
+            AddRepoView { name, cwd in
+                workspaceData.addRepo(name: name, cwd: cwd)
+            }
         }
         .sheet(isPresented: $isSearchPresented) {
             SearchView()
@@ -100,39 +142,42 @@ public struct WorkspacesView: View {
         .liveThreadPresentation($activeLiveThread)
         #if DEBUG
         .sheet(isPresented: $isRepoPickerDirectPresented) {
-            RepoPickerView()
+            RepoPickerView(repos: repos, selectedCwd: repos.first?.cwd, onSelect: { _ in })
         }
-        #endif
-        #if DEBUG
         .sheet(isPresented: $isContextDirectPresented) {
             ContextAttachView()
         }
-        #endif
-        #if DEBUG
         .sheet(isPresented: $isTrustedMachinesDirectPresented) {
             TrustedMachinesView()
                 .environment(relayFleetStore)
         }
-        #endif
-        #if DEBUG
         .navigationDestination(isPresented: $isThreadListDirectPresented) {
-            ThreadListView(workspaceName: "conduit")
+            if let first = repos.first {
+                ThreadListView(workspace: .repo(first))
+            } else {
+                ThreadListView(workspace: .allRepos)
+            }
         }
-        #endif
-        #if DEBUG
         .navigationDestination(isPresented: $isThreadDetailDirectPresented) {
-            ThreadDetailView(
-                thread: ThreadRow(title: "Fix onboarding flow", status: .checksPassed, diffStat: "+142 -18"),
-                cwd: LiveThreadCwd.forWorkspace("conduit")
-            )
+            if let first = workspaceData.threads(forCwd: nil, allRepos: true).first {
+                ThreadDetailView(thread: first)
+            } else {
+                ThreadDetailView(
+                    thread: ThreadListItem(
+                        id: "debug-empty",
+                        title: "No threads yet",
+                        statusKind: .idle,
+                        statusLabel: WorkspaceRepoCatalog.statusLabel(.idle),
+                        repoName: nil,
+                        cwd: "",
+                        lastActivityAt: .now
+                    )
+                )
+            }
         }
-        #endif
-        #if DEBUG
         .navigationDestination(isPresented: $isPRDetailDirectPresented) {
             PRDetailView()
         }
-        #endif
-        #if DEBUG
         .onAppear {
             switch ProcessInfo.processInfo.environment["LANCER_DESTINATION"] {
             case "profile":
@@ -159,7 +204,11 @@ public struct WorkspacesView: View {
             case "liveThread":
                 let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
                     ?? "Can you take a look at the onboarding flow?"
-                activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: LiveThreadCwd.homePlaceholder)
+                let cwd = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_CWD"]
+                    ?? repos.first?.cwd
+                    ?? ""
+                guard !cwd.isEmpty else { break }
+                activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: cwd)
             case "search":
                 isSearchPresented = true
             default:
@@ -169,11 +218,10 @@ public struct WorkspacesView: View {
         #endif
     }
 
-    /// M3: the composer's `onSend` hand-off — presents `LiveThreadView` via
-    /// `.liveThreadPresentation`. `ShellLiveBridge.send` is triggered by that
-    /// view's own `.task`, not here, so this stays a pure state-setting hop.
-    private func handleSend(_ prompt: String) {
-        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: LiveThreadCwd.homePlaceholder)
+    private func handleSend(_ prompt: String, _ cwd: String) {
+        let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
+        guard !normalized.isEmpty else { return }
+        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized)
     }
 
     private var topBar: some View {
@@ -257,39 +305,34 @@ public struct WorkspacesView: View {
         .background(Capsule().fill(Color(.secondarySystemBackground)))
         .overlay(Capsule().strokeBorder(Color(.separator), lineWidth: 0.5))
     }
-
-    fileprivate static let rows: [WorkspaceRow] = [
-        WorkspaceRow(title: "All Repos", systemImage: "square.stack", showsChevron: true),
-        WorkspaceRow(title: "conduit", systemImage: "folder", showsChevron: true),
-        WorkspaceRow(title: "personal-web", systemImage: "folder", showsChevron: true),
-        WorkspaceRow(title: "Add Repo", systemImage: "folder.badge.plus", showsChevron: false),
-    ]
-}
-
-private struct WorkspaceRow: Identifiable {
-    let id = UUID()
-    let title: String
-    let systemImage: String
-    let showsChevron: Bool
 }
 
 private struct WorkspaceRowView: View {
-    let row: WorkspaceRow
+    let title: String
+    let systemImage: String
+    let subtitle: String?
+    let showsChevron: Bool
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: row.systemImage)
+            Image(systemName: systemImage)
                 .font(.system(size: 19, weight: .regular))
                 .foregroundStyle(.secondary)
                 .frame(width: 24)
 
-            Text(row.title)
+            Text(title)
                 .font(.system(size: 17))
                 .foregroundStyle(.primary)
 
             Spacer()
 
-            if row.showsChevron {
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+            }
+
+            if showsChevron {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color(.tertiaryLabel))
@@ -313,6 +356,7 @@ private struct WorkspaceRowView: View {
     )
     let approvalIngest = RelayApprovalIngest(database: db)
     let questionIngest = RelayQuestionIngest(chatRepo: chatRepo)
+    let workspaceData = WorkspaceDataStore(chatRepo: chatRepo)
     return NavigationStack {
         WorkspacesView()
     }
@@ -320,5 +364,6 @@ private struct WorkspaceRowView: View {
     .environment(bridge)
     .environment(approvalIngest)
     .environment(questionIngest)
+    .environment(workspaceData)
 }
 #endif

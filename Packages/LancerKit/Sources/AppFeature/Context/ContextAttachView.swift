@@ -1,16 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-/// Section 6 of the frontend rebuild: a faithful, Apple-native recreation of
-/// the Cursor-mobile "Context" attach sheet (owner reference screenshots
-/// `IMG_2421`/`IMG_2422`). Presented from the New Chat composer's leading
-/// `+` attach button. Visual-only for this milestone — the recent-context
-/// thumbnail strip is static placeholder cards (not real screenshots), the
-/// "Mode" rows (Plan/Draft) carry a simple selected/unselected visual state
-/// with no real behavior, and the "Add" rows (Photos/Screenshots/Camera/
-/// Files/MCP Servers) are all no-ops. System `SF Symbols` + semantic colors
-/// only, no DesignSystem module. Reuses the shared sheet chrome
-/// (`RepoSheetHeader`, `RepoSectionHeader`) defined in `RepoPickerView.swift`.
+/// Context attach sheet — honest empty recent-context strip; add rows are
+/// affordances only (no fake MCP counts or invented thumbnails).
 public struct ContextAttachView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedMode: ContextMode = .plan
@@ -25,7 +17,10 @@ public struct ContextAttachView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 16)
 
-                thumbnailStrip
+                Text("No recent context yet")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 24)
 
                 RepoSectionHeader(title: "Mode")
@@ -60,36 +55,14 @@ public struct ContextAttachView: View {
         .presentationDragIndicator(.visible)
     }
 
-    private var thumbnailStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(Self.thumbnails) { thumbnail in
-                    ContextThumbnailCard(thumbnail: thumbnail)
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-
-    // MARK: - Static sample data
-
-    private static let thumbnails: [ContextThumbnail] = [
-        ContextThumbnail(systemImage: "list.bullet.rectangle", tint: .blue),
-        ContextThumbnail(systemImage: "chart.bar.xaxis", tint: .orange),
-        ContextThumbnail(systemImage: "person.crop.circle.fill", tint: .purple),
-        ContextThumbnail(systemImage: "doc.plaintext", tint: .teal),
-    ]
-
     private static let addRows: [ContextAddRowModel] = [
         ContextAddRowModel(title: "Photos", systemImage: "photo", trailing: .none),
         ContextAddRowModel(title: "Screenshots", systemImage: "square.dashed", trailing: .chevron),
         ContextAddRowModel(title: "Camera", systemImage: "camera", trailing: .none),
         ContextAddRowModel(title: "Files", systemImage: "folder", trailing: .none),
-        ContextAddRowModel(title: "MCP Servers", systemImage: "puzzlepiece.extension", trailing: .badgeAndChevron(count: 3)),
+        ContextAddRowModel(title: "MCP Servers", systemImage: "puzzlepiece.extension", trailing: .chevron),
     ]
 }
-
-// MARK: - Mode section
 
 enum ContextMode: String, CaseIterable, Identifiable {
     case plan
@@ -139,12 +112,9 @@ struct ContextModeRow: View {
     }
 }
 
-// MARK: - Add section
-
 enum ContextAddRowTrailing {
     case none
     case chevron
-    case badgeAndChevron(count: Int)
 }
 
 struct ContextAddRowModel: Identifiable {
@@ -159,7 +129,7 @@ struct ContextAddRow: View {
 
     var body: some View {
         Button {
-            // No-op for this milestone.
+            // Affordance only — attach wiring deferred.
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: row.systemImage)
@@ -180,13 +150,6 @@ struct ContextAddRow: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color(.tertiaryLabel))
-                case .badgeAndChevron(let count):
-                    Text("\(count)")
-                        .font(.system(size: 15))
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color(.tertiaryLabel))
                 }
             }
             .padding(.horizontal, 20)
@@ -194,36 +157,6 @@ struct ContextAddRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Recent-context thumbnail strip
-
-/// Static placeholder card standing in for a real recent-context screenshot
-/// thumbnail — a tinted rounded rectangle with a representative SF Symbol,
-/// proportioned to match the reference's small horizontally-scrolling cards.
-struct ContextThumbnail: Identifiable {
-    let id = UUID()
-    let systemImage: String
-    let tint: Color
-}
-
-struct ContextThumbnailCard: View {
-    let thumbnail: ContextThumbnail
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(Color(.secondarySystemBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color(.separator), lineWidth: 0.5)
-            )
-            .overlay(
-                Image(systemName: thumbnail.systemImage)
-                    .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(thumbnail.tint.opacity(0.8))
-            )
-            .frame(width: 108, height: 128)
     }
 }
 
