@@ -7,9 +7,9 @@
 
 | Lane | Branch / worktree | Scope | Write-set | Status |
 |---|---|---|---|---|
-| A | `feat/p1-tool-cards` / `.worktrees/p1-tool-cards` | Tool-call cards + working-indicator enum (§1.1 step 3) | CursorThreadTranscriptModel/Mapper, CursorWorkThreadView, new CursorToolCall* | dispatched |
-| B | `feat/p1-policy-matrix` / `.worktrees/p1-policy-matrix` | Happier permission-matrix SHAPE → Go policy tests (§1.2) | daemon/lancerd `*_test.go` only | dispatched |
-| D | `feat/p1-thread-order` / `.worktrees/p1-thread-order` | Thread-list ordering by AttentionReason (§1.3) | CursorThreadAttention, CursorWorkspaceThreadListView | dispatched |
+| A | `feat/p1-tool-cards` / `.worktrees/p1-tool-cards` | Tool-call cards + working-indicator enum (§1.1 step 3) | CursorThreadTranscriptModel/Mapper, CursorWorkThreadView, new CursorToolCall* | dispatched (running) |
+| B | **MERGED** PR #70 (`eeaa6134`) | 81-case permission matrix + **real fail-open bug found & fixed**: `policy/match.go` corrupt ExpiresAt (effect-aware fail-closed after Opus CI correction) | — | done; worktree removed |
+| D | **MERGED** PR #71 (`57bf761d`) | Ordering already existed (C1–C2); +8 ordering tests, force-unwrap removed | — | done; worktree removed |
 | C (queued) | — | Re-port master-line M1 question card onto W0.A shell (from #69 integration) | CursorWorkThreadView + new card file | blocked by A (same write-set) |
 | queued | — | Stop ladder + derived-offline (§1.1 step 5) | chat internals | after A |
 | queued | — | Unread read-cursor (§1.3) | thread view + list | after A+D |
