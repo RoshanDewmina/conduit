@@ -74,9 +74,10 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
           set -euo pipefail
-          cursor-agent -p "$(cat /tmp/prompt.txt)" \
-            --model "$REVIEWER_MODEL" --mode=ask \
-            --output-format json --force > /tmp/review-raw.json
+          # Prompt via stdin — a big diff as an argv element exceeds Linux's
+          # 128KiB per-argument limit (first run failed exit 126).
+          cursor-agent -p --model "$REVIEWER_MODEL" --mode=ask \
+            --output-format json --force < /tmp/prompt.txt > /tmp/review-raw.json
           python3 - <<'EOF'
           import json
           raw = open('/tmp/review-raw.json').read()
