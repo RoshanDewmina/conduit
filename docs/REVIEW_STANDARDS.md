@@ -54,6 +54,11 @@ Emit structured verdict JSON — one finding per entry:
 
 ## Appended rules
 
+- 2026-07-11 (PR #70, Opus CI reviewer correction): validity/expiry guards on policy rules must
+  be **effect-aware** — on corrupt/unparseable data, an allow rule becomes inactive but a deny
+  rule stays active. "Fail closed" means failing toward the more restrictive outcome per rule
+  effect, not uniformly skipping the rule.
+
 - 2026-07-11 (Phase 0 repair, `1c102940`): before committing, verify `git status` shows the
   files you expect as *modified*, not the whole tree as untracked — a wiped index silently
   produces an empty-tree commit that records deletion of every file. `git cat-file -p HEAD`
