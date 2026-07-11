@@ -15,20 +15,6 @@ struct LiveThreadIdentifier: Identifiable, Sendable, Hashable {
     }
 }
 
-/// Maps a workspace / repo display name to the cwd used for live send.
-/// Until real repo-picker paths land, named repos use `~/name`; the
-/// aggregate "All Repos" row (and empty names) stay at home.
-enum LiveThreadCwd {
-    static let homePlaceholder = "~"
-
-    static func forWorkspace(_ workspaceName: String) -> String {
-        let trimmed = workspaceName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return homePlaceholder }
-        if trimmed == "All Repos" { return homePlaceholder }
-        return "\(homePlaceholder)/\(trimmed)"
-    }
-}
-
 #if os(iOS)
 import SwiftUI
 

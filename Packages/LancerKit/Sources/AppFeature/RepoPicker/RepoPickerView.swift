@@ -1,17 +1,33 @@
 #if os(iOS)
 import SwiftUI
 
-/// Section 4 of the frontend rebuild: a faithful, Apple-native recreation of
-/// the Cursor-mobile "Repo" picker sheet (owner reference screenshot
-/// `IMG_2416`). Presented from the New Chat composer's repo/branch selector.
-/// Visual-only for this milestone — the search field does not filter, and
-/// tapping a row does nothing (no selection wiring back to the composer).
-/// System `SF Symbols` + semantic colors only, no DesignSystem module.
+/// Repo picker sheet over the real workspace list (derived + user-added).
 public struct RepoPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
 
-    public init() {}
+    let repos: [WorkspaceRepo]
+    let selectedCwd: String?
+    let onSelect: (WorkspaceRepo) -> Void
+
+    public init(
+        repos: [WorkspaceRepo],
+        selectedCwd: String?,
+        onSelect: @escaping (WorkspaceRepo) -> Void
+    ) {
+        self.repos = repos
+        self.selectedCwd = selectedCwd
+        self.onSelect = onSelect
+    }
+
+    private var filtered: [WorkspaceRepo] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return repos }
+        return repos.filter {
+            $0.name.localizedCaseInsensitiveContains(trimmed)
+                || $0.cwd.localizedCaseInsensitiveContains(trimmed)
+        }
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -26,65 +42,75 @@ public struct RepoPickerView: View {
 
             Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    RepoSectionHeader(title: "Active")
-                        .padding(.top, 20)
+            if filtered.isEmpty {
+                Text(repos.isEmpty ? "Add a repo to get started" : "No matching repos")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                Spacer(minLength: 0)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let active = filtered.first(where: {
+                            WorkspaceRepoCatalog.normalizeCwd($0.cwd)
+                                == WorkspaceRepoCatalog.normalizeCwd(selectedCwd ?? "")
+                        }) {
+                            RepoSectionHeader(title: "Active")
+                                .padding(.top, 20)
+                            Button {
+                                onSelect(active)
+                                dismiss()
+                            } label: {
+                                RepoListRow(
+                                    repo: RepoRow(
+                                        name: active.name,
+                                        branch: nil,
+                                        showsSwitcher: true,
+                                        subtitle: active.cwd
+                                    )
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            Divider()
+                                .padding(.leading, 58)
+                        }
 
-                    RepoListRow(repo: Self.activeRepo)
-                    Divider()
-                        .padding(.leading, 58)
+                        RepoSectionHeader(title: "Workspaces")
+                            .padding(.top, 20)
 
-                    RepoSectionHeader(title: "Recents")
-                        .padding(.top, 20)
-
-                    ForEach(Self.recentRepos) { repo in
-                        RepoListRow(repo: repo)
-                        Divider()
-                            .padding(.leading, 58)
+                        ForEach(filtered) { repo in
+                            Button {
+                                onSelect(repo)
+                                dismiss()
+                            } label: {
+                                RepoListRow(
+                                    repo: RepoRow(
+                                        name: repo.name,
+                                        branch: nil,
+                                        showsSwitcher: false,
+                                        subtitle: repo.cwd
+                                    )
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            Divider()
+                                .padding(.leading, 58)
+                        }
                     }
-
-                    RepoSectionHeader(title: "More")
-                        .padding(.top, 20)
-
-                    ForEach(Self.moreRepos) { repo in
-                        RepoListRow(repo: repo)
-                        Divider()
-                            .padding(.leading, 58)
-                    }
+                    .padding(.bottom, 24)
                 }
-                .padding(.bottom, 24)
             }
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
-
-    // MARK: - Static sample data
-
-    private static let activeRepo = RepoRow(name: "conduit", branch: "master", showsSwitcher: true)
-
-    private static let recentRepos: [RepoRow] = [
-        RepoRow(name: "personal-web", branch: nil, showsSwitcher: false),
-        RepoRow(name: "api-gateway", branch: nil, showsSwitcher: false),
-    ]
-
-    private static let moreRepos: [RepoRow] = [
-        RepoRow(name: "marketing-site", branch: nil, showsSwitcher: false),
-        RepoRow(name: "design-tokens", branch: nil, showsSwitcher: false),
-        RepoRow(name: "docs-site", branch: nil, showsSwitcher: false),
-        RepoRow(name: "mobile-app", branch: nil, showsSwitcher: false),
-        RepoRow(name: "internal-tools", branch: nil, showsSwitcher: false),
-        RepoRow(name: "data-pipeline", branch: nil, showsSwitcher: false),
-        RepoRow(name: "billing-service", branch: nil, showsSwitcher: false),
-    ]
 }
 
 // MARK: - Shared sheet chrome (used by RepoPickerView + AddRepoView)
 
-/// Centered bold title with a leading circular close button — matches the
-/// close-button chrome established in `ProfileView`.
 struct RepoSheetHeader: View {
     let title: String
     let onClose: () -> Void
@@ -118,7 +144,6 @@ struct RepoSheetHeader: View {
     }
 }
 
-/// Static (non-filtering) search capsule with placeholder "Repo...".
 struct RepoSearchField: View {
     @Binding var text: String
 
@@ -151,13 +176,12 @@ struct RepoSectionHeader: View {
     }
 }
 
-// MARK: - Row model + view
-
 struct RepoRow: Identifiable {
     let id = UUID()
     let name: String
     let branch: String?
     let showsSwitcher: Bool
+    var subtitle: String? = nil
 }
 
 struct RepoListRow: View {
@@ -170,10 +194,18 @@ struct RepoListRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 24)
 
-            Text(repo.name)
-                .font(.system(size: 17))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(repo.name)
+                    .font(.system(size: 17))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                if let subtitle = repo.subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
 
             Spacer()
 
@@ -196,6 +228,6 @@ struct RepoListRow: View {
 }
 
 #Preview {
-    RepoPickerView()
+    RepoPickerView(repos: [], selectedCwd: nil, onSelect: { _ in })
 }
 #endif

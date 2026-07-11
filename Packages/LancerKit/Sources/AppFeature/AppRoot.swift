@@ -152,6 +152,8 @@ public struct AppRoot: View {
     /// publishes them for `LiveThreadView`'s question card. Same construction
     /// constraint as `relayApprovalIngest` — needs `env.chatRepo`.
     @State private var relayQuestionIngest: RelayQuestionIngest?
+    /// Derived + user-added workspace repos for the Workspaces shell.
+    @State private var workspaceDataStore: WorkspaceDataStore?
 
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
@@ -175,11 +177,13 @@ public struct AppRoot: View {
             ))
             _relayApprovalIngest = State(initialValue: RelayApprovalIngest(database: env.database))
             _relayQuestionIngest = State(initialValue: RelayQuestionIngest(chatRepo: env.chatRepo))
+            _workspaceDataStore = State(initialValue: WorkspaceDataStore(chatRepo: env.chatRepo))
         } catch {
             _environment = State(initialValue: .failure(error.localizedDescription))
             _shellLiveBridge = State(initialValue: nil)
             _relayApprovalIngest = State(initialValue: nil)
             _relayQuestionIngest = State(initialValue: nil)
+            _workspaceDataStore = State(initialValue: nil)
         }
     }
 
@@ -191,8 +195,8 @@ public struct AppRoot: View {
                 systemImage: "exclamationmark.triangle",
                 description: Text(message)
             )
-        case .ready:
-            if let shellLiveBridge, let relayApprovalIngest, let relayQuestionIngest {
+        case .ready(let env):
+            if let shellLiveBridge, let relayApprovalIngest, let relayQuestionIngest, let workspaceDataStore {
                 NavigationStack {
                     WorkspacesView()
                 }
@@ -200,12 +204,15 @@ public struct AppRoot: View {
                 .environment(shellLiveBridge)
                 .environment(relayApprovalIngest)
                 .environment(relayQuestionIngest)
+                .environment(workspaceDataStore)
                 .task {
                     relayApprovalIngest.start()
                     relayQuestionIngest.start()
                     await RelayFleetHydration.hydrate(into: relayFleetStore)
                     shellLiveBridge.markHydrated()
+                    await workspaceDataStore.refresh()
                     #if DEBUG
+                    await DebugSeeder.seedIfNeeded(env: env)
                     await DebugSeeder.autoPairRelayIfRequested(into: relayFleetStore)
                     #endif
                 }

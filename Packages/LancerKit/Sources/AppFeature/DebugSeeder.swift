@@ -10,14 +10,20 @@ import SSHTransport
 public enum DebugSeeder {
     private static let seededKey = "dev.lancer.debugSeeded"
 
+    /// Demo hosts/approvals/snippets — only when explicitly requested via
+    /// `LANCER_SEED_DEMO=1` (or UITest reseed seams). Never runs on a normal
+    /// dogfood launch.
     public static func seedIfNeeded(env: AppEnvironment) async {
+        guard ProcessInfo.processInfo.environment["LANCER_SEED_DEMO"] == "1" else { return }
         guard !UserDefaults.standard.bool(forKey: seededKey) else { return }
         await seed(env: env)
         UserDefaults.standard.set(true, forKey: seededKey)
     }
 
-    /// Force re-seed (useful from Settings debug menu).
+    /// Force re-seed (useful from Settings debug menu). Still requires
+    /// `LANCER_SEED_DEMO=1` so a stray menu tap cannot pollute production.
     public static func reseed(env: AppEnvironment) async {
+        guard ProcessInfo.processInfo.environment["LANCER_SEED_DEMO"] == "1" else { return }
         await seed(env: env)
         UserDefaults.standard.set(true, forKey: seededKey)
     }

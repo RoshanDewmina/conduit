@@ -1,26 +1,59 @@
 #if os(iOS)
 import SwiftUI
+import PersistenceKit
 
-/// Section 5 of the frontend rebuild: a faithful, Apple-native recreation of
-/// the Cursor-mobile per-workspace thread list (owner reference screenshot
-/// `IMG_2409`). Pushed via `NavigationStack` when tapping a Workspaces row.
-/// Visual-only for this milestone — rows are static sample data with no
-/// navigation to a thread detail. System `SF Symbols` + semantic colors
-/// only, no DesignSystem module.
+/// Scope for a thread list — either every conversation or one real repo cwd.
+public enum ThreadListWorkspace: Hashable {
+    case allRepos
+    case repo(WorkspaceRepo)
+
+    public var title: String {
+        switch self {
+        case .allRepos: return "All Repos"
+        case .repo(let repo): return repo.name
+        }
+    }
+
+    public var cwd: String? {
+        switch self {
+        case .allRepos: return nil
+        case .repo(let repo): return repo.cwd
+        }
+    }
+
+    public var isAllRepos: Bool {
+        if case .allRepos = self { return true }
+        return false
+    }
+}
+
+/// Per-workspace thread list backed by `WorkspaceDataStore` conversations.
 public struct ThreadListView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(WorkspaceDataStore.self) private var workspaceData
     @State private var isSearchPresented = false
     @State private var isComposerPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
 
-    let workspaceName: String
+    let workspace: ThreadListWorkspace
 
-    public init(workspaceName: String) {
-        self.workspaceName = workspaceName
+    public init(workspace: ThreadListWorkspace) {
+        self.workspace = workspace
     }
 
-    private var workspaceCwd: String {
-        LiveThreadCwd.forWorkspace(workspaceName)
+    /// Convenience for callers that only have a display name + cwd.
+    public init(workspaceName: String, cwd: String) {
+        self.workspace = .repo(
+            WorkspaceRepo(name: workspaceName, cwd: cwd, threadCount: 0, isUserAdded: false)
+        )
+    }
+
+    private var threads: [ThreadListItem] {
+        workspaceData.threads(forCwd: workspace.cwd, allRepos: workspace.isAllRepos)
+    }
+
+    private var groups: [(title: String, items: [ThreadListItem])] {
+        WorkspaceRepoCatalog.groupByRecency(threads)
     }
 
     public var body: some View {
@@ -33,42 +66,44 @@ public struct ThreadListView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
 
-                Text(workspaceName)
+                Text(workspace.title)
                     .font(.largeTitle.bold())
                     .padding(.horizontal, 20)
                     .padding(.top, 28)
                     .padding(.bottom, 8)
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        sectionHeader("Yesterday")
+                if threads.isEmpty {
+                    Text("No threads yet")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                    Spacer(minLength: 0)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+                                sectionHeader(group.title)
+                                    .padding(.top, index == 0 ? 0 : 20)
 
-                        ForEach(Self.yesterdayThreads) { thread in
-                            NavigationLink {
-                                ThreadDetailView(thread: thread, cwd: workspaceCwd)
-                            } label: {
-                                ThreadListRow(thread: thread)
+                                ForEach(group.items) { thread in
+                                    NavigationLink {
+                                        ThreadDetailView(thread: thread)
+                                    } label: {
+                                        ThreadListRow(
+                                            thread: thread,
+                                            showsRepoName: workspace.isAllRepos
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    Divider()
+                                        .padding(.leading, 40)
+                                }
                             }
-                            .buttonStyle(.plain)
-                            Divider()
-                                .padding(.leading, 40)
                         }
-
-                        sectionHeader("This Week")
-                            .padding(.top, 20)
-
-                        ForEach(Self.thisWeekThreads) { thread in
-                            NavigationLink {
-                                ThreadDetailView(thread: thread, cwd: workspaceCwd)
-                            } label: {
-                                ThreadListRow(thread: thread)
-                            }
-                            .buttonStyle(.plain)
-                            Divider()
-                                .padding(.leading, 40)
-                        }
+                        .padding(.bottom, 90)
                     }
-                    .padding(.bottom, 90)
                 }
             }
 
@@ -84,17 +119,34 @@ public struct ThreadListView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .task {
+            await workspaceData.refresh()
+        }
         .sheet(isPresented: $isSearchPresented) {
             SearchView()
         }
         .sheet(isPresented: $isComposerPresented) {
-            NewChatComposerView(onSend: handleSend)
+            NewChatComposerView(
+                initialRepo: workspaceCwdRepo,
+                onSend: handleSend
+            )
         }
         .liveThreadPresentation($activeLiveThread)
     }
 
-    private func handleSend(_ prompt: String) {
-        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: workspaceCwd)
+    private var workspaceCwdRepo: WorkspaceRepo? {
+        switch workspace {
+        case .allRepos:
+            return workspaceData.repos.first
+        case .repo(let repo):
+            return repo
+        }
+    }
+
+    private func handleSend(_ prompt: String, _ cwd: String) {
+        let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
+        guard !normalized.isEmpty else { return }
+        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized)
     }
 
     private var topBar: some View {
@@ -174,26 +226,14 @@ public struct ThreadListView: View {
         .background(Capsule().fill(Color(.secondarySystemBackground)))
         .overlay(Capsule().strokeBorder(Color(.separator), lineWidth: 0.5))
     }
-
-    // MARK: - Static sample data
-
-    fileprivate static let yesterdayThreads: [ThreadRow] = [
-        ThreadRow(title: "Fix onboarding flow", status: .checksPassed, diffStat: "+142 -18"),
-        ThreadRow(title: "Update README", status: .merged, diffStat: nil),
-    ]
-
-    fileprivate static let thisWeekThreads: [ThreadRow] = [
-        ThreadRow(title: "Refactor auth module", status: .merged, diffStat: "+89 -34"),
-        ThreadRow(title: "Investigate flaky CI job", status: .noChanges, diffStat: nil),
-        ThreadRow(title: "Add dark mode toggle", status: .checksPassed, diffStat: "+212 -6"),
-        ThreadRow(title: "Clean up test fixtures", status: .merged, diffStat: "+54 -201"),
-        ThreadRow(title: "Optimize image loading", status: .noChanges, diffStat: nil),
-    ]
 }
 
 #Preview {
-    NavigationStack {
-        ThreadListView(workspaceName: "conduit")
+    let db = try! PersistenceKit.AppDatabase.inMemory()
+    let chatRepo = ChatConversationRepository(db)
+    return NavigationStack {
+        ThreadListView(workspace: .allRepos)
     }
+    .environment(WorkspaceDataStore(chatRepo: chatRepo))
 }
 #endif

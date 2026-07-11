@@ -1,18 +1,30 @@
 #if os(iOS)
 import SwiftUI
 
-/// Section 4 of the frontend rebuild: a faithful, Apple-native recreation of
-/// the Cursor-mobile "Add Repo" sheet (owner reference screenshot
-/// `IMG_2414`). Presented from the Workspaces root's static "Add Repo" row.
-/// Visual-only for this milestone — the search field does not filter, and
-/// tapping a row does nothing (no selection wiring back to Workspaces).
-/// System `SF Symbols` + semantic colors only, no DesignSystem module.
-/// Reuses the shared sheet chrome + row view defined in `RepoPickerView.swift`.
+/// Add Repo sheet — enter a real cwd path; no fake GitHub / sample list.
 public struct AddRepoView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var searchText = ""
+    @State private var pathText = ""
+    @State private var nameText = ""
 
-    public init() {}
+    private let onAdd: (_ name: String, _ cwd: String) -> Void
+
+    public init(onAdd: @escaping (_ name: String, _ cwd: String) -> Void) {
+        self.onAdd = onAdd
+    }
+
+    private var normalizedPath: String {
+        WorkspaceRepoCatalog.normalizeCwd(pathText)
+    }
+
+    private var canAdd: Bool { !normalizedPath.isEmpty }
+
+    private var previewName: String {
+        let trimmed = nameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        guard canAdd else { return "" }
+        return WorkspaceRepoCatalog.displayName(forCwd: normalizedPath)
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -21,47 +33,78 @@ public struct AddRepoView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 12)
 
-            RepoSearchField(text: $searchText)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
-
             Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    RepoSectionHeader(title: "Workspaces")
-                        .padding(.top, 20)
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Repos also appear automatically when you run an agent in them from a paired machine. Add one manually if you want to send there before the first thread exists.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    ForEach(Self.workspaceRepos) { repo in
-                        RepoListRow(repo: repo)
-                        Divider()
-                            .padding(.leading, 58)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Path on the machine")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("~/Documents/my-repo", text: $pathText)
+                            .font(.system(size: 16))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(.secondarySystemBackground))
+                            )
                     }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Display name (optional)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField(previewName.isEmpty ? "my-repo" : previewName, text: $nameText)
+                            .font(.system(size: 16))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(.secondarySystemBackground))
+                            )
+                    }
+
+                    Button {
+                        guard canAdd else { return }
+                        onAdd(previewName, normalizedPath)
+                        dismiss()
+                    } label: {
+                        Text("Add Repo")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .foregroundStyle(canAdd ? Color(.systemBackground) : .secondary)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(canAdd ? Color.primary : Color(.tertiarySystemFill))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canAdd)
+                    .padding(.top, 8)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
                 .padding(.bottom, 24)
             }
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .presentationDetents([.large])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
-
-    // MARK: - Static sample data
-
-    private static let workspaceRepos: [RepoRow] = [
-        RepoRow(name: "marketing-site", branch: nil, showsSwitcher: false),
-        RepoRow(name: "api-gateway", branch: nil, showsSwitcher: false),
-        RepoRow(name: "design-tokens", branch: nil, showsSwitcher: false),
-        RepoRow(name: "docs-site", branch: nil, showsSwitcher: false),
-        RepoRow(name: "mobile-app", branch: nil, showsSwitcher: false),
-        RepoRow(name: "internal-tools", branch: nil, showsSwitcher: false),
-        RepoRow(name: "data-pipeline", branch: nil, showsSwitcher: false),
-        RepoRow(name: "onboarding-flow", branch: nil, showsSwitcher: false),
-        RepoRow(name: "billing-service", branch: nil, showsSwitcher: false),
-    ]
 }
 
 #Preview {
-    AddRepoView()
+    AddRepoView { _, _ in }
 }
 #endif

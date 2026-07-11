@@ -1,35 +1,16 @@
 #if os(iOS)
 import SwiftUI
 
-/// Shared thread-row model + view for Section 5 of the frontend rebuild:
-/// used by both `ThreadListView` (per-workspace, date-grouped) and
-/// `SearchView` (flat, repo-tagged). Visual-only — static sample data,
-/// no live wiring.
-struct ThreadRow: Identifiable {
-    let id = UUID()
-    let title: String
-    let status: ThreadRowStatus
-    let diffStat: String?
-    var repoName: String? = nil
-}
-
-enum ThreadRowStatus {
-    case checksPassed
-    case merged
-    case noChanges
-}
-
-/// A single thread row: a small status dot, a title line, and a status
-/// line (icon + label, optionally followed by " · +NNN -NNN" diff stats
-/// and, in Search results, " · <repo name>").
+/// Shared thread-row view for `ThreadListView` and `SearchView`.
+/// Status labels come from `WorkspaceRepoCatalog` — never invented CI copy.
 struct ThreadListRow: View {
-    let thread: ThreadRow
+    let thread: ThreadListItem
     var showsRepoName: Bool = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Circle()
-                .fill(Color(.systemGray3))
+                .fill(dotColor)
                 .frame(width: 8, height: 8)
                 .padding(.top, 7)
 
@@ -49,36 +30,40 @@ struct ThreadListRow: View {
         .contentShape(Rectangle())
     }
 
+    private var dotColor: Color {
+        switch thread.statusKind {
+        case .working: return .orange
+        case .completed: return Color(.systemGray3)
+        case .failed: return .red
+        case .archived: return Color(.systemGray4)
+        case .idle: return Color(.systemGray4)
+        }
+    }
+
     @ViewBuilder
     private var statusLine: some View {
         HStack(spacing: 4) {
-            switch thread.status {
-            case .checksPassed:
+            switch thread.statusKind {
+            case .working:
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.orange)
+            case .completed:
                 Image(systemName: "checkmark")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.green)
-                Text("Checks Passed")
-                    .font(.system(size: 14))
                     .foregroundStyle(.secondary)
-            case .merged:
-                Image(systemName: "arrow.trianglehead.branch")
+            case .failed:
+                Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text("Merged")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-            case .noChanges:
-                Text("No Changes")
-                    .font(.system(size: 14))
-                    .italic()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.red)
+            case .archived, .idle:
+                EmptyView()
             }
 
-            if let diffStat = thread.diffStat {
-                Text("· \(diffStat)")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-            }
+            Text(thread.statusLabel)
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .italic(thread.statusKind == .idle)
 
             if showsRepoName, let repoName = thread.repoName {
                 Text("· \(repoName)")
