@@ -53,7 +53,33 @@ func normalizeClaudeModel(model string) string {
 func agentArgv(agent, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
-		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "-p", prompt}
+		// --permission-prompt-tool stdio + --input-format stream-json together
+		// are what actually open a LIVE bidirectional control channel for
+		// AskUserQuestion — verified live 2026-07-10 (M3 probe, see
+		// docs/plans/2026-07-10-in-thread-questions-Status.md): with
+		// --permission-prompt-tool stdio alone (M2's fix), a "control_request"
+		// line never appears on stdout at all — the CLI auto-denies the tool
+		// call instantly ("Stream closed") regardless of whether stdin is a
+		// live pipe or /dev/null. Adding --input-format stream-json is what
+		// unlocks the real control_request/control_response protocol
+		// (confirmed via a live probe: same argv minus --input-format never
+		// emits control_request; with it, a real
+		// {"type":"control_request","request":{"subtype":"can_use_tool",...}}
+		// line appears and a {"type":"control_response",...} written back to
+		// stdin genuinely resumes the SAME turn with the real answer — the
+		// model's own final text reflected the injected answer, not a denial).
+		//
+		// The catch (also verified live): with --input-format stream-json the
+		// CLI reads its initial user message from stdin as a
+		// {"type":"user","message":{...}} line, NOT from a positional -p
+		// argument — a positional prompt combined with --input-format
+		// stream-json hangs forever waiting on stdin instead of using it. The
+		// trailing "-p", prompt pair is deliberately KEPT here (for the
+		// existing audit/display "command" string built from this same argv,
+		// and for claudeStdinPromptArgv's test coverage); realLauncher strips
+		// it from the actual exec argv and delivers prompt as the initial
+		// stdin message instead — see claudeStdinPromptArgv's doc comment.
+		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "-p", prompt}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -93,7 +119,11 @@ func agentArgv(agent, prompt, model string) ([]string, bool) {
 func continueArgv(agent, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
-		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--continue", "-p", prompt}
+		// --permission-prompt-tool stdio + --input-format stream-json: see
+		// agentArgv's doc comment — same live-verified same-turn-continuation
+		// protocol applies to a continued turn; realLauncher strips the
+		// trailing "-p", prompt pair and delivers it over stdin the same way.
+		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue", "-p", prompt}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -148,7 +178,11 @@ func continueArgv(agent, prompt, model string) ([]string, bool) {
 func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
-		argv := []string{"claude", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--resume", sessionID, "-p", prompt}
+		// --permission-prompt-tool stdio + --input-format stream-json: see
+		// agentArgv's doc comment — same live-verified same-turn-continuation
+		// protocol applies to a resumed turn; realLauncher strips the trailing
+		// "-p", prompt pair and delivers it over stdin the same way.
+		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", sessionID, "-p", prompt}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -333,6 +367,22 @@ type procHandle struct {
 	kill   func()
 	pause  func()
 	resume func()
+	// writeControlResponse sends a raw control_response JSON line (no
+	// trailing newline required) to the child's stdin. nil when this run has
+	// no live bidirectional control channel (any agent other than a
+	// claudeCode run launched with --input-format stream-json — see
+	// claudeStdinPromptArgv). handleControlRequest is the only caller.
+	writeControlResponse func(payload []byte) error
+	// closeStdin closes the child's stdin (EOF). With --input-format
+	// stream-json the CLI does NOT exit on its own once a turn's "result"
+	// event is emitted — verified live 2026-07-10: it idles waiting for
+	// another stdin message instead. streamJSONOutput calls this once it
+	// observes "result" so the process still exits promptly (confirmed live:
+	// ~0.5s to clean exit after closing stdin). Always non-nil on a procHandle
+	// returned by realLauncher; a no-op when the run has no live stdin (never
+	// opened). nil only on procHandles built by other launchFuncs (tests,
+	// e2eFakeRelayLaunch) that don't set it — callers must nil-check.
+	closeStdin func()
 }
 
 // emitFunc sends a JSON-RPC notification (method + params) to the attached phone.
@@ -341,6 +391,85 @@ type emitFunc func(method string, params any)
 // launchFunc starts an agent process, streaming its stdout/stderr + status to
 // emit (tagged with runID), and returns its control handle. Injectable for tests.
 type launchFunc func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error)
+
+// controlStdin serializes every write to a claudeCode child's stdin —
+// the launch goroutine's one-time initial user message and the
+// stdout-scanning goroutine's later control_response replies and final
+// close-on-result EOF all go through the same mutex so they can never
+// interleave or double-close the underlying pipe.
+type controlStdin struct {
+	mu     sync.Mutex
+	w      io.WriteCloser
+	closed bool
+}
+
+func (c *controlStdin) write(b []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return nil
+	}
+	_, err := c.w.Write(b)
+	return err
+}
+
+func (c *controlStdin) close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return
+	}
+	c.closed = true
+	_ = c.w.Close()
+}
+
+// claudeStdinPromptArgv detects a claudeCode argv built with --input-format
+// stream-json (agentArgv/continueArgv/resumeArgv's claudeCode case) and, if
+// found, returns the argv with its trailing "-p", "<prompt>" pair replaced
+// by a bare "-p" flag, plus the prompt text to deliver separately.
+//
+// Verified live 2026-07-10: in --input-format stream-json mode the CLI reads
+// its initial user turn from a {"type":"user","message":{...}} line on
+// stdin, not from a positional prompt argument — a positional prompt
+// combined with --input-format stream-json hangs forever (the CLI waits on
+// stdin for a message that never arrives; a bare "-p" with no positional arg
+// plus a stdin-delivered message is what actually works). realLauncher uses
+// this to build the real exec argv and know what to write to stdin; the
+// ORIGINAL argv (still carrying the prompt positionally) is what
+// dispatch()/continueRun()/resumeRun() use for the audit-log "command"
+// string and what dispatch_test.go's TestAgentArgv/TestContinueArgv/
+// TestResumeArgv assert against — this function is the only place that
+// diverges from it.
+//
+// ok is false for every argv this doesn't apply to (any non-claudeCode
+// vendor, or a claudeCode argv without --input-format stream-json, or an
+// empty prompt) — the caller launches exactly as before with argv unchanged
+// and no stdin pipe.
+func claudeStdinPromptArgv(argv []string) (execArgv []string, prompt string, ok bool) {
+	if len(argv) < 4 || argv[0] != "claude" {
+		return nil, "", false
+	}
+	hasStreamInput := false
+	for i := 0; i+1 < len(argv); i++ {
+		if argv[i] == "--input-format" && argv[i+1] == "stream-json" {
+			hasStreamInput = true
+			break
+		}
+	}
+	if !hasStreamInput {
+		return nil, "", false
+	}
+	if argv[len(argv)-2] != "-p" {
+		return nil, "", false
+	}
+	prompt = argv[len(argv)-1]
+	if prompt == "" {
+		return nil, "", false
+	}
+	execArgv = make([]string, 0, len(argv)-1)
+	execArgv = append(execArgv, argv[:len(argv)-1]...) // keep everything through the bare "-p"
+	return execArgv, prompt, true
+}
 
 func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
 	// Build the child env with an augmented PATH first: under launchd the daemon
@@ -354,17 +483,28 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 		env = lancerGateEnvironment(env)
 	}
 
+	// A claudeCode argv built with --input-format stream-json (agentArgv's
+	// doc comment) needs its prompt delivered over stdin, not positionally —
+	// see claudeStdinPromptArgv. execArgv is what actually gets exec'd;
+	// argv (unchanged) is still what streamJSON-mode detection below reads.
+	execArgv := argv
+	stdinPrompt := ""
+	useControlStdin := false
+	if ea, p, ok := claudeStdinPromptArgv(argv); ok {
+		execArgv, stdinPrompt, useControlStdin = ea, p, true
+	}
+
 	// Resolve the binary against the AUGMENTED PATH ourselves and pass an absolute
 	// path. exec.Command resolves a bare name using the daemon's own (minimal)
 	// PATH at call time — cmd.Env does NOT affect that lookup — so without this the
 	// run fails "executable file not found in $PATH" under launchd.
-	bin := argv[0]
+	bin := execArgv[0]
 	if !strings.Contains(bin, "/") {
 		if resolved := lookPathIn(bin, env); resolved != "" {
 			bin = resolved
 		}
 	}
-	cmd := exec.Command(bin, argv[1:]...) // explicit argv, no shell
+	cmd := exec.Command(bin, execArgv[1:]...) // explicit argv, no shell
 	cmd.Dir = expandHome(cwd)
 	cmd.Env = env
 	// Run the agent in its own process group so we can reap its whole subtree.
@@ -382,10 +522,36 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	if err != nil {
 		return nil, err
 	}
+
+	var stdinCtl *controlStdin
+	if useControlStdin {
+		stdinPipe, err := cmd.StdinPipe()
+		if err != nil {
+			return nil, err
+		}
+		stdinCtl = &controlStdin{w: stdinPipe}
+	}
+
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 	emitRunStatus(emit, runID, "running", nil)
+
+	if stdinCtl != nil {
+		// Deliver the turn's prompt as the initial stream-json user message —
+		// verified live 2026-07-10: this is what --input-format stream-json
+		// actually reads (see claudeStdinPromptArgv's doc comment). Best-effort:
+		// a write failure here leaves the process with no input, which it will
+		// itself error/exit on — the existing exit-status handling below still
+		// reports that terminal status normally, same as any other launch failure.
+		initMsg, merr := json.Marshal(map[string]any{
+			"type":    "user",
+			"message": map[string]any{"role": "user", "content": stdinPrompt},
+		})
+		if merr == nil {
+			_ = stdinCtl.write(append(initMsg, '\n'))
+		}
+	}
 
 	// Detect whether the agent was launched in stream-json mode so the stdout
 	// reader can parse per-line JSON deltas instead of line-buffered chunks.
@@ -426,6 +592,9 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 		}
 		_ = stdout.Close()
 		_ = stderr.Close()
+		if stdinCtl != nil {
+			stdinCtl.close()
+		}
 		streams.Wait()
 	}()
 
@@ -446,6 +615,17 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 		resume: func() {
 			if proc != nil {
 				_ = proc.Signal(syscall.SIGCONT)
+			}
+		},
+		writeControlResponse: func(payload []byte) error {
+			if stdinCtl == nil {
+				return nil
+			}
+			return stdinCtl.write(append(payload, '\n'))
+		},
+		closeStdin: func() {
+			if stdinCtl != nil {
+				stdinCtl.close()
 			}
 		},
 	}, nil
@@ -818,6 +998,43 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			if errText, ok := extractStreamJSONResultError(obj); ok {
 				emitStreamJSONResultError(emit, runID, errText, seq)
 			}
+			// A "result" line means this turn is done — but with
+			// --input-format stream-json (claudeStdinPromptArgv) the CLI does
+			// NOT exit on its own afterward; verified live 2026-07-10 it idles
+			// waiting for another stdin message. Signal wrapEmitForRun to close
+			// this run's stdin so the process actually exits. Harmless no-op
+			// for every other run shape (dispatcher.handleControlClose
+			// nil-checks the run's closeStdin).
+			emit("agent.control.close", map[string]any{"runId": runID})
+		case "control_request":
+			// The live bidirectional control channel opened by
+			// --permission-prompt-tool stdio + --input-format stream-json
+			// (agentArgv's doc comment) — verified live 2026-07-10:
+			// {"type":"control_request","request_id":"...","request":{
+			//   "subtype":"can_use_tool","tool_name":"...","input":{...},
+			//   "tool_use_id":"...","requires_user_interaction":true}}.
+			// Only "can_use_tool" is a known subtype; anything else is
+			// ignored (forward-compat with a future protocol addition rather
+			// than misinterpreting it). dispatcher.handleControlRequest owns
+			// the allow/deny decision and the actual stdin write.
+			req, _ := obj["request"].(map[string]any)
+			if req == nil {
+				break
+			}
+			if subtype, _ := req["subtype"].(string); subtype != "can_use_tool" {
+				break
+			}
+			requestID, _ := obj["request_id"].(string)
+			toolName, _ := req["tool_name"].(string)
+			toolUseID, _ := req["tool_use_id"].(string)
+			input, _ := req["input"].(map[string]any)
+			if requestID == "" {
+				break
+			}
+			emit("agent.control.request", map[string]any{
+				"runId": runID, "requestId": requestID, "toolName": toolName,
+				"toolUseId": toolUseID, "input": input,
+			})
 		case "text":
 			part, _ := obj["part"].(map[string]any)
 			if part == nil {
@@ -949,6 +1166,16 @@ type dispatchRun struct {
 	WorktreePath string // non-empty when launched in a daemon-managed per-run worktree
 	RepoRoot     string // repo root for worktree cleanup
 	handle       *procHandle
+	// pendingControlAnswer stages a resolved AskUserQuestion outcome (allow
+	// with the real answer, or a fail-closed deny on hold-timeout) keyed by
+	// tool_use_id, staged by registerAndWaitForQuestion (question.go) the
+	// instant it resolves — strictly before the stdout scanner can reach the
+	// corresponding "control_request" line for the SAME tool_use_id, because
+	// registerAndWaitForQuestion runs synchronously in that same scanning
+	// goroutine and blocks it until answered (see its doc comment). Consumed
+	// (and deleted) by dispatcher.handleControlRequest. Guarded by
+	// dispatcher.mu like every other dispatchRun field.
+	pendingControlAnswer map[string]controlAnswer
 }
 
 // runTerminalCallback fires once when a launched run reaches a terminal process
@@ -1138,6 +1365,24 @@ func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 			}
 			return
 		}
+		if method == "agent.control.request" {
+			m, _ := params.(map[string]any)
+			requestID, _ := m["requestId"].(string)
+			toolName, _ := m["toolName"].(string)
+			toolUseID, _ := m["toolUseId"].(string)
+			input, _ := m["input"].(map[string]any)
+			d.handleControlRequest(runID, requestID, toolName, toolUseID, input)
+			return
+		}
+		if method == "agent.control.close" {
+			d.mu.Lock()
+			run := d.runs[runID]
+			d.mu.Unlock()
+			if run != nil && run.handle != nil && run.handle.closeStdin != nil {
+				run.handle.closeStdin()
+			}
+			return
+		}
 		if method == "agent.run.status" {
 			if m, ok := params.(map[string]any); ok {
 				status, _ := m["status"].(string)
@@ -1160,6 +1405,183 @@ func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 			d.emit(method, params)
 		}
 	}
+}
+
+// controlAnswer is a resolved AskUserQuestion outcome staged by
+// registerAndWaitForQuestion (question.go) for delivery as a
+// control_response once the corresponding control_request's request_id is
+// known — see dispatchRun.pendingControlAnswer's doc comment.
+type controlAnswer struct {
+	allow   bool
+	answers map[string]any // Agent-SDK "answers" shape: question text -> label | []label | freeText
+	message string         // deny message; empty for allow
+}
+
+// controlResponsePayload mirrors the exact wire shape verified live
+// 2026-07-10 (see agentArgv's doc comment / docs/plans/
+// 2026-07-10-in-thread-questions-Status.md's M3 probe evidence):
+//
+//	{"type":"control_response","response":{"subtype":"success",
+//	 "request_id":"...","response":{"behavior":"allow"|"deny", ...}}}
+type controlResponsePayload struct {
+	Type     string                  `json:"type"`
+	Response controlResponseEnvelope `json:"response"`
+}
+
+type controlResponseEnvelope struct {
+	Subtype   string            `json:"subtype"`
+	RequestID string            `json:"request_id"`
+	Response  controlToolResult `json:"response"`
+}
+
+type controlToolResult struct {
+	Behavior     string         `json:"behavior"` // "allow" | "deny"
+	UpdatedInput map[string]any `json:"updatedInput,omitempty"`
+	Message      string         `json:"message,omitempty"`
+}
+
+func allowControlResponse(requestID string, updatedInput map[string]any) controlResponsePayload {
+	return controlResponsePayload{
+		Type: "control_response",
+		Response: controlResponseEnvelope{
+			Subtype:   "success",
+			RequestID: requestID,
+			Response:  controlToolResult{Behavior: "allow", UpdatedInput: updatedInput},
+		},
+	}
+}
+
+func denyControlResponse(requestID, message string) controlResponsePayload {
+	return controlResponsePayload{
+		Type: "control_response",
+		Response: controlResponseEnvelope{
+			Subtype:   "success",
+			RequestID: requestID,
+			Response:  controlToolResult{Behavior: "deny", Message: message},
+		},
+	}
+}
+
+// buildControlAnswers converts a resolved QuestionAnswer into the Agent
+// SDK's documented "answers" shape (question text -> selected label, an
+// array of labels for multiSelect, or free text) — verified live 2026-07-10:
+// a plain string works for single-select, a JSON array of strings for
+// multiSelect. Items must already be aligned 1:1 with event.Questions by
+// index (questionStore.resolve's own contract — see question.go).
+func buildControlAnswers(event QuestionEvent, answer QuestionAnswer) map[string]any {
+	out := make(map[string]any, len(event.Questions))
+	for i, q := range event.Questions {
+		if i >= len(answer.Items) {
+			break
+		}
+		item := answer.Items[i]
+		switch {
+		case len(item.SelectedLabels) > 1:
+			out[q.Question] = item.SelectedLabels
+		case len(item.SelectedLabels) == 1:
+			out[q.Question] = item.SelectedLabels[0]
+		case item.FreeText != "":
+			out[q.Question] = item.FreeText
+		default:
+			out[q.Question] = ""
+		}
+	}
+	return out
+}
+
+// stashControlAnswer records a resolved AskUserQuestion outcome for runID's
+// pending control_request to pick up — see dispatchRun.pendingControlAnswer.
+// A no-op if the run is gone (e.g. cancelled/exited between the answer
+// resolving and this call) or toolUseID is empty.
+func (d *dispatcher) stashControlAnswer(runID, toolUseID string, ca controlAnswer) {
+	if toolUseID == "" {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	run := d.runs[runID]
+	if run == nil {
+		return
+	}
+	if run.pendingControlAnswer == nil {
+		run.pendingControlAnswer = map[string]controlAnswer{}
+	}
+	run.pendingControlAnswer[toolUseID] = ca
+}
+
+// takeControlAnswer pops (retrieves and deletes) a staged control answer.
+func (d *dispatcher) takeControlAnswer(runID, toolUseID string) (controlAnswer, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	run := d.runs[runID]
+	if run == nil || run.pendingControlAnswer == nil {
+		return controlAnswer{}, false
+	}
+	ca, ok := run.pendingControlAnswer[toolUseID]
+	if ok {
+		delete(run.pendingControlAnswer, toolUseID)
+	}
+	return ca, ok
+}
+
+// handleControlRequest answers a live control_request (streamJSONOutput's
+// "control_request" case, forwarded here via wrapEmitForRun's
+// "agent.control.request" internal event) on the run's actual child stdin.
+//
+// For a recognized question tool (isQuestionToolName), it answers with
+// whatever registerAndWaitForQuestion already staged via stashControlAnswer:
+// allow with the real structured answer, or a fail-closed deny if the
+// 10-minute hold timed out with no answer. If nothing was staged at all (the
+// question pipeline never registered this tool_use_id — e.g. onQuestion is
+// nil, or extractQuestionEvent didn't recognize the input), this denies and
+// audits rather than guessing.
+//
+// Any OTHER tool name is denied unconditionally, no exceptions: Lancer's
+// PreToolUse hook already gates every ordinary tool call before canUseTool
+// is ever consulted (docs/agent-contract.md; see launchRisk's hookWired
+// convention) — ordinary tool approvals are NOT routed through this control
+// protocol. A control_request for e.g. Bash arriving here means the hook did
+// not resolve it, an unexpected and security-relevant state this must never
+// silently allow. This is a deliberate scope boundary for M3, not an
+// oversight — see docs/plans/2026-07-10-in-thread-questions-Status.md.
+func (d *dispatcher) handleControlRequest(runID, requestID, toolName, toolUseID string, input map[string]any) {
+	if requestID == "" {
+		return
+	}
+	d.mu.Lock()
+	run := d.runs[runID]
+	d.mu.Unlock()
+	if run == nil || run.handle == nil || run.handle.writeControlResponse == nil {
+		return
+	}
+
+	var resp controlResponsePayload
+	if isQuestionToolName(toolName) {
+		if ca, ok := d.takeControlAnswer(runID, toolUseID); ok {
+			if ca.allow {
+				updated := make(map[string]any, len(input)+1)
+				for k, v := range input {
+					updated[k] = v
+				}
+				updated["answers"] = ca.answers
+				resp = allowControlResponse(requestID, updated)
+			} else {
+				resp = denyControlResponse(requestID, ca.message)
+			}
+		} else {
+			resp = denyControlResponse(requestID, "no answer available for this question")
+			d.emitAudit(AuditEntry{Action: "control-request-unresolved", Agent: run.Agent, Kind: "question", Command: toolName, ApprovalID: toolUseID})
+		}
+	} else {
+		resp = denyControlResponse(requestID, "tool approval must go through Lancer's PreToolUse hook, not an interactive prompt")
+		d.emitAudit(AuditEntry{Action: "control-request-denied-unexpected-tool", Agent: run.Agent, Kind: "command", Command: toolName, ApprovalID: toolUseID})
+	}
+
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		return
+	}
+	_ = run.handle.writeControlResponse(payload)
 }
 
 func (d *dispatcher) receiptStartFromDispatch(p dispatchParams) receiptStartParams {

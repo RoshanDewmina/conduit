@@ -148,6 +148,10 @@ public struct AppRoot: View {
     /// `shellLiveBridge` — needs `env.database`, so only non-nil once
     /// `AppEnvironment` construction has succeeded.
     @State private var relayApprovalIngest: RelayApprovalIngest?
+    /// In-thread questions: listens for relay-delivered pending questions and
+    /// publishes them for `LiveThreadView`'s question card. Same construction
+    /// constraint as `relayApprovalIngest` — needs `env.chatRepo`.
+    @State private var relayQuestionIngest: RelayQuestionIngest?
 
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
@@ -170,10 +174,12 @@ public struct AppRoot: View {
                 chatRepo: env.chatRepo
             ))
             _relayApprovalIngest = State(initialValue: RelayApprovalIngest(database: env.database))
+            _relayQuestionIngest = State(initialValue: RelayQuestionIngest(chatRepo: env.chatRepo))
         } catch {
             _environment = State(initialValue: .failure(error.localizedDescription))
             _shellLiveBridge = State(initialValue: nil)
             _relayApprovalIngest = State(initialValue: nil)
+            _relayQuestionIngest = State(initialValue: nil)
         }
     }
 
@@ -186,15 +192,17 @@ public struct AppRoot: View {
                 description: Text(message)
             )
         case .ready:
-            if let shellLiveBridge, let relayApprovalIngest {
+            if let shellLiveBridge, let relayApprovalIngest, let relayQuestionIngest {
                 NavigationStack {
                     WorkspacesView()
                 }
                 .environment(relayFleetStore)
                 .environment(shellLiveBridge)
                 .environment(relayApprovalIngest)
+                .environment(relayQuestionIngest)
                 .task {
                     relayApprovalIngest.start()
+                    relayQuestionIngest.start()
                     await RelayFleetHydration.hydrate(into: relayFleetStore)
                     shellLiveBridge.markHydrated()
                     #if DEBUG

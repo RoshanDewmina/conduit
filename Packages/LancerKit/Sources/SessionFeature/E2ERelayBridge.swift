@@ -837,17 +837,21 @@ public final class E2ERelayBridge: ObservableObject {
             }
             conversationsArchiveContinuation = nil
 
-        case "questionPending":
+        case "agentQuestion":
+            // Wire type is "agentQuestion" (matching `e2e_router.go`'s
+            // `sendQuestion`, NOT a "questionPending" guess) with a
+            // relay-specific payload shape — see `E2ERelayMessage.QuestionData`'s
+            // doc comment for why this isn't `QuestionPendingParams`.
             guard let env = try? JSONDecoder().decode(
-                E2ERelayMessage.RelayInnerEnvelope<QuestionPendingParams>.self, from: message.payload
+                E2ERelayMessage.RelayInnerEnvelope<E2ERelayMessage.QuestionData>.self, from: message.payload
             ) else {
-                Self.logger.error("handleRelayMessage: questionPending decode failed for machine=\(self.machineID.uuidString, privacy: .public)")
+                Self.logger.error("handleRelayMessage: agentQuestion decode failed for machine=\(self.machineID.uuidString, privacy: .public)")
                 return
             }
             NotificationCenter.default.post(
                 name: Notification.Name("lancerE2EQuestionPending"),
                 object: nil,
-                userInfo: ["questionParams": env.payload, "machineID": self.machineID]
+                userInfo: ["questionData": env.payload, "machineID": self.machineID]
             )
 
         case "agentConversationsAttachObservedSessionResult":

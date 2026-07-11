@@ -12,6 +12,7 @@ public struct WorkspacesView: View {
     @Environment(RelayFleetStore.self) private var relayFleetStore
     @Environment(ShellLiveBridge.self) private var shellLiveBridge
     @Environment(RelayApprovalIngest.self) private var relayApprovalIngest
+    @Environment(RelayQuestionIngest.self) private var relayQuestionIngest
     @State private var isProfilePresented = false
     @State private var isComposerPresented = false
     @State private var isAddRepoPresented = false
@@ -108,6 +109,8 @@ public struct WorkspacesView: View {
             LiveThreadView(prompt: thread.prompt, cwd: thread.cwd)
                 .environment(shellLiveBridge)
                 .environment(relayApprovalIngest)
+                .environment(relayQuestionIngest)
+                .environment(relayFleetStore)
         }
         #if DEBUG
         .sheet(isPresented: $isRepoPickerDirectPresented) {
@@ -329,11 +332,13 @@ private struct WorkspaceRowView: View {
         chatRepo: chatRepo
     )
     let approvalIngest = RelayApprovalIngest(database: db)
+    let questionIngest = RelayQuestionIngest(chatRepo: chatRepo)
     return NavigationStack {
         WorkspacesView()
     }
     .environment(relayFleetStore)
     .environment(bridge)
     .environment(approvalIngest)
+    .environment(questionIngest)
 }
 #endif
