@@ -150,3 +150,6 @@ research_repos/
 
 # Competitor study clones — never commit
 research-repos/
+
+# owner's personal cross-tool prompt doc — keep untracked
+/visual-first-communication.md
