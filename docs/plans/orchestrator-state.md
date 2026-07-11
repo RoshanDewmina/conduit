@@ -7,7 +7,9 @@
 
 | Lane | Branch / worktree | Scope | Write-set | Status |
 |---|---|---|---|---|
-| A | `feat/p1-tool-cards` / `.worktrees/p1-tool-cards` | Tool-call cards + working-indicator enum (§1.1 step 3) | CursorThreadTranscriptModel/Mapper, CursorWorkThreadView, new CursorToolCall* | dispatched (running) |
+| A | **PR #72 open — OWNER GATE (ui)** | Tool-call cards + indicator enum; rebased on master; swift gates green, 22 new tests; Orca attribution present | CursorStyle + tests | awaiting owner batched eyeball |
+| C | `feat/p1-question-card` (stacked on A) / `.worktrees/p1-question-card` | Question card on W0.A shell + RelayQuestionIngest reconcile w/ 30a28e26 | Bridge/RelayQuestionIngest, CursorShellLiveBridge, CursorWorkThreadView, new CursorQuestionCard | dispatched (Grok) |
+| E | `chore/p1-siri-warnings` / `.worktrees/p1-siri-warnings` | 25-warning mechanical cleanup | Lancer/SiriRelevanceCoordinator.swift | dispatched (Composer) |
 | B | **MERGED** PR #70 (`eeaa6134`) | 81-case permission matrix + **real fail-open bug found & fixed**: `policy/match.go` corrupt ExpiresAt (effect-aware fail-closed after Opus CI correction) | — | done; worktree removed |
 | D | **MERGED** PR #71 (`57bf761d`) | Ordering already existed (C1–C2); +8 ordering tests, force-unwrap removed | — | done; worktree removed |
 | C (queued) | — | Re-port master-line M1 question card onto W0.A shell (from #69 integration) | CursorWorkThreadView + new card file | blocked by A (same write-set) |
