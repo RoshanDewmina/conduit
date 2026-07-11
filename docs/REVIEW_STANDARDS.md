@@ -54,6 +54,13 @@ Emit structured verdict JSON — one finding per entry:
 
 ## Appended rules
 
+- 2026-07-11 (owner correction, dogfood round 2): **sim live-loop gate.** A feature PR without
+  end-to-end simulator evidence against a live daemon (screenshot + runtime log of the actual
+  flow) is NOT mergeable, regardless of green builds/tests — un-simulatable features need an
+  explicit owner greenlight instead. Three UI lanes merged "green" on 2026-07-11 while send,
+  follow-up, and streaming were broken live; builds and unit tests cannot stand in for driving
+  the flow.
+
 - 2026-07-11 (PR #70, Opus CI reviewer correction): validity/expiry guards on policy rules must
   be **effect-aware** — on corrupt/unparseable data, an allow rule becomes inactive but a deny
   rule stays active. "Fail closed" means failing toward the more restrictive outcome per rule

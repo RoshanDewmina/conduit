@@ -51,6 +51,18 @@ Tool-agnostic entry point for Claude Code, Codex, Cursor, and Kimi working in th
    voice-approve rejected · fail-closed mutating kinds · never "all clear" on stale relay data.
 10. **`AskUserQuestion`:** max 4 options per question.
 
+## Sim live-loop gate (owner rule, 2026-07-11 — MANDATORY)
+
+**No feature merges unless its user-facing flow has been exercised end-to-end in the
+simulator app against a live `lancerd`** — build/unit/test evidence alone is NOT enough
+(2026-07-11: three UI lanes merged green while send/follow-up/streaming were broken live).
+Procedure: `build_run_sim` → pair the sim app to the running daemon → drive the actual flow
+(send, reply, follow-up, approval, question — whatever the PR touches) → paste screenshot +
+runtime-log evidence in the PR. Features that cannot be exercised on sim (real APNs
+registration, lock-screen actions, device-only behavior) require an **explicit owner
+greenlight before merge** instead. ⚠️ The daemon has a single relay pairing slot — sim
+pairing orphans the phone; re-pair the phone after sim testing and say so in the PR.
+
 ## Skills to invoke
 
 | When | Skill |

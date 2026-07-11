@@ -38,6 +38,11 @@ E2E relay protocol types, anything touching keychain/pairing/audit chain.
    - iOS: `swift test` (LancerKit) → app-target `build_sim` → affected UITests
    - Go: `cd daemon/lancerd && go test ./...`
    - Cross-cutting: `relay-approval-e2e.sh` when touching relay/approval/receipt paths
+   - **Sim live-loop gate (owner rule 2026-07-11):** any user-facing PR additionally requires
+     driving the affected flow end-to-end in the simulator app against a live `lancerd`
+     (screenshot + runtime-log evidence in the PR). Un-simulatable (APNs registration, lock
+     screen, device-only) → explicit owner greenlight instead. Sim pairing occupies the
+     daemon's single relay slot — re-pair the owner's phone afterward and note it in the PR.
 7. **Cross-model review (v2 — full spec: `.claude/skills/swarm-orchestrator/references/verification-pipeline.md`)**:
    a FRESH Cursor session reviews read-only — `git diff master...HEAD | agent -p "<checklist>"
    --mode=ask --model <grok-or-composer>`. The prompt includes the spec, the diff, a
