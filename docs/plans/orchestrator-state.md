@@ -18,6 +18,14 @@ as superseded. Re-queue lanes against the restored shell:
   the docs were wrong about which shell the owner meant. When a directive names a branch,
   attach a screenshot of what it looks like before acting on delete/keep decisions.
 
+## Dogfood round 1: ALL THREE FINDINGS FIXED AND MERGED (2026-07-11 night)
+
+PR #76 (composer onSend required, repo-scoped send) · #77 (chat/PR polish to reference) ·
+#78 (real data everywhere; +app-target access-level hotfix 65ba058c — swift build on macOS
+missed an iOS-gated public-init/internal-type error, CI build_sim caught it). Dogfood
+candidate installed+launched on phone from master 36d81be6. ~/.cursor/mcp.json RESTORED.
+Reinstall wipes pairing — owner must re-pair (`lancerd pair` for a fresh code).
+
 ## Dogfood round 1 (owner, 2026-07-11 evening) — pairing WORKED; 3 findings → lanes
 
 1. **P0 composer bug** (root-caused by Fable): `NewChatComposerView.send()` = `onSend?();dismiss()`;
