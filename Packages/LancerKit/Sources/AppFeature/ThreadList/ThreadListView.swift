@@ -11,11 +11,16 @@ public struct ThreadListView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isSearchPresented = false
     @State private var isComposerPresented = false
+    @State private var activeLiveThread: LiveThreadIdentifier?
 
     let workspaceName: String
 
     public init(workspaceName: String) {
         self.workspaceName = workspaceName
+    }
+
+    private var workspaceCwd: String {
+        LiveThreadCwd.forWorkspace(workspaceName)
     }
 
     public var body: some View {
@@ -40,7 +45,7 @@ public struct ThreadListView: View {
 
                         ForEach(Self.yesterdayThreads) { thread in
                             NavigationLink {
-                                ThreadDetailView(thread: thread)
+                                ThreadDetailView(thread: thread, cwd: workspaceCwd)
                             } label: {
                                 ThreadListRow(thread: thread)
                             }
@@ -54,7 +59,7 @@ public struct ThreadListView: View {
 
                         ForEach(Self.thisWeekThreads) { thread in
                             NavigationLink {
-                                ThreadDetailView(thread: thread)
+                                ThreadDetailView(thread: thread, cwd: workspaceCwd)
                             } label: {
                                 ThreadListRow(thread: thread)
                             }
@@ -83,8 +88,13 @@ public struct ThreadListView: View {
             SearchView()
         }
         .sheet(isPresented: $isComposerPresented) {
-            NewChatComposerView()
+            NewChatComposerView(onSend: handleSend)
         }
+        .liveThreadPresentation($activeLiveThread)
+    }
+
+    private func handleSend(_ prompt: String) {
+        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: workspaceCwd)
     }
 
     private var topBar: some View {

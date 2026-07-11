@@ -15,11 +15,16 @@ import SwiftUI
 struct ThreadDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isFollowUpPresented = false
+    @State private var activeLiveThread: LiveThreadIdentifier?
 
     let thread: ThreadRow
+    /// Cwd of the workspace/thread this detail belongs to — follow-up send
+    /// continues in the same directory as the parent repo page.
+    let cwd: String
 
-    init(thread: ThreadRow) {
+    init(thread: ThreadRow, cwd: String) {
         self.thread = thread
+        self.cwd = cwd
     }
 
     public var body: some View {
@@ -80,8 +85,13 @@ struct ThreadDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isFollowUpPresented) {
-            NewChatComposerView()
+            NewChatComposerView(onSend: handleSend)
         }
+        .liveThreadPresentation($activeLiveThread)
+    }
+
+    private func handleSend(_ prompt: String) {
+        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: cwd)
     }
 
     // MARK: - Top bar
@@ -397,7 +407,10 @@ func diffStatText(added: Int, removed: Int) -> Text {
 
 #Preview {
     NavigationStack {
-        ThreadDetailView(thread: ThreadRow(title: "Fix onboarding flow", status: .checksPassed, diffStat: "+142 -18"))
+        ThreadDetailView(
+            thread: ThreadRow(title: "Fix onboarding flow", status: .checksPassed, diffStat: "+142 -18"),
+            cwd: LiveThreadCwd.forWorkspace("conduit")
+        )
     }
 }
 #endif
