@@ -19,6 +19,13 @@ W0.A landed (incl. repair of an empty-tree tip commit `1c102940` → `4c350a52`,
 dispatch-cwd fail-fast fix `4c2634df`); wipe worktree + branch removed (tip was ancestor of
 master); `build_sim` SUCCEEDED on the kept W0.A shell. Owner-gated remainder: Tier 0 re-proof.
 
+**SUPERSEDED same day — frontend reversal (owner, 2026-07-11 PM):** the owner clarified with
+the Cursor Design reference set (`docs/design/cursor-reference/`) that the intended frontend
+is the **Codex Workspaces shell** (`80407933..b472ffd3`), not W0.A. PR #75 restores it; the
+W0.A CursorStyle shell is retired; PRs #72/#73/#74 closed as superseded (their shell-agnostic
+logic — tool-call pairing, question-ingest observer, warning cleanup — re-queued against the
+restored line). The paragraph below documents the original #69 resolution for history only.
+
 **Integration resolution (2026-07-11 merge of master into W0.A):** master had grown a
 *parallel* frontend line since `e850b126` (wipe `80407933` + Workspaces-shell rebuild + M2–M4
 + in-thread questions PR #68). Per owner directive (W0.A shell KEPT, approved 2026-07-11), the

@@ -39,9 +39,12 @@ Tool-agnostic entry point for Claude Code, Codex, Cursor, and Kimi working in th
 5. **Product framing (2026-07-10):** personal daily-driver first; wedge = "don't watch your
    agents — govern them"; chat is the vehicle, not the differentiator; deep iOS-native
    integration is core identity. The MVP exit bar and phase order live in the definition doc.
-6. **Frontend:** the current W0.A shell is KEPT — finesse, don't rebuild. The scorched-wipe
-   worktree (`feat/frontend-scorched-wipe`) is abandoned; **no agent deletes frontend chrome
-   without a fresh owner ask.**
+6. **Frontend (owner decision 2026-07-11, supersedes the 07-10 "W0.A kept" note):** the app
+   shell is the **Codex-built Workspaces shell** (master line `80407933..b472ffd3`, restored
+   by PR #75): Workspaces root + avatar/search/+ chips + docked "Plan, ask, build…" composer,
+   **no tab bar**. Canonical visual reference: `docs/design/cursor-reference/` (matches
+   Cursor's mobile app, system light/dark). The W0.A `CursorStyle` shell is **retired** —
+   do not resurrect it. **No agent deletes frontend chrome without a fresh owner ask.**
 7. **Do not wholesale-merge `amazing-mayer-246fef`** — cherry-pick only.
 8. **Deployment target:** iOS **26.0** — not 27, until the Phase 3 raise decision.
 9. **Permanent safety rules:** no Siri approve intent · no Face ID reintroduction ·

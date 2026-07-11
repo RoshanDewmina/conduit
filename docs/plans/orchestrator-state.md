@@ -3,6 +3,21 @@
 **Updated:** 2026-07-11 PM (update after every merge or blocker; this file is compaction insurance)
 **Phase:** 1 — dogfood MVP. Phase 0 CLOSED: PR #69 merged (`fd7b56d5`); stashes + checkpoint/backup refs dropped; w0a branch deleted.
 
+## FRONTEND REVERSAL (owner, 2026-07-11 PM) — read before touching UI
+
+Owner supplied the Cursor Design reference set → the frontend is the **Codex Workspaces
+shell** (`b472ffd3` line), NOT W0.A. PR #75 restores it. W0.A retired; PRs #72/73/74 closed
+as superseded. Re-queue lanes against the restored shell:
+- Tool-call cards re-port (pairing/presentation logic from closed #72 is shell-agnostic)
+- Siri warning cleanup (redo of #73)
+- LancerUITests rewrite (current suite targets the retired W0.A shell; kept only so
+  xcodegen resolves)
+- Known fidelity gaps from the Codex session: light-mode header-chip chrome subtler than
+  reference; avatar orb oversized. Device dogfood items M2/M3/M4 unproven live.
+- **Failure lesson (recorded):** the 07-10 purge docs said "W0.A KEPT / wipe abandoned" —
+  the docs were wrong about which shell the owner meant. When a directive names a branch,
+  attach a screenshot of what it looks like before acting on delete/keep decisions.
+
 ## Phase 1 lanes (dispatched 2026-07-11, Grok 4.5 xhigh via cursor-agent)
 
 | Lane | Branch / worktree | Scope | Write-set | Status |
