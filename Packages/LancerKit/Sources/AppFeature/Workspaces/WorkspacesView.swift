@@ -10,21 +10,13 @@ import PersistenceKit
 /// module.
 public struct WorkspacesView: View {
     @Environment(RelayFleetStore.self) private var relayFleetStore
-    @Environment(ShellLiveBridge.self) private var shellLiveBridge
-    @Environment(RelayApprovalIngest.self) private var relayApprovalIngest
-    @Environment(RelayQuestionIngest.self) private var relayQuestionIngest
     @State private var isProfilePresented = false
     @State private var isComposerPresented = false
     @State private var isAddRepoPresented = false
     @State private var isSearchPresented = false
     /// M3: set by the composer's send action (`onSend`); presented via
-    /// `.sheet(item:)` to show the new live conversation. `Identifiable` so
-    /// `.sheet(item:)` can key off it; a fresh `UUID` per send keeps repeat
-    /// sends from reusing a stale sheet identity.
+    /// `.liveThreadPresentation` to show the new live conversation.
     @State private var activeLiveThread: LiveThreadIdentifier?
-    /// M3: no repo-picker wiring yet — hardcoded placeholder cwd for the
-    /// live send flow (out of scope for this milestone per the brief).
-    private static let placeholderCwd = "~"
     #if DEBUG
     @State private var isComposerRepoPickerPresented = false
     @State private var isRepoPickerDirectPresented = false
@@ -105,13 +97,7 @@ public struct WorkspacesView: View {
         .sheet(isPresented: $isSearchPresented) {
             SearchView()
         }
-        .sheet(item: $activeLiveThread) { thread in
-            LiveThreadView(prompt: thread.prompt, cwd: thread.cwd)
-                .environment(shellLiveBridge)
-                .environment(relayApprovalIngest)
-                .environment(relayQuestionIngest)
-                .environment(relayFleetStore)
-        }
+        .liveThreadPresentation($activeLiveThread)
         #if DEBUG
         .sheet(isPresented: $isRepoPickerDirectPresented) {
             RepoPickerView()
@@ -135,7 +121,10 @@ public struct WorkspacesView: View {
         #endif
         #if DEBUG
         .navigationDestination(isPresented: $isThreadDetailDirectPresented) {
-            ThreadDetailView(thread: ThreadRow(title: "Fix onboarding flow", status: .checksPassed, diffStat: "+142 -18"))
+            ThreadDetailView(
+                thread: ThreadRow(title: "Fix onboarding flow", status: .checksPassed, diffStat: "+142 -18"),
+                cwd: LiveThreadCwd.forWorkspace("conduit")
+            )
         }
         #endif
         #if DEBUG
@@ -170,7 +159,7 @@ public struct WorkspacesView: View {
             case "liveThread":
                 let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
                     ?? "Can you take a look at the onboarding flow?"
-                activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: Self.placeholderCwd)
+                activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: LiveThreadCwd.homePlaceholder)
             case "search":
                 isSearchPresented = true
             default:
@@ -181,10 +170,10 @@ public struct WorkspacesView: View {
     }
 
     /// M3: the composer's `onSend` hand-off — presents `LiveThreadView` via
-    /// `.sheet(item:)`. `ShellLiveBridge.send` is triggered by that view's
-    /// own `.task`, not here, so this stays a pure state-setting hop.
+    /// `.liveThreadPresentation`. `ShellLiveBridge.send` is triggered by that
+    /// view's own `.task`, not here, so this stays a pure state-setting hop.
     private func handleSend(_ prompt: String) {
-        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: Self.placeholderCwd)
+        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: LiveThreadCwd.homePlaceholder)
     }
 
     private var topBar: some View {
@@ -275,15 +264,6 @@ public struct WorkspacesView: View {
         WorkspaceRow(title: "personal-web", systemImage: "folder", showsChevron: true),
         WorkspaceRow(title: "Add Repo", systemImage: "folder.badge.plus", showsChevron: false),
     ]
-}
-
-/// M3: identifies one live-send `LiveThreadView` presentation. A fresh id
-/// per `handleSend` call ensures `.sheet(item:)` always treats a new send as
-/// a new sheet instance, even if the prompt text happens to repeat.
-private struct LiveThreadIdentifier: Identifiable {
-    let id = UUID()
-    let prompt: String
-    let cwd: String
 }
 
 private struct WorkspaceRow: Identifiable {

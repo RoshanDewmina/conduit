@@ -17,15 +17,14 @@ public struct NewChatComposerView: View {
     @State private var isRepoPickerPresented = false
     @State private var isContextPresented = false
     private let initiallyShowsRepoPicker: Bool
-    /// M3: hands the prompt off to the presenting view (`WorkspacesView`) so
-    /// it can drive the live send flow and present `LiveThreadView`. A
-    /// closure (not `.environment(_:)` injection) keeps this view decoupled,
-    /// matching the existing `onPaired`-style callback pattern used by
-    /// `RelayPairingSheet`. `nil` by default so existing call sites (the
-    /// follow-up pill in `ThreadDetailView`) keep compiling unchanged.
-    private let onSend: ((String) -> Void)?
+    /// M3: hands the prompt off to the presenting view so it can drive the
+    /// live send flow and present `LiveThreadView`. A closure (not
+    /// `.environment(_:)` injection) keeps this view decoupled, matching the
+    /// existing `onPaired`-style callback pattern used by `RelayPairingSheet`.
+    /// Required so a missing handler cannot silently dismiss on send.
+    private let onSend: (String) -> Void
 
-    public init(initiallyShowsRepoPicker: Bool = false, onSend: ((String) -> Void)? = nil) {
+    public init(initiallyShowsRepoPicker: Bool = false, onSend: @escaping (String) -> Void) {
         self.initiallyShowsRepoPicker = initiallyShowsRepoPicker
         self.onSend = onSend
     }
@@ -198,11 +197,11 @@ public struct NewChatComposerView: View {
     }
 
     /// M3: hands the prompt to the presenting view and dismisses this sheet.
-    /// The presenting view (`WorkspacesView`) is responsible for driving
-    /// `ShellLiveBridge.send` and showing `LiveThreadView` — this view stays
-    /// decoupled from the live bridge entirely.
+    /// The presenting view is responsible for driving `ShellLiveBridge.send`
+    /// and showing `LiveThreadView` — this view stays decoupled from the
+    /// live bridge entirely.
     private func send(_ prompt: String) {
-        onSend?(prompt)
+        onSend(prompt)
         dismiss()
     }
 
@@ -228,7 +227,7 @@ public struct NewChatComposerView: View {
     Color(.systemGroupedBackground)
         .ignoresSafeArea()
         .sheet(isPresented: .constant(true)) {
-            NewChatComposerView()
+            NewChatComposerView(onSend: { _ in })
         }
 }
 #endif
