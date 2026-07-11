@@ -110,6 +110,34 @@ func TestReceiptOpencodeConfidenceBestEffort(t *testing.T) {
 	}
 }
 
+// TestNewReceiptAccumulatorDoesNotBlockOnHungGit: start-snapshot must not
+// run on the caller's goroutine — a forever-blocking gitRunner must not delay
+// construction (relay messageLoop must stay free).
+func TestNewReceiptAccumulatorDoesNotBlockOnHungGit(t *testing.T) {
+	blocking := func(workdir, tool string, args ...string) (string, error) {
+		select {} // hang forever
+	}
+	start := time.Now()
+	acc := newReceiptAccumulator("run-hang", receiptStartParams{
+		agent: "claudeCode",
+		cwd:   t.TempDir(),
+	}, blocking)
+	elapsed := time.Since(start)
+	if elapsed >= time.Second {
+		t.Fatalf("newReceiptAccumulator blocked for %v; want <1s", elapsed)
+	}
+	if acc == nil {
+		t.Fatal("expected accumulator")
+	}
+	// Honest unknown start state until (if ever) the async snapshot lands.
+	acc.mu.Lock()
+	ref, dirty, ok := acc.gitStartRef, acc.gitDirtyAtStart, acc.gitAvailable
+	acc.mu.Unlock()
+	if ref != "" || dirty || ok {
+		t.Fatalf("initial snapshot = ref=%q dirty=%v ok=%v, want unknown", ref, dirty, ok)
+	}
+}
+
 func TestReceiptNonGitCWDFilesUnavailable(t *testing.T) {
 	acc := newReceiptAccumulator("run-1", receiptStartParams{
 		agent: "claudeCode",
