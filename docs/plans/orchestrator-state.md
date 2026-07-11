@@ -18,6 +18,26 @@ as superseded. Re-queue lanes against the restored shell:
   the docs were wrong about which shell the owner meant. When a directive names a branch,
   attach a screenshot of what it looks like before acting on delete/keep decisions.
 
+## Pairing friction SOLVED (2026-07-11 night): PRs #80 + #81 merged, prod-relay-proven
+
+Root causes (backend-log-verified): (a) daemon sat on relay-reaped sockets forever (no read
+deadline; x/net/websocket has no control-frame ping) — #80 adds 90s read deadline + bounded
+expired-code giveUp; daemon REDEPLOYED. (b) E2ERelayClient minted a new keypair per instance
+→ backend key-pin rejected every retry/reinstall as hijack — #81 adds Keychain-persisted
+stable device identity (dev.lancer.relay, AfterFirstUnlockThisDeviceOnly, survives reinstall)
++ launch auto-restore + fail-closed corruption wipe. Sim gate vs PROD relay: pair PASS,
+relaunch-no-code auto-reconnect PASS ("phone connected (paired)"). Owner pairs ONCE more
+(final code 853535), then never again. Ops note: `lancerd pair` codes expire unconfirmed
+~15min — generate immediately before pairing.
+
+## S27 lane (owner top priority): iOS 27 SDK ALREADY INSTALLED — all packages CAN START NOW
+
+Branch feat/s27-deep-integration: plan committed (docs/plans/2026-07-11-s27-deep-integration-Plan.md),
+S27-0 target raise DONE on branch (cb7f3196, swift+app-target gates green). Next: S27-2a
+Live-Activity widget restore (deleted in wipe — prereq for the Siri-dispatch headline),
+S27-1 tests, S27-2 LongRunningIntent (sensitive), S27-3 Spotlight, S27-4 FM copilot
+(iOS26+, parallel-safe), S27-5 verify-then-build. Queued: cross-device continuation proof.
+
 ## Dogfood round 2: PR #79 MERGED (2026-07-11 late) — streaming/timeout/transcript
 
 Owner findings → fixes, all sim-gate-proven (evidence `docs/test-runs/2026-07-11-sim-live-loop-gate/`):
