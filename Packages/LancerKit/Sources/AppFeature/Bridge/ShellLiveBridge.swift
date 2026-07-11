@@ -76,6 +76,12 @@ public final class ShellLiveBridge {
     /// nothing is paired (found 2026-07-10 sim dogfood).
     public private(set) var isHydrated = false
 
+    /// Armed by the Agents section's "Continue in Lancer" before presenting
+    /// `LiveThreadPresentation`. The next `send(prompt:cwd:)` consumes this
+    /// and routes through `agent.observedSession.continue` instead of
+    /// starting a brand-new conversation.
+    public private(set) var pendingObservedContinue: ObservedContinueTarget?
+
     /// True while a send/follow-up is still awaiting a terminal turn
     /// (including degraded unreachable polling). Composer must stay disabled.
     public var isSendInFlight: Bool {
@@ -89,12 +95,31 @@ public final class ShellLiveBridge {
 
     public func markHydrated() { isHydrated = true }
 
+    /// Arms the next `send` to resume an observed host session by vendor + id.
+    public func armObservedContinue(vendor: String, sessionId: String, cwd: String) {
+        pendingObservedContinue = ObservedContinueTarget(
+            vendor: vendor,
+            sessionId: sessionId,
+            cwd: cwd
+        )
+    }
+
+    public func clearObservedContinue() {
+        pendingObservedContinue = nil
+    }
+
     private let relayFleetStore: RelayFleetStore
     private let conversationSyncCoordinator: ConversationSyncCoordinator
     private let chatRepo: ChatConversationRepository
 
     /// This milestone hardcodes the vendor CLI — no picker UI exists yet.
     private static let vendor = "claudeCode"
+
+    public struct ObservedContinueTarget: Equatable, Sendable {
+        public let vendor: String
+        public let sessionId: String
+        public let cwd: String
+    }
 
     public init(
         relayFleetStore: RelayFleetStore,
@@ -108,13 +133,24 @@ public final class ShellLiveBridge {
 
     /// Starts a brand-new conversation on the first connected paired machine
     /// and polls for the reply. No-op if a send is already in flight.
+    ///
+    /// When `pendingObservedContinue` is armed (Agents → Continue in Lancer),
+    /// routes through `relayContinueObservedSession` instead of
+    /// `startConversation`, then polls the observed transcript for the reply.
     public func send(prompt: String, cwd: String) async {
         guard !isSendInFlight else { return }
         guard let machine = await waitForConnectedMachine() else {
+            pendingObservedContinue = nil
             sendState = .failed("No connected machine. Pair one in Settings → Trusted Machines.")
             return
         }
         activeMachineID = machine.id
+
+        if let target = pendingObservedContinue {
+            pendingObservedContinue = nil
+            await sendObservedContinue(prompt: prompt, cwd: cwd, target: target, machine: machine)
+            return
+        }
 
         sendState = .working
         activeConversationID = nil
@@ -146,6 +182,156 @@ public final class ShellLiveBridge {
             inFlightPrompt = nil
             sendState = .failed(message)
         }
+    }
+
+    /// Resumes an observed (terminal-started) session via
+    /// `agent.observedSession.continue`, then polls that session's on-disk
+    /// transcript for the assistant reply so `LiveThreadView` can render it.
+    private func sendObservedContinue(
+        prompt: String,
+        cwd: String,
+        target: ObservedContinueTarget,
+        machine: RelayFleetStore.Machine
+    ) async {
+        sendState = .working
+        activeConversationID = nil
+        transcriptTurns = []
+        inFlightPrompt = prompt
+
+        let resumeCwd = target.cwd.isEmpty ? cwd : target.cwd
+        let result: DispatchResult
+        do {
+            result = try await machine.bridge.relayContinueObservedSession(
+                vendor: target.vendor,
+                sessionId: target.sessionId,
+                cwd: resumeCwd,
+                prompt: prompt
+            )
+        } catch {
+            inFlightPrompt = nil
+            sendState = .failed(error.localizedDescription)
+            return
+        }
+
+        switch result.status {
+        case "started":
+            let runID = result.startedRunId ?? UUID().uuidString
+            await pollObservedTranscriptReply(
+                sessionId: target.sessionId,
+                prompt: prompt,
+                runID: runID,
+                bridge: machine.bridge
+            )
+        case "needsApproval":
+            inFlightPrompt = nil
+            sendState = .failed("Waiting for approval on \(machine.record.displayName).")
+        case "denied":
+            inFlightPrompt = nil
+            let rule = result.rule.map { " (\($0))" } ?? ""
+            sendState = .failed("Denied by policy on \(machine.record.displayName)\(rule).")
+        case "budgetExceeded":
+            inFlightPrompt = nil
+            sendState = .failed("Daily budget reached on \(machine.record.displayName).")
+        default:
+            inFlightPrompt = nil
+            sendState = .failed(result.message ?? "Couldn't continue session on \(machine.record.displayName).")
+        }
+    }
+
+    /// Observed continue writes into the vendor transcript (not the conversation
+    /// ledger). Re-poll `agent.sessions.transcript` for a new assistant turn.
+    private func pollObservedTranscriptReply(
+        sessionId: String,
+        prompt: String,
+        runID: String,
+        bridge: E2ERelayBridge
+    ) async {
+        let turnID = UUID().uuidString
+        let baselineCount: Int
+        if let baseline = try? await bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: 0) {
+            baselineCount = baseline.messages.count
+        } else {
+            baselineCount = 0
+        }
+
+        var turn = LancerCore.ChatTurn(
+            id: turnID,
+            conversationID: "observed:\(sessionId)",
+            ordinal: 0,
+            prompt: prompt,
+            runID: runID,
+            transportKind: "relay",
+            status: .running,
+            assistantText: "",
+            vendorSessionID: sessionId
+        )
+        transcriptTurns = [turn]
+        sendState = .working
+
+        for _ in 0..<20 {
+            do {
+                try await Task.sleep(nanoseconds: 2_000_000_000)
+            } catch {
+                return
+            }
+            guard let result = try? await bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: 0)
+            else { continue }
+
+            let newMessages = Array(result.messages.dropFirst(baselineCount))
+            let assistantText = newMessages
+                .filter { $0.role == .assistant }
+                .map(\.text)
+                .joined(separator: "\n\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if !assistantText.isEmpty {
+                turn.assistantText = assistantText
+                turn.status = .running
+                transcriptTurns = [turn]
+                sendState = .streaming(turn)
+                // Keep polling briefly for more chunks, then complete.
+                for _ in 0..<5 {
+                    do {
+                        try await Task.sleep(nanoseconds: 2_000_000_000)
+                    } catch {
+                        inFlightPrompt = nil
+                        turn.status = .completed
+                        turn.completedAt = .now
+                        transcriptTurns = [turn]
+                        sendState = .completed(turn)
+                        return
+                    }
+                    if let later = try? await bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: 0) {
+                        let laterText = Array(later.messages.dropFirst(baselineCount))
+                            .filter { $0.role == .assistant }
+                            .map(\.text)
+                            .joined(separator: "\n\n")
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if laterText.count > assistantText.count {
+                            turn.assistantText = laterText
+                            transcriptTurns = [turn]
+                            sendState = .streaming(turn)
+                        }
+                    }
+                }
+                inFlightPrompt = nil
+                turn.status = .completed
+                turn.completedAt = .now
+                transcriptTurns = [turn]
+                sendState = .completed(turn)
+                return
+            }
+        }
+
+        // Started but no transcript reply appeared — still a successful continue.
+        inFlightPrompt = nil
+        turn.status = .completed
+        turn.completedAt = .now
+        turn.assistantText = turn.assistantText.isEmpty
+            ? "Continued on the host. Open the session again to see later output."
+            : turn.assistantText
+        transcriptTurns = [turn]
+        sendState = .completed(turn)
     }
 
     /// Appends a follow-up turn to the active conversation and polls for the
