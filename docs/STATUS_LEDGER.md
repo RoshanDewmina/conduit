@@ -1,8 +1,8 @@
 # Lancer status ledger
 
 **Last updated:** 2026-07-10  
-**Active branch:** `feat/in-thread-questions` @ `0cf5f1e0` (M1–M3 complete; landing on `master`) — open this file first for current priority, canonical doc map, and branch status.  
-**`master` tip:** `77488c11` until this branch merges — re-check `git rev-parse HEAD` / `gh pr list` before citing.
+**Active branch:** `master` @ `daf0a6fa` — open this file first for current priority, canonical doc map, and branch status.  
+**`master` tip:** `daf0a6fa` (PR #68 — in-thread questions M1–M3) — re-check `git rev-parse HEAD` / `gh pr list` before citing.
 
 > **Superseded 2026-07-10:** the Wave 0 chat-overhaul work (`feat/chat-overhaul-w0a`) and the old
 > `AppFeature/CursorStyle/` live-bridge shell it depended on were replaced by a **scorched-earth
@@ -49,13 +49,13 @@ top of surviving engines (`SessionFeature` / relay / GRDB). All of the following
 Full detail: [`docs/plans/2026-07-10-frontend-rebuild-Plan.md`](plans/2026-07-10-frontend-rebuild-Plan.md) +
 [`docs/plans/2026-07-10-frontend-rebuild-Status.md`](plans/2026-07-10-frontend-rebuild-Status.md).
 
-**In-thread Question cards (2026-07-10) — M1–M3 DONE on `feat/in-thread-questions` @ `0cf5f1e0`:**
+**In-thread Question cards (2026-07-10) — M1–M3 LANDED on `master` via [PR #68](https://github.com/RoshanDewmina/conduit/pull/68) (`daf0a6fa`):**
 
 | Stage | Status | Evidence |
 |-------|--------|----------|
-| M1 — `RelayQuestionIngest` + in-thread card on `LiveThreadView` | **Done** (`898e24fc`) | real `agentQuestion` → card |
-| M2 — unlock AskUserQuestion (`--permission-prompt-tool stdio`) + relay wire fix | **Done** (`30a28e26`) | pending → answered audited |
-| M3 — same-turn stdio `control_request`/`control_response` responder | **Done** (`0cf5f1e0`) | [`docs/test-runs/2026-07-10-in-thread-questions-dogfood/M3.md`](test-runs/2026-07-10-in-thread-questions-dogfood/M3.md) — assistant reply **"You chose Red."** |
+| M1 — `RelayQuestionIngest` + in-thread card on `LiveThreadView` | **Landed** | real `agentQuestion` → card |
+| M2 — unlock AskUserQuestion (`--permission-prompt-tool stdio`) + relay wire fix | **Landed** | pending → answered audited |
+| M3 — same-turn stdio `control_request`/`control_response` responder | **Landed** | [`docs/test-runs/2026-07-10-in-thread-questions-dogfood/M3.md`](test-runs/2026-07-10-in-thread-questions-dogfood/M3.md) — assistant reply **"You chose Red."** |
 
 Plan/Status: [`docs/plans/2026-07-10-in-thread-questions-Plan.md`](plans/2026-07-10-in-thread-questions-Plan.md) +
 [`docs/plans/2026-07-10-in-thread-questions-Status.md`](plans/2026-07-10-in-thread-questions-Status.md).
