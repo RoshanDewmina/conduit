@@ -1,8 +1,8 @@
 # Lancer status ledger
 
 **Last updated:** 2026-07-10  
-**Active branch:** `master` @ `77488c11` is the current baseline; new work happens on `feat/in-thread-questions` (cut from `master`) — open this file first for current priority, canonical doc map, and branch status.  
-**`master` tip:** `77488c11` — re-check `git rev-parse HEAD` / `gh pr list` before citing.
+**Active branch:** `feat/in-thread-questions` @ `0cf5f1e0` (M1–M3 complete; landing on `master`) — open this file first for current priority, canonical doc map, and branch status.  
+**`master` tip:** `77488c11` until this branch merges — re-check `git rev-parse HEAD` / `gh pr list` before citing.
 
 > **Superseded 2026-07-10:** the Wave 0 chat-overhaul work (`feat/chat-overhaul-w0a`) and the old
 > `AppFeature/CursorStyle/` live-bridge shell it depended on were replaced by a **scorched-earth
@@ -49,10 +49,17 @@ top of surviving engines (`SessionFeature` / relay / GRDB). All of the following
 Full detail: [`docs/plans/2026-07-10-frontend-rebuild-Plan.md`](plans/2026-07-10-frontend-rebuild-Plan.md) +
 [`docs/plans/2026-07-10-frontend-rebuild-Status.md`](plans/2026-07-10-frontend-rebuild-Status.md).
 
-**Active next slice:** in-thread agent **Question** cards (answer / multi-choice) on `LiveThreadView`,
-mirroring the M4 approval-ingest discipline — see
-[`docs/plans/2026-07-10-in-thread-questions-Plan.md`](plans/2026-07-10-in-thread-questions-Plan.md).
-Branch: `feat/in-thread-questions`.
+**In-thread Question cards (2026-07-10) — M1–M3 DONE on `feat/in-thread-questions` @ `0cf5f1e0`:**
+
+| Stage | Status | Evidence |
+|-------|--------|----------|
+| M1 — `RelayQuestionIngest` + in-thread card on `LiveThreadView` | **Done** (`898e24fc`) | real `agentQuestion` → card |
+| M2 — unlock AskUserQuestion (`--permission-prompt-tool stdio`) + relay wire fix | **Done** (`30a28e26`) | pending → answered audited |
+| M3 — same-turn stdio `control_request`/`control_response` responder | **Done** (`0cf5f1e0`) | [`docs/test-runs/2026-07-10-in-thread-questions-dogfood/M3.md`](test-runs/2026-07-10-in-thread-questions-dogfood/M3.md) — assistant reply **"You chose Red."** |
+
+Plan/Status: [`docs/plans/2026-07-10-in-thread-questions-Plan.md`](plans/2026-07-10-in-thread-questions-Plan.md) +
+[`docs/plans/2026-07-10-in-thread-questions-Status.md`](plans/2026-07-10-in-thread-questions-Status.md).
+Owner-gated leftovers only: other-vendor responders, card polish, physical device.
 
 **Physical-device work is explicitly DEFERRED by owner** — do not ask for phone time; prove features on
 Simulator + a real local `lancerd`/relay instead (the sim-dogfood pattern above). Deferred items, no
@@ -64,10 +71,10 @@ urgency:
 
 **Ranked next (confirm with owner before starting):**
 
-1. In-thread Question cards (active — see Plan above).
-2. Clear the 2 pre-existing stale "Relay host" dead pairings surfaced during dogfood (cosmetic, not urgent).
-3. Production P0s from burn list — GCS `lancerd` publish, VPS C1, CloudKit Production schema (D2) — owner-gated.
-4. Away Launch Composer remains deferred until owner asks.
+1. Clear the 2 pre-existing stale "Relay host" dead pairings surfaced during dogfood (cosmetic, not urgent).
+2. Production P0s from burn list — GCS `lancerd` publish, VPS C1, CloudKit Production schema (D2) — owner-gated.
+3. Away Launch Composer remains deferred until owner asks.
+4. Question-card polish / Codex·Kimi·OpenCode same-turn — only if owner asks.
 
 **Tier 0 exit bar** (historical — superseded by the rebuild's own D0–D8 sim-dogfood proof above, kept for context):
 

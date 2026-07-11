@@ -322,7 +322,7 @@ go build ./... && go vet ./... && go test ./...
 - Extending the same-turn responder to Codex/Kimi/OpenCode — explicitly out of scope (M4+), no
   evidence yet that their CLIs expose an equivalent control protocol.
 - Polish (multi-item layout, free-text keyboard-avoidance, etc.) — **not started, needs owner OK**.
-- Merge to `master` — **owner-gated**, not done in this session.
+- Merge to `master` — owner asked to land (2026-07-10 evening); PR in flight from this worktree.
 
 ## Commands run
 
