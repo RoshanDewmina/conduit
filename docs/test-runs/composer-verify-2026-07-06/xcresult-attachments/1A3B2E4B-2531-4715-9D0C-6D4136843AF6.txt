@@ -1,5 +1,0 @@
-Query chain:
- →Find: Target Application 'dev.lancer.mobile'
-  ↪︎Find: Descendants matching type Button
-    ↪︎Find: Elements matching predicate 'label CONTAINS[c] "Composer 2.5"'
-      ↪︎Find: First Match

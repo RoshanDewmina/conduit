@@ -1,4 +1,0 @@
-Query chain:
- →Find: Target Application 'dev.lancer.mobile'
-  ↪︎Find: Descendants matching type Button
-    ↪︎Find: Elements matching predicate '"chevron.up" IN identifiers'
