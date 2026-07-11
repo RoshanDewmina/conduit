@@ -205,19 +205,114 @@ import CryptoKit
         #expect(UserDefaults.standard.string(forKey: Self.legacyURLKey) == nil)
         #expect(await legacyPrivKeyExists() == false)
     }
+
+    @Test("valid legacy state seeds an absent device identity with the legacy privkey")
+    func validLegacyStateSeedsAbsentIdentity() async {
+        clearLegacyState()
+        defer { clearLegacyState() }
+        RelayMachineMigration.indexKeychain = Keychain(service: Self.kcService, inMemory: true)
+
+        let privateKey = Curve25519.KeyAgreement.PrivateKey()
+        UserDefaults.standard.set("123456", forKey: Self.legacyCodeKey)
+        UserDefaults.standard.set("https://relay.example.com", forKey: Self.legacyURLKey)
+        await writeLegacyPrivKeyRaw(privateKey.rawRepresentation)
+
+        let identity = RelayDeviceIdentity(store: InMemoryRelayIdentityStore())
+        let result = await RelayMachineMigration.migrateLegacyIfNeeded(identity: identity)
+        #expect(result != nil)
+        if let machineID = result {
+            E2ERelayClient.deleteStoredPairing(machineID: machineID)
+        }
+
+        // The upgrading install's already-pinned key becomes the device
+        // identity — not a freshly minted one — so the very next reconnect
+        // presents the SAME public key the backend already trusts.
+        let (keyPair, outcome) = identity.loadOrCreate()
+        #expect(outcome == .existing)
+        #expect(keyPair.publicKeyBase64URL == PairingCrypto.KeyPair(privateKey: privateKey).publicKeyBase64URL)
+    }
+
+    @Test("valid legacy state does NOT clobber an already-present device identity")
+    func validLegacyStateDoesNotClobberExistingIdentity() async {
+        clearLegacyState()
+        defer { clearLegacyState() }
+        RelayMachineMigration.indexKeychain = Keychain(service: Self.kcService, inMemory: true)
+
+        let identity = RelayDeviceIdentity(store: InMemoryRelayIdentityStore())
+        let existing = identity.loadOrCreate().keyPair
+
+        let legacyPrivateKey = Curve25519.KeyAgreement.PrivateKey()
+        UserDefaults.standard.set("123456", forKey: Self.legacyCodeKey)
+        UserDefaults.standard.set("https://relay.example.com", forKey: Self.legacyURLKey)
+        await writeLegacyPrivKeyRaw(legacyPrivateKey.rawRepresentation)
+
+        let result = await RelayMachineMigration.migrateLegacyIfNeeded(identity: identity)
+        if let machineID = result {
+            E2ERelayClient.deleteStoredPairing(machineID: machineID)
+        }
+
+        #expect(identity.loadOrCreate().keyPair.publicKeyBase64URL == existing.publicKeyBase64URL)
+    }
+
+    // Fail-closed launch-time reconciliation. These live in this suite (not
+    // in RelayDeviceIdentityTests.swift) because they mutate the shared
+    // `indexKeychain` static and must serialize with every other test that
+    // swaps it — separate suites run concurrently and race that static.
+
+    @Test("a healthy (non-corrupt) identity leaves persisted machines untouched")
+    func healthyIdentityNoOp() async {
+        RelayMachineMigration.indexKeychain = Keychain(service: Self.kcService, inMemory: true)
+        let identity = RelayDeviceIdentity(store: InMemoryRelayIdentityStore())
+
+        let record = RelayMachineRecord(displayName: "Test Host")
+        await RelayMachineMigration.writeIndex([record])
+        UserDefaults.standard.set("123456", forKey: "lancer.relay.machine.\(record.id.uuidString).code")
+        UserDefaults.standard.set("https://relay.example.com", forKey: "lancer.relay.machine.\(record.id.uuidString).url")
+        defer { E2ERelayClient.deleteStoredPairing(machineID: record.id) }
+
+        let wiped = await RelayMachineMigration.invalidateAllMachinesIfIdentityRegenerated(identity: identity)
+        #expect(wiped == false)
+
+        let index = await RelayMachineMigration.readIndex()
+        #expect(index.count == 1)
+        #expect(E2ERelayClient.hasStoredPairing(machineID: record.id) == true)
+    }
+
+    @Test("a corrupt-and-regenerated identity wipes every persisted machine pairing")
+    func corruptIdentityWipesAllMachines() async {
+        RelayMachineMigration.indexKeychain = Keychain(service: Self.kcService, inMemory: true)
+        let identity = RelayDeviceIdentity(store: InMemoryRelayIdentityStore(seed: Data([0x00, 0x01])))
+
+        let record = RelayMachineRecord(displayName: "Test Host")
+        await RelayMachineMigration.writeIndex([record])
+        UserDefaults.standard.set("123456", forKey: "lancer.relay.machine.\(record.id.uuidString).code")
+        UserDefaults.standard.set("https://relay.example.com", forKey: "lancer.relay.machine.\(record.id.uuidString).url")
+        defer { E2ERelayClient.deleteStoredPairing(machineID: record.id) }
+
+        let wiped = await RelayMachineMigration.invalidateAllMachinesIfIdentityRegenerated(identity: identity)
+        #expect(wiped == true)
+
+        let index = await RelayMachineMigration.readIndex()
+        #expect(index.isEmpty)
+        #expect(E2ERelayClient.hasStoredPairing(machineID: record.id) == false)
+    }
 }
 
 // MARK: - Namespaced pairing restore (incomplete-state regression)
 //
-// Regression for the 2026-07-03 on-device finding: a machine whose Keychain
-// private key was gone — while its UserDefaults code + URL survived — passed
-// the old `hasStoredPairing` gate, so launch hydration called `connect()` on
-// a client whose restore had silently no-op'd: it dialed the relay with an
-// EMPTY pairing code and a freshly generated keypair, got HTTP 400 forever,
-// and the UI showed the machine as permanently disconnected. These tests pin
-// the two behaviors that close that hole. Real UserDefaults + real Keychain
-// (same accepted tradeoff as RelayMachineMigrationTests above); state is
-// namespaced per fresh machineID, so no cross-test races.
+// Regression for the 2026-07-03 on-device finding: a client whose restore
+// had silently no-op'd dialed the relay with an EMPTY pairing code and a
+// freshly generated keypair, got HTTP 400 forever, and the UI showed the
+// machine as permanently disconnected. These tests pin the behaviors that
+// close that hole. Real UserDefaults + real Keychain (same accepted tradeoff
+// as RelayMachineMigrationTests above); state is namespaced per fresh
+// machineID, so no cross-test races.
+//
+// As of the 2026-07-11 stable-identity fix, the relay private key is no
+// longer per-machine — every `E2ERelayClient` loads the one shared, always-
+// persisted `RelayDeviceIdentity` at init time (see `RelayDeviceIdentityTests`
+// for that layer's own coverage) — so restore validity now depends only on
+// the namespaced code + URL, not on any per-machine Keychain entry.
 
 @MainActor
 @Suite struct E2ERelayClientRestoreTests {
@@ -236,12 +331,27 @@ import CryptoKit
         #expect(restored.restoreNamespacedStoredPairing() == true)
         #expect(restored.pairingCode == "222333")
         #expect(restored.relayURL == relayURL)
+        // Same device identity, so the restored client presents the exact
+        // public key the original pairing pinned with the backend — the
+        // property that makes a retry/relaunch/reinstall reconnect-safe.
+        #expect(restored.publicKeyBase64URL == client.publicKeyBase64URL)
     }
 
-    @Test("code+URL without a Keychain private key reports false and restores nothing")
-    func missingPrivKey() {
+    @Test("URL missing (code present) reports false and restores nothing")
+    func missingURL() {
         let id = RelayMachineID()
         UserDefaults.standard.set("444555", forKey: udCodeKey(id))
+        defer { E2ERelayClient.deleteStoredPairing(machineID: id) }
+
+        let client = E2ERelayClient(relayURL: URL(string: "https://original.example.com")!, pairingCode: "", machineID: id)
+        #expect(client.restoreNamespacedStoredPairing() == false)
+        #expect(client.pairingCode.isEmpty)
+        #expect(client.relayURL.host == "original.example.com")
+    }
+
+    @Test("code missing (URL present) reports false and restores nothing")
+    func missingCode() {
+        let id = RelayMachineID()
         UserDefaults.standard.set("https://relay.example.com", forKey: udURLKey(id))
         defer { E2ERelayClient.deleteStoredPairing(machineID: id) }
 
