@@ -125,14 +125,21 @@ func newReceiptAccumulator(runID string, p receiptStartParams, gitRun gitRunner)
 		conversationID: p.conversationID,
 		contract:       p.contract,
 		startedAt:      time.Now().UTC(),
+		// gitStartRef / dirty / available stay at zero (unknown) until the
+		// async snapshot below lands — never block the relay messageLoop.
 	}
 	if gitRun == nil {
 		gitRun = realGitRunner
 	}
-	ref, dirty, ok := gitStartSnapshot(acc.cwd, gitRun)
-	acc.gitStartRef = ref
-	acc.gitDirtyAtStart = dirty
-	acc.gitAvailable = ok
+	cwd := acc.cwd
+	go func() {
+		ref, dirty, ok := gitStartSnapshot(cwd, gitRun)
+		acc.mu.Lock()
+		acc.gitStartRef = ref
+		acc.gitDirtyAtStart = dirty
+		acc.gitAvailable = ok
+		acc.mu.Unlock()
+	}()
 	return acc
 }
 
