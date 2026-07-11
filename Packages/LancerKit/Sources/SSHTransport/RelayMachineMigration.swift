@@ -32,16 +32,21 @@ public enum RelayMachineMigration {
     static var indexKeychain = Keychain(service: kcService)
 
     /// Reads the three legacy singular keys. If all three are present and the
-    /// privkey decodes as a valid Curve25519 private key, migrates them into
-    /// one `RelayMachineRecord` under a fresh `RelayMachineID`, writes the
-    /// machines-index, deletes the legacy keys, and returns the new id.
+    /// privkey decodes as a valid Curve25519 private key, migrates the
+    /// code/URL into one `RelayMachineRecord` under a fresh `RelayMachineID`,
+    /// seeds the shared `RelayDeviceIdentity` with the legacy privkey (only
+    /// if no device identity exists yet — an upgrading install already has a
+    /// key the backend pinned for this still-active pairing code, and
+    /// minting a fresh device identity instead would make the very next
+    /// reconnect look like a hijack attempt), writes the machines-index,
+    /// deletes the legacy keys, and returns the new id.
     ///
     /// If any legacy piece is missing, or the privkey is present but invalid,
     /// deletes whatever legacy fragments exist and returns nil.
     ///
     /// If no legacy pairing exists at all, this is a no-op that returns nil.
     @discardableResult
-    public static func migrateLegacyIfNeeded() async -> RelayMachineID? {
+    public static func migrateLegacyIfNeeded(identity: RelayDeviceIdentity = .shared) async -> RelayMachineID? {
         guard E2ERelayClient.hasStoredPairing else { return nil }
 
         guard
@@ -55,23 +60,41 @@ public enum RelayMachineMigration {
             return nil
         }
 
+        identity.seedIfAbsent(privKeyData)
+
         let machineID = RelayMachineID()
         UserDefaults.standard.set(code, forKey: "lancer.relay.machine.\(machineID.uuidString).code")
         UserDefaults.standard.set(relayURLString, forKey: "lancer.relay.machine.\(machineID.uuidString).url")
-        do {
-            try await indexKeychain.write(privKeyData, account: "lancer.relay.machine.\(machineID.uuidString).privKey")
-        } catch {
-            // Namespaced write failed: leave no partial state under the new id.
-            UserDefaults.standard.removeObject(forKey: "lancer.relay.machine.\(machineID.uuidString).code")
-            UserDefaults.standard.removeObject(forKey: "lancer.relay.machine.\(machineID.uuidString).url")
-            await deleteLegacyFragments()
-            return nil
-        }
 
         let record = RelayMachineRecord(id: machineID, displayName: "Relay host")
         await writeIndex([record])
         await deleteLegacyFragments()
         return machineID
+    }
+
+    /// Call once at launch, immediately after `migrateLegacyIfNeeded()` and
+    /// before restoring/dialing any machine.
+    ///
+    /// If the persisted per-device relay identity turned out to be corrupt
+    /// (undecodable) and `identity` had to regenerate it, every persisted
+    /// machine pairing on this device was pinned by the backend against the
+    /// OLD public key — which this device can no longer prove possession of.
+    /// Reconnecting any of them would be rejected as a hijack attempt, so
+    /// fail closed: wipe every stored pairing and require a fresh, honest
+    /// re-pair instead of an unfixable, silent reconnect loop.
+    ///
+    /// Returns true iff a wipe occurred.
+    @discardableResult
+    public static func invalidateAllMachinesIfIdentityRegenerated(
+        identity: RelayDeviceIdentity = .shared
+    ) async -> Bool {
+        guard identity.loadOrCreate().outcome == .regeneratedAfterCorruption else { return false }
+        let records = await readIndex()
+        for record in records {
+            E2ERelayClient.deleteStoredPairing(machineID: record.id)
+        }
+        await writeIndex([])
+        return true
     }
 
     /// Reads the machines-index Keychain entry and decodes it, or `[]` if

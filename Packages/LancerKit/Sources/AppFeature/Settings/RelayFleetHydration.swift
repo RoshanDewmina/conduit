@@ -16,6 +16,7 @@ public enum RelayFleetHydration {
     /// machine in the persisted index. Call once at launch.
     public static func hydrate(into store: RelayFleetStore) async {
         _ = await RelayMachineMigration.migrateLegacyIfNeeded()
+        _ = await RelayMachineMigration.invalidateAllMachinesIfIdentityRegenerated()
         let records = await RelayMachineMigration.readIndex()
         for record in records {
             let client = E2ERelayClient(relayURL: RelaySettings.url(), pairingCode: "", machineID: record.id)
