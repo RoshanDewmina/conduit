@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,6 +35,17 @@ type e2eRelayClient struct {
 	wg             sync.WaitGroup
 	reconnectDelay time.Duration
 
+	// readTimeout is the per-Receive stale-connection deadline (see
+	// messageLoop). Defaults to e2eReadTimeout; tests shrink it to run a
+	// silent-drop scenario in milliseconds instead of e2eReadTimeout's real
+	// 90s.
+	readTimeout time.Duration
+
+	// expiredCode tracks consecutive relay rejections of THIS pairing code
+	// as "expired unconfirmed" across reconnect attempts. Bounded so a dead
+	// code fails closed (giveUp) instead of retrying forever silently.
+	expiredCode *expiredCodeTracker
+
 	// sendSeq/recv track the per-direction replay-resistance sequence for the
 	// current pairing generation (see seqFrame/replaySequencer in
 	// e2e_crypto.go). Both reset on every new peer_joined session key.
@@ -54,7 +67,9 @@ func newE2ERelayClient(relayURL, pairingCode string, handler func(msgType string
 		publicKey:      pub,
 		messageHandler: handler,
 		stopCh:         make(chan struct{}),
-		reconnectDelay: 1 * time.Second,
+		reconnectDelay: e2eInitialReconnectBackoff,
+		readTimeout:    e2eReadTimeout,
+		expiredCode:    newExpiredCodeTracker(e2eMaxExpiredCodeRejections),
 	}
 }
 
@@ -68,7 +83,9 @@ func newE2ERelayClientWithKey(relayURL, pairingCode string, handler func(msgType
 		publicKey:      pubKey,
 		messageHandler: handler,
 		stopCh:         make(chan struct{}),
-		reconnectDelay: 1 * time.Second,
+		reconnectDelay: e2eInitialReconnectBackoff,
+		readTimeout:    e2eReadTimeout,
+		expiredCode:    newExpiredCodeTracker(e2eMaxExpiredCodeRejections),
 	}
 }
 
@@ -91,16 +108,34 @@ func (c *e2eRelayClient) start() {
 // connection slot. Idempotent — safe to call more than once.
 func (c *e2eRelayClient) stop() {
 	c.stopOnce.Do(func() {
-		close(c.stopCh)
-		c.mu.Lock()
-		if c.conn != nil {
-			c.conn.Close()
-		}
-		c.connected = false
-		c.paired = false
-		c.mu.Unlock()
+		c.closeAndHalt()
 	})
 	c.wg.Wait()
+}
+
+// giveUp is stop()'s teardown, minus wg.Wait() — safe to call from INSIDE
+// connectLoop's own goroutine (e.g. after a bounded number of expired-code
+// rejections). Waiting on wg here would deadlock: connectLoop is the very
+// goroutine wg.Wait() is waiting on. The external stop() path still works
+// afterward — stopOnce makes closeAndHalt idempotent, and wg.Wait() there
+// simply returns once both loop goroutines have exited on their own via the
+// now-closed stopCh.
+func (c *e2eRelayClient) giveUp(reason string) {
+	c.stopOnce.Do(func() {
+		c.closeAndHalt()
+		log.Printf("e2e: giving up on pairing code %s — %s", c.pairingCode, reason)
+	})
+}
+
+func (c *e2eRelayClient) closeAndHalt() {
+	close(c.stopCh)
+	c.mu.Lock()
+	if c.conn != nil {
+		c.conn.Close()
+	}
+	c.connected = false
+	c.paired = false
+	c.mu.Unlock()
 }
 
 // sleepOrStop waits for d, or returns early (reporting false) if stop() is
@@ -129,12 +164,10 @@ func (c *e2eRelayClient) connectLoop() {
 			if !c.sleepOrStop(c.reconnectDelay) {
 				return
 			}
-			if c.reconnectDelay < 30*time.Second {
-				c.reconnectDelay *= 2
-			}
+			c.reconnectDelay = nextReconnectBackoff(c.reconnectDelay, e2eMaxReconnectBackoff)
 			continue
 		}
-		c.reconnectDelay = 1 * time.Second
+		c.reconnectDelay = e2eInitialReconnectBackoff
 		c.messageLoop()
 
 		// messageLoop returns either because stop() closed stopCh (in which
@@ -183,9 +216,26 @@ func (c *e2eRelayClient) messageLoop() {
 		default:
 		}
 
+		// A read deadline is the fix for the daemon sitting on a silently
+		// dropped connection forever: golang.org/x/net/websocket has no
+		// RFC6455 control-frame ping (that's a gorilla/nhooyr-only API), so
+		// this library's Receive blocks indefinitely with no way to notice a
+		// connection that infra dropped without a FIN/RST (idle-connection
+		// reaping, NAT/LB drop). Refreshed every iteration: any inbound frame
+		// (including the "pong" the relay sends for our keepaliveLoop ping)
+		// pushes the deadline forward, so a live-but-quiet connection never
+		// times out — only a truly dead one does.
+		if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+			log.Printf("e2e: set read deadline failed: %v", err)
+		}
+
 		var data []byte
 		if err := websocket.Message.Receive(c.conn, &data); err != nil {
-			log.Printf("e2e: receive error: %v", err)
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				log.Printf("e2e: connection stale (no data in %v), reconnecting", c.readTimeout)
+			} else {
+				log.Printf("e2e: receive error: %v", err)
+			}
 			c.mu.Lock()
 			c.connected = false
 			c.paired = false
@@ -219,7 +269,23 @@ func (c *e2eRelayClient) messageLoop() {
 			// a rejected pairing is silently indistinguishable from a network drop.
 			log.Printf("e2e: relay rejected: %s", msg.Message)
 
+			// "expired unconfirmed" (see push-backend's pairConfirmWindow) means
+			// this code can never succeed again without a fresh pairing — redialing
+			// it is a silent infinite loop, not recovery. Bound the retries and
+			// surface an actionable line instead of looping forever.
+			if strings.Contains(strings.ToLower(msg.Message), "expired") {
+				streak, exceeded := c.expiredCode.record()
+				if exceeded {
+					c.giveUp(fmt.Sprintf(
+						"pairing code expired unconfirmed after %d rejected attempts — run 'lancerd pair' again",
+						streak,
+					))
+					return
+				}
+			}
+
 		case "peer_joined":
+			c.expiredCode.reset()
 			c.mu.Lock()
 			key, err := deriveSessionKey(
 				c.privateKey,
