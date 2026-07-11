@@ -26,8 +26,15 @@ chat thread finesse · composer · push approvals incl. lock screen · emergency
 build roadmap §1. Exit bar: owner completes the full loop on a physical phone 5 days of 7.
 Owner starts `docs/dogfood-log.md` (one line/day; every laptop-reach is a bug or scope insight).
 
-**Frozen until Phase 3 fork (post-60d):** pricing/billing/StoreKit reconciliation, team tier,
-outreach/interviews, Away Launch Composer, hosted-cloud. Watch: cut (owner, Jul 8).
+**September target (owner, 07-10): App Store launch at iOS 27 GA (~Sept 14)** — S27 + LAUNCH
+work packages in the build roadmap §3.1/§3.1b; billing + legal/review unfreeze early August.
+Dogfood log by mid-Aug is the go/no-go input (downgrade path: TestFlight-only).
+**Still frozen:** team tier, hosted-cloud, Away Launch Composer. Watch: cut (owner, Jul 8).
+
+**Execution model + process (owner, 07-10):** [`ENGINEERING_PROCESS.md`](ENGINEERING_PROCESS.md)
+— Cursor CLI (Grok 4.5 high / Composer 2.5) codes, Sonnet 5 high is fallback + sensitive paths,
+Fable orchestrates via [`plans/2026-07-10-fable-orchestrator-PASTE.md`](plans/2026-07-10-fable-orchestrator-PASTE.md)
++ the `swarm-orchestrator` skill.
 
 ## Tier 0 / device evidence (current)
 

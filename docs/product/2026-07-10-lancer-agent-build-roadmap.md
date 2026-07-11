@@ -95,12 +95,21 @@ intents must surface staleness ("as of 2 min ago; machine unreachable") — pair
 derived-offline pattern above. No competitor has any of this (all React Native) — **uncontested
 surface; our own merged code is the reference.**
 
-### 2.2 Live Activities into the daily loop
-No competitor reference exists (RN). Our own prior work is the reference: push-to-start sender
-in `daemon/push-backend/liveactivity.go`, token forwarding `AppRoot.swift`, risk-gated buttons in
-`LancerLiveActivityWidget.swift`. Constraints (verified 07-07): 8 h active +4 h lock-screen cap →
-re-start-via-push for long loops; sparse updates (stage changes, not ticks) to respect push
-budgets; low-risk-only inline approve, else "Review in Lancer" deep link.
+### 2.2 Live Activities into the daily loop — work packages (agent-dispatchable)
+No competitor reference exists (all three are React Native). Our own merged code is the
+reference: push-to-start sender `daemon/push-backend/liveactivity.go`, token forwarding
+`AppRoot.swift` (~:1634), risk-gated buttons `LancerLiveActivityWidget.swift:120-324`,
+`ApprovalActionIntent` (auth on approve, reject unauthenticated, `openAppWhenRun`).
+Constraints (verified 07-07): 8 h active + 4 h lock-screen cap; sparse updates (stage changes,
+not progress ticks); low-risk-only inline approve, else "Review in Lancer" deep link;
+`.end()`-on-background already fixed — do not re-add it.
+
+| Pkg | Scope | Risk | Acceptance |
+|---|---|---|---|
+| **LA-1 Token lifecycle hardening** | Relay-path Activity + push-to-start token registration under churn: new token per Activity, re-registration on rotation, dedupe server-side; kill the "one token per device" assumption end-to-end | sensitive (protocol) | Go test: token rotate → old token evicted, new token receives `update`; loopback e2e asserts start→update→end on relay path |
+| **LA-2 Long-run refresh** | Runs > 8 h: daemon detects Activity-lifetime expiry and re-issues push-to-start with same content state (version the content state — old Activities render post-update) | low | Unit test: simulated 8 h expiry → new `start` payload emitted, seq/content preserved; content-state decode test old-vs-new schema |
+| **LA-3 Away-state content** | Content state carries: run status, current stage, pending-approval risk badge, criteria-progress (n/m met) from contract; redact command detail above low risk (HIG lock-screen rule) | ui | Widget snapshot tests per risk tier; screenshots in `docs/test-runs/` |
+| **LA-4 Device proof** | Owner runs a real dispatch with phone locked: Activity starts push-to-start, updates on stage change, inline approve (low-risk) works, "Review in Lancer" deep link opens staged decision | owner-gated | Recorded in `docs/test-runs/` with screenshots; blocks Phase 2 exit |
 
 ### 2.3 Receipt card + contract echo (backend done — `lancer.proof/v0`)
 Spec: `2026-07-07-lancer-layers-0-3-implementation-spec.md` §C1–C3, B3–B4 (still the build spec;
@@ -125,11 +134,27 @@ JSONL for tool events.
 
 ## Phase 3 — Aug→Sept: deep Siri lane + loop supervision + the fork
 
-### 3.1 iOS 27 deep Siri (Apple-gated ~Sept 14 GA; prep in August)
-`LongRunningIntent` Siri-dispatched runs · `IndexedEntityQuery` semantic search over runs ·
-Foundation Models advisory copilot (never authoritative; availability fallback mandatory).
-Reference: our own `docs/plans/2026-07-09-siri-ios27-all-in-roadmap.md` + WWDC inventory.
-AppIntentsTesting first (regression-guards the two Siri bug classes already hit).
+### 3.1 iOS 27 deep integration — work packages (owner decision 07-10: **App Store launch at GA ~Sept 14**, deep Siri + Live Activities as the headline)
+Reference: `docs/plans/2026-07-09-siri-ios27-all-in-roadmap.md` + `2026-07-09-wwdc-ios-capability-inventory.md`.
+All S27 packages build in August against the iOS 27 beta on a branch; merge at GA.
+
+| Pkg | Scope | Risk | Acceptance |
+|---|---|---|---|
+| **S27-0 Target raise** | iOS 26→27: `project.yml`, regenerate, `Package.swift`, all targets; remove `swift(>=6.4)` gates | low, churny | All gates green on iOS 27 SDK; solo PR, lands first |
+| **S27-1 AppIntentsTesting** | Regression tests for the two shipped Siri bug classes (AppShortcutsProvider placement, entity disambiguation) | low | New test target green in CI; intentionally-broken provider placement fails the test |
+| **S27-2 LongRunningIntent dispatch** | "Siri, have Lancer fix the flaky relay test on the studio" → dispatch with contract → auto-Live-Activity progress. Confirmation-gated; **dispatch only, never approve** | sensitive (dispatch path) | Simulator: Siri phrase → run starts with contract, Activity appears; deny/stop phrases still work |
+| **S27-3 Semantic search** | `IndexedEntityQuery` + CoreSpotlight over conversations/runs/receipts — "when did we touch the auth middleware" answered by the OS | low | Spotlight surfaces a receipt by natural-language query on simulator |
+| **S27-4 FM approval copilot** | On-device Foundation Models advisory `RiskVerdict` (@Generable) + evidence via Tool over local GRDB/audit — **advisory-only, never auto-decide**; "not available on this device" fallback that doesn't degrade the loop | sensitive | Unit: verdict never mutates approval state; UX shows fallback on ineligible device |
+| **S27-5 View Annotations** | "Pause *this* run" from on-screen context — verify the modifier's real OS gate FIRST; skip if gated beyond 27.0 | low | Prototype or documented skip decision |
+
+### 3.1b App Store launch packages (unfrozen by the 07-10 App Store decision)
+
+| Pkg | Scope | Notes |
+|---|---|---|
+| **LAUNCH-1 Production burn list** | GCS `lancerd` publish, VPS, CloudKit Production schema — [`2026-07-09-production-readiness-gaps.md`](2026-07-09-production-readiness-gaps.md) | Owner-gated infra; start early August |
+| **LAUNCH-2 Billing reconciliation** | StoreKit IAP vs Stripe entitlement — pick ONE for launch (App Review pushes hard toward IAP for digital goods; Stripe stays for the daemon/cloud side) | sensitive; needs owner decision early Aug |
+| **LAUNCH-3 App Review readiness** | `legal/` + `distribution/` docs are current: privacy labels, encryption compliance (E2E relay!), review notes explaining an agent-control app + demo daemon for reviewers | App Review demo account/video is the long pole — an app controlling dev machines needs a canned reviewer path |
+| **LAUNCH-4 TestFlight ramp** | Owner device → external TestFlight (small) by ~Aug 25 → submission ~Sept 7 for GA-day approval | Dogfood log is the go/no-go input: weak retention by mid-Aug = owner decision point to downgrade to TestFlight-only launch |
 
 ### 3.2 Loop supervision (owner-agreed direction, 07-10)
 Lancer supervises loops; it does not construct them (Conductor/CLI/Ralph plugins own that).
@@ -139,8 +164,14 @@ Lancer supervises loops; it does not construct them (Conductor/CLI/Ralph plugins
 - Reference: `research_repos/vibe-kanban` crates (`executors/`, `git/`, `git-host/`) for
   orchestrator/task-board/PR-integration shapes; our contract `doneCriteria` + receipt already
   *is* the Ralph exit condition — render it as such.
+- **Swarm overview surface (owner, 07-10):** visualize an orchestrator session as glanceable
+  lanes — agent → work package → gate status → needs-you — sourced from
+  `docs/plans/orchestrator-state.md` + observed sessions. The Fable-managing-subagents workflow
+  is Lancer's own best demo. Visual-first presentation is a product principle (owner):
+  prefer status lanes/cards/rings over text logs on every surface.
 - Dogfood experiment (owner): run one Ralph-style loop with a contract; gate it entirely from
-  the phone for a day. Magical → double-down signal.
+  the phone for a day. Magical → double-down signal. The orchestrator swarm itself is the
+  second dogfood loop — supervise it from the phone.
 
 ### 3.3 The fork (with evidence)
 Usage log + dated competitive re-check (all three clones + fresh web: has anyone closed

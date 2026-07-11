@@ -49,6 +49,11 @@ Foundation Models copilot) cannot ship before GA (~Sept 14) — Phase 3 preps in
 day-one at GA as the launch story. Caveat: thesis must survive the dated competitive re-check
 (all three competitors are OSS and moving; Omnara ships a Watch app).
 
+**Product principle (owner, 07-10): visual-first.** Prefer glanceable visual state — lanes,
+cards, rings, badges — over text logs on every surface. The swarm-overview use case (watching
+an orchestrator manage subagents from the phone) is both a roadmap item (§3.2) and the
+standing test of this principle.
+
 ## One-sentence definition
 
 > Lancer lets me drive, approve, and review the AI coding agents running on my own machines —
@@ -157,8 +162,9 @@ team tier · Away Launch Composer contract chips.
 - **Phase 2 — hands-free + trust surfaces (weeks 3–4).** The wedge made visible: Siri Phase 1
   polish (26-safe slice, already merged) + Live Activities into the daily loop; receipt card +
   contract echo (backend already done); needs-you ordering matured; whatever the log demanded.
-- **Phase 3 — Sept lane + the fork (Aug–Sept).** Prep the iOS-27 deep-Siri layer in August
-  (LongRunningIntent dispatch, semantic search, FM copilot — Apple-gated), ship day-one at GA
-  (~Sept 14) as the launch story. In parallel, with usage evidence + competitive re-check,
-  revisit the fork: product (govern-don't-watch wedge → outreach & pricing) or tool
-  (open-source/portfolio framing).
+- **Phase 3 — Sept lane (Aug–Sept). Owner decision (07-10, later in session): App Store launch
+  day-one at iOS 27 GA (~Sept 14)**, deep Siri + Live Activities as the headline. August preps
+  the iOS-27 layer (S27 packages) + launch packages (production burn list, billing
+  reconciliation, App Review readiness) per the build roadmap §3.1/§3.1b. Standing check: the
+  dogfood log by mid-August is the go/no-go input — weak owner retention = explicit owner
+  decision point to downgrade to TestFlight-only, not a silent slide.
