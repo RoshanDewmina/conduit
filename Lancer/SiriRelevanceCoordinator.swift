@@ -54,35 +54,35 @@ actor SiriRelevanceCoordinator {
     private func donateIntents(for snapshot: SiriRelevanceSnapshot) async {
         if let approvalID = snapshot.pendingApprovalIDs.first,
            let entity = try? await ApprovalEntityQuery().entities(for: [approvalID]).first {
-            var deny = DenyApprovalIntent()
+            let deny = DenyApprovalIntent()
             deny.approval = entity
-            try? await IntentDonationManager.shared.donate(intent: deny)
+            _ = try? await IntentDonationManager.shared.donate(intent: deny)
         }
 
         if snapshot.activeRunIDs.count == 1,
            let runID = snapshot.activeRunIDs.first,
            let entity = try? await RunEntityQuery().entities(for: [runID]).first {
-            var pause = PauseRunIntent()
+            let pause = PauseRunIntent()
             pause.run = entity
-            try? await IntentDonationManager.shared.donate(intent: pause)
+            _ = try? await IntentDonationManager.shared.donate(intent: pause)
 
-            var stop = StopRunIntent()
+            let stop = StopRunIntent()
             stop.run = entity
-            try? await IntentDonationManager.shared.donate(intent: stop)
+            _ = try? await IntentDonationManager.shared.donate(intent: stop)
         }
 
         if let conversationID = snapshot.recentConversationID,
            let entity = try? await ConversationEntityQuery().entities(for: [conversationID]).first {
-            var open = OpenConversationIntent()
+            let open = OpenConversationIntent()
             open.conversation = entity
-            try? await IntentDonationManager.shared.donate(intent: open)
+            _ = try? await IntentDonationManager.shared.donate(intent: open)
         }
 
         if let machineID = snapshot.onlineMachineID,
            let entity = try? await MachineEntityQuery().entities(for: [machineID]).first {
-            var start = StartAgentRunIntent()
+            let start = StartAgentRunIntent()
             start.machine = entity
-            try? await IntentDonationManager.shared.donate(intent: start)
+            _ = try? await IntentDonationManager.shared.donate(intent: start)
         }
     }
 
@@ -90,7 +90,7 @@ actor SiriRelevanceCoordinator {
         for kind in kinds {
             if kind.hasPrefix("denyApproval:") {
                 let id = String(kind.dropFirst("denyApproval:".count))
-                try? await IntentDonationManager.shared.deleteDonations(
+                _ = try? await IntentDonationManager.shared.deleteDonations(
                     matching: .intentType(
                         DenyApprovalIntent.self,
                         entityIdentifier: EntityIdentifier(for: ApprovalEntity.self, identifier: id)
@@ -98,7 +98,7 @@ actor SiriRelevanceCoordinator {
                 )
             } else if kind.hasPrefix("pauseRun:") {
                 let id = String(kind.dropFirst("pauseRun:".count))
-                try? await IntentDonationManager.shared.deleteDonations(
+                _ = try? await IntentDonationManager.shared.deleteDonations(
                     matching: .intentType(
                         PauseRunIntent.self,
                         entityIdentifier: EntityIdentifier(for: RunEntity.self, identifier: id)
@@ -106,7 +106,7 @@ actor SiriRelevanceCoordinator {
                 )
             } else if kind.hasPrefix("stopRun:") {
                 let id = String(kind.dropFirst("stopRun:".count))
-                try? await IntentDonationManager.shared.deleteDonations(
+                _ = try? await IntentDonationManager.shared.deleteDonations(
                     matching: .intentType(
                         StopRunIntent.self,
                         entityIdentifier: EntityIdentifier(for: RunEntity.self, identifier: id)
@@ -114,14 +114,14 @@ actor SiriRelevanceCoordinator {
                 )
             } else if kind.hasPrefix("openConversation:") {
                 let id = String(kind.dropFirst("openConversation:".count))
-                try? await IntentDonationManager.shared.deleteDonations(
+                _ = try? await IntentDonationManager.shared.deleteDonations(
                     matching: .intentType(
                         OpenConversationIntent.self,
                         entityIdentifier: EntityIdentifier(for: ConversationEntity.self, identifier: id)
                     )
                 )
             } else if kind == "startAgentRun" {
-                try? await IntentDonationManager.shared.deleteDonations(
+                _ = try? await IntentDonationManager.shared.deleteDonations(
                     matching: .intentType(StartAgentRunIntent.self)
                 )
             }
@@ -179,25 +179,25 @@ actor SiriRelevanceCoordinator {
     private func donateRelevantEntity(_ entity: any AppEntity) async {
         switch entity {
         case let approval as ApprovalEntity:
-            var deny = DenyApprovalIntent()
+            let deny = DenyApprovalIntent()
             deny.approval = approval
-            try? await IntentDonationManager.shared.donate(intent: deny)
+            _ = try? await IntentDonationManager.shared.donate(intent: deny)
         case let run as RunEntity:
-            var pause = PauseRunIntent()
+            let pause = PauseRunIntent()
             pause.run = run
-            try? await IntentDonationManager.shared.donate(intent: pause)
+            _ = try? await IntentDonationManager.shared.donate(intent: pause)
 
-            var stop = StopRunIntent()
+            let stop = StopRunIntent()
             stop.run = run
-            try? await IntentDonationManager.shared.donate(intent: stop)
+            _ = try? await IntentDonationManager.shared.donate(intent: stop)
         case let conversation as ConversationEntity:
-            var open = OpenConversationIntent()
+            let open = OpenConversationIntent()
             open.conversation = conversation
-            try? await IntentDonationManager.shared.donate(intent: open)
+            _ = try? await IntentDonationManager.shared.donate(intent: open)
         case let machine as MachineEntity:
-            var start = StartAgentRunIntent()
+            let start = StartAgentRunIntent()
             start.machine = machine
-            try? await IntentDonationManager.shared.donate(intent: start)
+            _ = try? await IntentDonationManager.shared.donate(intent: start)
         default:
             break
         }
