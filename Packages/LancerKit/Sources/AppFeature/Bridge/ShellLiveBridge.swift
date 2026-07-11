@@ -122,11 +122,12 @@ public final class ShellLiveBridge {
         inFlightPrompt = prompt
 
         let transport = Self.transport(for: machine.bridge)
+        let model = DispatchModelSelection.load().slug
         let outcome = await conversationSyncCoordinator.startConversation(
             agent: "relay|\(machine.id.uuidString)|\(Self.vendor)",
             cwd: cwd,
             prompt: prompt,
-            model: nil,
+            model: model,
             budgetUSD: nil,
             hostName: machine.record.displayName,
             hostID: machine.id.uuidString,
@@ -169,7 +170,12 @@ public final class ShellLiveBridge {
         }
         activeMachineID = machine.id
 
-        let baseSeq = (try? await chatRepo.conversation(id: conversationID))?.lastHostSeq ?? 0
+        let conversation = try? await chatRepo.conversation(id: conversationID)
+        let baseSeq = conversation?.lastHostSeq ?? 0
+        let model = DispatchModelSelection.modelForFollowUp(
+            conversationModel: conversation?.model,
+            selected: DispatchModelSelection.load()
+        )
 
         sendState = .working
         inFlightPrompt = prompt
@@ -180,6 +186,7 @@ public final class ShellLiveBridge {
             baseSeq: baseSeq,
             prompt: prompt,
             clientTurnID: UUID().uuidString,
+            model: model,
             hostName: machine.record.displayName,
             hostID: machine.id.uuidString,
             transport: transport
