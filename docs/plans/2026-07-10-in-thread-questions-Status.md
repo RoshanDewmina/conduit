@@ -1,6 +1,6 @@
 # In-thread agent Question cards — Status
 
-**Updated:** 2026-07-10 (M2: AskUserQuestion unblocked, real live round trip proven)
+**Updated:** 2026-07-10 (M3: stdio same-turn responder implemented, live protocol probe + dogfood proven)
 **Plan:** `docs/plans/2026-07-10-in-thread-questions-Plan.md`
 **Branch / worktree:** `feat/in-thread-questions` @ `77488c11` (cut from `master`) in
 `/Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe`
@@ -165,13 +165,164 @@ accumulated debug backlog via a daemon restart):**
 SUCCEEDED, 0 errors, 0 new warnings. `git status --short` matched the intended 7-file write-set
 exactly.
 
+## M3 — stdio same-turn responder (2026-07-10)
+
+**Owner ask:** resolve M2's open decision — build the real bidirectional
+`--permission-prompt-tool stdio` responder so an answered question injects into the SAME live
+Claude Code turn, Orca/Happier same-turn semantics, but headless (no PTY clone).
+
+### Part 1 — live protocol probe (before any code)
+
+`which claude && claude --version` → `/opt/homebrew/bin/claude`, `2.1.206 (Claude Code)` (same
+version M2 verified against).
+
+Six live probes in a scratch dir (`/private/tmp/.../scratchpad/probe/probe{1..6}_*.py`, Python
+`subprocess.Popen` with live stdin/stdout pipes — no code changes yet):
+
+1. **`--permission-prompt-tool stdio` + a live (never-closed) stdin pipe, no `--input-format`
+   change** (i.e. exactly M2's existing argv shape, but with a real pipe instead of `/dev/null`):
+   **still auto-denies instantly** — `"Tool permission request failed: Error: Stream closed"`, zero
+   `control_request` lines on stdout. This disproves the natural assumption that M2's fix plus a
+   live pipe alone would be enough.
+2. **Adding `--input-format stream-json`** (prompt delivered as a
+   `{"type":"user","message":{"role":"user","content":"..."}}` line on stdin instead of positional
+   `-p <prompt>`, everything else unchanged): a REAL control_request appears —
+   ```json
+   {"type":"control_request","request_id":"7b3ac1ff-...","request":{"subtype":"can_use_tool","tool_name":"AskUserQuestion","display_name":"AskUserQuestion","input":{"questions":[{"question":"Which color should the button be?","header":"Color","options":[{"label":"Red","description":"A red button"},{"label":"Blue","description":"A blue button"}],"multiSelect":false}]},"tool_use_id":"toolu_01DpeuKfruQbCyir7YCyzs7V","requires_user_interaction":true}}
+   ```
+3. **Responding** with
+   `{"type":"control_response","response":{"subtype":"success","request_id":"<same id>","response":{"behavior":"allow","updatedInput":{"questions":[...],"answers":{"Which color should the button be?":"Red"}}}}}`
+   on stdin: **the SAME run's final text became `"Red was chosen."`** (`permission_denials: []`) —
+   definitive proof of same-turn continuation with the real answer, not the old auto-deny text.
+4. **Positional `-p <prompt>` kept alongside `--input-format stream-json`** (no stdin write): the
+   process **hangs indefinitely** (20s timeout, zero stdout) — confirms the positional prompt is
+   ignored/unusable in this mode; the prompt MUST be delivered via the stdin JSON message.
+5. **`behavior: "deny"`**: `"result":"The question was declined — the user did not answer or
+   select an option."`, clean exit, no hang. **`multiSelect` array answer**
+   (`"answers":{"Which toppings?":["Cheese","Mushroom"]}`): `"result":"Selected toppings: Cheese,
+   Mushroom."` — both documented Agent-SDK answer shapes (single string, array) confirmed live.
+6. **Does the process exit on its own after a "result" event?** No — verified live it idles
+   waiting for another stdin message (streaming-input mode). Closing stdin (EOF) after the result
+   triggers a clean exit in **~0.5s**. This is a new failure mode M3's switch to stream-json input
+   introduces and had to handle (see `realLauncher`'s `agent.control.close` wiring below) — without
+   it every claudeCode run would leak a live process forever.
+
+Full verbatim stdout/stderr for all 6 probes is preserved in this session's transcript (probe
+scripts + raw output too large to inline here; the JSON snippets above are copied verbatim from
+that output, not paraphrased).
+
+### Part 2 — implementation
+
+**`daemon/lancerd/dispatch.go`:**
+- `agentArgv`/`continueArgv`/`resumeArgv` (claudeCode case): added `--input-format stream-json`;
+  kept the trailing `-p`, `<prompt>` pair in the returned argv (used for the dispatch-time
+  audit/display "command" string and by `dispatch_test.go`'s existing `want=` assertions).
+- New `claudeStdinPromptArgv(argv) (execArgv, prompt, ok)`: detects a claudeCode +
+  `--input-format stream-json` argv and returns it with the trailing prompt replaced by a bare
+  `-p`, plus the prompt text — the ONLY place the M2-era argv shape and the M3 exec-time shape
+  diverge.
+- `realLauncher`: when `claudeStdinPromptArgv` matches, opens a `cmd.StdinPipe()`, writes the
+  initial `{"type":"user","message":{...}}` line right after `cmd.Start()`, and returns a
+  `procHandle` carrying `writeControlResponse`/`closeStdin` (both nil-safe no-ops for every other
+  launch shape). New `controlStdin` type serializes every stdin write/close under one mutex (the
+  launch goroutine's initial write and the stdout-scanner goroutine's later control_response
+  writes + final close can never race or double-close).
+- `streamJSONOutput`: new `case "control_request":` (only for `subtype:"can_use_tool"`) emits an
+  internal `"agent.control.request"` event; the existing `case "result":` now also emits
+  `"agent.control.close"` so a stream-json-input run's stdin gets closed once its turn is done.
+- `wrapEmitForRun` intercepts both new internal events: `"agent.control.request"` →
+  `dispatcher.handleControlRequest`; `"agent.control.close"` → `run.handle.closeStdin()`.
+- New `dispatcher.handleControlRequest(runID, requestID, toolName, toolUseID, input)`: for a
+  recognized question tool, answers with whatever `stashControlAnswer` already staged (allow with
+  the real structured `answers`, echoing the original `input` fields back per the Agent SDK's
+  documented `updatedInput` contract — or a fail-closed deny on hold-timeout / nothing staged).
+  **Any other tool name is denied unconditionally** — Lancer's PreToolUse hook already gates
+  ordinary tool calls before `canUseTool` is ever consulted; this is a deliberate scope boundary
+  (see the Plan's decision log), not a TODO.
+- New `controlAnswer`/`controlResponsePayload`/`controlResponseEnvelope`/`controlToolResult` types
+  + `allowControlResponse`/`denyControlResponse`/`buildControlAnswers` helpers — the exact wire
+  shape verified live in Part 1.
+
+**`daemon/lancerd/question.go`:** `registerAndWaitForQuestion` now stashes a `controlAnswer` (via
+`dispatcher.stashControlAnswer`) the instant it resolves (answered or hold-timeout) — race-free by
+construction, since this call runs synchronously in the SAME goroutine that later reads the
+corresponding `control_request` line, strictly before it can reach that line (see the updated doc
+comment). `questionAnswerHoldTimeout` changed from `const` to `var` so
+`TestRegisterAndWaitForQuestionStashesDenyOnTimeout` can shorten it instead of genuinely waiting 10
+minutes.
+
+### Part 3 — tests
+
+`daemon/lancerd/dispatch_test.go`: updated `TestAgentArgv`/`TestContinueArgv`/`TestResumeArgv`
+`want=` slices for the new `--input-format stream-json` flag (only change needed; these 3 tests
+were the only breakage from the argv change).
+
+New `daemon/lancerd/question_control_test.go` (17 tests; named to avoid colliding with the
+pre-existing, unrelated `control.go`/`control_test.go` — the LancerMac local IPC control socket):
+`claudeStdinPromptArgv` (splits correctly for agent/continue/resume, rejects other vendors, rejects
+missing `--input-format`/empty prompt), `buildControlAnswers` (single-select, multi-select array,
+free text, multi-question index alignment), `allowControlResponse`/`denyControlResponse` wire-shape
+marshal tests (byte-for-byte against the verified protocol), `handleControlRequest` (allows with a
+staged answer + echoes original input fields, denies on a staged timeout, denies + audits when
+nothing was staged, **denies a non-question tool unconditionally even with a staged allow answer
+under that tool_use_id** — proves the fail-closed scope boundary, no-ops safely when a run has no
+live writer), `registerAndWaitForQuestion` end-to-end stashing (on real answer via
+`applyQuestionAnswer`, and on a shortened hold-timeout), `streamJSONOutput` control_request/
+control_close emission from raw stream-json lines.
+
+```
+cd daemon/lancerd && go build ./... && go vet ./... && go test ./...
+# ok  	lancer/lancerd	46.445s
+# ok  	lancer/lancerd/policy	(cached)
+```
+
+### Part 4 — vendor-cli-adapter-audit
+
+Ran the `vendor-cli-adapter-audit` skill before finalizing: re-verified `which`/`--version`
+(2.1.206, unchanged from M2), grepped for any other code depending on the old trailing-`-p`
+argv shape (`tmux_session.go`'s unrelated `-p` flag was the only hit; `doctor.go`'s claude checks
+are PATH-resolution only, unaffected), confirmed `hook_install.go`'s PreToolUse hook installation
+is a separate mechanism untouched by this change. `ai-coding-agents-comprehensive-study.md` does
+not exist locally — skipped, nothing to cross-check.
+
+### Part 5 — install + live dogfood (M3, this worktree's own daemon)
+
+Rebuilt `daemon/lancerd` with the M3 changes, installed via the established gotcha (`launchctl
+stop`/`unload` → `mv` not cp-in-place → `launchctl load`), `lancerd doctor`: 12 OK / 1 warn
+(pre-existing shim-PATH warning, unrelated) / 0 fail.
+
+`build_sim` and `build_run_sim` (XcodeBuildMCP, scheme `Lancer`, this worktree's `Lancer.xcodeproj`,
+iPhone 17 Pro): both **SUCCEEDED**, 0 errors, 0 new warnings. iOS write-set for M3 is empty (daemon
+-only milestone) — this is a smoke-build confirming the existing M1/M2 iOS code still works against
+the new daemon, not a code-change verification.
+
+Live dogfood (already relay-paired + trusted from the M2 session, no re-pairing needed): launched
+`liveThread` with a prompt forcing `AskUserQuestion` plus `LANCER_DEBUG_APPROVAL_DECISION=approve` +
+`LANCER_DEBUG_QUESTION_ANSWER=Red`. **Clean pass on the first attempt** (unlike M2, which needed 3
+rounds to shake out 2 real bugs): `audit.log` shows `question-pending` → `question-answered` for
+the same `approvalId`, and — the decisive proof — the in-app chat transcript's own final assistant
+text is **"You chose Red."**, not the old auto-deny "stream closed" text M2's dogfood recorded for
+the exact same scenario. Full evidence, verbatim audit-log excerpt, and the screenshot:
+`docs/test-runs/2026-07-10-in-thread-questions-dogfood/M3.md`.
+
+Also confirmed no leaked `claude` process after the run (`ps aux | grep "claude --output-format"` →
+empty) — proves the new close-on-`"result"` stdin-EOF logic (Part 2 above) works in production, not
+just in the scratch-dir probes.
+
+**Final verification (all from `daemon/lancerd`):**
+```bash
+go build ./... && go vet ./... && go test ./...
+# ok  	lancer/lancerd	46.445s
+# ok  	lancer/lancerd/policy	(cached)
+```
+`build_sim` (iOS, this worktree): SUCCEEDED, 0 errors, 0 new warnings.
+
 ## Remaining
 
-- **Owner decision needed:** invest in a real bidirectional `--permission-prompt-tool stdio`
-  responder in `lancerd` (genuine new protocol work, not a minimal fix) so an answer can inject its
-  content into the *same* live turn — versus keeping the current "hold resolves + a separate
-  follow-up send carries the answer forward" model. Not decided in this session.
+- Extending the same-turn responder to Codex/Kimi/OpenCode — explicitly out of scope (M4+), no
+  evidence yet that their CLIs expose an equivalent control protocol.
 - Polish (multi-item layout, free-text keyboard-avoidance, etc.) — **not started, needs owner OK**.
+- Merge to `master` — **owner-gated**, not done in this session.
 
 ## Commands run
 

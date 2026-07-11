@@ -148,10 +148,52 @@ found"), prove the full round-trip live (question appears → answer submitted �
 same rigor as the 2026-07-10 approval dogfood (D6/D7). Possible polish: multi-item question layout,
 free-text keyboard-avoidance, confidence caption display (`QuestionCardModel.confidenceCaption`).
 
-### M3+ — Not scoped yet
+### M3 — stdio same-turn responder (implemented 2026-07-10)
+
+**Owner ask:** make a phone/relay answer inject into the SAME still-running Claude Code process so
+the model continues with the real answer (Orca/Happier same-turn semantics), via a real
+`--permission-prompt-tool stdio` responder in `lancerd` — not a follow-up composer send, not a PTY
+rewrite.
+
+**Architecture decision (A vs B, resolved as B/same-turn):** M2's closing note left this as an
+undecided owner call between (A) keep the current "hold resolves + a separate follow-up send
+carries the answer forward" model, or (B) build a genuine bidirectional
+`--permission-prompt-tool stdio` responder for same-turn injection. **Resolved: B.** Clone Orca's
+*behavior* (same-turn continuation) — explicitly **reject** cloning Orca's *mechanism* (PTY
+keystroke injection into an interactive TUI Claude instance); Lancer is headless `stream-json`
+dispatch and stays that way. The daemon now speaks Claude Code's own undocumented
+control-protocol (the same one the Agent SDK's `canUseTool` callback uses under the hood) directly
+over the child process's stdin/stdout — no PTY, no terminal emulation.
+
+**Write-set:** `daemon/lancerd/dispatch.go` (argv builders, `realLauncher`, `streamJSONOutput`,
+`wrapEmitForRun`, new `claudeStdinPromptArgv`/`controlStdin`/`controlAnswer`/
+`controlResponsePayload`/`handleControlRequest`/`stashControlAnswer`/`takeControlAnswer`/
+`buildControlAnswers`/`allowControlResponse`/`denyControlResponse`), `daemon/lancerd/question.go`
+(`registerAndWaitForQuestion` now stashes a `controlAnswer` on resolve/timeout instead of only
+holding output), `daemon/lancerd/dispatch_test.go` (updated `TestAgentArgv`/`TestContinueArgv`/
+`TestResumeArgv` `want=` slices for the new `--input-format stream-json` flag), new
+`daemon/lancerd/question_control_test.go` (17 new unit tests). iOS: unchanged — the existing
+`RelayQuestionIngest`/`LiveThreadView` question-card + relay `questionAnswer` path is the same
+production path M3 wires the daemon side of; no iOS write-set for this milestone.
+
+**Acceptance:**
+- [x] Live probe evidence of the real `control_request`/`control_response` wire protocol,
+      documented in Status.md.
+- [x] An answer from the relay/debug seam causes the SAME Claude run to continue with that answer
+      (proven live: the model's own final text reflects the injected answer, not the old
+      auto-deny "stream closed" text) — dogfood proof recorded in Status.md /
+      `docs/test-runs/2026-07-10-in-thread-questions-dogfood/`.
+- [x] `cd daemon/lancerd && go build ./... && go vet ./... && go test ./...` — PASS.
+- [x] iOS still builds (`build_sim`, scheme `Lancer`) — SUCCEEDED.
+
+**Stop:** implement this milestone only, verify, commit on `feat/in-thread-questions`, update
+Status, **stop for owner OK** before any merge or further polish.
+
+### M4+ — Not scoped yet
 
 Anything else (queueing multiple pending questions, Inbox-surface parity with the approval card,
-Live Activity) is out of scope until M1/M2 are owner-reviewed.
+Live Activity, extending same-turn injection to Codex/Kimi/OpenCode) is out of scope until M3 is
+owner-reviewed.
 
 ## Decision log
 
@@ -166,6 +208,27 @@ Live Activity) is out of scope until M1/M2 are owner-reviewed.
   `RelayApprovalIngest`'s direct-bridge-call pattern), not `CommandGateway.answerQuestion`
   (AppIntent-oriented "any connected machine" fallback, wrong transport-resolution semantics for a
   live thread that already knows its exact machine).
+- 2026-07-10 (M3): `--input-format stream-json` (not just `--permission-prompt-tool stdio`) is what
+  actually unlocks the live `control_request`/`control_response` protocol — verified live that
+  `--permission-prompt-tool stdio` alone (M2's fix) never emits a `control_request` line at all,
+  regardless of whether stdin is a live pipe; adding `--input-format stream-json` is what does. The
+  tradeoff: in that mode the CLI reads its initial turn from a stdin JSON message, not a positional
+  `-p` argument (a positional prompt + `--input-format stream-json` hangs forever) — `dispatch.go`
+  keeps the prompt positional in argv (for audit/display + test parity) and has `realLauncher` split
+  it out via `claudeStdinPromptArgv` at the actual-exec boundary, so the change is invisible outside
+  that one function.
+- 2026-07-10 (M3): a `stream-json`-input claudeCode process does NOT exit on its own once its turn's
+  "result" event streams — verified live it idles waiting for another stdin message. `realLauncher`
+  now closes the child's stdin (EOF) the instant `streamJSONOutput` observes a "result" line, which
+  triggers a clean exit in ~0.5s (verified live); without this every claudeCode run would leak a
+  live process indefinitely.
+- 2026-07-10 (M3): any `control_request` for a tool name other than a recognized question tool is
+  denied unconditionally, never routed through a new approval flow. Lancer's PreToolUse hook already
+  gates every ordinary tool call before `canUseTool`/`control_request` is ever consulted (per the
+  Agent SDK docs and `docs/agent-contract.md`'s hook-wired convention) — a `control_request` for e.g.
+  `Bash` arriving here means the hook did not resolve it, a security-relevant state this must never
+  silently allow by guessing at a new approval-routing path. Deliberate scope boundary, not an
+  oversight.
 
 ## Related docs
 

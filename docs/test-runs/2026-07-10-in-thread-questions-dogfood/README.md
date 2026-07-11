@@ -1,5 +1,9 @@
 # In-thread questions M2 — unblock AskUserQuestion + live dogfood: results
 
+> **M3 update (2026-07-10):** the "continuation-semantics caveat" flagged at the bottom of this
+> file is resolved — see [`M3.md`](M3.md) for the live proof that an answer now injects into the
+> SAME running turn (`"You chose Red."`, not the auto-deny text below).
+
 **Run date:** 2026-07-10
 **Branch/worktree:** `feat/in-thread-questions` @ (M1 `898e24fc` + this session's fixes) in
 `/Users/roshansilva/Documents/command-center/.worktrees/frontend-scorched-wipe`
