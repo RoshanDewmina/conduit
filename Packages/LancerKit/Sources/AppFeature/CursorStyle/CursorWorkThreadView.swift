@@ -202,6 +202,9 @@ public struct CursorWorkThreadView: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
             assistantBody(for: section)
+            if let group = section.toolCallGroup, !group.isEmpty {
+                CursorToolCallGroupView(group: group)
+            }
             if let error = section.turnError, !error.isEmpty {
                 Text(error).foregroundStyle(.red)
             }
@@ -225,15 +228,21 @@ public struct CursorWorkThreadView: View {
                     .textSelection(.enabled)
                     .task(id: section.turnID) { streamingPacer.reset(to: resolved) }
                     .onChange(of: resolved) { _, newValue in streamingPacer.ingest(newValue) }
+            } else if let indicator = overlay.workingIndicator {
+                Text(indicator.displayLabel)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("work-thread-working-indicator")
             } else if overlay.isWorking {
-                Text("Working…").foregroundStyle(.secondary)
+                Text(CursorWorkingIndicator.thinking.displayLabel)
+                    .foregroundStyle(.secondary)
             } else {
-                Text("Starting…").foregroundStyle(.secondary)
+                Text(CursorWorkingIndicator.starting.displayLabel)
+                    .foregroundStyle(.secondary)
             }
         } else if !section.assistantText.isEmpty {
             CursorAssistantMarkdownView(text: section.assistantText, onCopyCodeBlock: { UIPasteboard.general.string = $0 })
                 .textSelection(.enabled)
-        } else if section.artifacts.isEmpty {
+        } else if section.artifacts.isEmpty, section.toolCallGroup == nil {
             Text("No output recorded for this turn.").foregroundStyle(.secondary)
         }
     }
@@ -246,8 +255,12 @@ public struct CursorWorkThreadView: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
             }
-            Text(liveBridge?.activeThreadIsWorking == true ? "Working…" : "Starting…")
-                .foregroundStyle(.secondary)
+            Text(
+                (liveBridge?.activeThreadIsWorking == true
+                    ? CursorWorkingIndicator.thinking
+                    : CursorWorkingIndicator.starting).displayLabel
+            )
+            .foregroundStyle(.secondary)
         }
     }
 
