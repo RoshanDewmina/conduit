@@ -295,14 +295,6 @@ func TestPermissionMatrixInvalidExpiresAtFailClosed(t *testing.T) {
 			rule.ExpiresAt = "not-a-timestamp"
 			doc := Document{Default: string(EffectAsk), Rules: []Rule{rule}}
 			res := Evaluate(doc, matrixReq(vendor, "npm test", "/repo/app", "Bash"))
-			if res.Effect == EffectAllow {
-				// TODO(policy-matrix): match.go:34-39 only skips on successful
-				// RFC3339 parse + Now.After(exp). Unparseable ExpiresAt still
-				// matches — fail-open for hand-edited policy-always.yaml.
-				// Expected: ask (fail-closed). Actual: allow.
-				// File: daemon/lancerd/policy/match.go:34-39
-				t.Skip("TODO: invalid ExpiresAt still allows (match.go:34-39); expected ask, got allow")
-			}
 			if res.Effect != EffectAsk {
 				t.Fatalf("invalid ExpiresAt want ask, got %v (%s)", res.Effect, res.MatchedRule)
 			}
