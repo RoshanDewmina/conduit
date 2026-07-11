@@ -2,7 +2,9 @@
 import Foundation
 import Observation
 import LancerCore
-import DesignSystem
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor @Observable
 open class InboxViewModel {
@@ -49,7 +51,9 @@ open class InboxViewModel {
             if decision == .approvedAlways {
                 persistAllowAlwaysRule(for: approvals[idx])
             }
-            Haptics.selection()
+            #if canImport(UIKit)
+            UISelectionFeedbackGenerator().selectionChanged()
+            #endif
             decisionSink?(id, decision, editedToolInput, contentHash)
         }
     }

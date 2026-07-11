@@ -355,7 +355,10 @@ func bestEffortQuestionText(inputJSON string) string {
 // noticing and answering a push/relay notification; unlike approvals there is
 // no noClientGrace fast-path because a question has no safe default to fall
 // back to.
-const questionAnswerHoldTimeout = 10 * time.Minute
+// var, not const: TestRegisterAndWaitForQuestionStashesDenyOnTimeout
+// temporarily lowers this to make the timeout path testable in milliseconds
+// instead of genuinely waiting 10 minutes (save/restore around the test).
+var questionAnswerHoldTimeout = 10 * time.Minute
 
 // registerAndWaitForQuestion is the dispatcher's onQuestion hook (wired in
 // newServer, server.go): it registers a freshly extracted question, relays it
@@ -363,21 +366,34 @@ const questionAnswerHoldTimeout = 10 * time.Minute
 // scanning the run's stdout in streamJSONOutput — until a human answers or
 // questionAnswerHoldTimeout elapses.
 //
-// Blocking the stream-scanning goroutine is the deliberate "hold" mechanism:
-// there is no stdin/tool-result injection path into an already-launched
-// one-shot vendor CLI process (dispatch() launches `claude ... -p prompt`
-// non-interactively; there is no live channel back into its tool call), so
-// the daemon cannot make the agent's *next* action wait on an answer. What it
-// CAN do is stop advancing this run's own event stream — output, artifacts,
-// and receipt accumulation all pause exactly where the question was asked,
-// instead of racing ahead as if nothing were pending — until a human actually
-// answers. On questionAnswerHoldTimeout, per waitForAnswer's contract, the
-// pending question is left exactly as it was (never auto-removed, never
-// auto-answered) and this simply returns, letting output processing resume;
-// a later answer can still be recorded via questionStore.resolve even though
-// nothing here is still listening for it by then. Surfacing that late answer
-// to the run/UI after the hold gives up is a known follow-up, not solved by
-// E1 — tracked against the E2 iOS lane, which owns the answer UI.
+// Blocking the stream-scanning goroutine is the deliberate "hold" mechanism,
+// and — as of M3 (2026-07-10) — it is also what makes the SAME-TURN
+// injection below race-free: this call resolves (answered or timed out)
+// strictly BEFORE the scanner can reach the "control_request" line that
+// corresponds to this exact tool_use_id, because that line always arrives
+// later in the same stdout stream this very goroutine is blocked reading.
+// So by the time the scanner gets there, stashControlAnswer below has always
+// already run — dispatcher.handleControlRequest never has to wait for it.
+//
+// Historical note (superseded by M3, kept for context): before M3, there was
+// no stdin/tool-result injection path into an already-launched claudeCode
+// process (dispatch() launched it fully non-interactively), so the daemon
+// could only pause this run's own event stream — output, artifacts, and
+// receipt accumulation all paused here, while the CLI itself had already
+// auto-denied the tool call and moved on internally. M3 (see agentArgv's doc
+// comment: --input-format stream-json + --permission-prompt-tool stdio with
+// a live stdin pipe) replaced that: the CLI itself now genuinely blocks
+// waiting for a control_response, so this hold is a REAL pause of the
+// agent's own reasoning, not just a cosmetic delay of already-raced-ahead
+// output. On questionAnswerHoldTimeout, per waitForAnswer's contract, the
+// pending question is left exactly as it was in questionStore (never
+// auto-removed) — but the control_request IS resolved (denied) below, since
+// unlike before M3 the CLI is now actually waiting on it and would otherwise
+// hang indefinitely (the Agent SDK's own documented behavior: "The callback
+// can stay pending indefinitely"). A later answer arriving after the timeout
+// can still be recorded via questionStore.resolve for audit purposes, but by
+// then the CLI has already moved on past its own deny — same accepted gap as
+// before M3, now scoped to "after the 10-minute hold, not after every turn".
 func (s *server) registerAndWaitForQuestion(event QuestionEvent) {
 	ch := s.questions.add(event)
 	s.notifyQuestionPending(event)
@@ -389,7 +405,7 @@ func (s *server) registerAndWaitForQuestion(event QuestionEvent) {
 		Effect:     event.Confidence,
 		ApprovalID: event.QuestionID,
 	})
-	_, answered := waitForAnswer(ch, questionAnswerHoldTimeout)
+	answer, answered := waitForAnswer(ch, questionAnswerHoldTimeout)
 	if !answered {
 		_ = s.audit.append(AuditEntry{
 			Action:     "question-hold-timeout",
@@ -397,6 +413,19 @@ func (s *server) registerAndWaitForQuestion(event QuestionEvent) {
 			Kind:       "question",
 			Command:    bestEffortQuestionSummary(event),
 			ApprovalID: event.QuestionID,
+		})
+		if event.ToolUseID != "" {
+			s.dispatcher.stashControlAnswer(event.RunID, event.ToolUseID, controlAnswer{
+				allow:   false,
+				message: "No human answer arrived within the wait window.",
+			})
+		}
+		return
+	}
+	if event.ToolUseID != "" {
+		s.dispatcher.stashControlAnswer(event.RunID, event.ToolUseID, controlAnswer{
+			allow:   true,
+			answers: buildControlAnswers(event, answer),
 		})
 	}
 }

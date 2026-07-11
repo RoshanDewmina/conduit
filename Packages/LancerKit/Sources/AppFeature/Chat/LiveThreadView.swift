@@ -1,0 +1,385 @@
+#if os(iOS)
+import SwiftUI
+import LancerCore
+import Foundation
+import SessionFeature
+
+/// M3: the real, live conversation view — reached only from the New Chat
+/// composer's send action (a brand-new conversation flow). This is
+/// deliberately separate from `ThreadDetailView` (Section 7's static,
+/// owner-approved PR-review-style mockup for browsing sample thread rows) —
+/// see the M3 brief's scope boundary. Apple-native `NavigationStack` /
+/// `ScrollView` / `TextField` only, no DesignSystem module.
+///
+/// M4: also renders a pending-approval card (see `approvalCard`) — a fully
+/// separate, orthogonal piece of UI state from `SendState` below. A pending
+/// approval can appear at any point regardless of whether the current turn
+/// is still working or already completed.
+public struct LiveThreadView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(ShellLiveBridge.self) private var bridge
+    @Environment(RelayApprovalIngest.self) private var approvalIngest
+    @Environment(RelayQuestionIngest.self) private var questionIngest
+    @Environment(RelayFleetStore.self) private var relayFleetStore
+
+    let prompt: String
+    let cwd: String
+
+    @State private var hasSentInitialPrompt = false
+    @State private var followUpText: String = ""
+    @FocusState private var isFollowUpFocused: Bool
+    #if DEBUG
+    @State private var hasAutoAnsweredQuestion = false
+    #endif
+
+    public init(prompt: String, cwd: String) {
+        self.prompt = prompt
+        self.cwd = cwd
+    }
+
+    public var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        userBubble(prompt)
+
+                        replyState
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                }
+
+                if let machineID = bridge.activeMachineID, let pendingApproval {
+                    approvalCard(pendingApproval, machineID: machineID)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
+                }
+
+                if let machineID = bridge.activeMachineID, let pendingQuestion {
+                    questionCard(pendingQuestion, machineID: machineID)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
+                }
+
+                Divider()
+                followUpBar
+            }
+            .navigationTitle("Chat")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+        .task {
+            guard !hasSentInitialPrompt else { return }
+            hasSentInitialPrompt = true
+            await bridge.send(prompt: prompt, cwd: cwd)
+        }
+        #if DEBUG
+        // Simulator HID taps are unreliable on this iOS build (see
+        // docs/test-runs/2026-07-02-device-hub-matrix-simulator-pass.md), so
+        // the Approve/Deny buttons above can't always be driven by a tap.
+        // Gated on LANCER_DEBUG_APPROVAL_DECISION, this drives the exact same
+        // `RelayApprovalIngest.decide` → `ApprovalRelay.enqueue` path the
+        // buttons call — no bypass of the real decision/audit flow.
+        .onChange(of: pendingApproval) { _, newValue in
+            guard let approval = newValue,
+                  let machineID = bridge.activeMachineID,
+                  let decisionRaw = ProcessInfo.processInfo.environment["LANCER_DEBUG_APPROVAL_DECISION"]
+            else { return }
+            let decision: Approval.Decision = decisionRaw == "deny" ? .rejected : .approved
+            Task { await approvalIngest.decide(approval, decision: decision, machineID: machineID) }
+        }
+        // Same rationale as the approval seam above, for the question card's
+        // Submit button. Gated on LANCER_DEBUG_QUESTION_ANSWER (the free-text/
+        // option text to answer with — applied to every item via the same
+        // fuzzy-match-or-free-text rule `AnswerQuestionResolver` already uses),
+        // drives the exact same `RelayQuestionIngest.submit` path the Submit
+        // button calls. `hasAutoAnsweredQuestion` gates this to fire exactly
+        // once: `toggleOption` mutating `latestPendingQuestion` re-triggers
+        // this same onChange (the value it observes changed), and toggling
+        // the SAME label a second time flips it back off (toggleOption is a
+        // toggle, not a set) — an ungated version live-locked into flipping
+        // the selection on/off forever and never reached `submit` (found live
+        // 2026-07-10).
+        .onChange(of: pendingQuestion) { _, newValue in
+            guard !hasAutoAnsweredQuestion,
+                  let question = newValue,
+                  let machineID = bridge.activeMachineID,
+                  let answerText = ProcessInfo.processInfo.environment["LANCER_DEBUG_QUESTION_ANSWER"]
+            else { return }
+            hasAutoAnsweredQuestion = true
+            for idx in question.items.indices {
+                if let matched = QuestionCardModel.fuzzyMatchOption(answerText, in: question.items[idx]) {
+                    questionIngest.toggleOption(machineID: machineID, itemIndex: idx, label: matched)
+                } else {
+                    questionIngest.setFreeText(machineID: machineID, itemIndex: idx, text: answerText)
+                }
+            }
+            Task { await questionIngest.submit(machineID: machineID, relayFleetStore: relayFleetStore) }
+        }
+        #endif
+    }
+
+    // MARK: - Reply state (Orca rule: working indicator and visible reply text
+    // are mutually exclusive on screen)
+
+    @ViewBuilder
+    private var replyState: some View {
+        switch bridge.sendState {
+        case .idle:
+            EmptyView()
+        case .working:
+            workingIndicator
+        case .completed(let turn):
+            if turn.status == .failed {
+                errorState(turn.errorMessage ?? "Run failed")
+            } else {
+                Text(turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText)
+                    .font(.system(size: 16))
+                    .foregroundStyle(.primary)
+            }
+        case .failed(let message):
+            errorState(message)
+        }
+    }
+
+    private var workingIndicator: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+            Text("Working…")
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func errorState(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text("Couldn't get a reply")
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            Text(message)
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+            Button("Retry") {
+                Task { await bridge.send(prompt: prompt, cwd: cwd) }
+            }
+            .font(.system(size: 14, weight: .medium))
+        }
+    }
+
+    // MARK: - Pending approval card (M4)
+
+    /// The most recent pending approval that arrived from the same paired
+    /// machine this thread is talking to — see `RelayApprovalIngest`'s doc
+    /// comment for why this is machine-scoped, not strictly run-scoped.
+    private var pendingApproval: Approval? {
+        guard let machineID = bridge.activeMachineID,
+              let approval = approvalIngest.latestPendingApproval[machineID],
+              approval.isPending
+        else { return nil }
+        return approval
+    }
+
+    private func approvalCard(_ approval: Approval, machineID: RelayMachineID) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.shield")
+                    .foregroundStyle(.blue)
+                Text(approval.kind.rawValue.capitalized)
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+                riskLabel(approval.risk)
+            }
+            Text(approval.command ?? approval.patch ?? "(no detail)")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(6)
+            HStack(spacing: 12) {
+                Button("Deny", role: .destructive) {
+                    Task { await approvalIngest.decide(approval, decision: .rejected, machineID: machineID) }
+                }
+                .buttonStyle(.bordered)
+
+                Button("Approve") {
+                    Task { await approvalIngest.decide(approval, decision: .approved, machineID: machineID) }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    private func riskLabel(_ risk: Approval.Risk) -> some View {
+        let (text, color): (String, Color) = {
+            switch risk {
+            case .low: return ("Low", .secondary)
+            case .medium: return ("Medium", .secondary)
+            case .high: return ("High", .orange)
+            case .critical: return ("Critical", .red)
+            }
+        }()
+        return Text(text)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(color)
+    }
+
+    // MARK: - Pending question card (in-thread questions)
+
+    /// The most recent pending question that arrived from the same paired
+    /// machine this thread is talking to — see `RelayQuestionIngest`'s doc
+    /// comment for why this is machine-scoped, not strictly run-scoped.
+    /// Orthogonal to `SendState` and `pendingApproval`, same rule M4
+    /// established for the approval card: any combination can be visible at once.
+    private var pendingQuestion: QuestionCardModel.PresentationState? {
+        guard let machineID = bridge.activeMachineID,
+              let question = questionIngest.latestPendingQuestion[machineID],
+              !question.isAnswered
+        else { return nil }
+        return question
+    }
+
+    private func questionCard(_ question: QuestionCardModel.PresentationState, machineID: RelayMachineID) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "questionmark.circle")
+                    .foregroundStyle(.blue)
+                Text("Question")
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+                if let caption = QuestionCardModel.confidenceCaption(question.confidence) {
+                    Text(caption)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            ForEach(Array(question.items.enumerated()), id: \.offset) { index, item in
+                questionItem(item, itemIndex: index, allowFreeText: question.allowFreeText, machineID: machineID)
+            }
+
+            Button("Submit") {
+                Task { await questionIngest.submit(machineID: machineID, relayFleetStore: relayFleetStore) }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!QuestionCardModel.isReadyToAnswer(question))
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    private func questionItem(
+        _ item: QuestionCardModel.ItemState,
+        itemIndex: Int,
+        allowFreeText: Bool,
+        machineID: RelayMachineID
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let header = item.header {
+                Text(header)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(item.question)
+                .font(.system(size: 15))
+                .foregroundStyle(.primary)
+
+            ForEach(item.options, id: \.label) { option in
+                Button {
+                    questionIngest.toggleOption(machineID: machineID, itemIndex: itemIndex, label: option.label)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: item.isSelected(option.label) ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(item.isSelected(option.label) ? Color.blue : Color.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.label)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.primary)
+                            if let description = option.description {
+                                Text(description)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+
+            if item.options.isEmpty || allowFreeText {
+                TextField(
+                    item.options.isEmpty ? "Type your answer…" : "Or type a free-text answer…",
+                    text: Binding(
+                        get: { item.freeText },
+                        set: { questionIngest.setFreeText(machineID: machineID, itemIndex: itemIndex, text: $0) }
+                    )
+                )
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 14))
+            }
+        }
+    }
+
+    private func userBubble(_ text: String) -> some View {
+        HStack {
+            Spacer(minLength: 40)
+            Text(text)
+                .font(.system(size: 16))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color(.secondarySystemBackground))
+                )
+        }
+    }
+
+    // MARK: - Follow-up composer (plain field, not the ornate composer sheet)
+
+    private var followUpBar: some View {
+        HStack(spacing: 10) {
+            TextField("Reply…", text: $followUpText)
+                .textFieldStyle(.roundedBorder)
+                .focused($isFollowUpFocused)
+                .disabled(bridge.sendState == .working)
+
+            Button {
+                sendFollowUp()
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 28))
+            }
+            .disabled(
+                followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || bridge.sendState == .working
+                    || bridge.activeConversationID == nil
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func sendFollowUp() {
+        let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, let conversationID = bridge.activeConversationID else { return }
+        followUpText = ""
+        isFollowUpFocused = false
+        Task { await bridge.sendFollowUp(prompt: text, conversationID: conversationID, cwd: cwd) }
+    }
+}
+#endif

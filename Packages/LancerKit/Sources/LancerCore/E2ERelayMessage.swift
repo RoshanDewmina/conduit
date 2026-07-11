@@ -69,6 +69,41 @@ public enum E2ERelayMessage: Codable, Sendable {
         }
     }
 
+    /// Wire shape of the daemon's `e2e_router.go` `sendQuestion` — deliberately
+    /// its own type, not a reuse of `QuestionPendingParams` (the SSH
+    /// `agent.question.pending` JSON-RPC shape): the relay payload is a
+    /// hand-rolled map keyed `questionID` (not `id`) and omits `toolUseID`/
+    /// `timestamp` entirely, exactly the same relay-vs-SSH shape divergence
+    /// `ApprovalData` already has versus `ApprovalPendingParams`. Confirmed
+    /// live 2026-07-10: before this type existed, the relay case incorrectly
+    /// decoded straight into `QuestionPendingParams` under a `"questionPending"`
+    /// switch label the daemon never actually sends (it sends `"agentQuestion"`,
+    /// per `e2e_router.go`'s own doc comment citing "the Lane E proposal") — the
+    /// message was silently dropped end-to-end, undetected until a real
+    /// `AskUserQuestion` round-trip was dogfooded for the first time.
+    public struct QuestionData: Codable, Sendable {
+        public let questionID: String
+        public let agent: String
+        public let runId: String?
+        public let cwd: String?
+        public let questions: [QuestionItemWire]
+        public let allowFreeText: Bool
+        public let confidence: String
+
+        public init(
+            questionID: String, agent: String, runId: String? = nil, cwd: String? = nil,
+            questions: [QuestionItemWire] = [], allowFreeText: Bool = false, confidence: String = "bestEffort"
+        ) {
+            self.questionID = questionID
+            self.agent = agent
+            self.runId = runId
+            self.cwd = cwd
+            self.questions = questions
+            self.allowFreeText = allowFreeText
+            self.confidence = confidence
+        }
+    }
+
     public struct DecisionData: Codable, Sendable {
         public let approvalID: String
         public let decision: String

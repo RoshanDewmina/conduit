@@ -17,8 +17,19 @@
 **Phase 0 — git hygiene: DONE 2026-07-11** (evidence in [`plans/orchestrator-state.md`](plans/orchestrator-state.md)):
 W0.A landed (incl. repair of an empty-tree tip commit `1c102940` → `4c350a52`, and the
 dispatch-cwd fail-fast fix `4c2634df`); wipe worktree + branch removed (tip was ancestor of
-master); `build_sim` SUCCEEDED on the kept W0.A shell. Owner-gated remainder: merge to master,
-Tier 0 re-proof, `ANTHROPIC_API_KEY` repo secret.
+master); `build_sim` SUCCEEDED on the kept W0.A shell. Owner-gated remainder: Tier 0 re-proof.
+
+**Integration resolution (2026-07-11 merge of master into W0.A):** master had grown a
+*parallel* frontend line since `e850b126` (wipe `80407933` + Workspaces-shell rebuild + M2–M4
++ in-thread questions PR #68). Per owner directive (W0.A shell KEPT, approved 2026-07-11), the
+merge takes **W0.A for the entire iOS UI surface** (AppFeature/CursorStyle, DesignSystem,
+widgets, UITests, Package.swift/resolved, project.yml, Lancer/) and **master for the backend**
+(daemon incl. questions M3 stdio responder; LancerCore `E2ERelayMessage` + SessionFeature
+`E2ERelayBridge` wire fixes; InboxFeature VM). The w0a dispatch-cwd fail-fast fix was re-applied
+onto master's dispatch.go. **Dropped from tree (git history keeps them):** master's
+Workspaces-shell UI incl. the M1 in-thread Question *card* and M4 approve/deny *surfaces* —
+re-porting those onto the W0.A shell is a Phase 1 lane. All gates green post-merge
+(go build/vet/test · swift build · build_sim).
 
 **Then Phase 1 — dogfood MVP (weeks 1–2):** six pieces (pairing/trusted machines · thread list ·
 chat thread finesse · composer · push approvals incl. lock screen · emergency stop), per the
