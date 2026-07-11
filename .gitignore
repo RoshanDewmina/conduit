@@ -153,3 +153,6 @@ research-repos/
 
 # owner's personal cross-tool prompt doc — keep untracked
 /visual-first-communication.md
+
+# owner's local folder, accidentally committed in #75
+/frontend-slides-main/
