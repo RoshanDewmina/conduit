@@ -102,10 +102,16 @@ func agentArgv(agent, prompt, model string) ([]string, bool) {
 		// and for claudeStdinPromptArgv's test coverage); realLauncher strips
 		// it from the actual exec argv and delivers prompt as the initial
 		// stdin message instead — see claudeStdinPromptArgv's doc comment.
-		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "-p", prompt}
+		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
+		// The "-p", prompt pair must stay TRAILING: claudeStdinPromptArgv only
+		// engages stdin-prompt mode when argv[len-2] == "-p". Appending flags
+		// after it silently disabled that rewrite, so claude launched in
+		// stream-json input mode with no stdin feed and exited on EOF with no
+		// output (found live 2026-07-11, first model-specified dispatch ever).
+		argv = append(argv, "-p", prompt)
 		return argv, true
 	case "codex":
 		// --json emits structured NDJSON events; --dangerously-bypass flag is
@@ -146,10 +152,12 @@ func continueArgv(agent, prompt, model string) ([]string, bool) {
 		// agentArgv's doc comment — same live-verified same-turn-continuation
 		// protocol applies to a continued turn; realLauncher strips the
 		// trailing "-p", prompt pair and delivers it over stdin the same way.
-		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue", "-p", prompt}
+		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue"}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
+		// "-p", prompt must stay trailing — see agentArgv's claudeCode case.
+		argv = append(argv, "-p", prompt)
 		return argv, true
 	case "codex":
 		// Resume the most-recent codex session non-interactively. Same headless
@@ -205,10 +213,12 @@ func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
 		// agentArgv's doc comment — same live-verified same-turn-continuation
 		// protocol applies to a resumed turn; realLauncher strips the trailing
 		// "-p", prompt pair and delivers it over stdin the same way.
-		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", sessionID, "-p", prompt}
+		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", sessionID}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
+		// "-p", prompt must stay trailing — see agentArgv's claudeCode case.
+		argv = append(argv, "-p", prompt)
 		return argv, true
 	case "codex":
 		// codex exec resume <SESSION_ID> [PROMPT] resumes that exact conversation
