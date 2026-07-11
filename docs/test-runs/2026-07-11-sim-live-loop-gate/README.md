@@ -14,3 +14,12 @@ LANCER_DESTINATION=liveThread, LANCER_LIVETHREAD_PROMPT/_CWD/_FOLLOWUP.
 | False-timeout removal | Unit-tested (LivePollPolicy 8/8); no long-run live proof this session | — |
 
 Known cosmetic: markdown heading newlines collapse in streamed text ("SystemsBeginnings:") — polish item.
+
+## Addendum — fix/relay-stable-identity + keepalive daemon (2026-07-11 evening)
+
+Stack: daemon rebuilt from master post-#80 (read-deadline keepalive), fresh code 547438.
+| Check | Result | Evidence |
+|---|---|---|
+| Initial pair (stable identity key) | PASS | lancerd.stderr.log "paired with phone (code: 547438)" ×1 |
+| **Relaunch WITHOUT pair code → auto-restore reconnect** | PASS | daemon log ×2; backend log "phone connected with code 547438 (paired)" — pin matched the persisted Keychain identity |
+| Stale-daemon reproduction (old binary) | Captured pre-deploy: backend reaped session while daemon logged connected — exact #80 root cause observed live | backend "expired unconfirmed" 21:02Z vs daemon "connected" 20:35Z |

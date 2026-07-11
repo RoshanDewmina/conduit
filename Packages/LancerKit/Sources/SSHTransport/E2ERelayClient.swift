@@ -60,6 +60,12 @@ public final class E2ERelayClient: ObservableObject {
     public var relayURL: URL
     public var pairingCode: String
     private var keyPair: PairingCrypto.KeyPair
+    /// How this instance's `keyPair` was obtained from `identity` at init
+    /// time. `.regeneratedAfterCorruption` signals every persisted machine
+    /// pairing on this device is now orphaned — see `RelayDeviceIdentity`'s
+    /// doc comment and `RelayMachineMigration
+    /// .invalidateAllMachinesIfIdentityRegenerated`, which reacts to it.
+    public let identityLoadOutcome: RelayDeviceIdentity.LoadOutcome
     private var webSocketTask: URLSessionWebSocketTask?
     private var sessionKey: SymmetricKey?
     private var reconnectTask: Task<Void, Never>?
@@ -101,11 +107,18 @@ public final class E2ERelayClient: ObservableObject {
         messageStream
     }
 
-    public init(relayURL: URL, pairingCode: String, machineID: RelayMachineID = RelayMachineID()) {
+    public init(
+        relayURL: URL,
+        pairingCode: String,
+        machineID: RelayMachineID = RelayMachineID(),
+        identity: RelayDeviceIdentity = .shared
+    ) {
         self.machineID = machineID
         self.relayURL = relayURL
         self.pairingCode = pairingCode
-        self.keyPair = PairingCrypto.generateKeyPair()
+        let loaded = identity.loadOrCreate()
+        self.keyPair = loaded.keyPair
+        self.identityLoadOutcome = loaded.outcome
     }
 
     private static func isValidPairingCode(_ code: String) -> Bool {
@@ -120,14 +133,20 @@ public final class E2ERelayClient: ObservableObject {
     /// `beginPairingSession()` and *before* `connect()`.
     public var publicKeyBase64URL: String { keyPair.publicKeyBase64URL }
 
-    /// Rotate to a fresh keypair + single-use pairing code for a new pairing
-    /// attempt, and return the new code. Call this before rendering the QR so the
-    /// encoded `(code, publicKey)` matches what `connect()` will present. Unlike
-    /// the old behaviour, `connect()` no longer rotates the keypair — that would
-    /// invalidate a QR already on screen.
+    /// Roll a fresh single-use pairing code for a new pairing attempt, and
+    /// return it. Call this before rendering the QR so the encoded
+    /// `(code, publicKey)` matches what `connect()` will present.
+    ///
+    /// Does NOT rotate `keyPair` — it never has since the 2026-07-11 stable-
+    /// identity fix. `keyPair` is the device's one persisted relay identity
+    /// (see `RelayDeviceIdentity`), loaded once at init and reused for every
+    /// pairing attempt this device ever makes. Rotating it here would defeat
+    /// that: a retry (this method is exactly what a re-shown pairing sheet
+    /// calls) would present the backend a NEW public key for a code it may
+    /// have already pinned to the OLD one, and get rejected as a hijack
+    /// attempt — the bug this fix closes.
     @discardableResult
     public func beginPairingSession() -> String {
-        keyPair = PairingCrypto.generateKeyPair()
         let code = PairingCrypto.generatePairingCode()
         pairingCode = code
         return code
@@ -215,30 +234,6 @@ public final class E2ERelayClient: ObservableObject {
         return result as? Data
     }
 
-    /// Diagnostic: every account stored under this app's relay Keychain
-    /// service, so an incomplete-pairing state can show whether the private
-    /// key exists under a DIFFERENT account (stale machineID) or not at all.
-    private static func keychainListAccounts() -> [String] {
-        var result: AnyObject?
-        let status = SecItemCopyMatching([
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: kcService,
-            kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecReturnAttributes as String: true,
-        ] as CFDictionary, &result)
-        guard status == errSecSuccess, let items = result as? [[String: Any]] else {
-            return ["<list failed: OSStatus \(status)>"]
-        }
-        return items.compactMap { $0[kSecAttrAccount as String] as? String }
-    }
-
-    private static func keychainDelete(account: String) {
-        _ = SecItemDelete([
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: kcService,
-            kSecAttrAccount as String: account,
-        ] as CFDictionary)
-    }
 
     public static func storedRelayURL() -> String? {
         UserDefaults.standard.string(forKey: udPairingRelayURL)
@@ -264,23 +259,19 @@ public final class E2ERelayClient: ObservableObject {
         "lancer.relay.machine.\(machineID.uuidString).url"
     }
 
-    private static func kcMachinePrivKeyAccount(_ machineID: RelayMachineID) -> String {
-        "lancer.relay.machine.\(machineID.uuidString).privKey"
-    }
-
-    /// Writes this instance's pairing code, relay URL, and private key under
-    /// `self.machineID`-namespaced keys. All-or-nothing: the private key
-    /// (Keychain) is written FIRST, and the code/URL (UserDefaults) only if it
-    /// succeeded — a key-write failure with the code/URL left behind produces
-    /// a machine that hydrates but can never reconnect (seen live on-device
-    /// 2026-07-03: code+URL present, key absent, permanent reconnect loop).
+    /// Writes this instance's pairing code + relay URL under
+    /// `self.machineID`-namespaced UserDefaults keys.
+    ///
+    /// No private key is written here (2026-07-11 stable-identity fix): the
+    /// key is no longer per-machine — every machine on this device shares
+    /// the one persisted `RelayDeviceIdentity`, loaded once at init and
+    /// never rewritten — so there is nothing key-shaped left to persist per
+    /// pairing, and the previous "write the key first, only persist code/URL
+    /// if that succeeded" ordering (guarding against a key-write failure
+    /// leaving an un-reconnectable machine, 2026-07-03) no longer applies.
     public func persistPairing() {
         guard Self.isValidPairingCode(pairingCode) else {
             Self.logger.error("persistPairing: invalid pairing code shape for machine=\(self.machineID.uuidString, privacy: .public) — NOT persisting pairing")
-            return
-        }
-        guard Self.keychainWrite(keyPair.privateKey.rawRepresentation, account: Self.kcMachinePrivKeyAccount(machineID)) else {
-            Self.logger.error("persistPairing: private-key Keychain write failed for machine=\(self.machineID.uuidString, privacy: .public) — NOT persisting code/URL; pairing will not survive relaunch")
             return
         }
         UserDefaults.standard.set(pairingCode, forKey: Self.udMachineCodeKey(machineID))
@@ -296,50 +287,37 @@ public final class E2ERelayClient: ObservableObject {
         UserDefaults.standard.string(forKey: udMachineCodeKey(machineID))
     }
 
-    public static func storedPairingPrivKey(machineID: RelayMachineID) -> String? {
-        guard let data = keychainRead(account: kcMachinePrivKeyAccount(machineID)) else { return nil }
-        return Base64URL.encode(data)
-    }
-
     public static func storedRelayURL(machineID: RelayMachineID) -> String? {
         UserDefaults.standard.string(forKey: udMachineURLKey(machineID))
     }
 
-    /// Deletes all three namespaced entries for `machineID`.
+    /// Deletes both namespaced entries for `machineID`. No Keychain entry to
+    /// delete — see `persistPairing()`.
     public static func deleteStoredPairing(machineID: RelayMachineID) {
         UserDefaults.standard.removeObject(forKey: udMachineCodeKey(machineID))
         UserDefaults.standard.removeObject(forKey: udMachineURLKey(machineID))
-        keychainDelete(account: kcMachinePrivKeyAccount(machineID))
     }
 
-    /// Same behavior as `restoreStoredPairing()` but reads the namespaced
-    /// keys for `self.machineID` instead of the global singular keys.
+    /// Restores this instance's pairing code + relay URL from the namespaced
+    /// UserDefaults entries for `self.machineID`. `keyPair` needs no
+    /// restoring — it was already loaded from the shared `RelayDeviceIdentity`
+    /// at init time, and is identical to what every other machine on this
+    /// device presents.
     ///
-    /// Named distinctly from `restoreStoredPairing()` (rather than
-    /// overloading it) because that existing instance method already has the
-    /// identical `() -> Void` signature — Swift can't disambiguate two
-    /// methods that differ only in body, and the singular method must stay
-    /// until the later lane that rewires `AppRoot.swift` deletes it.
-    /// Returns true only when ALL THREE pieces (code, private key, relay URL)
-    /// were present and valid — the only state in which `connect()` can ever
-    /// succeed. Callers MUST gate `connect()` on this: the three pieces have
-    /// historically diverged on real devices (the machines index + private
-    /// keys live in the Keychain and survive an app uninstall; the code + URL
-    /// live in UserDefaults and don't — and a Keychain write can fail while
-    /// the UserDefaults writes stick). Dialing after a partial restore sent an
-    /// EMPTY pairing code and a freshly generated keypair to the relay, which
-    /// 400-rejected it in an infinite reconnect loop the UI showed as a
-    /// permanently disconnected machine (found live on-device 2026-07-03).
+    /// Returns true only when BOTH pieces (code, relay URL) were present and
+    /// the code has a valid shape — the only state in which `connect()` can
+    /// ever succeed. Callers MUST gate `connect()` on this: dialing with an
+    /// empty/invalid pairing code gets an unfixable HTTP 400 from the relay
+    /// in an infinite reconnect loop the UI would show as a permanently
+    /// disconnected machine (found live on-device 2026-07-03).
     @discardableResult
     public func restoreNamespacedStoredPairing() -> Bool {
         let storedCode = Self.storedPairingCode(machineID: machineID)
-        let storedKey = Self.storedPairingPrivKey(machineID: machineID)
         let storedURL = Self.storedRelayURL(machineID: machineID)
-        guard let code = storedCode, let privKeyBase64 = storedKey, let relayURLString = storedURL
-        else {
-            let detail = "code=\(storedCode != nil) privKey=\(storedKey != nil) url=\(storedURL != nil)"
+        guard let code = storedCode, let relayURLString = storedURL else {
+            let detail = "code=\(storedCode != nil) url=\(storedURL != nil)"
             Self.logger.error("restoreNamespacedStoredPairing: INCOMPLETE stored pairing for machine=\(self.machineID.uuidString, privacy: .public) — \(detail, privacy: .public); re-pair required")
-            print("[E2ERelayClient] INCOMPLETE stored pairing machine=\(machineID.uuidString) \(detail) keychainAccounts=\(Self.keychainListAccounts())")
+            print("[E2ERelayClient] INCOMPLETE stored pairing machine=\(machineID.uuidString) \(detail)")
             return false
         }
 
@@ -349,21 +327,12 @@ public final class E2ERelayClient: ObservableObject {
             return false
         }
 
-        guard let privKeyData = try? Base64URL.decode(privKeyBase64),
-              let privateKey = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: privKeyData)
-        else {
-            Self.logger.error("restoreNamespacedStoredPairing: failed to decode stored private key")
-            print("[E2ERelayClient] stored private key UNDECODABLE machine=\(machineID.uuidString); re-pair required")
-            return false
-        }
-
         guard let restoredURL = URL(string: relayURLString) else {
             Self.logger.error("restoreNamespacedStoredPairing: invalid stored relay URL for machine=\(self.machineID.uuidString, privacy: .public); re-pair required")
             return false
         }
 
         self.pairingCode = code
-        self.keyPair = PairingCrypto.KeyPair(privateKey: privateKey)
         self.relayURL = restoredURL
         Self.logger.info("restoreNamespacedStoredPairing: restored pairing for relayHost=\(self.relayURL.host ?? "", privacy: .public)")
         return true
