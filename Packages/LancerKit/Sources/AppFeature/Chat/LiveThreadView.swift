@@ -41,15 +41,34 @@ public struct LiveThreadView: View {
     public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        ChatUserBubble(text: prompt)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            ForEach(priorTurns) { turn in
+                                ChatUserBubble(text: turn.prompt)
+                                staticAssistant(turn)
+                            }
 
-                        replyState
+                            if let liveUserPrompt {
+                                ChatUserBubble(text: liveUserPrompt)
+                            }
+
+                            replyState
+                                .id("live-tail")
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 12)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 12)
+                    .onChange(of: bridge.sendState) { _, _ in
+                        scrollToTail(proxy)
+                    }
+                    .onChange(of: bridge.transcriptTurns.count) { _, _ in
+                        scrollToTail(proxy)
+                    }
+                    .onChange(of: streamingAssistantText) { _, _ in
+                        scrollToTail(proxy)
+                    }
                 }
 
                 if let machineID = bridge.activeMachineID, let pendingApproval {
@@ -150,6 +169,75 @@ public struct LiveThreadView: View {
         !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !bridge.isSendInFlight
             && bridge.activeConversationID != nil
+    }
+
+    /// Turn id currently bound to `sendState` (streaming / completed / degraded /
+    /// in-flight running / failed). Priors render frozen; this one uses replyState.
+    private var liveTurnID: String? {
+        switch bridge.sendState {
+        case .streaming(let turn), .completed(let turn):
+            return turn.id
+        case .degraded(_, let turn):
+            return turn?.id
+        case .working:
+            return bridge.transcriptTurns.last(where: { $0.status == .running })?.id
+        case .failed:
+            return bridge.transcriptTurns.last(where: { $0.status == .failed })?.id
+        case .idle:
+            return nil
+        }
+    }
+
+    private var priorTurns: [LancerCore.ChatTurn] {
+        LiveThreadTranscript.priorTurns(turns: bridge.transcriptTurns, liveTurnID: liveTurnID)
+    }
+
+    /// User bubble for the live exchange — prefers the mirrored live turn,
+    /// then in-flight prompt, then the sheet's initial prompt when empty.
+    private var liveUserPrompt: String? {
+        if let live = LiveThreadTranscript.liveTurn(turns: bridge.transcriptTurns, liveTurnID: liveTurnID) {
+            return live.prompt
+        }
+        if let inFlight = bridge.inFlightPrompt {
+            return inFlight
+        }
+        if bridge.transcriptTurns.isEmpty {
+            return prompt
+        }
+        return nil
+    }
+
+    private var streamingAssistantText: String {
+        switch bridge.sendState {
+        case .streaming(let turn), .completed(let turn):
+            return turn.assistantText
+        case .degraded(_, let turn):
+            return turn?.assistantText ?? ""
+        case .idle, .working, .failed:
+            return ""
+        }
+    }
+
+    private func scrollToTail(_ proxy: ScrollViewProxy) {
+        withAnimation {
+            proxy.scrollTo("live-tail", anchor: .bottom)
+        }
+    }
+
+    @ViewBuilder
+    private func staticAssistant(_ turn: LancerCore.ChatTurn) -> some View {
+        if turn.status == .failed {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(turn.errorMessage ?? "Run failed")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+            ChatMarkdownBody(markdown: body)
+        }
     }
 
     // MARK: - Reply state (Orca rule: working indicator and visible reply text

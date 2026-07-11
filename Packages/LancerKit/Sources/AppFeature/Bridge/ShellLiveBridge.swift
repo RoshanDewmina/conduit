@@ -54,6 +54,13 @@ public final class ShellLiveBridge {
 
     public private(set) var sendState: SendState = .idle
     public private(set) var activeConversationID: String?
+    /// Full conversation transcript from `ChatConversationRepository`, refreshed
+    /// on every poll tick. `LiveThreadView` renders these in order so follow-ups
+    /// keep prior turns on screen (I2, 2026-07-11).
+    public private(set) var transcriptTurns: [LancerCore.ChatTurn] = []
+    /// Prompt for the in-flight send/follow-up before its turn row lands in
+    /// the mirror — lets the live user bubble appear immediately.
+    public private(set) var inFlightPrompt: String?
     /// M4: the machine the most recent send/follow-up resolved via
     /// `RelayFleetStore.firstConnectedMachine`. `LiveThreadView` reads this to
     /// look up `RelayApprovalIngest.latestPendingApproval[activeMachineID]` —
@@ -111,6 +118,8 @@ public final class ShellLiveBridge {
 
         sendState = .working
         activeConversationID = nil
+        transcriptTurns = []
+        inFlightPrompt = prompt
 
         let transport = Self.transport(for: machine.bridge)
         let outcome = await conversationSyncCoordinator.startConversation(
@@ -128,10 +137,12 @@ public final class ShellLiveBridge {
         switch outcome {
         case .started(let started):
             activeConversationID = started.conversationID
+            await refreshTranscript(conversationID: started.conversationID)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
         case .blocked(let message):
             // Blocked reasons from startConversation (policy / approval /
             // budget / transport) are surfaced via `.failed` — not silent.
+            inFlightPrompt = nil
             sendState = .failed(message)
         }
     }
@@ -161,6 +172,7 @@ public final class ShellLiveBridge {
         let baseSeq = (try? await chatRepo.conversation(id: conversationID))?.lastHostSeq ?? 0
 
         sendState = .working
+        inFlightPrompt = prompt
 
         let transport = Self.transport(for: machine.bridge)
         let outcome = await conversationSyncCoordinator.continueConversation(
@@ -176,9 +188,11 @@ public final class ShellLiveBridge {
         switch outcome {
         case .started(let started):
             activeConversationID = started.conversationID
+            await refreshTranscript(conversationID: started.conversationID)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
         case .blocked(let message):
             // Surface blocked reason in the UI (same `.failed` path as send).
+            inFlightPrompt = nil
             sendState = .failed(message)
         }
     }
@@ -220,12 +234,16 @@ public final class ShellLiveBridge {
                 }
             }
 
+            await refreshTranscript(conversationID: conversationID)
+
             if let turn = try? await chatRepo.turnByRunID(runID) {
                 switch turn.status {
                 case .completed:
+                    inFlightPrompt = nil
                     sendState = .completed(turn)
                     return
                 case .failed:
+                    inFlightPrompt = nil
                     sendState = .failed(turn.errorMessage ?? "Run failed")
                     return
                 case .running:
@@ -246,6 +264,12 @@ public final class ShellLiveBridge {
                 // Task cancelled (sheet dismissed) — stop polling.
                 return
             }
+        }
+    }
+
+    private func refreshTranscript(conversationID: String) async {
+        if let turns = try? await chatRepo.turns(conversationID: conversationID) {
+            transcriptTurns = turns
         }
     }
 
