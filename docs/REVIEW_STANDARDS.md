@@ -19,6 +19,13 @@ superseded with a strikethrough + pointer.
 9. UI copy states what was **asked of the agent**, never what is "guaranteed".
 10. Never report "all clear" from stale relay data — surface staleness explicitly.
 
+## Standing pipeline constraint — subscription-only billing (owner, 2026-07-11)
+
+No pay-per-use API keys anywhere in the pipeline, ever. Every model call rides the owner's
+existing Cursor Ultra or Claude subscription. Any tool requiring metered billing → propose a
+subscription-backed alternative and ask the owner. (This is why CI review runs cursor-agent
+with `CURSOR_API_KEY`, not an Anthropic API key.)
+
 ## Reviewer output contract
 
 Emit structured verdict JSON — one finding per entry:

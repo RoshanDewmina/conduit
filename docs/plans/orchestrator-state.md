@@ -12,7 +12,14 @@
 | Default implementer | `grok-4.5-xhigh` (Cursor Grok 4.5; `grok-4.5-fast-xhigh` when speed matters) |
 | Mechanical edits / first-pass review summaries | `composer-2.5` |
 | Fallback + sensitive + repo-skill work | Claude `sonnet` high via Agent tool |
+| CI stage-4 reviewer | `claude-opus-4-8-thinking-high` via cursor-agent headless (`CURSOR_API_KEY` repo secret; NOT Grok, cross-model independence) |
 | Cursor auth | logged in (sidewhinder2k3@gmail.com); `gh` auth OK (RoshanDewmina, repo=conduit) |
+
+**Standing constraint (owner, 2026-07-11): subscription-only billing.** No pay-per-use API
+keys anywhere in the pipeline; all model calls ride Cursor Ultra or the Claude subscription.
+Metered-only tool → propose subscription-backed alternative + ask owner. After the first CI
+review run, verify the owner's Cursor dashboard shows it as plan usage, not metered — if
+metered, STOP CI reviews and tell the owner.
 
 ## Phase 0 log (2026-07-11)
 

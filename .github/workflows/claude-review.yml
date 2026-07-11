@@ -1,33 +1,102 @@
-name: Claude PR Review
+name: Cursor PR Review
+
+# Stage-4 independent PR reviewer (verification-pipeline v2). Runs cursor-agent
+# headless on the owner's Cursor plan (CURSOR_API_KEY repo secret) — NO metered
+# API keys anywhere in this pipeline (owner directive 2026-07-11).
+# Reviewer model is deliberately NOT Grok (the implementer) for cross-model
+# independence.
 
 on:
   pull_request:
     types: [opened, ready_for_review, synchronize]
 
+env:
+  REVIEWER_MODEL: claude-opus-4-8-thinking-high
+
 jobs:
-  claude-review:
+  review:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: write
-      issues: read
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            Review this PR as the independent third reviewer (stage 4 of the verification
-            pipeline in docs/REVIEW_STANDARDS.md — read it first). Focus on correctness,
-            the review bar in that file, and anything the diff breaks beyond itself
-            (call sites of changed public symbols). Report findings with severity
-            (blocking|major|minor|nit) and confidence (certain|likely|speculative).
-            Nits and minors never block. Do not restate the diff; only report findings
-            with file:line evidence. Sensitive paths (daemon/lancerd/dispatch.go, policy/,
-            approval/content-hash, Security*, relay protocol) get extra scrutiny:
-            fail-closed behavior, no shell interpolation, versioned wire types.
-          claude_args: '--max-turns 30'
+      - name: Install cursor-agent
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build review input (diff + dependents map + standards)
+        run: |
+          set -euo pipefail
+          BASE="origin/${{ github.base_ref }}"
+          git diff "$BASE"...HEAD > /tmp/pr.diff
+          DIFF_LINES=$(wc -l < /tmp/pr.diff)
+          if [ "$DIFF_LINES" -gt 15000 ]; then
+            head -15000 /tmp/pr.diff > /tmp/pr.diff.t && mv /tmp/pr.diff.t /tmp/pr.diff
+            echo "TRUNCATED: diff was $DIFF_LINES lines, reviewing first 15000" >> /tmp/pr.diff
+          fi
+          # Dependents map: call sites of public symbols added/changed in this diff,
+          # outside the files that define them.
+          : > /tmp/dependents.txt
+          grep -E '^\+.*(public (func|struct|class|enum|protocol|var|let)|^\+func [A-Z])' /tmp/pr.diff \
+            | grep -oE '(func|struct|class|enum|protocol|var|let) [A-Za-z_][A-Za-z0-9_]*' \
+            | awk '{print $2}' | sort -u | head -40 > /tmp/symbols.txt || true
+          while read -r sym; do
+            [ -z "$sym" ] && continue
+            echo "== call sites of $sym ==" >> /tmp/dependents.txt
+            grep -rn --include='*.swift' --include='*.go' -F "$sym" \
+              Packages daemon Lancer* 2>/dev/null | head -12 >> /tmp/dependents.txt || true
+          done < /tmp/symbols.txt
+          head -400 /tmp/dependents.txt > /tmp/dependents.t && mv /tmp/dependents.t /tmp/dependents.txt
+          {
+            echo "You are the independent stage-4 PR reviewer. Review ONLY; propose no edits."
+            echo "Standards (binding):"
+            cat docs/REVIEW_STANDARDS.md
+            echo
+            echo "=== DEPENDENTS MAP (call sites of changed public symbols) ==="
+            cat /tmp/dependents.txt
+            echo
+            echo "=== PR DIFF (base ${BASE}) ==="
+            cat /tmp/pr.diff
+            echo
+            echo "Output ONLY the verdict JSON per the reviewer output contract in the"
+            echo "standards above. No prose outside the JSON."
+          } > /tmp/prompt.txt
+
+      - name: Run reviewer
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          set -euo pipefail
+          cursor-agent -p "$(cat /tmp/prompt.txt)" \
+            --model "$REVIEWER_MODEL" --mode=ask \
+            --output-format json --force > /tmp/review-raw.json
+          python3 - <<'EOF'
+          import json
+          raw = open('/tmp/review-raw.json').read()
+          try:
+              result = json.loads(raw).get('result', raw)
+          except Exception:
+              result = raw
+          start, end = result.find('{'), result.rfind('}')
+          body = result[start:end+1] if start >= 0 else result
+          try:
+              verdict = json.loads(body)
+              pretty = json.dumps(verdict, indent=2)
+          except Exception:
+              pretty = result
+          with open('/tmp/comment.md', 'w') as f:
+              f.write("## Cursor PR Review (stage 4 — %s)\n\n```json\n%s\n```\n" %
+                      ("claude-opus-4-8-thinking-high", pretty))
+          EOF
+
+      - name: Post review comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/comment.md
