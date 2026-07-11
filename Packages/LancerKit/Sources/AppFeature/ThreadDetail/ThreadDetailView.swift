@@ -3,12 +3,13 @@ import SwiftUI
 
 /// Section 7 of the frontend rebuild: a faithful, Apple-native recreation of
 /// the Cursor-mobile thread detail screen (owner reference screenshots
-/// `IMG_2412`/`IMG_2410`). Pushed via `NavigationLink` when tapping a thread
-/// row in `ThreadListView` (Section 5) or `WorkspacesView`'s DEBUG seam.
+/// `docs/design/cursor-reference/IMG_2354` / `IMG_2358`–`2360`). Pushed via
+/// `NavigationLink` when tapping a thread row in `ThreadListView` (Section 5)
+/// or `WorkspacesView`'s DEBUG seam.
 /// Visual-only for this milestone — the user message, assistant response,
 /// table, and changed files are entirely invented static content, not real
 /// `SessionFeature`/chat-engine output. The "..." menu, the "Changes" file
-/// row, and "Squash & Merge" are decorative (no gesture handler, matching
+/// row, and "Mark Ready" are decorative (no gesture handler, matching
 /// the "line.3.horizontal" precedent in `ThreadListView`). "View PR" is the
 /// one functional push, to `PRDetailView`. System `SF Symbols` + semantic
 /// colors only, no DesignSystem module.
@@ -24,7 +25,7 @@ struct ThreadDetailView: View {
 
     public var body: some View {
         ZStack(alignment: .bottom) {
-            Color(.systemGroupedBackground)
+            Color(.systemBackground)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -35,7 +36,7 @@ struct ThreadDetailView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        userBubble
+                        ChatUserBubble(text: Self.userPrompt)
                             .padding(.top, 16)
 
                         VStack(alignment: .leading, spacing: 10) {
@@ -43,22 +44,14 @@ struct ThreadDetailView: View {
                                 .font(.system(size: 13))
                                 .foregroundStyle(.secondary)
 
-                            assistantParagraph1
-                                .font(.system(size: 16))
-                                .foregroundStyle(.primary)
-
-                            assistantParagraph2
-                                .font(.system(size: 16))
-                                .foregroundStyle(.primary)
+                            ChatMarkdownBody(markdown: Self.assistantMarkdown)
                         }
 
                         summaryTable
 
-                        wireframesLine
-                            .font(.system(size: 16))
-                            .foregroundStyle(.primary)
+                        ChatMarkdownBody(markdown: Self.wireframesMarkdown)
 
-                        changesCard
+                        ChatChangesCard(files: Self.changedFiles)
 
                         pillRow
                     }
@@ -70,10 +63,9 @@ struct ThreadDetailView: View {
             Button {
                 isFollowUpPresented = true
             } label: {
-                followUpComposer
+                ChatFollowUpPlaceholderBar()
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("Follow up"))
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
         }
@@ -98,10 +90,15 @@ struct ThreadDetailView: View {
 
             Spacer()
 
-            Text(thread.title)
-                .font(.system(size: 17, weight: .semibold))
-                .lineLimit(1)
-                .padding(.horizontal, 12)
+            HStack(spacing: 6) {
+                Text(thread.title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .lineLimit(1)
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 8)
 
             Spacer()
 
@@ -119,52 +116,6 @@ struct ThreadDetailView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.primary)
             )
-    }
-
-    // MARK: - Message bubble
-
-    private var userBubble: some View {
-        HStack {
-            Spacer(minLength: 40)
-
-            Text("Can you take a look at the onboarding flow and clean up the handoff between the permissions screen and account setup? It feels like there are a couple of redundant taps in there.")
-                .font(.system(size: 16))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(.secondarySystemBackground))
-                )
-        }
-    }
-
-    // MARK: - Assistant prose (manual bold/inline-code substrings, no Markdown renderer)
-
-    /// Built from an `AttributedString` so "step ordering" can be bolded
-    /// inline without the deprecated `Text` `+` concatenation operator.
-    private var assistantParagraph1: Text {
-        var emphasis = AttributedString("step ordering")
-        emphasis.inlinePresentationIntent = .stronglyEmphasized
-
-        let combined = AttributedString("I went through the onboarding flow and found a few places where ")
-            + emphasis
-            + AttributedString(" was causing the redundant taps you mentioned. The permissions screen was requesting camera access before it was actually needed, which pushed users through an extra confirmation step later on.")
-        return Text(combined)
-    }
-
-    /// Built from an `AttributedString` so "PermissionCoordinator" can carry
-    /// its own monospaced font + color inline without the deprecated `Text`
-    /// `+` concatenation operator.
-    private var assistantParagraph2: Text {
-        var code = AttributedString("PermissionCoordinator")
-        code.font = .system(size: 15, design: .monospaced)
-        code.foregroundColor = Color.primary
-
-        let combined = AttributedString("The fix consolidates permission requests into a single ")
-            + code
-            + AttributedString(" pass and removes the duplicate account-setup confirmation screen. I also tightened up the transition animation so the flow feels like one continuous handoff instead of five separate screens.")
-        return Text(combined)
     }
 
     // MARK: - Summary table
@@ -205,72 +156,6 @@ struct ThreadDetailView: View {
         )
     }
 
-    /// Built from an `AttributedString` so the "Screens touched: " label can
-    /// be bolded inline without the deprecated `Text` `+` concatenation
-    /// operator.
-    private var wireframesLine: Text {
-        var label = AttributedString("Screens touched: ")
-        label.inlinePresentationIntent = .stronglyEmphasized
-
-        let combined = label + AttributedString("Welcome, Permissions, Account setup, Tutorial, Confirmation.")
-        return Text(combined)
-    }
-
-    // MARK: - Changes card
-
-    private var changesCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                Text("Changes")
-                    .font(.system(size: 15, weight: .semibold))
-                Text("\(Self.changedFiles.count)")
-                    .font(.system(size: 15))
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-
-            Divider()
-
-            ForEach(Array(Self.changedFiles.enumerated()), id: \.offset) { index, file in
-                changedFileRow(file)
-
-                if index < Self.changedFiles.count - 1 {
-                    Divider()
-                        .padding(.leading, 50)
-                }
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color(.separator), lineWidth: 0.5)
-        )
-    }
-
-    private func changedFileRow(_ file: ChangedFile) -> some View {
-        HStack(spacing: 12) {
-            fileBadge(file.badge)
-
-            Text(file.name)
-                .font(.system(size: 15))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            Spacer(minLength: 8)
-
-            diffStatText(added: file.added, removed: file.removed)
-                .font(.system(size: 14))
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-
     // MARK: - Pills
 
     private var pillRow: some View {
@@ -278,66 +163,18 @@ struct ThreadDetailView: View {
             NavigationLink {
                 PRDetailView()
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.trianglehead.branch")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Text("View PR")
-                        .font(.system(size: 15))
-                        .foregroundStyle(.primary)
-                    diffStatText(added: Self.prAdded, removed: Self.prRemoved)
-                        .font(.system(size: 14))
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .overlay(
-                    Capsule().strokeBorder(Color(.separator), lineWidth: 0.5)
+                ChatOutlinePillLabel(
+                    title: "View PR",
+                    added: Self.prAdded,
+                    removed: Self.prRemoved,
+                    systemImage: "arrow.trianglehead.branch"
                 )
             }
             .buttonStyle(.plain)
 
-            Text("Squash & Merge")
-                .font(.system(size: 15))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .overlay(
-                    Capsule().strokeBorder(Color(.separator), lineWidth: 0.5)
-                )
+            ChatOutlinePillLabel(title: "Mark Ready")
         }
         .padding(.top, 4)
-    }
-
-    private var followUpComposer: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(Color(.tertiarySystemFill))
-                .frame(width: 34, height: 34)
-                .overlay(
-                    Image(systemName: "plus")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.secondary)
-                )
-
-            Text("Follow up...")
-                .font(.system(size: 16))
-                .foregroundStyle(.secondary)
-
-            Spacer()
-
-            Circle()
-                .fill(Color(.tertiarySystemFill))
-                .frame(width: 34, height: 34)
-                .overlay(
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                )
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Capsule().fill(Color(.secondarySystemBackground)))
-        .overlay(Capsule().strokeBorder(Color(.separator), lineWidth: 0.5))
     }
 
     // MARK: - Static sample data
@@ -346,6 +183,18 @@ struct ThreadDetailView: View {
         let label: String
         let value: String
     }
+
+    private static let userPrompt =
+        "Can you take a look at the onboarding flow and clean up the handoff between the permissions screen and account setup? It feels like there are a couple of redundant taps in there."
+
+    private static let assistantMarkdown = """
+    I went through the onboarding flow and found a few places where **step ordering** was causing the redundant taps you mentioned. The permissions screen was requesting camera access before it was actually needed, which pushed users through an extra confirmation step later on.
+
+    The fix consolidates permission requests into a single `PermissionCoordinator` pass and removes the duplicate account-setup confirmation screen. I also tightened up the transition animation so the flow feels like one continuous handoff instead of five separate screens.
+    """
+
+    private static let wireframesMarkdown =
+        "**Screens touched:** Welcome, Permissions, Account setup, Tutorial, Confirmation."
 
     private static let summaryRows: [SummaryRow] = [
         SummaryRow(label: "Priority", value: "High"),
@@ -366,14 +215,6 @@ struct ThreadDetailView: View {
 
 // MARK: - Shared helpers (used by ThreadDetailView + PRDetailView)
 
-struct ChangedFile: Identifiable {
-    let id = UUID()
-    let badge: String
-    let name: String
-    let added: Int
-    let removed: Int
-}
-
 func fileBadge(_ text: String) -> some View {
     RoundedRectangle(cornerRadius: 6, style: .continuous)
         .fill(Color(.tertiarySystemFill))
@@ -388,11 +229,7 @@ func fileBadge(_ text: String) -> some View {
 /// Built from an `AttributedString` so the added/removed counts keep
 /// distinct colors without the deprecated `Text` `+` concatenation operator.
 func diffStatText(added: Int, removed: Int) -> Text {
-    var addedText = AttributedString("+\(added)")
-    addedText.foregroundColor = Color.green
-    var removedText = AttributedString(" -\(removed)")
-    removedText.foregroundColor = Color.red
-    return Text(addedText + removedText)
+    chatDiffStatText(added: added, removed: removed)
 }
 
 #Preview {
