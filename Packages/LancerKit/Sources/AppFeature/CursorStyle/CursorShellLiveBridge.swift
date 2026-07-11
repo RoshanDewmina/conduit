@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import InboxFeature
 import LancerCore
+import SessionFeature
 import SSHTransport
 import AgentKit
 
@@ -84,6 +85,11 @@ public final class CursorShellLiveBridge {
     /// approval" forever while the approval was in the store (2026-07-08,
     /// relay-approval-e2e). Setting the object here re-renders deterministically.
     public var pendingApproval: Approval?
+    /// Live pending agent question for the active thread (relay ingest → card).
+    /// Orthogonal to `pendingApproval` — answering a question is NOT an approval.
+    public var pendingQuestion: QuestionCardModel.PresentationState?
+    /// Machine that owns `pendingQuestion` (UUID string of `RelayMachineID`).
+    public var pendingQuestionMachineID: String?
     /// Looks up the REAL `Approval` (command, cwd, risk, agent, tool name…)
     /// behind `pendingApprovalID` — without this, CursorReviewDiffView had no
     /// way to render anything but hardcoded example content, meaning a real
@@ -145,6 +151,14 @@ public final class CursorShellLiveBridge {
     /// The `QuestionAnswerParams` should be forwarded to the daemon via
     /// `DaemonChannel.sendQuestionAnswer` or `E2ERelayBridge.sendQuestionAnswer`.
     public var onAnswerQuestion: ((ChatArtifact, QuestionAnswerParams) async -> Void)?
+    /// Live pending-card submit — typically `RelayQuestionIngest.submit` for the
+    /// machine in `pendingQuestionMachineID`. Returns whether the relay send
+    /// succeeded; the bridge clears `pendingQuestion` on success.
+    public var onSubmitPendingQuestion: (() async -> Bool)?
+    /// Optional ingest used when the UI mutates options/free-text so the
+    /// ingest's published dict stays in sync with the live card.
+    private var boundQuestionIngest: RelayQuestionIngest?
+    private var questionListenTask: Task<Void, Never>?
 
     public var observedSessions: [CursorObservedSessionMapping.RowModel] = []
     /// Bumps the same refresh trigger the workspace/thread list uses (AppRoot's
@@ -211,6 +225,165 @@ public final class CursorShellLiveBridge {
 
     public func reloadThreads(workspaceName: String, rows: [ThreadRow]) {
         threadsByWorkspace[workspaceName] = rows
+    }
+
+    // MARK: - Pending question (live card)
+
+    /// Idempotent listener for `lancerE2EQuestionPending` — surfaces the card
+    /// even when AppRoot has not yet bound a `RelayQuestionIngest`. Prefer
+    /// `bindQuestionIngest` when ingest is available (persist + submit).
+    public func startQuestionPendingListener() {
+        guard questionListenTask == nil else { return }
+        questionListenTask = Task { [weak self] in
+            for await notification in NotificationCenter.default.notifications(
+                named: Notification.Name("lancerE2EQuestionPending")
+            ) {
+                guard let self else { return }
+                await self.handleQuestionPendingNotification(notification)
+            }
+        }
+    }
+
+    private func handleQuestionPendingNotification(_ notification: Notification) async {
+        // Prefer ingest-driven updates when bound (includes artifact persistence).
+        guard boundQuestionIngest == nil else { return }
+        guard
+            let wire = notification.userInfo?["questionData"] as? E2ERelayMessage.QuestionData,
+            let machineID = notification.userInfo?["machineID"] as? RelayMachineID,
+            let state = CursorQuestionCardModel.presentation(from: wire)
+        else { return }
+        setPendingQuestion(
+            state,
+            machineID: machineID.uuidString,
+            conversationID: selectedThreadID
+        )
+    }
+
+    /// Publish or clear the live pending question and sync
+    /// `CursorThreadAttention.ThreadState.hasBlockingQuestion` for the thread.
+    public func setPendingQuestion(
+        _ state: QuestionCardModel.PresentationState?,
+        machineID: String?,
+        conversationID: String? = nil
+    ) {
+        if let state, CursorQuestionCardModel.shouldShowCard(state) {
+            pendingQuestion = state
+            pendingQuestionMachineID = machineID
+        } else {
+            pendingQuestion = nil
+            pendingQuestionMachineID = nil
+        }
+        refreshBlockingQuestionAttention(conversationID: conversationID ?? selectedThreadID)
+    }
+
+    public func togglePendingQuestionOption(itemIndex: Int, label: String) {
+        if let ingest = boundQuestionIngest,
+           let machineKey = pendingQuestionMachineID,
+           let uuid = UUID(uuidString: machineKey) {
+            ingest.toggleOption(machineID: RelayMachineID(uuid), itemIndex: itemIndex, label: label)
+            return
+        }
+        guard var state = pendingQuestion else { return }
+        QuestionCardModel.toggleOption(in: &state, itemIndex: itemIndex, label: label)
+        pendingQuestion = state
+    }
+
+    public func setPendingQuestionFreeText(itemIndex: Int, text: String) {
+        if let ingest = boundQuestionIngest,
+           let machineKey = pendingQuestionMachineID,
+           let uuid = UUID(uuidString: machineKey) {
+            ingest.setFreeText(machineID: RelayMachineID(uuid), itemIndex: itemIndex, text: text)
+            return
+        }
+        guard var state = pendingQuestion else { return }
+        QuestionCardModel.setFreeText(in: &state, itemIndex: itemIndex, text: text)
+        pendingQuestion = state
+    }
+
+    /// Submit via `onSubmitPendingQuestion` (ingest/relay path). Clears the
+    /// published card on success so the turn can resume.
+    @discardableResult
+    public func submitPendingQuestion() async -> Bool {
+        guard let state = pendingQuestion, QuestionCardModel.isReadyToAnswer(state) else {
+            return false
+        }
+        if let onSubmitPendingQuestion {
+            let sent = await onSubmitPendingQuestion()
+            if sent {
+                setPendingQuestion(nil, machineID: nil)
+            }
+            return sent
+        }
+        // Fallback: artifact answer path when AppRoot wired `onAnswerQuestion`
+        // but not the pending-ingest submit closure.
+        if let onAnswerQuestion {
+            let answer = QuestionCardModel.buildAnswer(from: state)
+            let params = QuestionPendingParams(
+                id: state.questionID,
+                agent: state.agent,
+                questions: [],
+                allowFreeText: state.allowFreeText,
+                confidence: state.confidence
+            )
+            guard let payloadData = try? JSONEncoder().encode(QuestionArtifactPayload(event: params)),
+                  let payloadJSON = String(data: payloadData, encoding: .utf8)
+            else { return false }
+            let artifact = ChatArtifact(
+                id: "question:\(state.questionID)",
+                conversationID: selectedThreadID ?? "",
+                turnID: "",
+                runID: activeRunID ?? "",
+                kind: .question,
+                title: CursorQuestionCardModel.cardTitle,
+                payloadJSON: payloadJSON,
+                status: .running
+            )
+            await onAnswerQuestion(artifact, answer)
+            setPendingQuestion(nil, machineID: nil)
+            return true
+        }
+        return false
+    }
+
+    /// Bind `RelayQuestionIngest.onPendingChanged` so live questions surface on
+    /// this bridge (and drive `.blockingQuestion` attention). Call once from
+    /// app wiring after creating the ingest.
+    public func bindQuestionIngest(_ ingest: RelayQuestionIngest) {
+        boundQuestionIngest = ingest
+        ingest.onPendingChanged = { [weak self] machineID, state in
+            guard let self else { return }
+            self.setPendingQuestion(
+                state,
+                machineID: machineID.uuidString,
+                conversationID: self.selectedThreadID
+            )
+        }
+        if let machineKey = pendingQuestionMachineID,
+           let uuid = UUID(uuidString: machineKey) {
+            let mid = RelayMachineID(uuid)
+            if let existing = ingest.latestPendingQuestion[mid] {
+                setPendingQuestion(existing, machineID: machineKey, conversationID: selectedThreadID)
+            }
+        } else if let first = ingest.latestPendingQuestion.first {
+            setPendingQuestion(
+                first.value,
+                machineID: first.key.uuidString,
+                conversationID: selectedThreadID
+            )
+        }
+    }
+
+    private func refreshBlockingQuestionAttention(conversationID: String?) {
+        guard let conversationID else { return }
+        var state = threadStates[conversationID] ?? CursorThreadAttention.ThreadState()
+        let hasQuestion = CursorQuestionCardModel.shouldShowCard(pendingQuestion)
+        state.hasBlockingQuestion = hasQuestion
+        if hasQuestion {
+            state.statusText = CursorQuestionCardModel.awaitingInputDetail
+        }
+        threadStates[conversationID] = state
+        let (attention, _, _) = CursorThreadAttention.derive(state)
+        threadAttention[conversationID] = attention
     }
 }
 #endif

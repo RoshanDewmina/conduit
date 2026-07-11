@@ -39,6 +39,10 @@ public struct CursorWorkThreadView: View {
         liveBridge?.pendingApprovalID != nil
     }
 
+    private var showsPendingQuestion: Bool {
+        CursorQuestionCardModel.shouldShowCard(liveBridge?.pendingQuestion)
+    }
+
     public init(
         routedConversationID: String? = nil,
         fallbackTitle: String = "Thread",
@@ -106,13 +110,32 @@ public struct CursorWorkThreadView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
+                if showsPendingQuestion, let question = liveBridge?.pendingQuestion {
+                    CursorQuestionCard(
+                        state: question,
+                        onToggleOption: { itemIndex, label in
+                            liveBridge?.togglePendingQuestionOption(itemIndex: itemIndex, label: label)
+                        },
+                        onSetFreeText: { itemIndex, text in
+                            liveBridge?.setPendingQuestionFreeText(itemIndex: itemIndex, text: text)
+                        },
+                        onSubmit: {
+                            Task { await liveBridge?.submitPendingQuestion() }
+                        }
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                }
                 if showsApprovalBanner {
                     approvalBanner
                 }
                 composer
             }
         }
-        .onAppear { bindTranscript() }
+        .onAppear {
+            liveBridge?.startQuestionPendingListener()
+            bindTranscript()
+        }
         .onChange(of: effectiveConversationID) { _, _ in bindTranscript() }
         .onChange(of: liveBridge?.selectedThreadID) { _, _ in refreshTranscriptOverlay() }
         .onChange(of: liveBridge?.activeThreadResponse) { _, _ in refreshTranscriptOverlay() }
@@ -373,8 +396,15 @@ public struct CursorWorkThreadView: View {
                 )
             }
         case .question:
-            QuestionCardView(artifact: artifact) { answer in
-                Task { await liveBridge?.onAnswerQuestion?(artifact, answer) }
+            if CursorQuestionCardModel.shouldSuppressTranscriptArtifact(
+                artifact: artifact,
+                pending: liveBridge?.pendingQuestion
+            ) {
+                EmptyView()
+            } else {
+                QuestionCardView(artifact: artifact) { answer in
+                    Task { await liveBridge?.onAnswerQuestion?(artifact, answer) }
+                }
             }
         default:
             EmptyView()

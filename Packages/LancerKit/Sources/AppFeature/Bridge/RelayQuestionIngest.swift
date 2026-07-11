@@ -45,6 +45,12 @@ public final class RelayQuestionIngest {
     private let chatRepo: ChatConversationRepository
     private var listenTask: Task<Void, Never>?
 
+    /// Optional sink for CursorStyle — when set, every publish/clear of
+    /// `latestPendingQuestion` is forwarded so `CursorShellLiveBridge` can
+    /// mirror the pending card + `hasBlockingQuestion` attention without
+    /// duplicating decode logic.
+    public var onPendingChanged: (@MainActor (RelayMachineID, QuestionCardModel.PresentationState?) -> Void)?
+
     public init(chatRepo: ChatConversationRepository) {
         self.chatRepo = chatRepo
     }
@@ -69,19 +75,9 @@ public final class RelayQuestionIngest {
             let machineID = notification.userInfo?["machineID"] as? RelayMachineID
         else { return }
 
-        // Relay wire shape → the SSH-path's QuestionPendingParams, same
-        // field-by-field conversion pattern RelayApprovalIngest.handle uses
-        // for E2ERelayMessage.ApprovalData → Approval (the relay's payload is
-        // keyed `questionID`, not `id`, and carries no toolUseID/timestamp).
-        let params = QuestionPendingParams(
-            id: wire.questionID,
-            agent: wire.agent,
-            runId: wire.runId,
-            cwd: wire.cwd,
-            questions: wire.questions,
-            allowFreeText: wire.allowFreeText,
-            confidence: wire.confidence
-        )
+        // 30a28e26 wire fix: relay `QuestionData` is keyed `questionID`, not
+        // SSH `id` — shared conversion lives in `CursorQuestionCardModel`.
+        let params = CursorQuestionCardModel.pendingParams(from: wire)
 
         guard let payloadData = try? JSONEncoder().encode(QuestionArtifactPayload(event: params)),
               let payloadJSON = String(data: payloadData, encoding: .utf8)
@@ -112,6 +108,7 @@ public final class RelayQuestionIngest {
 
         guard let state = QuestionCardModel.decode(from: artifact) else { return }
         latestPendingQuestion[machineID] = state
+        onPendingChanged?(machineID, state)
     }
 
     /// Toggle an option in the currently-published question for `machineID` — forwards
@@ -120,6 +117,7 @@ public final class RelayQuestionIngest {
         guard var state = latestPendingQuestion[machineID] else { return }
         QuestionCardModel.toggleOption(in: &state, itemIndex: itemIndex, label: label)
         latestPendingQuestion[machineID] = state
+        onPendingChanged?(machineID, state)
     }
 
     /// Update the free-text field for the currently-published question for `machineID`.
@@ -127,6 +125,7 @@ public final class RelayQuestionIngest {
         guard var state = latestPendingQuestion[machineID] else { return }
         QuestionCardModel.setFreeText(in: &state, itemIndex: itemIndex, text: text)
         latestPendingQuestion[machineID] = state
+        onPendingChanged?(machineID, state)
     }
 
     /// Entry point for the in-thread Submit button. Builds the wire answer, sends it
@@ -159,6 +158,7 @@ public final class RelayQuestionIngest {
 
         latestPendingQuestion[machineID] = nil
         persistedArtifactID[machineID] = nil
+        onPendingChanged?(machineID, nil)
         return sent
     }
 }
