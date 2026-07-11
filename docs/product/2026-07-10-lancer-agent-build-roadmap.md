@@ -173,7 +173,25 @@ Lancer supervises loops; it does not construct them (Conductor/CLI/Ralph plugins
   the phone for a day. Magical → double-down signal. The orchestrator swarm itself is the
   second dogfood loop — supervise it from the phone.
 
-### 3.3 The fork (with evidence)
+### 3.3 In-app PR surface (owner, 07-10: users shouldn't need the GitHub app)
+
+Verdict-first, receipt-style — never a raw-diff-first UI on a phone. Merge stays gated per the
+existing ship-action rules (in-app, staged, hash-verified). Reference: our own receipt card
+chrome + Happier's diff-fence toggle w/ byte budget (`MarkdownCodeBlock.tsx:19-22,101-148`);
+data via `gh api` through the daemon (host-side auth, same governed pipeline as ship actions).
+
+| Pkg | Scope | Risk |
+|---|---|---|
+| **PR-1 Read** | PR list per repo/workspace, status checks, review-bot findings rendered as severity-sorted cards (the verification pipeline's verdict JSON is the native format) | low |
+| **PR-2 Act** | Approve / comment / request-changes from phone; findings card → one-tap "ask agent to fix" (dispatches a fix task with the finding as spec) | ui |
+| **PR-3 Merge (gated)** | Staged in-app merge with content-hash verification, high-tier approval only | sensitive |
+
+Brainstormed alongside (backlog, unscheduled): review-verdict push ("PR #71: 1 blocking
+finding") routed like approvals · swarm lane for claude-code-action status · dogfood-log
+quick-add from any thread ("this annoyed me" button) · orchestrator drift-check results as a
+Home card.
+
+### 3.4 The fork (with evidence)
 Usage log + dated competitive re-check (all three clones + fresh web: has anyone closed
 own-subs + own-machines + OpenCode + governed hands-free?) → product (outreach, pricing unfreezes)
 or tool (open-source/portfolio). Pricing/team/billing stay frozen until here.

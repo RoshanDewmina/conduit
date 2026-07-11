@@ -45,20 +45,36 @@ SendMessage instead of respawning.
 **Never:** dispatch without a written spec (goal, write-set, acceptance commands, risk class);
 let two agents share a write-set; merge on a subagent's say-so.
 
-## Review pipeline (cheap → expensive)
+## Verification pipeline (v2 — full spec in `references/verification-pipeline.md`, read it once per session)
 
-1. Mechanical gates (build/tests/lint) — coder runs them, you re-run them.
-2. Fresh-session cross-model review: `git diff master...HEAD | agent -p "<checklist>"
-   --mode=ask` — verdict `approve | fix | escalate`.
-3. You read: the verdict + diffstat always; full diffs only for sensitive paths (security,
-   protocol, payments, anything fail-open) or repeated gate failures.
-4. Owner review only for UX-visible or sensitive changes. Batch these; don't ping per-PR.
+Five bounded stages, cheap → expensive: **(1)** mechanical gates (coder runs, you re-run) →
+**(2)** fresh-session cross-model review with a **dependents map** (beyond-the-diff: rg the
+call sites of every changed public symbol into the review prompt) + `docs/REVIEW_STANDARDS.md`,
+emitting the structured verdict JSON (severity `blocking|major|minor|nit` × confidence
+`certain|likely|speculative` per finding — never a numeric self-score) → **(3)** fix loop
+bounded at ONE re-review, then automatic escalation — never a third pass → **(4)**
+`claude-code-action` on the PR as independent third reviewer; you arbitrate `blocking`
+disagreements by reading the code → **(5)** risk-gated deep review: `sensitive` = strongest
+model full diff, mandatory; `ui` = owner eyeballs the app, batched; `low` + clean 1–4 =
+auto-merge. Nits and minors never block (noise budget). Every reviewer correction by owner or
+orchestrator appends a rule to `REVIEW_STANDARDS.md` — review quality must compound.
+
+**Principle 0 (Cherny):** never dispatch a task whose "done" the coder can't verify itself —
+the spec always includes runnable acceptance commands; UI tasks include a screenshot step.
 
 ## Escalation ladder
 
 Grok fails gate → retry once with the failure output in the spec → still failing → Sonnet
 takes the task → Sonnet fails → YOU debug it (this is what you're for) → still stuck → owner,
 with: exact ask, what was tried, verbatim errors, file:line evidence, and a checkable done-bar.
+
+## Long-running harness (Anthropic pattern)
+
+First session initializes the environment (state file, task list, worktrees) before coding.
+Near context limits: write a full structured handoff into the state file and start a FRESH
+session from it — reset-from-handoff beats compaction. Progress is measured in merged PRs,
+never transcript claims. Drift check at every phase boundary / 5 merges: diff the state file
+against the roadmap's phase goals; any creep goes in the owner digest.
 
 ## Token discipline (hard rules)
 

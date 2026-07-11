@@ -79,5 +79,17 @@ sessions. Frontend = W0.A Cursor shell, KEPT, needs finesse not rebuild. Device 
 2026-07-10 to a minimum set — do not recreate deleted docs; git history holds them. Watch is
 cut. Deployment target iOS 26.0 until package S27-0.
 
+## Verification pipeline (v2 — read `.claude/skills/swarm-orchestrator/references/verification-pipeline.md`)
+
+Five stages: gates → beyond-the-diff cross-model review (dependents map + `docs/REVIEW_STANDARDS.md`,
+structured verdict JSON, nits never block) → fix loop bounded at ONE re-review then escalate →
+`claude-code-action` as independent PR reviewer (set it up in `.github/workflows/` during Phase 0
+if absent) → risk-gated deep review (sensitive = full diff by strongest model; ui = owner,
+batched; low = auto-merge). Create `docs/REVIEW_STANDARDS.md` in Phase 0 (seed: the "What good
+code means" list in ENGINEERING_PROCESS.md) and append a rule on every reviewer correction.
+Long-running: reset-from-handoff via the state file, never limp through compaction; drift check
+against roadmap phase goals every 5 merges.
+
 Begin with Phase 0. First actions: `git status` / `git worktree list` / `agent models` /
-`gh auth status`, then create `docs/plans/orchestrator-state.md` and dispatch the Phase 0 work.
+`gh auth status`, then create `docs/plans/orchestrator-state.md` + `docs/REVIEW_STANDARDS.md`
++ the claude-code-action workflow, and dispatch the Phase 0 work.

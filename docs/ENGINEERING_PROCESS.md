@@ -38,11 +38,16 @@ E2E relay protocol types, anything touching keychain/pairing/audit chain.
    - iOS: `swift test` (LancerKit) → app-target `build_sim` → affected UITests
    - Go: `cd daemon/lancerd && go test ./...`
    - Cross-cutting: `relay-approval-e2e.sh` when touching relay/approval/receipt paths
-7. **Cross-model review**: a FRESH Cursor session reviews the diff read-only —
-   `git diff master...HEAD | agent -p "<review checklist>" --mode=ask --model <grok-or-composer>`.
-   Checklist: correctness vs spec · edge cases · concurrency (Swift 6 sendability / Go races) ·
-   security (injection, fail-open, secrets) · honest-UX rules (no fake all-clear, "asked of the
-   agent" copy) · test adequacy. Output: verdict `approve | fix(list) | escalate`.
+7. **Cross-model review (v2 — full spec: `.claude/skills/swarm-orchestrator/references/verification-pipeline.md`)**:
+   a FRESH Cursor session reviews read-only — `git diff master...HEAD | agent -p "<checklist>"
+   --mode=ask --model <grok-or-composer>`. The prompt includes the spec, the diff, a
+   **dependents map** (rg'd call sites of every changed public symbol — review beyond the
+   diff), and `docs/REVIEW_STANDARDS.md` (living rules file; every reviewer correction appends
+   a rule). Output: structured verdict JSON — per-finding `severity` (blocking/major/minor/nit)
+   × `confidence` (certain/likely/speculative). Blocking or major+certain = fix; minors/nits
+   never block. Fix loop is bounded: ONE re-review (scoped to findings), then automatic
+   escalation — never a third pass. `anthropics/claude-code-action` runs on the PR as the
+   independent third reviewer; orchestrator arbitrates blocking disagreements by reading code.
 8. **PR**: `gh pr create` from the branch. Body must contain: spec, gate outputs (pasted, not
    claimed), review verdict, risk class, screenshots for anything visual. Never push to `master`
    directly (docs-only commits by the orchestrator are the sole exception).

@@ -15,6 +15,9 @@ from the Codex skill set (`~/.codex/skills/`) on 2026-06-18 and corrected to the
 | **lancer-design-handoff** | Generating/regenerating the design handoff or screen inventory from current code (not a stale doc), screenshotting real-app/debug-seam routes, writing per-page descriptions. | — |
 | **lancer-dead-view-sweep** | "Delete the old-design swift files, keep what the app uses now" — reachability-based detection of orphaned views + stale assets, delete on one confirm. | — |
 | **lancer-onboarding-smoke** | Live on-device first-run / onboarding / approval-loop / push smoke test. Encodes the ordered checklist (run lancerd *before* pairing). | — |
+| **agent-next-prompt** | Owner asks “what’s next?” / wants a paste-ready prompt for another session or tool. Diagnoses Plan/Status/git and emits one `PASTE THIS` block. | `references/prompt-catalog.md` |
+| **agent-feature-loop** | New/fuzzy feature: enforce Plan.md → approve → new implement session → milestone verify → PR. Blocks plan+code in the same chat. | `references/loop-templates.md` |
+| **agent-session-handoff** | Context full, tool hop, or “continue later” — write Status.md so the next session doesn’t need transcript archaeology. | `references/status-template.md` |
 
 ## Notes
 - **Source of truth always wins over a skill reference.** Skills point you at the right files; the
