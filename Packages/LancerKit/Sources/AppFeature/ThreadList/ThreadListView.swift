@@ -3,25 +3,25 @@ import SwiftUI
 import PersistenceKit
 
 /// Scope for a thread list — either every conversation or one real repo cwd.
-enum ThreadListWorkspace: Hashable {
+public enum ThreadListWorkspace: Hashable {
     case allRepos
     case repo(WorkspaceRepo)
 
-    var title: String {
+    public var title: String {
         switch self {
         case .allRepos: return "All Repos"
         case .repo(let repo): return repo.name
         }
     }
 
-    var cwd: String? {
+    public var cwd: String? {
         switch self {
         case .allRepos: return nil
         case .repo(let repo): return repo.cwd
         }
     }
 
-    var isAllRepos: Bool {
+    public var isAllRepos: Bool {
         if case .allRepos = self { return true }
         return false
     }
