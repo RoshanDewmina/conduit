@@ -211,5 +211,4 @@ private struct RunningPulseDot: View {
     }
 }
 
-extension RunningAgentsMapping.Row: Hashable {}
 #endif

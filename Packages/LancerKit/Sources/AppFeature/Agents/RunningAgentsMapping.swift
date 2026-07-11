@@ -5,7 +5,7 @@ import LancerCore
 /// OS-agnostic so host `swift test` can drive it without the iOS-only UI.
 public enum RunningAgentsMapping: Sendable {
 
-    public struct Row: Identifiable, Equatable, Sendable {
+    public struct Row: Identifiable, Equatable, Hashable, Sendable {
         public let id: String
         public let sessionId: String
         public let provider: String
