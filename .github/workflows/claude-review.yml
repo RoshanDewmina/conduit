@@ -1,0 +1,33 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, synchronize]
+
+jobs:
+  claude-review:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this PR as the independent third reviewer (stage 4 of the verification
+            pipeline in docs/REVIEW_STANDARDS.md — read it first). Focus on correctness,
+            the review bar in that file, and anything the diff breaks beyond itself
+            (call sites of changed public symbols). Report findings with severity
+            (blocking|major|minor|nit) and confidence (certain|likely|speculative).
+            Nits and minors never block. Do not restate the diff; only report findings
+            with file:line evidence. Sensitive paths (daemon/lancerd/dispatch.go, policy/,
+            approval/content-hash, Security*, relay protocol) get extra scrutiny:
+            fail-closed behavior, no shell interpolation, versioned wire types.
+          claude_args: '--max-turns 30'

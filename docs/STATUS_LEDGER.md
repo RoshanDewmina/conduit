@@ -1,6 +1,6 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-10 (docs purge + daily-driver direction)
+**Last updated:** 2026-07-11 (Phase 0 executed — see `plans/orchestrator-state.md`)
 **Active branch:** `feat/chat-overhaul-w0a` (W0.A dogfood in flight, dirty tree) — re-check
 `git rev-parse HEAD` / `gh pr list` before citing anything here.
 **Direction SSOT:** [`docs/product/2026-07-10-lancer-daily-driver-definition.md`](product/2026-07-10-lancer-daily-driver-definition.md)
@@ -14,12 +14,11 @@
 
 ## Current priority
 
-**Phase 0 — git hygiene (owner + agents, a day):**
-
-1. Land the in-flight W0.A work on `feat/chat-overhaul-w0a` deliberately (commit or stash-pop).
-2. Remove the abandoned wipe worktree (`.worktrees/frontend-scorched-wipe`, branch
-   `feat/frontend-scorched-wipe`, uncommitted) — the frontend is KEPT per owner 2026-07-10.
-3. `build_sim` green on the kept frontend.
+**Phase 0 — git hygiene: DONE 2026-07-11** (evidence in [`plans/orchestrator-state.md`](plans/orchestrator-state.md)):
+W0.A landed (incl. repair of an empty-tree tip commit `1c102940` → `4c350a52`, and the
+dispatch-cwd fail-fast fix `4c2634df`); wipe worktree + branch removed (tip was ancestor of
+master); `build_sim` SUCCEEDED on the kept W0.A shell. Owner-gated remainder: merge to master,
+Tier 0 re-proof, `ANTHROPIC_API_KEY` repo secret.
 
 **Then Phase 1 — dogfood MVP (weeks 1–2):** six pieces (pairing/trusted machines · thread list ·
 chat thread finesse · composer · push approvals incl. lock screen · emergency stop), per the
