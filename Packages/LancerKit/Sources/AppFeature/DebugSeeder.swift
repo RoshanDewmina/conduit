@@ -2,6 +2,7 @@
 import Foundation
 import LancerCore
 import PersistenceKit
+import SSHTransport
 
 /// Seeds the local database with realistic sample data for simulator runs.
 /// Only runs once — guarded by a UserDefaults flag.
@@ -66,6 +67,34 @@ public enum DebugSeeder {
             tags: ["local", "e2e"]
         )
         try? await env.hostRepo.upsert(host)
+    }
+
+    /// Pairs to a relay code with no UI interaction, gated on
+    /// `LANCER_RELAY_PAIR_CODE` (the 6-digit code printed by `lancerd pair`
+    /// on the host). Exists because Simulator HID taps are unreliable on
+    /// this iOS build (docs/test-runs/2026-07-02-device-hub-matrix-simulator-pass.md);
+    /// routes through the exact same `E2ERelayClient` + `RelayFleetHydration.addMachine`
+    /// path `RelayPairingSheet`'s `onPaired` callback uses — no shortcut
+    /// around the real E2E handshake. Idempotent no-op when unset.
+    public static func autoPairRelayIfRequested(into store: RelayFleetStore) async {
+        guard let code = ProcessInfo.processInfo.environment["LANCER_RELAY_PAIR_CODE"],
+              code.count == 6 else { return }
+        let client = E2ERelayClient(relayURL: RelaySettings.url(), pairingCode: code)
+        client.connect()
+        for _ in 0..<100 {
+            switch client.pairingState {
+            case .paired:
+                let record = RelayMachineRecord(id: client.machineID, displayName: "Relay host", pairedAt: .now)
+                RelayFleetHydration.addMachine(client: client, record: record, to: store)
+                return
+            case .pairingFailed:
+                client.disconnect()
+                return
+            case .unpaired, .waitingForPeer:
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
+        }
+        client.disconnect()
     }
 
     private static func seed(env: AppEnvironment) async {
