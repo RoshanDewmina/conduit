@@ -30,12 +30,17 @@ func globMatch(pattern, value string) bool {
 }
 
 func ruleMatches(rule Rule, req Request, riskLabel string, paths []string) bool {
-	// Check expiry — skip expired rules. An unparseable ExpiresAt must also
-	// skip the rule (fail-closed): a hand-edited policy file must never turn
-	// a time-boxed allow into a permanent one.
+	// Check expiry — skip expired rules. Fail-closed is effect-aware: an
+	// unparseable ExpiresAt drops an allow rule (a hand-edited file must never
+	// turn a time-boxed allow permanent) but keeps a deny rule active (a
+	// corrupt timestamp must never disable a deny).
 	if rule.ExpiresAt != "" {
 		exp, err := time.Parse(time.RFC3339, rule.ExpiresAt)
-		if err != nil || time.Now().After(exp) {
+		if err != nil {
+			if ParseEffect(rule.Effect) != EffectDeny {
+				return false
+			}
+		} else if time.Now().After(exp) {
 			return false
 		}
 	}

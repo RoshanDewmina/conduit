@@ -320,3 +320,25 @@ func TestPermissionMatrixPermitsNoClientGraceBands(t *testing.T) {
 		}
 	}
 }
+
+func TestPermissionMatrixInvalidExpiresAtKeepsDenyActive(t *testing.T) {
+	for _, vendor := range matrixVendors {
+		vendor := vendor
+		t.Run(vendor, func(t *testing.T) {
+			deny := Rule{
+				ID:        "matrix-deny-" + vendor,
+				Effect:    string(EffectDeny),
+				Agent:     vendor,
+				Tool:      "Bash",
+				Repo:      "/repo/**",
+				Match:     "npm test*",
+				ExpiresAt: "not-a-timestamp",
+			}
+			doc := Document{Default: string(EffectAllow), Rules: []Rule{deny}}
+			res := Evaluate(doc, matrixReq(vendor, "npm test", "/repo/app", "Bash"))
+			if res.Effect != EffectDeny {
+				t.Fatalf("corrupt ExpiresAt must not disable a deny: want deny, got %v", res.Effect)
+			}
+		})
+	}
+}
