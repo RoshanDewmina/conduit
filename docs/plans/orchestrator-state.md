@@ -18,6 +18,21 @@ as superseded. Re-queue lanes against the restored shell:
   the docs were wrong about which shell the owner meant. When a directive names a branch,
   attach a screenshot of what it looks like before acting on delete/keep decisions.
 
+## Dogfood wave 3 MERGED (2026-07-11 ~19:30): PRs #82–#85 — awaiting phone reconnect to install
+
+#82 model-argv (latent: ANY explicit-model dispatch instant-exited — picker exposed it) ·
+#83 relay-wedge (hung git on messageLoop; goroutine dump preserved; 10s CommandContext +
+async receipt snapshot) · #84 model picker Haiku default + cloud chip removed · #85 markdown
+HTML-conversion/block-boundaries + streaming pacer. Sim gate evidence:
+docs/test-runs/2026-07-11-sim-live-loop-gate/ (both addenda). Daemon deployed at 36dc6ac9-era
+tip on owner code 208937. **Device build SUCCEEDED but phone went unavailable at install time
+— install + launch it the moment the phone reconnects, then ping owner (review moment:
+Model chip → Haiku, algebra prompt markdown, streaming fluidity).**
+Backlog logged: dispatch-vs-repair race orphaning a running turn; pairing-sheet expiry UX.
+Feature queue: plan-limits collector (lfg MIT, docs/product/2026-07-11-lfg-study-and-usage-limits.md)
+· account switcher/hotswap (Orca) · in-app agent messaging + bug reports (needs owner spec
+confirm) · S27 lane (S27-0 done on branch) · cross-device continuation proof.
+
 ## Pairing friction SOLVED (2026-07-11 night): PRs #80 + #81 merged, prod-relay-proven
 
 Root causes (backend-log-verified): (a) daemon sat on relay-reaped sockets forever (no read
