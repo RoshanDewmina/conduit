@@ -1,5 +1,49 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ HANDOFF 2026-07-11 ~21:15 (session hop; owner directive: CHAT RELIABILITY + small issues = today's top priority)
+
+**Live state:** daemon deployed from master `d89a69e4`+#88 on owner code 208937, queue.json
+clean (2 ghost approvals hand-purged; class fix pending), 0 running turns. Owner phone has
+wave-4 build (master `027e6ef4`), pairing auto-restores (stable identity WORKS — proven ×6
+tonight). Sim identity pinned to dead codes — clean-reinstall sim before any sim gate.
+
+**CHAT RELIABILITY PUNCH LIST (owner: fix ALL today):**
+1. **Thread LIST shows stale "Working"** for turns the daemon marked failed (screenshot
+   21:10) — list statuses only refresh on thread open; need list-level refetch on
+   foreground/poll (ConversationSyncCoordinator / thread list store). NOT yet fixed or laned.
+2. Owner's send got 'machine didn't respond' twice tonight — (a) dispatch racing relay
+   re-key second (backlog), (b) handlers now off-loop (#87 fixed the big one). Re-verify send
+   works end-to-end on device after list fix.
+3. Lane P `fix/p1-repo-match` (repo normalizer + Add Repo dedup) — dispatched, verify+PR.
+4. Tap agent session → open conversation DIRECTLY (kill "Continue in Lancer" screen) — owner
+   explicitly annoyed. Not laned yet.
+5. Stale-approval class fix: drop pending approvals whose run is dead (same startup
+   reconciliation as #88 turns). Not laned yet.
+6. Transcript view slowness re-check post-#87.
+7. APNs lock-screen co-test NEVER RUN — owner was mid-session; ask for "closed" signal, fire
+   gated action, trace daemon→conduit-push logs (`gcloud logging read` project
+   roshan-agent-f1c2466d service conduit-push).
+
+**Landed tonight:** #80 keepalive · #81 stable identity · #82 model-argv · #83 git-wedge ·
+#84 picker/haiku · #85 markdown+pacer · #86 Agents section · #87 handlers off messageLoop ·
+#88 orphan-turn reconciliation. Sim-gate evidence: docs/test-runs/2026-07-11-sim-live-loop-gate/.
+
+**In-flight worktrees:** p2-proof-reel + p2-flight-recorder (Grok DONE, uncommitted — verify,
+commit, gate, PR) · p1-repo-match (Grok running) · s27-deep-integration (S27-0 committed,
+plan committed; NEXT: S27-2a Live-Activity restore) · fix-router-async + fix-orphan-turns
+(merged — REMOVE worktrees; NB fix-orphan-turns is nested INSIDE fix-router-async).
+
+**Operational gotchas:** cursor headless dies on big ~/.cursor/mcp.json → `mv` to
+.headless-hold during dispatch, ALWAYS restore · daemon redeploy = stop→mv→bootstrap, NEVER
+cp; restarts kill in-flight runs (now reconciled honestly, still avoid during owner runs) ·
+single relay slot: sim gates borrow via backup/restore of ~/.lancer/relay-pairing.json
+(phone auto-reconnects) · `lancerd pair` codes expire ~15min unconfirmed · TCC: owner may
+grant lancerd Full Disk Access; codesign lancerd queued for launch prep.
+
+**Feature queue (after punch list):** plan-limits collector (lfg study:
+docs/product/2026-07-11-lfg-study-and-usage-limits.md, MIT) → account switcher/hotswap →
+in-app messaging + bug reports (needs owner scope confirm) → S27 lane → cross-device proof.
+
 **Updated:** 2026-07-11 PM (update after every merge or blocker; this file is compaction insurance)
 **Phase:** 1 — dogfood MVP. Phase 0 CLOSED: PR #69 merged (`fd7b56d5`); stashes + checkpoint/backup refs dropped; w0a branch deleted.
 
