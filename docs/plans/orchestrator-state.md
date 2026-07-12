@@ -1,6 +1,41 @@
 # Orchestrator state — Fable swarm dashboard
 
-## ⚡ HANDOFF 2026-07-12 ~00:20 — PUNCH LIST FULLY CLEARED (PRs 89–94 merged); device build ready, phone offline
+## ⚡ HANDOFF 2026-07-12 ~09:00 — OWNER P0: duplicate command-center rows in Workspaces (3-lane fix in flight)
+
+**Owner P0 (screenshot + owner's words "Multiple instances of command-center — make sure we can
+only have one"):** Workspaces shows THREE command-center rows plus a "roshansilva" row. Confirmed
+against `~/.lancer/conversations.sqlite`: cwd buckets split across `/Users/roshansilva/Documents/command-center`
+(18), bare relative `command-center` (3), a `.claude/worktrees/hungry-ritchie-389bd0` subpath (1),
+plus `/Users/roshansilva` (39), `/tmp` (8), empty string (1). Two independent root causes, both
+audit-traced with file:line:
+- **(a) app-side:** `WorkspaceRepoCatalog.swift` `deriveRepos`/`matchingRepoCwd` only buckets
+  against ADDED repos — never absorbs worktree/relative/home-dir cwds into one root.
+- **(b) daemon-side:** `conversation_rpc.go:122` (`conversationsAppend`) and
+  `conversation_store.go` (`attachObservedSession`) persist relative/empty cwd BEFORE
+  `resolveDispatchCWD` validates; `server.go:1555-1557` leaves `ApprovalEvent.RunID` empty for
+  hook events with no in-memory run, so `restoreQueue` can never prune them.
+
+**Three lanes, disjoint write-sets — specs rescued to
+`docs/plans/2026-07-12-p1-repo-cwd-hygiene-specs.md` (commit `90c005ba`):**
+- **Lane T** `fix/p1-repo-bucketing` (ui) — IMPLEMENTED by Cursor grok-4.5-xhigh in
+  `.worktrees/p1-repo-bucketing` (6 files, +363/−70), UNGATED, UNCOMMITTED. Single
+  `bucketKey(forCwd:)` everywhere + 6 smaller audited fixes. Gate: swift build/test →
+  app-target build_sim → sim shows exactly ONE command-center row (count 22) → review → owner eyeball → PR.
+- **Lane V** `fix/p1-chat-loop-robustness` (ui) — IMPLEMENTED same way in
+  `.worktrees/p1-chat-loop` (10 files, +297/−95), UNGATED, UNCOMMITTED. ShellLiveBridge reset on
+  dismiss (close-mid-run wedge P0), Retry re-dispatch, reopened-thread real transcript,
+  no fake `.completed`, fractional timestamps, receipt-decode logging. Same gate; owner eyeball batched with T.
+- **Lane W** `fix/p1-ledger-cwd-hygiene` (sensitive-adjacent: approval-ingest + RPC surface) —
+  NOT YET DISPATCHED. Validate cwd via `resolveDispatchCWD` before persist; reject
+  relative/empty in `attachObservedSession`; best-effort RunID backfill (never invent);
+  `deriveTitle` wrap. Gate: go test/vet from daemon/lancerd + **Fable full-diff review**.
+
+**Then:** ONE device build with all three; update STATUS_LEDGER + this file; verify one
+command-center row on device/sim. Only then the owner-asks backlog (#22–#28) — this is a
+same-phase P0 interrupt, not a pivot. **Rule reinforced:** commit lane output (even WIP) as soon
+as its diff is stable — quota cutoffs stranded these worktrees once already.
+
+## PREVIOUS HANDOFF 2026-07-12 ~00:20 — PUNCH LIST FULLY CLEARED (PRs 89–94 merged); device build ready, phone offline
 
 **#94 merged** (Agents row → conversation directly; interstitial deleted; sim-gated with the
 live orchestrator session's own transcript). CI note: the app-target job on #94 failed ONLY on
