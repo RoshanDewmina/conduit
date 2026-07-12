@@ -95,12 +95,23 @@ func TestE2EClientReconnectsOnSilentlyDroppedConnection(t *testing.T) {
 	}
 }
 
-// TestE2EClientGivesUpAfterRepeatedExpiredCodeRejections is the regression
-// proof for requirement 3: a pairing code the relay keeps rejecting as
-// "expired unconfirmed" must not be redialed forever with no operator-visible
-// signal. After e2eMaxExpiredCodeRejections consecutive rejections the client
-// must stop retrying (giveUp closes stopCh) rather than looping.
-func TestE2EClientGivesUpAfterRepeatedExpiredCodeRejections(t *testing.T) {
+// TestE2EClientRemintsOnExpiredUnconfirmedCode is the regression proof for
+// REL-1 B: a pairing code the relay rejects as "expired unconfirmed" — one
+// that never completed its first key exchange — must not be redialed
+// forever with no operator-visible signal, AND must not just give up either.
+// The client auto-re-mints a fresh code (writing relay-pairing.json) and
+// stops itself; the resident's relayPairWatcher is what reconnects on the
+// new code (not exercised here — see e2e_router_test.go's watcher tests).
+//
+// LANCER_STATE_DIR MUST be isolated: remintPairingCode() calls
+// writeRelayPairing(), and this repo's daemon/lancerd tests run on a
+// developer machine that may have a REAL resident lancerd watching the REAL
+// ~/.lancer/relay-pairing.json — writing there would orphan a live paired
+// phone.
+func TestE2EClientRemintsOnExpiredUnconfirmedCode(t *testing.T) {
+	dir := withStateDir(t)
+	t.Setenv("LANCER_STATE_DIR", dir)
+
 	var rejectCount int32
 
 	mux := http.NewServeMux()
@@ -111,6 +122,7 @@ func TestE2EClientGivesUpAfterRepeatedExpiredCodeRejections(t *testing.T) {
 			atomic.AddInt32(&rejectCount, 1)
 			_ = sendJSON(conn, map[string]any{
 				"type":    "error",
+				"code":    "code_expired",
 				"message": "pairing code expired, generate a new one",
 			})
 		}).ServeHTTP(w, r)
@@ -120,7 +132,8 @@ func TestE2EClientGivesUpAfterRepeatedExpiredCodeRejections(t *testing.T) {
 	defer srv.Close()
 	relayURL := "ws" + strings.TrimPrefix(srv.URL, "http")
 
-	client := newE2ERelayClient(relayURL, "111111", nil)
+	oldCode := "111111"
+	client := newE2ERelayClient(relayURL, oldCode, nil)
 	if client == nil {
 		t.Fatal("newE2ERelayClient returned nil")
 	}
@@ -129,17 +142,23 @@ func TestE2EClientGivesUpAfterRepeatedExpiredCodeRejections(t *testing.T) {
 
 	select {
 	case <-client.stopCh:
-		// giveUp fired — the client stopped redialing on its own.
+		// remintPairingCode's giveUp fired — the dead client stopped itself.
 	case <-time.After(5 * time.Second):
-		t.Fatalf("client never gave up after repeated expired-code rejections (rejections observed: %d)",
+		t.Fatalf("client never stopped after an expired-unconfirmed rejection (rejections observed: %d)",
 			atomic.LoadInt32(&rejectCount))
 	}
 
-	got := atomic.LoadInt32(&rejectCount)
-	// The client must have retried a BOUNDED number of times (== the
-	// configured max), not zero and not unboundedly many.
-	if got != int32(e2eMaxExpiredCodeRejections) {
-		t.Fatalf("relay observed %d rejected connection attempts, want exactly %d (bounded retry)",
-			got, e2eMaxExpiredCodeRejections)
+	// Never confirmed on this code, so it must have re-minted on the FIRST
+	// rejection, not retried e2eMaxExpiredCodeRejections times first.
+	if got := atomic.LoadInt32(&rejectCount); got != 1 {
+		t.Fatalf("relay observed %d rejected connection attempts, want exactly 1 (immediate remint)", got)
+	}
+
+	cfg, err := readRelayPairing()
+	if err != nil {
+		t.Fatalf("readRelayPairing after remint: %v", err)
+	}
+	if cfg.Code == oldCode {
+		t.Fatalf("relay-pairing.json still has the dead code %s — remint did not run", oldCode)
 	}
 }

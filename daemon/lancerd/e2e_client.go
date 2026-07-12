@@ -46,6 +46,14 @@ type e2eRelayClient struct {
 	// code fails closed (giveUp) instead of retrying forever silently.
 	expiredCode *expiredCodeTracker
 
+	// everConfirmed is set once, the first time this client observes
+	// peer_joined, and never cleared again (unlike paired, which drops on
+	// every disconnect). It is the daemon-side signal that this pairing code
+	// completed at least one key exchange — the strictest available proxy
+	// for the relay's own PairedAt, used to decide whether a code_expired
+	// rejection is safe to auto-remint (see decideExpiryAction).
+	everConfirmed bool
+
 	// sendSeq/recv track the per-direction replay-resistance sequence for the
 	// current pairing generation (see seqFrame/replaySequencer in
 	// e2e_crypto.go). Both reset on every new peer_joined session key.
@@ -125,6 +133,37 @@ func (c *e2eRelayClient) giveUp(reason string) {
 		c.closeAndHalt()
 		log.Printf("e2e: giving up on pairing code %s — %s", c.pairingCode, reason)
 	})
+}
+
+// remintPairingCode generates a fresh pairing code + X25519 keypair exactly
+// as `lancerd pair`/beginPairing do, persists it to relay-pairing.json, and
+// stops this client. This client's own pairingCode is provably dead (the
+// relay just rejected it as expired-unconfirmed) — reconnecting to it would
+// only repeat the same rejection forever. The resident's relayPairWatcher
+// picks up the file change within 5s and starts a new client on the new
+// code; see startRelayWatch in resident.go.
+func (c *e2eRelayClient) remintPairingCode() {
+	code, err := generatePairingCode()
+	if err != nil {
+		c.giveUp(fmt.Sprintf("pairing code expired unconfirmed, re-mint failed: %v", err))
+		return
+	}
+	priv, pub, err := generateKeyPair()
+	if err != nil {
+		c.giveUp(fmt.Sprintf("pairing code expired unconfirmed, re-mint failed: %v", err))
+		return
+	}
+	if err := writeRelayPairing(&relayPairConfig{
+		RelayURL:   c.relayURL,
+		Code:       code,
+		PrivateKey: base64URLEncode(priv[:]),
+		PublicKey:  base64URLEncode(pub[:]),
+	}); err != nil {
+		c.giveUp(fmt.Sprintf("pairing code expired unconfirmed, re-mint failed: %v", err))
+		return
+	}
+	log.Printf("e2e: pairing code expired — re-minted %s", code)
+	c.giveUp(fmt.Sprintf("pairing code expired unconfirmed — re-minted %s", code))
 }
 
 func (c *e2eRelayClient) closeAndHalt() {
@@ -251,6 +290,7 @@ func (c *e2eRelayClient) messageLoop() {
 			Payload string `json:"payload,omitempty"`
 			PeerKey string `json:"peerPublicKey,omitempty"`
 			Message string `json:"message,omitempty"`
+			Code    string `json:"code,omitempty"`
 		}
 
 		if err := json.Unmarshal(data, &msg); err != nil {
@@ -271,16 +311,29 @@ func (c *e2eRelayClient) messageLoop() {
 
 			// "expired unconfirmed" (see push-backend's pairConfirmWindow) means
 			// this code can never succeed again without a fresh pairing — redialing
-			// it is a silent infinite loop, not recovery. Bound the retries and
-			// surface an actionable line instead of looping forever.
-			if strings.Contains(strings.ToLower(msg.Message), "expired") {
-				streak, exceeded := c.expiredCode.record()
-				if exceeded {
-					c.giveUp(fmt.Sprintf(
-						"pairing code expired unconfirmed after %d rejected attempts — run 'lancerd pair' again",
-						streak,
-					))
+			// it is a silent infinite loop, not recovery. Prefer the structured
+			// "code" field (additive on the backend); fall back to the substring
+			// match for an older backend that only sends "message".
+			isExpired := msg.Code == "code_expired" ||
+				(msg.Code == "" && strings.Contains(strings.ToLower(msg.Message), "expired"))
+			if isExpired {
+				c.mu.Lock()
+				everConfirmed := c.everConfirmed
+				c.mu.Unlock()
+
+				switch decideExpiryAction(everConfirmed) {
+				case expiryActionRemint:
+					c.remintPairingCode()
 					return
+				case expiryActionGiveUp:
+					streak, exceeded := c.expiredCode.record()
+					if exceeded {
+						c.giveUp(fmt.Sprintf(
+							"pairing code expired after %d rejected attempts on an already-confirmed pairing — run 'lancerd pair' again",
+							streak,
+						))
+						return
+					}
 				}
 			}
 
@@ -301,6 +354,7 @@ func (c *e2eRelayClient) messageLoop() {
 			}
 			c.sessionKey = key
 			c.paired = true
+			c.everConfirmed = true
 			c.sendSeq = 0
 			c.mu.Unlock()
 			c.recv.reset()

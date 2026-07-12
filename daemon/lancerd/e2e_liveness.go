@@ -74,3 +74,30 @@ func (t *expiredCodeTracker) record() (streak int, exceeded bool) {
 func (t *expiredCodeTracker) reset() {
 	t.streak = 0
 }
+
+// expiryAction is what the daemon does in response to a code_expired
+// rejection from the relay.
+type expiryAction int
+
+const (
+	// expiryActionRemint generates a fresh pairing code and reconnects on it.
+	expiryActionRemint expiryAction = iota
+	// expiryActionGiveUp stops the client and surfaces a log line instead.
+	expiryActionGiveUp
+)
+
+// decideExpiryAction chooses remint vs giveUp for a code_expired rejection.
+// A code that never completed its first key exchange (everConfirmed==false)
+// is provably dead — no phone ever derived a session key on it — so
+// re-minting cannot orphan a paired phone. everConfirmed==true means this
+// code DID complete an exchange at least once; the relay's own PairedAt
+// check already guarantees a paired code never expires, so seeing
+// code_expired here would mean something is misclassified upstream — the
+// safe daemon-side response is to give up rather than silently replace a
+// code a phone may still be legitimately using.
+func decideExpiryAction(everConfirmed bool) expiryAction {
+	if everConfirmed {
+		return expiryActionGiveUp
+	}
+	return expiryActionRemint
+}
