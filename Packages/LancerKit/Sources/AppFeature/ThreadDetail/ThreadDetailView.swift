@@ -282,6 +282,7 @@ struct ThreadDetailView: View {
     private func loadReviewDiffs() async {
         let pending = turns.filter { $0.status != .failed && turnDiffByTurnID[$0.id] == nil }
         var next = turnDiffByTurnID
+        let source = reviewDataSource
         await withTaskGroup(of: (String, RepoDiffSummary?).self) { group in
             let cap = 4
             var iterator = pending.makeIterator()
@@ -291,7 +292,6 @@ struct ThreadDetailView: View {
                     inFlight += 1
                     let turnID = turn.id
                     let conversationID = thread.id
-                    let source = reviewDataSource
                     group.addTask {
                         let diff = try? await source.turnDiff(
                             conversationID: conversationID,

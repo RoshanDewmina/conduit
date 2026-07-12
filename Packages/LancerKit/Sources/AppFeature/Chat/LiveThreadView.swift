@@ -504,6 +504,7 @@ public struct LiveThreadView: View {
             $0.status != .failed && turnDiffByTurnID[$0.id] == nil
         }
         var next = turnDiffByTurnID
+        let source = reviewDataSource
         await withTaskGroup(of: (String, RepoDiffSummary?).self) { group in
             let cap = 4
             var iterator = pending.makeIterator()
@@ -512,7 +513,6 @@ public struct LiveThreadView: View {
                 while inFlight < cap, let turn = iterator.next() {
                     inFlight += 1
                     let turnID = turn.id
-                    let source = reviewDataSource
                     group.addTask {
                         let diff = try? await source.turnDiff(
                             conversationID: conversationID,
