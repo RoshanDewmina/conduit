@@ -1,6 +1,28 @@
 # Orchestrator state — Fable swarm dashboard
 
-## ⚡ HANDOFF 2026-07-12 ~00:00 (punch list CLEARED except direct-open lane; PRs 89–93 merged)
+## ⚡ HANDOFF 2026-07-12 ~00:20 — PUNCH LIST FULLY CLEARED (PRs 89–94 merged); device build ready, phone offline
+
+**#94 merged** (Agents row → conversation directly; interstitial deleted; sim-gated with the
+live orchestrator session's own transcript). CI note: the app-target job on #94 failed ONLY on
+the known-flaky `waitForAnyConnected` test (deflaked once in #61; ConnectionStateStore untouched
+by the diff; local app-target build + full suite green) — flake, not regression; deflake again
+if it repeats. **Owner relay pairing RESTORED** (code 208937, daemon hot-reloaded + reconnected;
+phone auto-reconnects via stable identity — no code needed). ~/.cursor/mcp.json restored ✓.
+**Device build from master `c49ec4f5` SUCCEEDED; phone disconnected — reconnect monitor armed;
+install + launch on reconnect, then ping owner.** Owner review list: ① thread badges clear on
+foreground ② receipt card + Proof Reel after a run ③ Flight Recorder rows in thread detail
+④ Agents row opens the chat directly. Remaining owner-gated: APNs lock-screen co-test ·
+emergency-stop verify · Cursor-dashboard plan-usage check (ledger #2).
+
+**Routing confirmation (owner check 2026-07-12):** all five punch items were Cursor-dispatched
+(lanes Q/S/R = grok-4.5-xhigh); Fable edits were confined to root-cause one-liners found mid-gate
+(#90 optional field + verbatim-payload test; #93 hydration-wait, mirroring an existing pattern)
+plus docs. Next parallel lanes per owner-asks ledger (~/Downloads/lancer-owner-asks-ledger-2026-07-11.md):
+#22 plan-limits collector (⚠️ needs owner call: skip Cursor per-device for V1?) · #23 account
+switcher (sensitive → Sonnet) · #25 bug reporting · #26 artifact rendering · #27 S27 lane ·
+#28 cross-device proof — disjoint write-sets, dispatch after owner sees the device build.
+
+## PREVIOUS 2026-07-12 ~00:00 (punch list CLEARED except direct-open lane; PRs 89–93 merged)
 
 **Live state:** daemon running lane-Q-era binary == master content (list enrichment + approval
 prune live; backup at `~/.lancer/bin/lancerd.bak-pre-p93`). **Owner phone is ORPHANED** — sim
