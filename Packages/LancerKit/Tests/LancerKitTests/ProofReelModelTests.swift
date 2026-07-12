@@ -215,6 +215,28 @@ import LancerCore
         #expect(ProofReelModel.decodeReceipt(from: nonReceipt) == nil)
     }
 
+    @Test("decodes a real daemon lancer.proof/v0 payload with no conversationId")
+    func decodesRealDaemonPayload() {
+        // Verbatim daemon output (receipt.go marks conversationId omitempty) —
+        // sim live-loop gate 2026-07-11 caught the required-field decode failure.
+        let payload = """
+        {"schema":"lancer.proof/v0","runId":"f7abbf2b-8ca7-403c-8b3e-f948b5232425",\
+        "agent":"claude","model":"haiku","startedAt":"2026-07-12T02:58:50Z",\
+        "endedAt":"2026-07-12T02:58:54Z","exitCode":0,"status":"completed",\
+        "commands":null,"filesTouched":null,"tests":{"ran":false,"passed":0,"failed":0},\
+        "criteria":null,"git":{"startRef":"3ee418542fdd113cff645de6c07eb1c621cb32ca",\
+        "endRef":"3ee418542fdd113cff645de6c07eb1c621cb32ca","dirtyAtStart":true},\
+        "confidence":{"commands":"complete","files":"complete","tests":"bestEffort"},\
+        "resume":{"agent":"claude","vendorSessionId":"379f9b3a-a5bb-4a93-b9d0-2b5fd4a6f699"},\
+        "answersReserved":null}
+        """
+        let receipt = ProofReelModel.decodeReceiptPayload(payload)
+        #expect(receipt != nil)
+        #expect(receipt?.conversationId == nil)
+        #expect(receipt?.runId == "f7abbf2b-8ca7-403c-8b3e-f948b5232425")
+        #expect(receipt?.status == "completed")
+    }
+
     @Test("durationText and shortGitRef format observed metadata")
     func formattingHelpers() {
         #expect(

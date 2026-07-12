@@ -5,7 +5,9 @@ import Foundation
 public struct ProofReceipt: Codable, Sendable, Hashable {
     public let schema: String
     public let runId: String
-    public let conversationId: String
+    /// Omitted by the daemon (`omitempty`) for chat dispatches — optional so
+    /// real `lancer.proof/v0` payloads decode (sim gate 2026-07-11 finding).
+    public let conversationId: String?
     public let agent: String
     public let model: String?
     public let startedAt: String?
@@ -136,7 +138,7 @@ public struct ProofReceipt: Codable, Sendable, Hashable {
     public init(
         schema: String = "lancer.proof/v0",
         runId: String,
-        conversationId: String,
+        conversationId: String? = nil,
         agent: String,
         model: String? = nil,
         startedAt: String? = nil,
