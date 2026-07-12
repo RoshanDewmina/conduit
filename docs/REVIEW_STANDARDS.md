@@ -81,3 +81,9 @@ Emit structured verdict JSON — one finding per entry:
   files you expect as *modified*, not the whole tree as untracked — a wiped index silently
   produces an empty-tree commit that records deletion of every file. `git cat-file -p HEAD`
   tree `4b825dc642cb...` is the empty-tree signature.
+
+- 2026-07-12 (lane W full-diff review): **`resolveDispatchCWD` is Stat-only — it does NOT reject
+  relative paths**; a relative cwd that happens to exist under the daemon process's working
+  directory passes and persists verbatim. Any write-time cwd validation needs an explicit
+  `filepath.IsAbs` guard, and its test must create the relative dir + `t.Chdir` so the guard
+  (not accidental Stat failure) is what's proven.
