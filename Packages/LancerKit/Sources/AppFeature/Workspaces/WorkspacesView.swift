@@ -8,6 +8,7 @@ public struct WorkspacesView: View {
     @Environment(RelayFleetStore.self) private var relayFleetStore
     @Environment(WorkspaceDataStore.self) private var workspaceData
     @Environment(ShellLiveBridge.self) private var shellLiveBridge
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isProfilePresented = false
     @State private var isComposerPresented = false
     @State private var isAddRepoPresented = false
@@ -128,6 +129,10 @@ public struct WorkspacesView: View {
         }
         .task {
             await workspaceData.refresh()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            Task { await workspaceData.refresh() }
         }
         .sheet(isPresented: $isProfilePresented) {
             ProfileView()

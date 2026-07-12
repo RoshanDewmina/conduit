@@ -434,6 +434,11 @@ public final class WorkspaceDataStore {
     public let addedRepos: AddedRepoStore
 
     private let chatRepo: ChatConversationRepository
+    /// Optional host list sync — when any mirrored last-turn is still
+    /// `.running`, `refresh()` awaits this before re-reading local rows so
+    /// stale "Working" badges clear after daemon orphan reconciliation.
+    /// Set from `AppRoot`; nil / failure → list still renders local data.
+    public var syncRunningStatuses: (() async -> Void)?
 
     public init(chatRepo: ChatConversationRepository, addedRepos: AddedRepoStore = AddedRepoStore()) {
         self.chatRepo = chatRepo
@@ -448,6 +453,11 @@ public final class WorkspaceDataStore {
     }
 
     public func refresh() async {
+        if await hasLocalRunningLastTurn() {
+            if let syncRunningStatuses {
+                await syncRunningStatuses()
+            }
+        }
         let recent = (try? await chatRepo.recent(limit: 200)) ?? []
         var turns: [String: ChatTurn] = [:]
         for conversation in recent {
@@ -457,6 +467,17 @@ public final class WorkspaceDataStore {
         }
         conversations = recent
         lastTurnByConversationID = turns
+    }
+
+    private func hasLocalRunningLastTurn() async -> Bool {
+        let recent = (try? await chatRepo.recent(limit: 200)) ?? []
+        for conversation in recent {
+            if let last = try? await chatRepo.turns(conversationID: conversation.id).last,
+               last.status == .running {
+                return true
+            }
+        }
+        return false
     }
 
     public func search(_ query: String) async -> [ThreadListItem] {
