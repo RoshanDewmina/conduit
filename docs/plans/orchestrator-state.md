@@ -14,7 +14,9 @@ tonight). Sim identity pinned to dead codes — clean-reinstall sim before any s
 2. Owner's send got 'machine didn't respond' twice tonight — (a) dispatch racing relay
    re-key second (backlog), (b) handlers now off-loop (#87 fixed the big one). Re-verify send
    works end-to-end on device after list fix.
-3. Lane P `fix/p1-repo-match` (repo normalizer + Add Repo dedup) — dispatched, verify+PR.
+3. Lane P `fix/p1-repo-match` — DONE, PR #89 open (tests green; needs sim gate before
+   merge). ⚠️ worktree is NESTED at .worktrees/fix-router-async/.worktrees/fix-orphan-turns/
+   .worktrees/p1-repo-match (cd bug); clean up all three nested worktrees after merging.
 4. Tap agent session → open conversation DIRECTLY (kill "Continue in Lancer" screen) — owner
    explicitly annoyed. Not laned yet.
 5. Stale-approval class fix: drop pending approvals whose run is dead (same startup
