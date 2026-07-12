@@ -287,6 +287,12 @@ type conversationSummary struct {
 	LastActivityAt string  `json:"lastActivityAt"`
 	LastSeq        int64   `json:"lastSeq"`
 	ArchivedAt     string  `json:"archivedAt,omitempty"`
+	// LastTurnID / LastTurnStatus are additive list-only fields so the phone
+	// thread list can clear a stale "Working" badge after the daemon marks
+	// an orphaned turn failed (or a turn completes) without opening the
+	// thread. Omitted when the conversation has no turns yet.
+	LastTurnID     string `json:"lastTurnID,omitempty"`
+	LastTurnStatus string `json:"lastTurnStatus,omitempty"`
 }
 
 type conversationTurn struct {
@@ -372,8 +378,13 @@ func (s *conversationStore) list(limit int, cursor string, includeArchived bool)
 		hasCursor = true
 	}
 
+	// Correlated subqueries attach the latest turn (max ordinal) so list
+	// callers can refresh per-turn status without a full fetch. Additive —
+	// existing columns/order of conversations are unchanged.
 	query := `SELECT rowid, id, title, provider, agent_id, host_id, host_name, cwd, model,
-		budget_usd, state, source, created_at, updated_at, last_activity_at, last_seq, archived_at
+		budget_usd, state, source, created_at, updated_at, last_activity_at, last_seq, archived_at,
+		(SELECT id FROM conversation_turns WHERE conversation_id = conversations.id ORDER BY ordinal DESC LIMIT 1),
+		(SELECT status FROM conversation_turns WHERE conversation_id = conversations.id ORDER BY ordinal DESC LIMIT 1)
 		FROM conversations WHERE deleted_at IS NULL`
 	args := []any{}
 	if !includeArchived {
@@ -399,21 +410,26 @@ func (s *conversationStore) list(limit int, cursor string, includeArchived bool)
 	var out []row
 	for rows.Next() {
 		var (
-			r         row
-			hostID    sql.NullString
-			model     sql.NullString
-			budget    sql.NullFloat64
-			archived  sql.NullString
+			r              row
+			hostID         sql.NullString
+			model          sql.NullString
+			budget         sql.NullFloat64
+			archived       sql.NullString
+			lastTurnID     sql.NullString
+			lastTurnStatus sql.NullString
 		)
 		if err := rows.Scan(&r.rowid, &r.conv.ID, &r.conv.Title, &r.conv.Provider, &r.conv.AgentID,
 			&hostID, &r.conv.HostName, &r.conv.CWD, &model, &budget, &r.conv.State, &r.conv.Source,
-			&r.conv.CreatedAt, &r.conv.UpdatedAt, &r.conv.LastActivityAt, &r.conv.LastSeq, &archived); err != nil {
+			&r.conv.CreatedAt, &r.conv.UpdatedAt, &r.conv.LastActivityAt, &r.conv.LastSeq, &archived,
+			&lastTurnID, &lastTurnStatus); err != nil {
 			return conversationListResult{}, err
 		}
 		r.conv.HostID = hostID.String
 		r.conv.Model = model.String
 		r.conv.BudgetUSD = budget.Float64
 		r.conv.ArchivedAt = archived.String
+		r.conv.LastTurnID = lastTurnID.String
+		r.conv.LastTurnStatus = lastTurnStatus.String
 		out = append(out, r)
 	}
 	if err := rows.Err(); err != nil {
