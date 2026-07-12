@@ -185,6 +185,7 @@ public enum AttachmentUploader {
         }
     }
 
+    @MainActor
     public static func upload(
         draft: AttachmentDraft,
         conversationId: String?,

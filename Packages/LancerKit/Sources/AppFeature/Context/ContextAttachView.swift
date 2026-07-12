@@ -371,11 +371,6 @@ enum ContextAddKind {
     var showsChevron: Bool {
         self == .screenshots
     }
-
-    static let photos = ContextAddKind.photos
-    static let screenshots = ContextAddKind.screenshots
-    static let camera = ContextAddKind.camera
-    static let files = ContextAddKind.files
 }
 
 struct ContextAddRow: View {
