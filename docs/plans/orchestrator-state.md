@@ -1,6 +1,37 @@
 # Orchestrator state — Fable swarm dashboard
 
-## ⚡ HANDOFF 2026-07-12 ~16:30 — session 3 end state (context full)
+## ⚡ SESSION 4 IN FLIGHT 2026-07-12 ~17:20 — rescue done, REL-1 dispatched
+
+**Merged this session:** #105 (scroll arrow + proof chips + fetch-on-open), #106 (G1 turn-diff
+RPCs), #108 (G3 live status pill — review approve after 4 fixes; dispatch.go additive-only
+verified by Fable, no argv surface touched).
+
+**Open PRs:** #107 G2 review sheet (review approve after 9 fixes; CI had to be re-kicked with an
+empty commit — no run ever started on the original push). #109 lane H attachments (owner P0;
+full review trail on the PR: Fable daemon-surface review fixed lifetime→in-flight cap; grok
+review 3 blocking fixed; re-review caught SSH-first routing landing files on the WRONG host vs
+the prompt's relay machine — fixed to relay-first + NewChat parity; app-target build_sim caught
+2 iOS-only compile errors invisible to swift build).
+
+**REL-1 (tester blocker #1):** spec written by Fable —
+`docs/plans/2026-07-12-rel1-relay-robustness-spec.md` in `.worktrees/rel1-relay`
+(feat/rel1-relay-robustness). Sonnet implementing all 4 groups (backend structured error
+frames + expiresAt · daemon auto re-mint on dead unconfirmed code · phone .codeExpired stop-churn
++ TTL countdown · first-send readiness gate + single retry). Fable full-diff review REQUIRED
+before PR (relay protocol = sensitive).
+
+**Still owed this session:** merge #107/#109 → sim feature-drive on integrated master
+(attachments flow + status pill; owner done-bar) → device build → ask owner: did fetch-on-open
+pull the 35-turn "Fix triple…" conversation on his phone? (If not: debug
+refreshThreadFromHost/relayFetchConversation.)
+
+**New gotchas:** RelayMachineMigrationTests collide across CONCURRENT swift test runs in
+different worktrees (shared macOS Keychain) — run LancerKit suites serially, one worktree at a
+time · xcodegen generate + per-worktree XcodeBuildMCP defaults works fine for app-target gating
+worktrees (~100s cold) · a PR can silently get NO CI run on first push — check `gh run list
+--branch` and re-kick with an empty commit.
+
+## PREVIOUS HANDOFF 2026-07-12 ~16:30 — session 3 end state (context full)
 
 **Merged today:** #95–#104 (cwd/bucketing P0 ×4, backfill, long-transcript daemon+iOS, search-tap,
 structured transcripts Z1, tool chips Z2). **OPEN: PR #105** (fix/scroll-arrow-hit-target) —
