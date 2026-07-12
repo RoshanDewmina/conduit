@@ -128,10 +128,20 @@ public struct ThreadListView: View {
         .sheet(isPresented: $isComposerPresented) {
             NewChatComposerView(
                 initialRepo: workspaceCwdRepo,
+                // Inside a specific repo the composer is pinned to it —
+                // never silently substitute another repo (owner report).
+                lockRepo: isInsideSpecificRepo,
                 onSend: handleSend
             )
         }
         .liveThreadPresentation($activeLiveThread)
+    }
+
+    private var isInsideSpecificRepo: Bool {
+        if case .repo(let repo) = workspace {
+            return WorkspaceRepoCatalog.isAbsoluteSendTarget(repo.cwd)
+        }
+        return false
     }
 
     private var workspaceCwdRepo: WorkspaceRepo? {
@@ -142,7 +152,7 @@ public struct ThreadListView: View {
             if WorkspaceRepoCatalog.isAbsoluteSendTarget(repo.cwd) {
                 return repo
             }
-            return workspaceData.repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) }
+            return nil
         }
     }
 

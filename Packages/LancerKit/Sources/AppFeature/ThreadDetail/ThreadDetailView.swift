@@ -8,6 +8,7 @@ import PersistenceKit
 /// send into the thread's real cwd.
 struct ThreadDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(WorkspaceDataStore.self) private var workspaceData
     @State private var isFollowUpPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
     @State private var turns: [ChatTurn] = []
@@ -95,49 +96,45 @@ struct ThreadDetailView: View {
                                     VStack(alignment: .leading, spacing: 12) {
                                         ChatUserBubble(text: turn.prompt)
                                         threadAssistant(turn)
-
-                                        NavigationLink {
-                                            FlightRecorderView(
-                                                conversationID: thread.id,
-                                                turnID: turn.id,
-                                                prompt: turn.prompt,
-                                                runID: turn.runID
-                                            )
-                                        } label: {
-                                            flightRecorderRow(turn)
-                                        }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
 
+                            // Tail marker doubles as the bar-clearance spacer
+                            // (96pt): anchoring it .bottom lands the last
+                            // message fully above the ZStack-overlaid follow-up
+                            // bar, and its visibility drives the jump arrow
+                            // (geometry math went stale under keyboard resize).
                             Color.clear
-                                .frame(height: 1)
+                                .frame(height: 96)
                                 .id(Self.scrollTailID)
+                                .onScrollVisibilityChange(threshold: 0.1) { visible in
+                                    withAnimation { showScrollToBottom = !visible }
+                                }
                         }
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 96)
                     }
-                    .onScrollGeometryChange(for: Double.self) { geometry in
-                        ChatScrollPolicy.distanceFromBottom(
-                            contentHeight: geometry.contentSize.height,
-                            viewportHeight: geometry.containerSize.height,
-                            contentOffsetY: geometry.contentOffset.y
-                        )
-                    } action: { _, distance in
-                        showScrollToBottom = ChatScrollPolicy.shouldShowJumpToLatest(
-                            distanceFromBottom: distance
-                        )
-                    }
-                    .overlay(alignment: .bottomTrailing) {
+                    .overlay(alignment: .bottom) {
                         if showScrollToBottom {
                             ChatScrollToBottomButton {
-                                withAnimation {
-                                    proxy.scrollTo(Self.scrollTailID, anchor: .bottom)
+                                // Two hops: land on the last lazy item to force
+                                // tail layout, then anchor the true tail marker
+                                // (direct marker scrollTo no-ops from far away;
+                                // single-hop leaves the tail under the bar —
+                                // both sim-reproduced).
+                                if let last = visibleTurns.last {
+                                    proxy.scrollTo(last.id, anchor: .bottom)
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                                    withAnimation {
+                                        proxy.scrollTo(Self.scrollTailID, anchor: .bottom)
+                                    }
                                 }
                             }
-                            .padding(.trailing, 20)
-                            .padding(.bottom, 88)
+                            // This view's root ZStack overlays the follow-up bar
+                            // on the scroll bottom; 108 clears it or the bar wins
+                            // the hit test (sim-reproduced twice).
+                            .padding(.bottom, 108)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                     }
@@ -162,11 +159,12 @@ struct ThreadDetailView: View {
                 initialRepo: thread.cwd.isEmpty
                     ? nil
                     : WorkspaceRepo(
-                        name: thread.repoName ?? WorkspaceRepoCatalog.displayName(forCwd: thread.cwd),
+                        name: WorkspaceRepoCatalog.displayName(forCwd: thread.cwd),
                         cwd: thread.cwd,
                         threadCount: 0,
                         isUserAdded: false
                     ),
+                lockRepo: true,
                 onSend: handleSend
             )
         }
@@ -201,41 +199,32 @@ struct ThreadDetailView: View {
                 let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
                 ChatMarkdownBody(markdown: body)
             }
-        }
-    }
-
-    private func flightRecorderRow(_ turn: ChatTurn) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "waveform.path.ecg")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Flight Recorder")
-                    .font(.system(size: 15, weight: .medium))
-                Text(turn.prompt)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            // Same proof chip as the live view — reopened threads previously
+            // dropped receipts entirely (owner report 2026-07-12).
+            if let receipt = receiptForTurn(turn) {
+                ReceiptChipRow(receipt: receipt)
             }
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .accessibilityLabel(Text("Flight Recorder for turn \(turn.ordinal + 1)"))
     }
+
+    private func receiptForTurn(_ turn: ChatTurn) -> ProofReceipt? {
+        guard let event = (eventsByTurnID[turn.id] ?? []).last(where: { $0.kind == "receipt" }),
+              let payload = event.payloadJSON?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(ProofReceipt.self, from: payload)
+    }
+
 
     private func loadTurns() async {
         guard thread.id != "preview" else { return }
         guard let db = try? AppDatabase.openShared() else { return }
         let repo = ChatConversationRepository(db)
         turns = (try? await repo.turns(conversationID: thread.id)) ?? []
+        // Backfilled conversations carry summaries only — pull the turns and
+        // events from the host on first open (fetch-on-open), then re-read.
+        if turns.isEmpty, let refresh = workspaceData.refreshThreadFromHost {
+            await refresh(thread.id)
+            turns = (try? await repo.turns(conversationID: thread.id)) ?? []
+        }
         let events = (try? await repo.events(conversationID: thread.id, limit: 10_000)) ?? []
         eventsByTurnID = Dictionary(grouping: events.filter { $0.turnID != nil }, by: { $0.turnID! })
     }
@@ -267,8 +256,16 @@ struct ThreadDetailView: View {
 
             Spacer()
 
-            circleButton(systemImage: "ellipsis")
-                .accessibilityHidden(true)
+            Menu {
+                NavigationLink {
+                    FlightRecorderTurnListView(thread: thread, turns: turns)
+                } label: {
+                    Label("Flight Recorder", systemImage: "waveform.path.ecg")
+                }
+            } label: {
+                circleButton(systemImage: "ellipsis")
+            }
+            .accessibilityLabel(Text("Thread options"))
         }
     }
 
@@ -281,6 +278,38 @@ struct ThreadDetailView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.primary)
             )
+    }
+}
+
+/// Thread-level Flight Recorder entry: one row per turn, each opening that
+/// turn's event timeline. Replaces the per-turn rows that repeated after
+/// every reply (owner feedback 2026-07-12) now that tool chips render inline.
+struct FlightRecorderTurnListView: View {
+    let thread: ThreadListItem
+    let turns: [ChatTurn]
+
+    var body: some View {
+        List(turns) { turn in
+            NavigationLink {
+                FlightRecorderView(
+                    conversationID: thread.id,
+                    turnID: turn.id,
+                    prompt: turn.prompt,
+                    runID: turn.runID
+                )
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Turn \(turn.ordinal)")
+                        .font(.system(size: 15, weight: .medium))
+                    Text(turn.prompt)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .navigationTitle("Flight Recorder")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

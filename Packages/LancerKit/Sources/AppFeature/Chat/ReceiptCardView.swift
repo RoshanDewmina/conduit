@@ -159,4 +159,60 @@ public struct ReceiptCardView: View {
     }
     #endif
 }
+
+/// One-line collapsed proof chip — the full card expands on tap. Replaces the
+/// full-height Proof card inline in transcripts (owner decision 2026-07-12:
+/// receipts read as a chip; detail on demand).
+public struct ReceiptChipRow: View {
+    let receipt: ProofReceipt
+
+    @State private var isExpanded = false
+
+    public init(receipt: ProofReceipt) {
+        self.receipt = receipt
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Text(chipTitle)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Proof: \(chipTitle)"))
+            .accessibilityHint(Text(isExpanded ? "Collapse proof" : "Expand proof"))
+
+            if isExpanded {
+                ReceiptCardView(receipt: receipt)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var chipTitle: String {
+        var parts = ["Proof", receipt.status]
+        if let duration = ProofReelModel.durationText(
+            startedAt: receipt.startedAt, endedAt: receipt.endedAt
+        ) {
+            parts.append(duration)
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
 #endif

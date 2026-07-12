@@ -16,6 +16,7 @@ public struct NewChatComposerView: View {
     @AppStorage(DispatchModelSelection.storageKey) private var selectedModelSlug: String =
         DispatchModelSelection.default.rawValue
     private let initiallyShowsRepoPicker: Bool
+    private let lockRepo: Bool
     /// Hands (prompt, cwd) to the presenting view. Cwd is always the selected
     /// repo's real path — missing selection blocks send.
     private let onSend: (_ prompt: String, _ cwd: String) -> Void
@@ -27,10 +28,15 @@ public struct NewChatComposerView: View {
     public init(
         initiallyShowsRepoPicker: Bool = false,
         initialRepo: WorkspaceRepo? = nil,
+        lockRepo: Bool = false,
         onSend: @escaping (_ prompt: String, _ cwd: String) -> Void
     ) {
         self.initiallyShowsRepoPicker = initiallyShowsRepoPicker
         self.onSend = onSend
+        // A follow-up composer inside a thread is pinned to that thread's
+        // folder — offering the picker there silently retargeted sends
+        // (owner report 2026-07-12: Home thread offered command-center).
+        self.lockRepo = lockRepo && initialRepo != nil
         _selectedRepo = State(initialValue: initialRepo)
     }
 
@@ -106,18 +112,25 @@ public struct NewChatComposerView: View {
     }
 
     private var repoSelector: some View {
-        Button {
-            isRepoPickerPresented = true
-        } label: {
-            HStack(spacing: 4) {
+        Group {
+            if lockRepo {
                 Text(repoBranchLabel)
                     .font(.system(size: 15, weight: .medium))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+            } else {
+                Button {
+                    isRepoPickerPresented = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(repoBranchLabel)
+                            .font(.system(size: 15, weight: .medium))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
             }
         }
-        .buttonStyle(.plain)
     }
 
     private var textField: some View {

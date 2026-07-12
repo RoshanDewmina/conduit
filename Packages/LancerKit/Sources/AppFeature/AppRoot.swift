@@ -208,6 +208,23 @@ public struct AppRoot: View {
                     // No transport / not connected — list keeps rendering local rows.
                 }
             }
+            workspaceStore.refreshThreadFromHost = { conversationID in
+                var connected = fleet.firstConnectedMachine
+                let deadline = Date().addingTimeInterval(8)
+                while connected == nil, Date() < deadline {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    connected = fleet.firstConnectedMachine
+                }
+                guard let machine = connected else { return }
+                let transport = ConversationTransport(
+                    append: { try await machine.bridge.relayAppendConversation($0) },
+                    fetch: { try await machine.bridge.relayFetchConversation($0) },
+                    archive: { try await machine.bridge.relayArchiveConversation($0) }
+                )
+                _ = try? await coordinator.refreshConversation(
+                    conversationID: conversationID, transport: transport
+                )
+            }
             _workspaceDataStore = State(initialValue: workspaceStore)
         } catch {
             _environment = State(initialValue: .failure(error.localizedDescription))

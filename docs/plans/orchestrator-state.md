@@ -1,5 +1,40 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ HANDOFF 2026-07-12 ~16:30 — session 3 end state (context full)
+
+**Merged today:** #95–#104 (cwd/bucketing P0 ×4, backfill, long-transcript daemon+iOS, search-tap,
+structured transcripts Z1, tool chips Z2). **OPEN: PR #105** (fix/scroll-arrow-hit-target) —
+arrow visibility/tap (tail-marker onScrollVisibilityChange + two-hop scrollTo + 96pt tail spacer),
+proof chips in BOTH views (ReceiptChipRow), Flight Recorder → ⋯ menu, composer lockRepo,
+fetch-on-open (refreshThreadFromHost). All sim-gated except fetch-on-open live path (owner phone
+holds the single relay slot — owner verifying). Merge #105 when CI green.
+
+**Coded, NOT yet gated/PR'd (worktrees):**
+- G1 `.worktrees/g1-turn-diffs` — committed, go gates green, jail reviewed → needs PR.
+- G2 `.worktrees/g2-review-ui` — Codex-1:1 review sheet vs fixtures; needs my gates+review+PR.
+- G3 `.worktrees/g3-live-status` — status pill + daemon events; needs gates (incl. dispatch.go
+  additive-only check via vendor-cli-adapter-audit) + review + PR.
+- H `.worktrees/h-attachments` — context attachments (owner P0), cursor-agent STILL RUNNING.
+**Uncommitted worktree diffs must be committed before session end** (standing rule).
+
+**Relay ops:** owner phone paired code **818038**; daemon = master post-#100
+(`lancerd.bak-pre-p100`). NEVER run bare `lancerd pair` while owner holds the slot. Backend
+project roshan-agent-f1c2466d, service conduit-push (australia-southeast1) — REL-1 evidence in
+gap audit (silent code expiry / half-open sockets / slot churn, gcloud logs cited).
+
+**Owner asks queued:** REL-1 relay robustness (tester blocker #1) · finish H · gate/ship G1-G3 ·
+identity badges → hot-swap (`2026-07-12-account-hotswap-and-identity-design.md`) · terminal
+phases (`2026-07-12-orca-terminal-port-map.md`) · "+" vs Add Repo dedupe · backfill paging >50 ·
+Siri Phase 2 merge needs owner iOS-27 target call · dogfood-log habit.
+
+**Session-3 gotchas (append-worthy):** `agent` CLI name is shadowed by grok — use `cursor-agent` ·
+`&`-backgrounded dispatches die with the shell — use run_in_background per lane · `git stash pop`
+in main checkout popped an ALIEN stash & contaminated a commit (reverted 5e664bc9) — never pop
+without `git stash list` first · sim DB seeding: `get_app_container` + sqlite works for UI gates ·
+ThreadDetail root ZStack overlays the follow-up bar (hit-test) · onScrollGeometry goes stale under
+keyboard resize — use onScrollVisibilityChange · scrollTo across LazyVStack needs two hops.
+
+
 ## ⚡ HANDOFF 2026-07-12 ~12:10 — session 2: backfill + long-transcript lanes shipped (PRs #99–#101); hotswap/identity designed
 
 **Merged this block (on top of #95–#98):**

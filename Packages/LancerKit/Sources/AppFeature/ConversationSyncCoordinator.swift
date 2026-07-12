@@ -1120,7 +1120,18 @@ public actor ConversationSyncCoordinator {
             cwd: summary.cwd,
             model: summary.model,
             budgetUSD: summary.budgetUSD,
-            status: ChatConversation.Status(rawValue: summary.state) ?? .active,
+            status: {
+                let base = ChatConversation.Status(rawValue: summary.state) ?? .active
+                // Backfilled conversations have no local turn rows, so the list
+                // fell back to "No runs yet" for threads the host knows are
+                // finished. Trust the host's last-turn status for the label.
+                guard base == .active, let last = summary.lastTurnStatus else { return base }
+                switch last {
+                case "completed", "exited": return .completed
+                case "failed": return .failed
+                default: return base
+                }
+            }(),
             createdAt: parseDate(summary.createdAt) ?? fallback?.createdAt ?? .now,
             updatedAt: parseDate(summary.updatedAt) ?? .now,
             lastActivityAt: parseDate(summary.lastActivityAt) ?? .now,
