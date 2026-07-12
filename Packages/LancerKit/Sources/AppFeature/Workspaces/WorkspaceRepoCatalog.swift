@@ -453,11 +453,17 @@ public final class WorkspaceDataStore {
     }
 
     public func refresh() async {
-        if await hasLocalRunningLastTurn() {
-            if let syncRunningStatuses {
-                await syncRunningStatuses()
-            }
+        // Local rows render immediately; the host sync (which may wait for the
+        // relay to reconnect) runs after, then local rows are re-read so a
+        // cleared "Working" badge lands without blocking the first paint.
+        await loadLocalRows()
+        if await hasLocalRunningLastTurn(), let syncRunningStatuses {
+            await syncRunningStatuses()
+            await loadLocalRows()
         }
+    }
+
+    private func loadLocalRows() async {
         let recent = (try? await chatRepo.recent(limit: 200)) ?? []
         var turns: [String: ChatTurn] = [:]
         for conversation in recent {

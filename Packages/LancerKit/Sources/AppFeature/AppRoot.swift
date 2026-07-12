@@ -183,7 +183,17 @@ public struct AppRoot: View {
             // list-status refresh uses the live relay bridge when connected.
             let fleet = fleetStore
             workspaceStore.syncRunningStatuses = {
-                guard let machine = fleet.firstConnectedMachine else { return }
+                // Same hydration race as ShellLiveBridge.waitForConnectedMachine
+                // (2026-07-10): firstConnectedMachine read once at call time is
+                // nil during launch/reconnect. Wait briefly for the relay to
+                // come back before giving up on this refresh cycle.
+                var connected = fleet.firstConnectedMachine
+                let deadline = Date().addingTimeInterval(8)
+                while connected == nil, Date() < deadline {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    connected = fleet.firstConnectedMachine
+                }
+                guard let machine = connected else { return }
                 do {
                     let response = try await machine.bridge.relayListConversations(
                         ConversationListRequest(limit: 50)
