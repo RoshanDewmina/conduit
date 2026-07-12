@@ -2,6 +2,8 @@
 import SwiftUI
 
 /// Add Repo sheet — enter a real cwd path; no fake GitHub / sample list.
+/// Re-adding a path that already exists (after normalization) is a no-op that
+/// selects the existing repo via `onAdd`.
 public struct AddRepoView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var pathText = ""
@@ -76,6 +78,8 @@ public struct AddRepoView: View {
 
                     Button {
                         guard canAdd else { return }
+                        // Always hand the normalized cwd to the store; duplicate
+                        // normalized paths are a no-op that re-selects the existing repo.
                         onAdd(previewName, normalizedPath)
                         dismiss()
                     } label: {
