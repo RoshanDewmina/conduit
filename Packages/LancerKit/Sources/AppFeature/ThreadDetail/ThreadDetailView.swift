@@ -129,15 +129,17 @@ struct ThreadDetailView: View {
                             distanceFromBottom: distance
                         )
                     }
-                    .overlay(alignment: .bottomTrailing) {
+                    .overlay(alignment: .bottom) {
                         if showScrollToBottom {
                             ChatScrollToBottomButton {
                                 withAnimation {
                                     proxy.scrollTo(Self.scrollTailID, anchor: .bottom)
                                 }
                             }
-                            .padding(.trailing, 20)
-                            .padding(.bottom, 88)
+                            // Clear the follow-up bar, which overlays the scroll
+                            // view's bottom and otherwise wins the hit test
+                            // (caught live: tapping the arrow opened the composer).
+                            .padding(.bottom, 108)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                     }

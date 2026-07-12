@@ -98,15 +98,16 @@ public struct LiveThreadView: View {
                     .onChange(of: streamingPacer.displayText) { _, _ in
                         scrollToTailIfFollowing(proxy)
                     }
-                    .overlay(alignment: .bottomTrailing) {
+                    .overlay(alignment: .bottom) {
                         if showScrollToBottom {
                             ChatScrollToBottomButton {
                                 isNearBottom = true
                                 showScrollToBottom = false
                                 scrollToTail(proxy)
                             }
-                            .padding(.trailing, 8)
-                            .padding(.bottom, 8)
+                            // Clear the composer/approval area overlaying the
+                            // scroll bottom — it wins the hit test otherwise.
+                            .padding(.bottom, 108)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                     }
