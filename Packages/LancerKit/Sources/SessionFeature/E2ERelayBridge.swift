@@ -26,7 +26,7 @@ public final class E2ERelayBridge: ObservableObject {
     /// Window after a re-key event within which a `sendDispatch` timeout is
     /// assumed to be the first-send race rather than a real non-response, so
     /// it gets ONE automatic retry instead of surfacing to the user.
-    static let firstSendRetryWindow: TimeInterval = 5
+    nonisolated static let firstSendRetryWindow: TimeInterval = 5
     private var dispatchContinuation: CheckedContinuation<DispatchResult, Error>?
     private var continueContinuation: CheckedContinuation<DispatchResult, Error>?
     private var fsListContinuation: CheckedContinuation<RelayDirListing, Error>?
@@ -246,7 +246,7 @@ public final class E2ERelayBridge: ObservableObject {
     /// `attemptedAt` within `firstSendRetryWindow` of the most recent re-key
     /// event? A `nil` lastReadyAt (never paired this bridge instance) is never
     /// a race — there's no re-key to blame.
-    static func isFirstSendRace(attemptedAt: Date, lastReadyAt: Date?) -> Bool {
+    nonisolated static func isFirstSendRace(attemptedAt: Date, lastReadyAt: Date?) -> Bool {
         guard let lastReadyAt else { return false }
         let delta = attemptedAt.timeIntervalSince(lastReadyAt)
         return delta >= 0 && delta < firstSendRetryWindow
