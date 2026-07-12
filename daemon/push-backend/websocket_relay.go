@@ -165,8 +165,8 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 				// let a patient guesser claim an abandoned code later.
 				delete(hub.pairs, code)
 				hub.mu.Unlock()
-				log.Printf("relay: %s rejected, code %s expired unconfirmed", role, code)
-				sendJSON(conn, map[string]interface{}{"type": "error", "message": "pairing code expired, generate a new one"})
+				log.Printf("relay: closing %s conn for code %s: code expired unconfirmed", role, code)
+				sendJSON(conn, map[string]interface{}{"type": "error", "code": "code_expired", "message": "pairing code expired, generate a new one"})
 				return
 			}
 		}
@@ -187,7 +187,11 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 			hub.pairs[code] = pair
 			hub.mu.Unlock()
 			log.Printf("relay: %s connected with code %s (waiting for peer)", role, code)
-			sendJSON(conn, map[string]interface{}{"type": "waiting", "message": "waiting for peer"})
+			sendJSON(conn, map[string]interface{}{
+				"type":      "waiting",
+				"message":   "waiting for peer",
+				"expiresAt": pair.CreatedAt.Add(pairConfirmWindow).UTC().Format(time.RFC3339),
+			})
 		} else {
 			// Second-or-later connection on an already-allocated code. Once a
 			// role's key has been recorded, it is PINNED: a reconnect must
@@ -200,15 +204,15 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 			if role == "daemon" && pair.DaemonKey != "" && pair.DaemonKey != publicKey {
 				pair.mu.Unlock()
 				hub.mu.Unlock()
-				log.Printf("relay: daemon key mismatch for code %s, rejecting hijack attempt", code)
-				sendJSON(conn, map[string]interface{}{"type": "error", "message": "key mismatch -- pairing already established with a different key"})
+				log.Printf("relay: closing daemon conn for code %s: key mismatch, rejecting hijack attempt", code)
+				sendJSON(conn, map[string]interface{}{"type": "error", "code": "key_mismatch", "message": "key mismatch -- pairing already established with a different key"})
 				return
 			}
 			if role == "phone" && pair.PhoneKey != "" && pair.PhoneKey != publicKey {
 				pair.mu.Unlock()
 				hub.mu.Unlock()
-				log.Printf("relay: phone key mismatch for code %s, rejecting hijack attempt", code)
-				sendJSON(conn, map[string]interface{}{"type": "error", "message": "key mismatch -- pairing already established with a different key"})
+				log.Printf("relay: closing phone conn for code %s: key mismatch, rejecting hijack attempt", code)
+				sendJSON(conn, map[string]interface{}{"type": "error", "code": "key_mismatch", "message": "key mismatch -- pairing already established with a different key"})
 				return
 			}
 			// Newest-wins: a peer reconnecting on the same code with the SAME
@@ -218,11 +222,11 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 			// otherwise a restarted daemon is locked out until the dead TCP
 			// connection times out (minutes).
 			if role == "daemon" && pair.DaemonConn != nil {
-				log.Printf("relay: daemon reconnect on code %s replaces existing connection", code)
+				log.Printf("relay: closing daemon conn for code %s: newest-wins reconnect replace", code)
 				_ = pair.DaemonConn.Close()
 				pair.DaemonConn = nil
 			} else if role == "phone" && pair.PhoneConn != nil {
-				log.Printf("relay: phone reconnect on code %s replaces existing connection", code)
+				log.Printf("relay: closing phone conn for code %s: newest-wins reconnect replace", code)
 				_ = pair.PhoneConn.Close()
 				pair.PhoneConn = nil
 			}
@@ -302,7 +306,11 @@ func handleWebSocketRelay(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				log.Printf("relay: %s connected with code %s (waiting for peer)", role, code)
-				sendJSON(conn, map[string]interface{}{"type": "waiting", "message": "waiting for peer"})
+				waitingFrame := map[string]interface{}{"type": "waiting", "message": "waiting for peer"}
+				if pair.PairedAt.IsZero() {
+					waitingFrame["expiresAt"] = pair.CreatedAt.Add(pairConfirmWindow).UTC().Format(time.RFC3339)
+				}
+				sendJSON(conn, waitingFrame)
 			}
 			pair.mu.Unlock()
 		}

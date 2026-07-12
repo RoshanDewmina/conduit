@@ -50,3 +50,15 @@ func TestExpiredCodeTrackerResetClearsStreak(t *testing.T) {
 		t.Fatalf("after reset, rejection 1: streak=%d exceeded=%v, want 1/false", streak, exceeded)
 	}
 }
+
+func TestDecideExpiryActionRemintsWhenUnconfirmed(t *testing.T) {
+	if got := decideExpiryAction(false); got != expiryActionRemint {
+		t.Fatalf("decideExpiryAction(everConfirmed=false) = %v, want expiryActionRemint", got)
+	}
+}
+
+func TestDecideExpiryActionNeverRemintsConfirmedPairing(t *testing.T) {
+	if got := decideExpiryAction(true); got != expiryActionGiveUp {
+		t.Fatalf("decideExpiryAction(everConfirmed=true) = %v, want expiryActionGiveUp", got)
+	}
+}

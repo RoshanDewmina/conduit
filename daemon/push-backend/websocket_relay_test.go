@@ -331,6 +331,126 @@ func TestRelayExpiresUnconfirmedCode(t *testing.T) {
 	}
 }
 
+// The expiry error frame must carry a machine-readable "code" field so
+// clients can switch on it instead of substring-matching "message" —
+// old clients that only look at "message" are unaffected (additive field).
+func TestRelayExpiredCodeErrorFrameCarriesCode(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "stale2"
+	daemon := dialRelay(t, srv, "daemon", code, "daemon-key")
+	defer daemon.Close()
+	if got := recvJSON(t, daemon); got["type"] != "waiting" {
+		t.Fatalf("daemon first message type = %v, want waiting", got["type"])
+	}
+
+	hub.mu.Lock()
+	pair := hub.pairs[code]
+	pair.mu.Lock()
+	pair.CreatedAt = time.Now().Add(-pairConfirmWindow - time.Minute)
+	pair.mu.Unlock()
+	hub.mu.Unlock()
+
+	phone := dialRelay(t, srv, "phone", code, "phone-key")
+	defer phone.Close()
+	errMsg := recvErr(t, phone)
+	if errMsg["code"] != "code_expired" {
+		t.Fatalf("expiry error frame code = %v, want code_expired (full: %+v)", errMsg["code"], errMsg)
+	}
+}
+
+// The key-mismatch error frame must carry code=key_mismatch for the same
+// reason: a machine-readable discriminant instead of substring-matching
+// "message".
+func TestRelayKeyMismatchErrorFrameCarriesCode(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "hjack2"
+	daemon := dialRelay(t, srv, "daemon", code, "real-daemon-key")
+	defer daemon.Close()
+	_ = recvJSON(t, daemon) // waiting
+	phone := dialRelay(t, srv, "phone", code, "real-phone-key")
+	defer phone.Close()
+	_ = recvJSON(t, phone)  // peer_joined
+	_ = recvJSON(t, daemon) // peer_joined
+
+	attacker := dialRelay(t, srv, "daemon", code, "attacker-key")
+	defer attacker.Close()
+	errMsg := recvErr(t, attacker)
+	if errMsg["code"] != "key_mismatch" {
+		t.Fatalf("key-mismatch error frame code = %v, want key_mismatch (full: %+v)", errMsg["code"], errMsg)
+	}
+}
+
+// The "waiting" frame for an unconfirmed code must carry an expiresAt so
+// clients can show a TTL countdown instead of waiting blind.
+func TestRelayWaitingFrameCarriesExpiresAt(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	before := time.Now()
+	code := "wait01"
+	daemon := dialRelay(t, srv, "daemon", code, "daemon-key")
+	defer daemon.Close()
+
+	got := recvJSON(t, daemon)
+	if got["type"] != "waiting" {
+		t.Fatalf("first message type = %v, want waiting", got["type"])
+	}
+	rawExpiry, ok := got["expiresAt"].(string)
+	if !ok || rawExpiry == "" {
+		t.Fatalf("waiting frame missing expiresAt: %+v", got)
+	}
+	expiry, err := time.Parse(time.RFC3339, rawExpiry)
+	if err != nil {
+		t.Fatalf("expiresAt not RFC3339: %v", err)
+	}
+	wantAround := before.Add(pairConfirmWindow)
+	if diff := expiry.Sub(wantAround); diff < -5*time.Second || diff > 5*time.Second {
+		t.Fatalf("expiresAt = %v, want ~%v (CreatedAt+pairConfirmWindow)", expiry, wantAround)
+	}
+}
+
+// Once a code is PAIRED (both keys exchanged), a later one-sided "waiting"
+// frame (e.g. the daemon dropped and the phone alone is holding the slot)
+// must NOT carry expiresAt — a paired code never expires, so a countdown
+// would be misleading.
+func TestRelayWaitingFrameOmitsExpiresAtOncePaired(t *testing.T) {
+	resetHubForTest()
+	srv := httptest.NewServer(http.HandlerFunc(handleWebSocketRelay))
+	defer srv.Close()
+
+	code := "wait02"
+	daemonKey := "daemon-key"
+	phoneKey := "phone-key"
+
+	daemon := dialRelay(t, srv, "daemon", code, daemonKey)
+	_ = recvJSON(t, daemon) // waiting
+	phone := dialRelay(t, srv, "phone", code, phoneKey)
+	defer phone.Close()
+	_ = recvJSON(t, phone)  // peer_joined
+	_ = recvJSON(t, daemon) // peer_joined
+	daemon.Close()
+
+	// Phone is now alone (daemon dropped) — reconnect the phone with the SAME
+	// key to hit the one-sided "waiting" branch on an already-PAIRED code.
+	phone.Close()
+	phone2 := dialRelay(t, srv, "phone", code, phoneKey)
+	defer phone2.Close()
+	got := recvJSON(t, phone2)
+	if got["type"] != "waiting" {
+		t.Fatalf("first message type = %v, want waiting", got["type"])
+	}
+	if _, present := got["expiresAt"]; present {
+		t.Fatalf("waiting frame for a PAIRED code carries expiresAt, want omitted: %+v", got)
+	}
+}
+
 // Security: an already-PAIRED code (both keys exchanged at least once) must
 // keep working past pairConfirmWindow — expiry only applies to codes that
 // never completed their first exchange. This is the ongoing-relay-channel

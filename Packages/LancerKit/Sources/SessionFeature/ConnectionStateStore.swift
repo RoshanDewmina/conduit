@@ -162,6 +162,12 @@ public final class ConnectionStateStore {
         connection: E2ERelayClient.ConnectionState
     ) -> MachineState {
         if case .pairingFailed = pairing { return .pairingInvalid }
+        // A code the relay rejected as expired can never succeed again
+        // without a human re-pairing — same bucket as pairingFailed, not
+        // "actively retrying" (the connection-state switch below would say
+        // .reconnecting/.hostOffline, which is wrong: nothing here recovers
+        // on its own).
+        if pairing == .codeExpired { return .pairingInvalid }
         guard pairingUsable else { return .pairingInvalid }
         if pairing == .paired { return .connected }
         switch connection {

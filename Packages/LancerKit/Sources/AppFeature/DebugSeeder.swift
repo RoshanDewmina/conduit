@@ -93,7 +93,7 @@ public enum DebugSeeder {
                 let record = RelayMachineRecord(id: client.machineID, displayName: "Relay host", pairedAt: .now)
                 RelayFleetHydration.addMachine(client: client, record: record, to: store)
                 return
-            case .pairingFailed:
+            case .pairingFailed, .codeExpired:
                 client.disconnect()
                 return
             case .unpaired, .waitingForPeer:
