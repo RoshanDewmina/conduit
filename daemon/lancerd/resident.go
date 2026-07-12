@@ -3,10 +3,13 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -52,6 +55,8 @@ func newResident() (*resident, error) {
 	if err != nil {
 		return nil, err
 	}
+	// newServer opens the conversation store (and failOrphanedRunningTurns) before
+	// restoreQueue runs — load-bearing so dead-run approvals can be pruned.
 	core := newServer(serverHome())
 	r := &resident{
 		core:  core,
@@ -92,10 +97,47 @@ func (r *resident) restoreQueue() error {
 	if err != nil {
 		return err
 	}
+	var survivors, pruned []ApprovalEvent
 	for _, event := range events {
+		if approvalRunIsDead(r.core.conversations, event.RunID) {
+			pruned = append(pruned, event)
+			continue
+		}
+		survivors = append(survivors, event)
 		r.core.approvals.add(event)
 	}
+	if len(pruned) == 0 {
+		return nil
+	}
+	if err := r.queue.replace(survivors); err != nil {
+		return err
+	}
+	parts := make([]string, len(pruned))
+	for i, e := range pruned {
+		parts[i] = e.ApprovalID + "/" + e.RunID
+	}
+	log.Printf("restoreQueue: pruned %d stale approval(s): %s", len(pruned), strings.Join(parts, ", "))
 	return nil
+}
+
+// approvalRunIsDead reports whether a queued approval's run is known-dead and
+// must be dropped on startup. Fail-closed toward keeping the human in the loop:
+// empty RunID, missing store, non-terminal status, or unknown lookup errors → keep.
+// Terminal status or absent turn → drop (never auto-approve).
+func approvalRunIsDead(store *conversationStore, runID string) bool {
+	if runID == "" || store == nil {
+		return false
+	}
+	status, err := store.runStatus(runID)
+	if err != nil {
+		// runStatus maps sql.ErrNoRows to a plain fmt.Errorf (no %w today);
+		// also accept errors.Is in case a later change wraps errNoLedgerTurn.
+		if errors.Is(err, errNoLedgerTurn) || strings.Contains(err.Error(), errNoLedgerTurn.Error()) {
+			return true
+		}
+		return false
+	}
+	return isTerminalRunStatus(status)
 }
 
 func (r *resident) handleConnection(conn net.Conn) {
