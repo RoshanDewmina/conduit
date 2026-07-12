@@ -144,34 +144,123 @@ public enum WorkspaceRepoCatalog {
         normalizeCwd(cwd).lowercased()
     }
 
-    public static func displayName(forCwd cwd: String) -> String {
+    public static func displayName(
+        forCwd cwd: String,
+        homeDirectory: String = NSHomeDirectory()
+    ) -> String {
         let trimmed = cwd.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed == "~" { return "Home" }
         let normalized = normalizeCwd(cwd)
-        guard !normalized.isEmpty else { return "Untitled" }
-        if pathsMatch(normalized, NSHomeDirectory()) { return "Home" }
+        guard !normalized.isEmpty else { return "No folder" }
+        if pathsMatch(normalized, homeDirectory) { return "Home" }
+        if !isAbsoluteCwd(normalized) { return normalized }
         let base = (normalized as NSString).lastPathComponent
         return base.isEmpty ? normalized : base
     }
 
-    /// Longest matching repo cwd that equals or contains `cwd`, if any.
-    public static func matchingRepoCwd(for cwd: String, among repoCwds: [String]) -> String? {
-        let needle = normalizeCwd(cwd)
-        guard !needle.isEmpty else { return nil }
-        return repoCwds
-            .map(normalizeCwd)
-            .filter { !$0.isEmpty && isEqualOrUnder(cwd: needle, repoPath: $0) }
-            .max(by: { $0.count < $1.count })
+    /// True when `cwd` is a non-empty absolute path after normalize — the only
+    /// kind of target live sends may use.
+    public static func isAbsoluteSendTarget(_ cwd: String) -> Bool {
+        let normalized = normalizeCwd(cwd)
+        return !normalized.isEmpty && isAbsoluteCwd(normalized)
+    }
+
+    public static func isAbsoluteCwd(_ cwd: String) -> Bool {
+        (cwd as NSString).isAbsolutePath
+    }
+
+    /// True when the relative path from `ancestor` to `descendant` crosses a
+    /// hidden path component (`.worktrees`, `.claude`, …).
+    public static func hasHiddenComponent(between ancestor: String, and descendant: String) -> Bool {
+        let root = normalizeCwd(ancestor)
+        let child = normalizeCwd(descendant)
+        guard !root.isEmpty, !child.isEmpty else { return false }
+        guard isEqualOrUnder(cwd: child, repoPath: root), !pathsMatch(child, root) else { return false }
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        guard child.lowercased().hasPrefix(prefix.lowercased()) else { return false }
+        let remainder = String(child.dropFirst(prefix.count))
+        return remainder.split(separator: "/").contains { $0.hasPrefix(".") }
+    }
+
+    /// Discovered + added repo roots used by `bucketKey`.
+    /// Nested conversation cwds stay independent roots unless the path between
+    /// them crosses a hidden directory (worktree-style). Relative cwds are
+    /// kept as provisional roots and may merge later via last-component match.
+    public static func computeRoots(
+        conversationCwds: [String],
+        addedCwds: [String]
+    ) -> [String] {
+        var absolute: [String] = []
+        var relative: [String] = []
+        var seenAbsolute: Set<String> = []
+        var seenRelative: Set<String> = []
+
+        for raw in conversationCwds + addedCwds {
+            let cwd = normalizeCwd(raw)
+            guard !cwd.isEmpty else { continue }
+            if isAbsoluteCwd(cwd) {
+                let key = pathKey(cwd)
+                if seenAbsolute.insert(key).inserted {
+                    absolute.append(cwd)
+                }
+            } else {
+                let key = pathKey(cwd)
+                if seenRelative.insert(key).inserted {
+                    relative.append(cwd)
+                }
+            }
+        }
+
+        let absoluteRoots = absolute.filter { candidate in
+            !absolute.contains { ancestor in
+                pathKey(ancestor) != pathKey(candidate)
+                    && isEqualOrUnder(cwd: candidate, repoPath: ancestor)
+                    && !pathsMatch(candidate, ancestor)
+                    && hasHiddenComponent(between: ancestor, and: candidate)
+            }
+        }
+        return absoluteRoots + relative
+    }
+
+    /// Single bucketing rule for rows, counts, tap-filters, and search chips.
+    /// Returns the normalized bucket cwd, or `nil` for empty cwd.
+    public static func bucketKey(
+        forCwd cwd: String,
+        among roots: [String]
+    ) -> String? {
+        let normalized = normalizeCwd(cwd)
+        guard !normalized.isEmpty else { return nil }
+
+        let normalizedRoots = roots.map(normalizeCwd).filter { !$0.isEmpty }
+
+        if !isAbsoluteCwd(normalized) {
+            let matches = normalizedRoots.filter { root in
+                isAbsoluteCwd(root)
+                    && (root as NSString).lastPathComponent
+                    .caseInsensitiveCompare(normalized) == .orderedSame
+            }
+            if matches.count == 1 {
+                return matches[0]
+            }
+            return normalized
+        }
+
+        // Longest matching root: home is last resort because it is shortest.
+        let matching = normalizedRoots.filter { isEqualOrUnder(cwd: normalized, repoPath: $0) }
+        if let best = matching.max(by: { $0.count < $1.count }) {
+            return best
+        }
+        return normalized
     }
 
     /// Merge distinct conversation cwds with user-added repos. Sorted by
-    /// thread count (desc), then name. Empty / home-only placeholder cwds
-    /// from conversations are omitted unless the user explicitly added them.
-    /// Subpath conversations count under the longest matching added (or
-    /// derived) repo rather than spawning a sibling row.
+    /// thread count (desc), then name. Empty cwds are omitted from rows.
+    /// One `bucketKey` rule absorbs worktrees / relative aliases into the
+    /// longest matching root among added ∪ discovered roots.
     public static func deriveRepos(
         conversations: [ChatConversation],
-        added: [AddedRepo]
+        added: [AddedRepo],
+        homeDirectory: String = NSHomeDirectory()
     ) -> [WorkspaceRepo] {
         let addedNormalized: [(key: String, cwd: String, name: String)] = added.compactMap { repo in
             let cwd = normalizeCwd(repo.cwd)
@@ -187,18 +276,23 @@ public enum WorkspaceRepoCatalog {
             }
         }
         let addedCwds = Array(addedByKey.values.map(\.cwd))
+        let roots = computeRoots(
+            conversationCwds: conversations.map(\.cwd),
+            addedCwds: addedCwds
+        )
 
         var counts: [String: Int] = [:]
         var displayCwdByKey: [String: String] = [:]
 
         for conversation in conversations {
-            let cwd = normalizeCwd(conversation.cwd)
-            guard !cwd.isEmpty else { continue }
-            let bucket = matchingRepoCwd(for: cwd, among: addedCwds) ?? cwd
+            guard let bucket = bucketKey(
+                forCwd: conversation.cwd,
+                among: roots
+            ) else { continue }
             let key = pathKey(bucket)
             counts[key, default: 0] += 1
             if displayCwdByKey[key] == nil {
-                displayCwdByKey[key] = normalizeCwd(bucket)
+                displayCwdByKey[key] = bucket
             }
         }
 
@@ -207,7 +301,7 @@ public enum WorkspaceRepoCatalog {
         for (key, count) in counts {
             let cwd = displayCwdByKey[key] ?? key
             byKey[key] = WorkspaceRepo(
-                name: displayName(forCwd: cwd),
+                name: displayName(forCwd: cwd, homeDirectory: homeDirectory),
                 cwd: cwd,
                 threadCount: count,
                 isUserAdded: false
@@ -224,7 +318,9 @@ public enum WorkspaceRepoCatalog {
                 )
             } else {
                 byKey[key] = WorkspaceRepo(
-                    name: addedRepo.name.isEmpty ? displayName(forCwd: addedRepo.cwd) : addedRepo.name,
+                    name: addedRepo.name.isEmpty
+                        ? displayName(forCwd: addedRepo.cwd, homeDirectory: homeDirectory)
+                        : addedRepo.name,
                     cwd: addedRepo.cwd,
                     threadCount: 0,
                     isUserAdded: true
@@ -241,14 +337,27 @@ public enum WorkspaceRepoCatalog {
     public static func conversations(
         forCwd cwd: String?,
         allRepos: Bool,
-        conversations: [ChatConversation]
+        conversations: [ChatConversation],
+        added: [AddedRepo] = []
     ) -> [ChatConversation] {
         let sorted = conversations.sorted { $0.lastActivityAt > $1.lastActivityAt }
         guard !allRepos else { return sorted }
         guard let cwd else { return [] }
-        let needle = normalizeCwd(cwd)
-        guard !needle.isEmpty else { return [] }
-        return sorted.filter { isEqualOrUnder(cwd: $0.cwd, repoPath: needle) }
+        let roots = computeRoots(
+            conversationCwds: conversations.map(\.cwd),
+            addedCwds: added.map(\.cwd)
+        )
+        guard let needle = bucketKey(forCwd: cwd, among: roots) else {
+            return []
+        }
+        let needleKey = pathKey(needle)
+        return sorted.filter { conversation in
+            guard let bucket = bucketKey(
+                forCwd: conversation.cwd,
+                among: roots
+            ) else { return false }
+            return pathKey(bucket) == needleKey
+        }
     }
 
     public static func threadItem(
@@ -284,6 +393,7 @@ public enum WorkspaceRepoCatalog {
 
     /// Date-bucket labels for a sorted (newest-first) thread list. Returns
     /// contiguous groups; never invents sample rows.
+    /// Today = `[startOfToday, ∞)`, Yesterday = `[startOfYesterday, startOfToday)`.
     public static func groupByRecency(
         _ items: [ThreadListItem],
         now: Date = .now,
@@ -291,6 +401,7 @@ public enum WorkspaceRepoCatalog {
     ) -> [(title: String, items: [ThreadListItem])] {
         guard !items.isEmpty else { return [] }
 
+        var today: [ThreadListItem] = []
         var yesterday: [ThreadListItem] = []
         var thisWeek: [ThreadListItem] = []
         var earlier: [ThreadListItem] = []
@@ -300,7 +411,9 @@ public enum WorkspaceRepoCatalog {
         let startOfWeek = calendar.date(byAdding: .day, value: -7, to: startOfToday) ?? startOfToday
 
         for item in items {
-            if item.lastActivityAt >= startOfYesterday {
+            if item.lastActivityAt >= startOfToday {
+                today.append(item)
+            } else if item.lastActivityAt >= startOfYesterday {
                 yesterday.append(item)
             } else if item.lastActivityAt >= startOfWeek {
                 thisWeek.append(item)
@@ -310,6 +423,7 @@ public enum WorkspaceRepoCatalog {
         }
 
         var groups: [(title: String, items: [ThreadListItem])] = []
+        if !today.isEmpty { groups.append(("Today", today)) }
         if !yesterday.isEmpty { groups.append(("Yesterday", yesterday)) }
         if !thisWeek.isEmpty { groups.append(("This Week", thisWeek)) }
         if !earlier.isEmpty { groups.append(("Earlier", earlier)) }
@@ -349,7 +463,7 @@ public enum WorkspaceRepoCatalog {
         case .completed: return "Completed"
         case .failed: return "Failed"
         case .archived: return "Archived"
-        case .idle: return "No activity"
+        case .idle: return "No runs yet"
         }
     }
 }
@@ -383,7 +497,9 @@ public final class AddedRepoStore {
         }
         let display = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let repo = AddedRepo(
-            name: display.isEmpty ? WorkspaceRepoCatalog.displayName(forCwd: normalized) : display,
+            name: display.isEmpty
+                ? WorkspaceRepoCatalog.displayName(forCwd: normalized)
+                : display,
             cwd: normalized
         )
         repos.insert(repo, at: 0)
@@ -488,26 +604,38 @@ public final class WorkspaceDataStore {
 
     public func search(_ query: String) async -> [ThreadListItem] {
         let results = (try? await chatRepo.search(query, limit: 50)) ?? []
-        return results.map {
-            WorkspaceRepoCatalog.threadItem(
-                conversation: $0.conversation,
-                lastTurn: lastTurnByConversationID[$0.conversation.id],
-                includeRepoName: true
+        var items: [ThreadListItem] = []
+        items.reserveCapacity(results.count)
+        for result in results {
+            let lastTurn = (try? await chatRepo.turns(conversationID: result.conversation.id))?.last
+            items.append(
+                WorkspaceRepoCatalog.threadItem(
+                    conversation: result.conversation,
+                    lastTurn: lastTurn,
+                    includeRepoName: true
+                )
             )
         }
+        return items
     }
 
     public func threads(forCwd cwd: String?, allRepos: Bool) -> [ThreadListItem] {
         let filtered = WorkspaceRepoCatalog.conversations(
             forCwd: cwd,
             allRepos: allRepos,
-            conversations: conversations
+            conversations: conversations,
+            added: addedRepos.repos
         )
         return WorkspaceRepoCatalog.threadItems(
             conversations: filtered,
             lastTurnByConversationID: lastTurnByConversationID,
             includeRepoName: allRepos
         )
+    }
+
+    /// Sum of per-repo thread counts — equals All Repos badge (empty cwd excluded).
+    public var allReposThreadCount: Int {
+        repos.reduce(0) { $0 + $1.threadCount }
     }
 
     @discardableResult

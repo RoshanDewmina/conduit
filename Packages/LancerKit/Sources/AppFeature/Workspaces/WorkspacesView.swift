@@ -52,7 +52,7 @@ public struct WorkspacesView: View {
                             WorkspaceRowView(
                                 title: "All Repos",
                                 systemImage: "square.stack",
-                                subtitle: repos.isEmpty ? nil : "\(workspaceData.conversations.count)",
+                                subtitle: "\(workspaceData.allReposThreadCount)",
                                 showsChevron: true
                             )
                         }
@@ -77,7 +77,7 @@ public struct WorkspacesView: View {
                                     WorkspaceRowView(
                                         title: repo.name,
                                         systemImage: "folder",
-                                        subtitle: repo.threadCount > 0 ? "\(repo.threadCount)" : nil,
+                                        subtitle: "\(repo.threadCount)",
                                         showsChevron: true
                                     )
                                 }
@@ -144,11 +144,14 @@ public struct WorkspacesView: View {
             #if DEBUG
             NewChatComposerView(
                 initiallyShowsRepoPicker: isComposerRepoPickerPresented,
-                initialRepo: repos.first,
+                initialRepo: repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) },
                 onSend: handleSend
             )
             #else
-            NewChatComposerView(initialRepo: repos.first, onSend: handleSend)
+            NewChatComposerView(
+                initialRepo: repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) },
+                onSend: handleSend
+            )
             #endif
         }
         .sheet(isPresented: $isAddRepoPresented) {
@@ -239,8 +242,8 @@ public struct WorkspacesView: View {
     }
 
     private func handleSend(_ prompt: String, _ cwd: String) {
+        guard WorkspaceRepoCatalog.isAbsoluteSendTarget(cwd) else { return }
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
-        guard !normalized.isEmpty else { return }
         activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized)
     }
 

@@ -16,8 +16,18 @@ public struct SearchView: View {
 
     private var filteredResults: [ThreadListItem] {
         guard let selectedFilterCwd else { return results }
-        let needle = WorkspaceRepoCatalog.normalizeCwd(selectedFilterCwd)
-        return results.filter { WorkspaceRepoCatalog.normalizeCwd($0.cwd) == needle }
+        let roots = filterRepos.map(\.cwd)
+        guard let selectedBucket = WorkspaceRepoCatalog.bucketKey(
+            forCwd: selectedFilterCwd,
+            among: roots
+        ) else { return [] }
+        let selectedKey = WorkspaceRepoCatalog.pathKey(selectedBucket)
+        return results.filter { item in
+            guard let bucket = WorkspaceRepoCatalog.bucketKey(forCwd: item.cwd, among: roots) else {
+                return false
+            }
+            return WorkspaceRepoCatalog.pathKey(bucket) == selectedKey
+        }
     }
 
     public var body: some View {

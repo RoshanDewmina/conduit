@@ -47,11 +47,32 @@ struct WorkspaceRepoCatalogTests {
         ))
     }
 
-    @Test("displayName uses last path component")
+    @Test("displayName uses last path component; home and empty are honest")
     func displayName() {
+        let home = "/Users/u"
         #expect(WorkspaceRepoCatalog.displayName(forCwd: "/Users/dev/repos/conduit") == "conduit")
         #expect(WorkspaceRepoCatalog.displayName(forCwd: "~/Documents/my-app/") == "my-app")
         #expect(WorkspaceRepoCatalog.displayName(forCwd: "~") == "Home")
+        #expect(WorkspaceRepoCatalog.displayName(forCwd: home, homeDirectory: home) == "Home")
+        #expect(WorkspaceRepoCatalog.displayName(forCwd: "") == "No folder")
+        #expect(WorkspaceRepoCatalog.displayName(forCwd: "command-center") == "command-center")
+    }
+
+    @Test("hasHiddenComponent detects worktree-style paths only")
+    func hasHiddenComponent() {
+        let root = "/Users/u/Documents/command-center"
+        #expect(WorkspaceRepoCatalog.hasHiddenComponent(
+            between: root,
+            and: "\(root)/.claude/worktrees/x"
+        ))
+        #expect(WorkspaceRepoCatalog.hasHiddenComponent(
+            between: root,
+            and: "\(root)/.worktrees/p1"
+        ))
+        #expect(!WorkspaceRepoCatalog.hasHiddenComponent(
+            between: "/tmp",
+            and: "/tmp/lancer-chat-proof-fable"
+        ))
     }
 
     @Test("deriveRepos merges conversation cwds with user-added repos")
@@ -75,6 +96,7 @@ struct WorkspaceRepoCatalogTests {
         #expect(repos[1].threadCount == 1)
         #expect(repos[2].threadCount == 0)
         #expect(repos[2].name == "manual")
+        #expect(repos.reduce(0) { $0 + $1.threadCount } == 3)
     }
 
     @Test("deriveRepos counts worktree/subdir threads under matching repo")
@@ -108,7 +130,111 @@ struct WorkspaceRepoCatalogTests {
         #expect(!repos.contains { $0.cwd.contains(".worktrees") })
     }
 
-    @Test("conversations for cwd filter exact + subpath and sort by recency")
+    @Test("owner fixture: one command-center row, Home, sibling /tmp roots, empty excluded")
+    func ownerFixtureBucketing() {
+        let home = "/Users/u"
+        let cc = "/Users/u/Documents/command-center"
+        let conversations = Self.ownerFixtureConversations(home: home, cc: cc)
+        let repos = WorkspaceRepoCatalog.deriveRepos(
+            conversations: conversations,
+            added: [],
+            homeDirectory: home
+        )
+        Self.assertOwnerFixtureRepos(repos, home: home, cc: cc)
+        Self.assertOwnerFixtureFilters(conversations, home: home, cc: cc)
+    }
+
+    private static func assertOwnerFixtureRepos(
+        _ repos: [WorkspaceRepo],
+        home: String,
+        cc: String
+    ) {
+        let tmp = WorkspaceRepoCatalog.normalizeCwd("/tmp")
+        let tmpProof = WorkspaceRepoCatalog.normalizeCwd("/tmp/lancer-chat-proof-fable")
+        let ccRepo = repos.filter { $0.name == "command-center" }
+        #expect(ccRepo.count == 1)
+        #expect(ccRepo.first?.threadCount == 22)
+        #expect(ccRepo.first?.cwd == cc)
+        #expect(repos.first { $0.name == "Home" }?.threadCount == 39)
+        #expect(repos.first { $0.name == "Home" }?.cwd == home)
+        #expect(repos.first { WorkspaceRepoCatalog.pathsMatch($0.cwd, tmp) }?.threadCount == 8)
+        #expect(repos.first { WorkspaceRepoCatalog.pathsMatch($0.cwd, tmpProof) }?.threadCount == 4)
+        #expect(!repos.contains { $0.cwd.isEmpty })
+        #expect(!repos.contains { $0.cwd.contains(".claude") })
+        #expect(repos.reduce(0) { $0 + $1.threadCount } == 73)
+    }
+
+    private static func assertOwnerFixtureFilters(
+        _ conversations: [ChatConversation],
+        home: String,
+        cc: String
+    ) {
+        let filtered = WorkspaceRepoCatalog.conversations(
+            forCwd: cc,
+            allRepos: false,
+            conversations: conversations
+        )
+        #expect(filtered.count == 22)
+
+        let homeFiltered = WorkspaceRepoCatalog.conversations(
+            forCwd: home,
+            allRepos: false,
+            conversations: conversations
+        )
+        #expect(homeFiltered.count == 39)
+
+        let all = WorkspaceRepoCatalog.conversations(
+            forCwd: nil,
+            allRepos: true,
+            conversations: conversations
+        )
+        #expect(all.count == 74)
+
+        guard let empty = conversations.last else {
+            Issue.record("expected empty-cwd conversation")
+            return
+        }
+        let item = WorkspaceRepoCatalog.threadItem(
+            conversation: empty,
+            lastTurn: nil,
+            includeRepoName: true
+        )
+        #expect(item.repoName == "No folder")
+    }
+
+    /// Owner phone shape: 18 absolute + 3 relative + 1 worktree + 39 home + 8 /tmp
+    /// + 4 nested /tmp proof + 1 empty.
+    private static func ownerFixtureConversations(home: String, cc: String) -> [ChatConversation] {
+        func make(_ title: String, cwd: String) -> ChatConversation {
+            ChatConversation(title: title, agentID: "a", hostName: "mac", cwd: cwd)
+        }
+        var conversations: [ChatConversation] = []
+        conversations.reserveCapacity(74)
+        for i in 0..<18 { conversations.append(make("cc-\(i)", cwd: cc)) }
+        for i in 0..<3 { conversations.append(make("rel-\(i)", cwd: "command-center")) }
+        conversations.append(make("wt", cwd: "\(cc)/.claude/worktrees/x"))
+        for i in 0..<39 { conversations.append(make("home-\(i)", cwd: home)) }
+        for i in 0..<8 { conversations.append(make("tmp-\(i)", cwd: "/tmp")) }
+        for i in 0..<4 {
+            conversations.append(make("proof-\(i)", cwd: "/tmp/lancer-chat-proof-fable"))
+        }
+        conversations.append(make("empty", cwd: ""))
+        return conversations
+    }
+
+    @Test("relative cwd stays its own bucket when last-component match is ambiguous")
+    func relativeAmbiguousStaysSeparate() {
+        let conversations = [
+            ChatConversation(title: "A", agentID: "a", hostName: "mac", cwd: "/Users/u/a/demo"),
+            ChatConversation(title: "B", agentID: "a", hostName: "mac", cwd: "/Users/u/b/demo"),
+            ChatConversation(title: "R", agentID: "a", hostName: "mac", cwd: "demo"),
+        ]
+        let repos = WorkspaceRepoCatalog.deriveRepos(conversations: conversations, added: [])
+        #expect(repos.contains { $0.cwd == "demo" && $0.threadCount == 1 })
+        #expect(repos.filter { $0.name == "demo" }.count == 3)
+    }
+
+    @Test("conversations for cwd filter by bucketKey and sort by recency")
     func conversationsForCwd() {
         let older = ChatConversation(
             title: "Older", agentID: "a", hostName: "mac", cwd: "/Users/dev/r",
@@ -143,7 +269,7 @@ struct WorkspaceRepoCatalogTests {
         #expect(all.map(\.title) == ["Other", "Worktree", "Newer", "Older"])
     }
 
-    @Test("thread status maps from last turn without inventing Checks Passed")
+    @Test("thread status maps from last turn; idle copy is No runs yet")
     func threadStatusMapping() {
         let conversation = ChatConversation(
             title: "Fix flow", agentID: "a", hostName: "mac", cwd: "/Users/dev/r",
@@ -181,36 +307,68 @@ struct WorkspaceRepoCatalogTests {
         #expect(done.statusKind == .completed)
         #expect(done.statusLabel == "Completed")
         #expect(!done.statusLabel.contains("Checks"))
+
+        let idle = WorkspaceRepoCatalog.threadItem(
+            conversation: ChatConversation(
+                title: "Fresh", agentID: "a", hostName: "mac", cwd: "/Users/dev/r",
+                status: .active
+            ),
+            lastTurn: nil,
+            includeRepoName: false
+        )
+        #expect(idle.statusKind == .idle)
+        #expect(idle.statusLabel == "No runs yet")
     }
 
-    @Test("groupByRecency buckets without inventing rows")
+    @Test("groupByRecency splits Today and Yesterday around midnight")
     func groupByRecency() {
-        let calendar = Calendar(identifier: .gregorian)
-        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = Date(timeIntervalSince1970: 1_800_000_000) // 2027-01-15 08:00:00 UTC
         let startOfToday = calendar.startOfDay(for: now)
-        let yesterday = calendar.date(byAdding: .hour, value: -20, to: startOfToday)!
+        let todayMorning = calendar.date(byAdding: .hour, value: 1, to: startOfToday)!
+        let justBeforeMidnight = calendar.date(byAdding: .second, value: -1, to: startOfToday)!
+        let yesterdayNoon = calendar.date(byAdding: .hour, value: -12, to: startOfToday)!
         let lastWeek = calendar.date(byAdding: .day, value: -3, to: startOfToday)!
         let earlier = calendar.date(byAdding: .day, value: -20, to: startOfToday)!
 
         let items = [
             ThreadListItem(
-                id: "1", title: "Y", statusKind: .completed, statusLabel: "Completed",
-                repoName: nil, cwd: "/a", lastActivityAt: yesterday
+                id: "t", title: "T", statusKind: .completed, statusLabel: "Completed",
+                repoName: nil, cwd: "/a", lastActivityAt: todayMorning
             ),
             ThreadListItem(
-                id: "2", title: "W", statusKind: .completed, statusLabel: "Completed",
+                id: "y1", title: "Y1", statusKind: .completed, statusLabel: "Completed",
+                repoName: nil, cwd: "/a", lastActivityAt: justBeforeMidnight
+            ),
+            ThreadListItem(
+                id: "y2", title: "Y2", statusKind: .completed, statusLabel: "Completed",
+                repoName: nil, cwd: "/a", lastActivityAt: yesterdayNoon
+            ),
+            ThreadListItem(
+                id: "w", title: "W", statusKind: .completed, statusLabel: "Completed",
                 repoName: nil, cwd: "/a", lastActivityAt: lastWeek
             ),
             ThreadListItem(
-                id: "3", title: "E", statusKind: .idle, statusLabel: "No activity",
+                id: "e", title: "E", statusKind: .idle, statusLabel: "No runs yet",
                 repoName: nil, cwd: "/a", lastActivityAt: earlier
             ),
         ]
 
         let groups = WorkspaceRepoCatalog.groupByRecency(items, now: now, calendar: calendar)
-        #expect(groups.map(\.title) == ["Yesterday", "This Week", "Earlier"])
-        #expect(groups.map { $0.items.count } == [1, 1, 1])
+        #expect(groups.map(\.title) == ["Today", "Yesterday", "This Week", "Earlier"])
+        #expect(groups.map { $0.items.count } == [1, 2, 1, 1])
+        #expect(groups[0].items.map(\.id) == ["t"])
+        #expect(Set(groups[1].items.map(\.id)) == ["y1", "y2"])
         #expect(WorkspaceRepoCatalog.groupByRecency([], now: now, calendar: calendar).isEmpty)
+    }
+
+    @Test("isAbsoluteSendTarget rejects relative and empty cwd")
+    func isAbsoluteSendTarget() {
+        #expect(WorkspaceRepoCatalog.isAbsoluteSendTarget("/Users/dev/r"))
+        #expect(!WorkspaceRepoCatalog.isAbsoluteSendTarget("command-center"))
+        #expect(!WorkspaceRepoCatalog.isAbsoluteSendTarget(""))
+        #expect(!WorkspaceRepoCatalog.isAbsoluteSendTarget("   "))
     }
 }
 

@@ -83,9 +83,9 @@ public struct ThreadListView: View {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+                            ForEach(groups, id: \.title) { group in
                                 sectionHeader(group.title)
-                                    .padding(.top, index == 0 ? 0 : 20)
+                                    .padding(.top, group.title == groups.first?.title ? 0 : 20)
 
                                 ForEach(group.items) { thread in
                                     NavigationLink {
@@ -137,15 +137,18 @@ public struct ThreadListView: View {
     private var workspaceCwdRepo: WorkspaceRepo? {
         switch workspace {
         case .allRepos:
-            return workspaceData.repos.first
+            return workspaceData.repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) }
         case .repo(let repo):
-            return repo
+            if WorkspaceRepoCatalog.isAbsoluteSendTarget(repo.cwd) {
+                return repo
+            }
+            return workspaceData.repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) }
         }
     }
 
     private func handleSend(_ prompt: String, _ cwd: String) {
+        guard WorkspaceRepoCatalog.isAbsoluteSendTarget(cwd) else { return }
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
-        guard !normalized.isEmpty else { return }
         activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized)
     }
 
