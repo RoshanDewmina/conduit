@@ -96,6 +96,80 @@ func TestQueuePersistsAcrossRestart(t *testing.T) {
 	}
 }
 
+// TestRestoreQueueDropsDeadRunApprovals: on startup, approvals whose run is
+// terminal or absent are pruned; live-running and empty-RunID approvals stay.
+func TestRestoreQueueDropsDeadRunApprovals(t *testing.T) {
+	dir := withStateDir(t)
+	core := newServer(serverHome())
+	if core.conversations == nil {
+		t.Fatal("conversation store required for restoreQueue reconciliation")
+	}
+
+	failed, err := core.conversations.beginTurn(conversationAppendRequest{
+		ClientTurnID: "restore-failed",
+		Agent:        "claudeCode",
+		Prompt:       "failed run",
+	}, dir, "run-failed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := core.conversations.db.Exec(
+		`UPDATE conversation_turns SET status='failed' WHERE run_id=?`, failed.RunID); err != nil {
+		t.Fatal(err)
+	}
+
+	running, err := core.conversations.beginTurn(conversationAppendRequest{
+		ClientTurnID: "restore-running",
+		Agent:        "claudeCode",
+		Prompt:       "live run",
+	}, dir, "run-running")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ts := time.Now().UTC().Format(time.RFC3339)
+	seed := []ApprovalEvent{
+		{ApprovalID: "a-failed", Agent: "claudeCode", Kind: "command", Command: "rm", CWD: dir, RunID: failed.RunID, Timestamp: ts},
+		{ApprovalID: "a-missing", Agent: "claudeCode", Kind: "command", Command: "rm", CWD: dir, RunID: "run-does-not-exist", Timestamp: ts},
+		{ApprovalID: "a-running", Agent: "claudeCode", Kind: "command", Command: "ls", CWD: dir, RunID: running.RunID, Timestamp: ts},
+		{ApprovalID: "a-empty", Agent: "claudeCode", Kind: "command", Command: "ls", CWD: dir, RunID: "", Timestamp: ts},
+	}
+	q := newDiskQueue(filepath.Join(dir, queueFileName))
+	if err := q.replace(seed); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &resident{core: core, queue: q}
+	if err := r.restoreQueue(); err != nil {
+		t.Fatal(err)
+	}
+
+	pending := r.core.approvals.pendingEvents()
+	got := map[string]bool{}
+	for _, e := range pending {
+		got[e.ApprovalID] = true
+	}
+	if len(pending) != 2 || !got["a-running"] || !got["a-empty"] {
+		t.Fatalf("pending after restore = %+v, want a-running + a-empty", pending)
+	}
+	if got["a-failed"] || got["a-missing"] {
+		t.Fatalf("dead-run approvals were kept: %+v", pending)
+	}
+
+	rewritten, err := q.readAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rewritten) != 2 {
+		t.Fatalf("queue.json survivors = %d, want 2: %+v", len(rewritten), rewritten)
+	}
+	for _, e := range rewritten {
+		if e.ApprovalID != "a-running" && e.ApprovalID != "a-empty" {
+			t.Fatalf("unexpected survivor in queue.json: %+v", e)
+		}
+	}
+}
+
 func installTestPolicy(t *testing.T) {
 	t.Helper()
 	doc := policy.Document{
