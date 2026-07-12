@@ -44,8 +44,6 @@ type attachmentUpload struct {
 type attachmentUploadHub struct {
 	mu      sync.Mutex
 	uploads map[string]*attachmentUpload
-	// completed counts finalized files in this process — soft client mirror of the 5-file cap.
-	completed int
 }
 
 func (s *server) attachmentHub() *attachmentUploadHub {
@@ -117,8 +115,10 @@ func (s *server) handleAttachmentPut(p attachmentPutParams) (attachmentPutResult
 		if p.Seq != 0 {
 			return attachmentPutResult{}, fmt.Errorf("unexpected seq %d for new upload", p.Seq)
 		}
-		if hub.completed >= attachmentMaxFiles {
-			return attachmentPutResult{}, fmt.Errorf("at most %d attachments allowed", attachmentMaxFiles)
+		// Cap concurrent in-flight reassemblies (memory bound); the per-message
+		// 5-file rule is enforced client-side per composer send.
+		if len(hub.uploads) >= attachmentMaxFiles {
+			return attachmentPutResult{}, fmt.Errorf("at most %d concurrent attachment uploads", attachmentMaxFiles)
 		}
 		capHint := int(p.TotalBytes)
 		if capHint > attachmentMaxChunkBytes*2 {
@@ -166,7 +166,6 @@ func (s *server) handleAttachmentPut(p attachmentPutParams) (attachmentPutResult
 	if err != nil {
 		return attachmentPutResult{}, err
 	}
-	hub.completed++
 	return attachmentPutResult{Path: path, OK: true}, nil
 }
 

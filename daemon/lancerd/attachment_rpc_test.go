@@ -171,15 +171,15 @@ func TestAttachmentPutFileCap(t *testing.T) {
 	s := newServer(t.TempDir())
 	defer s.poller.stopForTest()
 
+	// Fill the in-flight cap with incomplete uploads.
 	for i := 0; i < attachmentMaxFiles; i++ {
 		name := strings.Repeat("a", i+1) + ".txt"
-		data := []byte("x")
 		_, err := s.handleAttachmentPut(attachmentPutParams{
 			Name:       name,
-			TotalBytes: 1,
+			TotalBytes: 2,
 			Seq:        0,
-			DataBase64: base64.StdEncoding.EncodeToString(data),
-			Done:       true,
+			DataBase64: base64.StdEncoding.EncodeToString([]byte("x")),
+			Done:       false,
 		})
 		if err != nil {
 			t.Fatalf("file %d: %v", i, err)
@@ -193,7 +193,27 @@ func TestAttachmentPutFileCap(t *testing.T) {
 		Done:       true,
 	})
 	if err == nil {
-		t.Fatal("expected 5-file cap error")
+		t.Fatal("expected in-flight cap error")
+	}
+
+	// Completing one upload frees its slot — the cap is concurrency, not lifetime.
+	if _, err := s.handleAttachmentPut(attachmentPutParams{
+		Name:       "a.txt",
+		TotalBytes: 2,
+		Seq:        1,
+		DataBase64: base64.StdEncoding.EncodeToString([]byte("y")),
+		Done:       true,
+	}); err != nil {
+		t.Fatalf("finishing upload: %v", err)
+	}
+	if _, err := s.handleAttachmentPut(attachmentPutParams{
+		Name:       "after-free.txt",
+		TotalBytes: 1,
+		Seq:        0,
+		DataBase64: base64.StdEncoding.EncodeToString([]byte("x")),
+		Done:       true,
+	}); err != nil {
+		t.Fatalf("upload after freed slot: %v", err)
 	}
 }
 
