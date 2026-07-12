@@ -1555,6 +1555,12 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 	if event.RunID == "" {
 		event.RunID = s.dispatcher.runForCWD(event.CWD, event.Agent)
 	}
+	// Best-effort ledger backfill: locally-launched agents have no in-memory
+	// dispatch, but may still have a RUNNING turn at (cwd, agent). Leave ""
+	// if neither source knows — restoreQueue fail-closed keep stays correct.
+	if event.RunID == "" && s.conversations != nil {
+		event.RunID = s.conversations.latestRunningRunID(event.CWD, event.Agent)
+	}
 
 	decisionCh := s.approvals.add(event)
 	if notify != nil {

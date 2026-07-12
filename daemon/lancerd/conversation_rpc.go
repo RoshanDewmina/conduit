@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"path/filepath"
+)
 
 // conversation_rpc.go — wire-level request/response glue between the
 // agent.conversations.* JSON-RPC methods (SSH transport, server.go's
@@ -123,11 +126,17 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 	if isNew && resolvedCWD == "" {
 		resolvedCWD = expandHome("~")
 	}
+	// Validate before beginTurn so a relative/missing cwd cannot leave a
+	// garbage ledger row when the later launch fails the same check.
+	var err error
+	resolvedCWD, err = resolveDispatchCWD(resolvedCWD)
+	if err != nil {
+		return conversationAppendResponse{}, err
+	}
 
 	runID := newUUID()
 	var wt worktreeCreateResult
 	if req.UseWorktree && isNew && resolvedCWD != "" {
-		var err error
 		wt, err = s.createManagedWorktree(resolvedCWD, "", runID)
 		if err != nil {
 			return conversationAppendResponse{Status: "error", Message: err.Error()}, nil
@@ -298,12 +307,20 @@ func (s *server) conversationsAttachObservedSession(req conversationAttachObserv
 		return conversationAttachObservedSessionResponse{}, fmt.Errorf("conversation store unavailable")
 	}
 
+	// Observed attach only requires a well-formed absolute cwd — the session
+	// may reference a removed worktree, so existence is not required here
+	// (unlike conversationsAppend / resolveDispatchCWD).
+	resolvedCWD := expandHome(req.CWD)
+	if resolvedCWD == "" || !filepath.IsAbs(resolvedCWD) {
+		return conversationAttachObservedSessionResponse{}, fmt.Errorf("cwd must be an absolute path")
+	}
+
 	transcript, err := loadFullObservedTranscript("", req.SessionID)
 	if err != nil {
 		return conversationAttachObservedSessionResponse{}, fmt.Errorf("attachObservedSession: %w", err)
 	}
 
-	res, err := s.conversations.attachObservedSession(req.Provider, req.SessionID, expandHome(req.CWD), "", transcript.Messages)
+	res, err := s.conversations.attachObservedSession(req.Provider, req.SessionID, resolvedCWD, "", transcript.Messages)
 	if err != nil {
 		return conversationAttachObservedSessionResponse{}, err
 	}

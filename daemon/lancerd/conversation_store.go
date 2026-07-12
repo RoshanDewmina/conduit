@@ -1206,6 +1206,34 @@ func (s *conversationStore) turnByRunID(runID string) (conversationID, turnID st
 	return conversationID, turnID, err
 }
 
+// latestRunningRunID returns the run_id of the most recent turn still marked
+// 'running' whose conversation matches cwd+agent. Used to correlate hook-
+// originated approvals when no in-memory dispatch is registered. Returns ""
+// when none match — never invents an ID.
+func (s *conversationStore) latestRunningRunID(cwd, agent string) string {
+	if s == nil {
+		return ""
+	}
+	wantCWD := expandHome(cwd)
+	wantAgent := normalizeAgentSource(agent)
+	if wantCWD == "" || wantAgent == "" {
+		return ""
+	}
+	var runID string
+	err := s.db.QueryRow(`
+		SELECT t.run_id FROM conversation_turns t
+		JOIN conversations c ON c.id = t.conversation_id
+		WHERE t.status = 'running'
+		  AND c.cwd = ?
+		  AND (c.agent_id = ? OR c.provider = ?)
+		ORDER BY t.started_at DESC, t.ordinal DESC
+		LIMIT 1`, wantCWD, wantAgent, wantAgent).Scan(&runID)
+	if err != nil {
+		return ""
+	}
+	return runID
+}
+
 // --- attachObservedSession (Task 9) -----------------------------------------
 
 // conversationImportResult mirrors what attachObservedSession can determine at
@@ -1269,7 +1297,9 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 	hostName, _ := os.Hostname()
 
 	convTitle := title
-	if convTitle == "" {
+	if convTitle != "" {
+		convTitle = deriveTitle(convTitle)
+	} else {
 		convTitle = firstUserMessagePreview(messages)
 	}
 	if convTitle == "" {

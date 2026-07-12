@@ -228,10 +228,11 @@ func TestConversationsAppendSSHAndRelayMatchShape(t *testing.T) {
 	s := newServer(home)
 	defer s.poller.stopForTest()
 
+	proj := t.TempDir()
 	appendReq := map[string]interface{}{
 		"clientTurnId": "device-1:1",
 		"agent":        "claudeCode",
-		"cwd":          "/Users/roshan/project",
+		"cwd":          proj,
 		"prompt":       "Fix the failing auth test",
 		"model":        "sonnet",
 	}
@@ -408,10 +409,11 @@ func TestConversationsAppendNeedsApprovalUnderDefaultPolicyDoesNotDispatch(t *te
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}
 
+	proj := t.TempDir()
 	sshMsg := callSSHRPC(t, s, "agent.conversations.append", map[string]interface{}{
 		"clientTurnId": "device-1:1",
 		"agent":        "claudeCode",
-		"cwd":          "/proj",
+		"cwd":          proj,
 		"prompt":       "do not actually run this",
 	})
 	if sshMsg.Error != nil {
@@ -477,10 +479,11 @@ func TestConversationsAppendLaunchesAndBindsSessionUnderAllowPolicy(t *testing.T
 		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
 	}
 
+	proj := t.TempDir()
 	sshMsg := callSSHRPC(t, s, "agent.conversations.append", map[string]interface{}{
 		"clientTurnId": "device-1:1",
 		"agent":        "claudeCode",
-		"cwd":          "/proj",
+		"cwd":          proj,
 		"prompt":       "actually run this",
 	})
 	if sshMsg.Error != nil {
@@ -574,10 +577,11 @@ func TestConversationsAppendDecodesAndThreadsContract(t *testing.T) {
 	// through encoding/json exactly the way the wire bytes from an iOS client
 	// would, so a mistyped/missing json tag on the Go struct would fail this
 	// test the same way it fails a real device.
+	proj := t.TempDir()
 	sshMsg := callSSHRPC(t, s, "agent.conversations.append", map[string]interface{}{
 		"clientTurnId": "device-1:1",
 		"agent":        "claudeCode",
-		"cwd":          "/proj",
+		"cwd":          proj,
 		"prompt":       "add the contract",
 		"contract": map[string]interface{}{
 			"goal":               "thread the contract end to end",
@@ -631,7 +635,7 @@ func TestConversationsAppendDecodesAndThreadsContract(t *testing.T) {
 	oversizedMsg := callSSHRPC(t, s, "agent.conversations.append", map[string]interface{}{
 		"clientTurnId": "device-1:2",
 		"agent":        "claudeCode",
-		"cwd":          "/proj",
+		"cwd":          proj,
 		"prompt":       "oversized contract",
 		"contract": map[string]interface{}{
 			"goal":         "x",
