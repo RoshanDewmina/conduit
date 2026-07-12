@@ -356,7 +356,19 @@ func (c *e2eRelayClient) messageLoop() {
 				// messages as {type, payload:{…typed params…}}; handlers unmarshal
 				// those params directly, so passing the whole plaintext left every
 				// field empty (silent no-op dispatch/approval over the relay).
-				c.messageHandler(inner.Type, inner.Payload)
+				//
+				// Run the handler on its own goroutine — NEVER inline. Inline
+				// handling serialized every phone RPC behind whatever the
+				// previous one was doing; two live incidents (2026-07-11) wedged
+				// ALL phone→daemon traffic for minutes: a hung git subprocess in
+				// the receipt snapshot, then agent.sessions.list walking a 778MB
+				// ~/.codex/sessions tree. Handlers are already concurrency-safe
+				// (the SSH path invokes them from per-connection goroutines) and
+				// sendMessage serializes the seq→encrypt→send critical section,
+				// so replies cannot interleave on the wire. inner.Payload aliases
+				// this iteration's receive buffer, which is freshly allocated per
+				// Receive — safe to retain across the goroutine boundary.
+				go c.messageHandler(inner.Type, inner.Payload)
 			}
 		}
 	}
