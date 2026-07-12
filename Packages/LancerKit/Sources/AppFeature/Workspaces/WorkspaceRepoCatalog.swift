@@ -153,9 +153,20 @@ public enum WorkspaceRepoCatalog {
         let normalized = normalizeCwd(cwd)
         guard !normalized.isEmpty else { return "No folder" }
         if pathsMatch(normalized, homeDirectory) { return "Home" }
+        if isHostHomePath(normalized) { return "Home" }
         if !isAbsoluteCwd(normalized) { return normalized }
         let base = (normalized as NSString).lastPathComponent
         return base.isEmpty ? normalized : base
+    }
+
+    /// True for a host machine's home directory (`/Users/<name>`, `/home/<name>`).
+    /// On iOS `NSHomeDirectory()` is the app sandbox, so host cwds coming from the
+    /// daemon ledger can only be recognized by shape.
+    public static func isHostHomePath(_ path: String) -> Bool {
+        var components = (path as NSString).pathComponents
+        if components.last == "/" { components.removeLast() }
+        guard components.count == 3, components[0] == "/" else { return false }
+        return components[1] == "Users" || components[1] == "home"
     }
 
     /// True when `cwd` is a non-empty absolute path after normalize — the only

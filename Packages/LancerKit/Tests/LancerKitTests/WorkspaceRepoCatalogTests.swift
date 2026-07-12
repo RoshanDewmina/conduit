@@ -56,6 +56,15 @@ struct WorkspaceRepoCatalogTests {
         #expect(WorkspaceRepoCatalog.displayName(forCwd: home, homeDirectory: home) == "Home")
         #expect(WorkspaceRepoCatalog.displayName(forCwd: "") == "No folder")
         #expect(WorkspaceRepoCatalog.displayName(forCwd: "command-center") == "command-center")
+        // Host home is recognized by shape: on iOS NSHomeDirectory() is the app
+        // sandbox, so an injected-home equality check can never match real
+        // daemon cwds like /Users/roshansilva.
+        #expect(WorkspaceRepoCatalog.displayName(forCwd: "/Users/roshansilva", homeDirectory: "/sandbox") == "Home")
+        // /home/… can't be asserted through displayName on a macOS test host —
+        // normalizeCwd resolves the /home automount symlink. Assert the shape
+        // check directly; on iOS /home never symlink-resolves.
+        #expect(WorkspaceRepoCatalog.isHostHomePath("/home/deploy"))
+        #expect(WorkspaceRepoCatalog.displayName(forCwd: "/Users/dev/repos", homeDirectory: "/sandbox") == "repos")
     }
 
     @Test("hasHiddenComponent detects worktree-style paths only")
