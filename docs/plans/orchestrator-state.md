@@ -1,6 +1,50 @@
 # Orchestrator state — Fable swarm dashboard
 
-## ⚡ HANDOFF 2026-07-11 ~21:15 (session hop; owner directive: CHAT RELIABILITY + small issues = today's top priority)
+## ⚡ HANDOFF 2026-07-12 ~00:00 (punch list CLEARED except direct-open lane; PRs 89–93 merged)
+
+**Live state:** daemon running lane-Q-era binary == master content (list enrichment + approval
+prune live; backup at `~/.lancer/bin/lancerd.bak-pre-p93`). **Owner phone is ORPHANED** — sim
+holds the relay slot (code 892188); owner backup at `~/.lancer/relay-pairing.json.owner-backup-2237`
+(code 208937 — stable identity means phone auto-reconnects when that file is restored, no code
+entry). RESTORE after the final sim gate + tell owner. `~/.cursor/mcp.json` restored ✓.
+
+**Merged tonight (all sim-live-loop-gated, evidence in docs/test-runs/2026-07-11-sim-live-loop-gate/):**
+- **#89** repo-match grouping/dedup — PASS (trailing-slash dedup, thread grouped, live pong round-trip).
+- **#90** Proof Reel + receipt card — PASS after the gate caught a real ship-blocker: required
+  `conversationId` vs daemon `omitempty` → every real receipt failed decode (fixed `28fb0a7c`,
+  regression test on verbatim daemon payload). Reel sheet proven with an approved `ls` run
+  (approval card → Approve → receipt card → Stop 1/1 playback).
+- **#91** Flight Recorder — PASS (timeline of real ledger events; stdout/receipt/exit; expand OK).
+  Backlog nit: turn-row a11y label repeats 4×.
+- **#92** startup prune of dead-run pending approvals (punch #5) — Fable full-diff reviewed
+  (fail-closed: terminal/absent→drop, unknown/live/empty→keep); **live-proven** in daemon log:
+  `restoreQueue: pruned 1 stale approval(s)`.
+- **#93** honest thread-list status (punch #1) — daemon list carries lastTurnID/lastTurnStatus;
+  merge advances running→terminal only; refresh syncs when a local turn is running + on
+  scenePhase active. Gate caught a second bug: connection-state-read-once hydration race
+  (fixed `7e03b466`). Proven end-to-end: Working badge → daemon restart mid-run → list shows
+  Failed WITHOUT opening the thread.
+
+**Punch list status:** #1 ✓ (#93) · #2 ✓ (6 live sends round-tripped tonight incl. approval
+flow) · #3 ✓ (#89) · #4 IN FLIGHT — lane R `fix/p1-agents-direct-open` (Grok, dispatched):
+row tap → arm observed continue → LiveThreadView adopt-without-initial-send; interstitial
+deleted. Needs: my verify + app-target build + sim gate (Agents row tap) + merge. · #5 ✓ (#92)
+· #6 ✓ (transcript responsive post-#87) · #7 APNs co-test still owner-gated.
+
+**Then:** ONE device build to owner from master (after lane R) — review list: thread-list
+badges clear on foreground; receipt card + Proof Reel on completed runs; Flight Recorder rows
+in thread detail; Agents-row direct open. Then feature queue (plan-limits collector → account
+switcher → in-app messaging).
+
+**New gotchas (also appended to REVIEW_STANDARDS):** Go `omitempty` ↔ Swift required field =
+prod-only decode failure — wire fixtures must include a verbatim daemon capture · never read
+`firstConnectedMachine` once at call time (hydration race — wait like ShellLiveBridge) ·
+sim typing: HID type_text doesn't land in this iOS 27 sim's fields — use `simctl pbcopy` +
+long-press + `idb ui tap` on the Paste callout (SwiftUI buttons still need snapshot_ui refs;
+UIKit callouts accept idb) · two command-center repo rows on Workspaces root (discovered-16 vs
+added-1) — likely path-spelling split predating #89's normalizer on host-side cwds; backlog.
+
+## PREVIOUS HANDOFF 2026-07-11 ~21:15 (superseded above; kept for context)
 
 **Live state:** daemon deployed from master `d89a69e4`+#88 on owner code 208937, queue.json
 clean (2 ghost approvals hand-purged; class fix pending), 0 running turns. Owner phone has

@@ -66,6 +66,17 @@ Emit structured verdict JSON — one finding per entry:
   rule stays active. "Fail closed" means failing toward the more restrictive outcome per rule
   effect, not uniformly skipping the rule.
 
+- 2026-07-12 (PR #90 sim gate): **wire-payload test fixtures must include at least one verbatim
+  capture from the real emitter**, not only hand-written literals. Every ProofReceipt fixture
+  included `conversationId`; the daemon marks it `omitempty` and omits it on chat dispatches, so
+  the required Swift field failed decode on every real payload while 618 tests stayed green.
+  When a Swift Codable mirrors a Go struct, audit `omitempty` fields — they must be optionals.
+
+- 2026-07-12 (PR #93 sim gate): **never read relay connection state once at call time**
+  (`fleet.firstConnectedMachine` et al.) — it races launch hydration and reconnection and
+  silently no-ops. Wait-with-deadline like `ShellLiveBridge.waitForConnectedMachine`
+  (documented from the 2026-07-10 sim dogfood; re-introduced and re-caught 2026-07-12).
+
 - 2026-07-11 (Phase 0 repair, `1c102940`): before committing, verify `git status` shows the
   files you expect as *modified*, not the whole tree as untracked — a wiped index silently
   produces an empty-tree commit that records deletion of every file. `git cat-file -p HEAD`
