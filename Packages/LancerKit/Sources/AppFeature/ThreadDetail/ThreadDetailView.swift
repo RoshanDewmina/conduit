@@ -95,18 +95,6 @@ struct ThreadDetailView: View {
                                     VStack(alignment: .leading, spacing: 12) {
                                         ChatUserBubble(text: turn.prompt)
                                         threadAssistant(turn)
-
-                                        NavigationLink {
-                                            FlightRecorderView(
-                                                conversationID: thread.id,
-                                                turnID: turn.id,
-                                                prompt: turn.prompt,
-                                                runID: turn.runID
-                                            )
-                                        } label: {
-                                            flightRecorderRow(turn)
-                                        }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
@@ -206,32 +194,6 @@ struct ThreadDetailView: View {
         }
     }
 
-    private func flightRecorderRow(_ turn: ChatTurn) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "waveform.path.ecg")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Flight Recorder")
-                    .font(.system(size: 15, weight: .medium))
-                Text(turn.prompt)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .accessibilityLabel(Text("Flight Recorder for turn \(turn.ordinal + 1)"))
-    }
 
     private func loadTurns() async {
         guard thread.id != "preview" else { return }
@@ -269,8 +231,16 @@ struct ThreadDetailView: View {
 
             Spacer()
 
-            circleButton(systemImage: "ellipsis")
-                .accessibilityHidden(true)
+            Menu {
+                NavigationLink {
+                    FlightRecorderTurnListView(thread: thread, turns: turns)
+                } label: {
+                    Label("Flight Recorder", systemImage: "waveform.path.ecg")
+                }
+            } label: {
+                circleButton(systemImage: "ellipsis")
+            }
+            .accessibilityLabel(Text("Thread options"))
         }
     }
 
@@ -283,6 +253,38 @@ struct ThreadDetailView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.primary)
             )
+    }
+}
+
+/// Thread-level Flight Recorder entry: one row per turn, each opening that
+/// turn's event timeline. Replaces the per-turn rows that repeated after
+/// every reply (owner feedback 2026-07-12) now that tool chips render inline.
+struct FlightRecorderTurnListView: View {
+    let thread: ThreadListItem
+    let turns: [ChatTurn]
+
+    var body: some View {
+        List(turns) { turn in
+            NavigationLink {
+                FlightRecorderView(
+                    conversationID: thread.id,
+                    turnID: turn.id,
+                    prompt: turn.prompt,
+                    runID: turn.runID
+                )
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Turn \(turn.ordinal)")
+                        .font(.system(size: 15, weight: .medium))
+                    Text(turn.prompt)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .navigationTitle("Flight Recorder")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
