@@ -35,6 +35,11 @@ public struct LiveThreadView: View {
     @State private var toolArtifactsByTurnID: [String: [ChatArtifact]] = [:]
     @State private var showScrollToBottom = false
     @State private var isNearBottom = true
+    /// Ephemeral runStatus events from the daemon (G3). Absent → legacy Working….
+    @State private var liveRunStatus: LiveRunStatusParams?
+    @State private var liveStatusFirstAt: Date?
+    @State private var liveStatusLastAt: Date?
+    @State private var liveStatusNow: Date = .now
     @FocusState private var isFollowUpFocused: Bool
     #if DEBUG
     @State private var hasAutoAnsweredQuestion = false
@@ -151,6 +156,20 @@ public struct LiveThreadView: View {
                 if case .idle = bridge.sendState {
                     isFollowUpFocused = true
                 }
+            }
+        }
+        .task {
+            await observeLiveRunStatus()
+        }
+        .onChange(of: bridge.sendState) { _, newValue in
+            switch newValue {
+            case .idle, .completed, .failed:
+                clearLiveRunStatus()
+            case .working:
+                // Fresh turn — drop any leftover pill from a prior run.
+                clearLiveRunStatus()
+            case .streaming, .degraded:
+                break
             }
         }
         .task(id: receiptRefreshToken) {
@@ -397,11 +416,21 @@ public struct LiveThreadView: View {
         case .idle:
             EmptyView()
         case .working:
-            workingIndicator
-                .onAppear { streamingPacer.reset() }
+            Group {
+                if let text = liveStatusPillText(hasVisibleReplyText: false, isTerminalOrIdle: false) {
+                    LiveStatusPill(text: text)
+                } else {
+                    workingIndicator
+                }
+            }
+            .onAppear { streamingPacer.reset() }
         case .streaming(let turn):
             VStack(alignment: .leading, spacing: 12) {
                 liveToolChips(for: turn)
+                let hasText = !turn.assistantText.isEmpty || !streamingPacer.displayText.isEmpty
+                if let text = liveStatusPillText(hasVisibleReplyText: hasText, isTerminalOrIdle: false) {
+                    LiveStatusPill(text: text)
+                }
                 streamingAssistantBody(target: turn.assistantText)
             }
         case .completed(let turn):
@@ -438,6 +467,61 @@ public struct LiveThreadView: View {
                 degradedBanner(message)
             }
         }
+    }
+
+    private func liveStatusPillText(hasVisibleReplyText: Bool, isTerminalOrIdle: Bool) -> String? {
+        LiveStatusPresentation.displayText(
+            event: liveRunStatus,
+            firstEventAt: liveStatusFirstAt,
+            lastEventAt: liveStatusLastAt,
+            now: liveStatusNow,
+            hasVisibleReplyText: hasVisibleReplyText,
+            isTerminalOrIdle: isTerminalOrIdle
+        )
+    }
+
+    private func clearLiveRunStatus() {
+        liveRunStatus = nil
+        liveStatusFirstAt = nil
+        liveStatusLastAt = nil
+    }
+
+    private func ingestLiveRunStatus(_ params: LiveRunStatusParams) {
+        let at = LiveStatusPresentation.parseEventDate(params.at) ?? .now
+        if liveStatusFirstAt == nil {
+            liveStatusFirstAt = at
+        }
+        liveStatusLastAt = at
+        liveRunStatus = params
+        liveStatusNow = .now
+    }
+
+    @MainActor
+    private func observeLiveRunStatus() async {
+        let clock = ContinuousClock()
+        let statusTask = Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(
+                named: Notification.Name("lancerE2ELiveRunStatus")
+            ) {
+                guard let params = notification.userInfo?["params"] as? LiveRunStatusParams else {
+                    continue
+                }
+                if let runID = liveTurnRunID, params.runId != runID {
+                    continue
+                }
+                ingestLiveRunStatus(params)
+            }
+        }
+        defer { statusTask.cancel() }
+
+        while !Task.isCancelled {
+            liveStatusNow = .now
+            try? await clock.sleep(for: .seconds(1))
+        }
+    }
+
+    private var liveTurnRunID: String? {
+        LiveThreadTranscript.liveTurn(turns: bridge.transcriptTurns, liveTurnID: liveTurnID)?.runID
     }
 
     /// Character/word-paced reveal between poll deltas; markdown only after settle.

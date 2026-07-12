@@ -573,6 +573,7 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 		return nil, err
 	}
 	emitRunStatus(emit, runID, "running", nil)
+	emitLiveStatusStarting(emit, runID)
 
 	if stdinCtl != nil {
 		// Deliver the turn's prompt as the initial stream-json user message —
@@ -829,6 +830,7 @@ func emitToolArtifact(emit emitFunc, runID, toolID, toolName, inputJSON string) 
 	emit("agent.tool.start", map[string]any{
 		"runId": runID, "toolId": toolID, "toolName": toolName, "inputJSON": inputJSON,
 	})
+	emitLiveStatusTool(emit, runID, toolName, inputJSON)
 	emit("agent.artifact", map[string]any{
 		"artifactID":  toolID,
 		"runID":       runID,
@@ -969,12 +971,19 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 				if cb == nil {
 					break
 				}
-				if cbType, _ := cb["type"].(string); cbType == "tool_use" {
+				cbType, _ := cb["type"].(string)
+				switch cbType {
+				case "tool_use":
 					pending = &toolAccum{
 						toolID:   fmt.Sprintf("%v", cb["id"]),
 						toolName: fmt.Sprintf("%v", cb["name"]),
 					}
-				} else {
+					// Tool start (name only; target fills in on content_block_stop).
+					emitLiveStatusTool(emit, runID, pending.toolName, "")
+				case "thinking":
+					pending = nil
+					emitLiveStatusThinking(emit, runID)
+				default:
 					pending = nil
 				}
 			case "content_block_delta":
@@ -988,10 +997,13 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 					if text == "" {
 						break
 					}
+					emitLiveStatusStreaming(emit, runID)
 					n := atomic.AddInt64(seq, 1)
 					emit("agent.run.output", map[string]any{
 						"runId": runID, "stream": "stdout", "chunk": text, "seq": int(n),
 					})
+				case "thinking_delta":
+					emitLiveStatusThinking(emit, runID)
 				case "input_json_delta":
 					if pending != nil {
 						partial, _ := delta["partial_json"].(string)
@@ -1081,6 +1093,7 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			if text == "" {
 				continue
 			}
+			emitLiveStatusStreaming(emit, runID)
 			n := atomic.AddInt64(seq, 1)
 			emit("agent.run.output", map[string]any{
 				"runId": runID, "stream": "stdout", "chunk": text, "seq": int(n),
@@ -1128,6 +1141,7 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			if itemType, _ := item["type"].(string); itemType == "agent_message" {
 				text, _ := item["text"].(string)
 				if text != "" {
+					emitLiveStatusStreaming(emit, runID)
 					n := atomic.AddInt64(seq, 1)
 					emit("agent.run.output", map[string]any{
 						"runId": runID, "stream": "stdout", "chunk": text + "\n", "seq": int(n),
@@ -1177,6 +1191,9 @@ func emitRunStatus(emit emitFunc, runID, status string, code *int) {
 		params["exitCode"] = *code
 	}
 	emit("agent.run.status", params)
+	if status == "exited" || status == "failed" || status == "cancelled" || status == "budget-exceeded" {
+		clearLiveStatus(runID)
+	}
 }
 
 func exitCode(waitErr error) int {
