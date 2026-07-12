@@ -9,10 +9,15 @@ import (
 )
 
 // SessionMessage is one neutral transcript entry returned by agent.sessions.transcript.
+// Pattern from happier packages/protocol/src/sessionMessages/transcriptRawRecordV1.ts (MIT):
+// one canonical block schema all vendors normalize into (text / tool_use / tool_result / thinking).
 type SessionMessage struct {
 	Role      string `json:"role"`
 	Text      string `json:"text"`
 	ToolName  string `json:"toolName,omitempty"`
+	ToolUseID string `json:"toolUseId,omitempty"`
+	InputJSON string `json:"inputJson,omitempty"`
+	IsError   bool   `json:"isError,omitempty"`
 	Timestamp string `json:"timestamp,omitempty"`
 }
 
@@ -29,9 +34,12 @@ type claudeContentBlock struct {
 	Type      string          `json:"type"`
 	Text      string          `json:"text"`
 	Name      string          `json:"name"`
+	ID        string          `json:"id"`
 	Input     json.RawMessage `json:"input"`
 	Content   json.RawMessage `json:"content"`
 	ToolUseID string          `json:"tool_use_id"`
+	IsError   bool            `json:"is_error"`
+	Thinking  string          `json:"thinking"`
 }
 
 type claudeMessage struct {
@@ -102,9 +110,8 @@ func parseClaudeTranscript(path string, sinceLine int) (msgs []SessionMessage, n
 			continue
 		}
 		for j := range msg {
-			if len(msg[j].Text) > maxMessageTextBytes {
-				msg[j].Text = msg[j].Text[:maxMessageTextBytes]
-			}
+			msg[j].Text = clampText(msg[j].Text)
+			msg[j].InputJSON = clampText(msg[j].InputJSON)
 			totalBytes += len(msg[j].Text)
 		}
 		msgs = append(msgs, msg...)
@@ -188,6 +195,8 @@ func claudeUserMessages(l claudeLine, raw []byte) []SessionMessage {
 			out = append(out, SessionMessage{
 				Role:      "toolResult",
 				Text:      claudeToolResultText(b.Content),
+				ToolUseID: b.ToolUseID,
+				IsError:   b.IsError,
 				Timestamp: l.Timestamp,
 			})
 		}
@@ -228,16 +237,81 @@ func claudeAssistantMessages(l claudeLine) []SessionMessage {
 			if b.Text != "" {
 				out = append(out, SessionMessage{Role: "assistant", Text: b.Text, Timestamp: l.Timestamp})
 			}
+		case "thinking":
+			out = append(out, SessionMessage{
+				Role:      "thinking",
+				Text:      b.Thinking,
+				Timestamp: l.Timestamp,
+			})
+		case "redacted_thinking":
+			out = append(out, SessionMessage{
+				Role:      "thinking",
+				Text:      "(redacted)",
+				Timestamp: l.Timestamp,
+			})
 		case "tool_use":
 			out = append(out, SessionMessage{
 				Role:      "toolCall",
 				Text:      claudeToolUseSummary(b.Name, b.Input),
 				ToolName:  b.Name,
+				ToolUseID: b.ID,
+				InputJSON: string(b.Input),
 				Timestamp: l.Timestamp,
 			})
 		}
 	}
 	return out
+}
+
+// computeEditStats best-effort line counts for Claude Edit/Write/MultiEdit
+// inputs. Returns (+added, -removed); unknown tools / bad JSON → (0, 0).
+func computeEditStats(toolName, inputJSON string) (added, removed int) {
+	if inputJSON == "" {
+		return 0, 0
+	}
+	switch toolName {
+	case "Edit":
+		var in struct {
+			OldString string `json:"old_string"`
+			NewString string `json:"new_string"`
+		}
+		if json.Unmarshal([]byte(inputJSON), &in) != nil {
+			return 0, 0
+		}
+		return countLines(in.NewString), countLines(in.OldString)
+	case "Write":
+		var in struct {
+			Content string `json:"content"`
+		}
+		if json.Unmarshal([]byte(inputJSON), &in) != nil {
+			return 0, 0
+		}
+		return countLines(in.Content), 0
+	case "MultiEdit":
+		var in struct {
+			Edits []struct {
+				OldString string `json:"old_string"`
+				NewString string `json:"new_string"`
+			} `json:"edits"`
+		}
+		if json.Unmarshal([]byte(inputJSON), &in) != nil {
+			return 0, 0
+		}
+		for _, e := range in.Edits {
+			added += countLines(e.NewString)
+			removed += countLines(e.OldString)
+		}
+		return added, removed
+	default:
+		return 0, 0
+	}
+}
+
+func countLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
 }
 
 func claudeToolUseSummary(name string, input json.RawMessage) string {

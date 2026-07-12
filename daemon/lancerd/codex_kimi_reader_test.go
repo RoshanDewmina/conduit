@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -16,9 +17,30 @@ func TestCodexMessageText(t *testing.T) {
 	if role != "assistant" || text != "done" {
 		t.Fatalf("assistant msg → (%q,%q)", role, text)
 	}
-	// Non-message payloads yield nothing.
+	// Non-message payloads yield nothing from the text helper.
 	if _, text := codexMessageText(mk(`{"type":"function_call","name":"shell"}`)); text != "" {
 		t.Fatalf("function_call should not produce text, got %q", text)
+	}
+}
+
+func TestCodexResponseItemFunctionCall(t *testing.T) {
+	mk := func(s string) json.RawMessage { return json.RawMessage(s) }
+
+	msgs := codexResponseItem(mk(`{"type":"function_call","name":"shell","arguments":"{\"command\":\"ls\"}","call_id":"call_abc"}`))
+	if len(msgs) != 1 {
+		t.Fatalf("got %d msgs, want 1: %+v", len(msgs), msgs)
+	}
+	m := msgs[0]
+	if m.Role != "toolCall" || m.ToolName != "shell" || m.ToolUseID != "call_abc" {
+		t.Fatalf("function_call → %+v", m)
+	}
+	if !strings.Contains(m.InputJSON, `"command"`) || !strings.Contains(m.InputJSON, `ls`) {
+		t.Fatalf("InputJSON = %q", m.InputJSON)
+	}
+
+	out := codexResponseItem(mk(`{"type":"function_call_output","call_id":"call_abc","output":"file.txt"}`))
+	if len(out) != 1 || out[0].Role != "toolResult" || out[0].ToolUseID != "call_abc" || out[0].Text != "file.txt" {
+		t.Fatalf("function_call_output → %+v", out)
 	}
 }
 
@@ -45,6 +67,26 @@ func TestKimiMessage(t *testing.T) {
 	// Non-message wire events yield nothing.
 	if role, _, _ := kimiMessage([]byte(`{"type":"config.update","modelAlias":"x"}`)); role != "" {
 		t.Fatalf("config.update should not be a message, got role %q", role)
+	}
+}
+
+func TestKimiTranscriptToolCallInputJSON(t *testing.T) {
+	msgs := kimiMessagesFromLine([]byte(`{"type":"context.append_message","message":{"role":"assistant","content":[{"type":"text","text":"running"}],"toolCalls":[{"id":"tc1","function":{"name":"bash","arguments":"{\"command\":\"pwd\"}"}}]}}`))
+	var tc *SessionMessage
+	for i := range msgs {
+		if msgs[i].Role == "toolCall" {
+			tc = &msgs[i]
+			break
+		}
+	}
+	if tc == nil {
+		t.Fatalf("expected toolCall in %+v", msgs)
+	}
+	if tc.ToolName != "bash" || tc.ToolUseID != "tc1" {
+		t.Fatalf("toolCall = %+v", tc)
+	}
+	if !strings.Contains(tc.InputJSON, `"command"`) || !strings.Contains(tc.InputJSON, `pwd`) {
+		t.Fatalf("InputJSON = %q", tc.InputJSON)
 	}
 }
 

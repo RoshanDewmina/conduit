@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestOpenCodePartToMessage(t *testing.T) {
 	cases := []struct {
@@ -16,7 +19,7 @@ func TestOpenCodePartToMessage(t *testing.T) {
 		{"assistant text", `{"type":"text","text":"done"}`, "assistant", "assistant", "done", "", true},
 		{"tool with command", `{"type":"tool","tool":"bash","state":{"input":{"command":"go test ./..."}}}`, "assistant", "toolCall", "go test ./...", "bash", true},
 		{"tool with path", `{"type":"tool","tool":"read","state":{"input":{"filePath":"/a/b.go"}}}`, "assistant", "toolCall", "/a/b.go", "read", true},
-		{"reasoning → system", `{"type":"reasoning","text":"thinking"}`, "assistant", "system", "thinking", "", true},
+		{"reasoning → thinking", `{"type":"reasoning","text":"thinking"}`, "assistant", "thinking", "thinking", "", true},
 		{"step-start skipped", `{"type":"step-start"}`, "assistant", "", "", "", false},
 		{"empty text skipped", `{"type":"text","text":""}`, "user", "", "", "", false},
 		{"malformed skipped", `{not json`, "user", "", "", "", false},
@@ -35,6 +38,17 @@ func TestOpenCodePartToMessage(t *testing.T) {
 					m.Role, m.Text, m.ToolName, c.wantRole, c.wantText, c.wantTool)
 			}
 		})
+	}
+
+	// Tool parts should carry full input JSON, not just the one-field summary.
+	m, ok := openCodePartToMessage(
+		`{"type":"tool","tool":"bash","state":{"input":{"command":"go test ./...","cwd":"/tmp"}}}`,
+		"assistant")
+	if !ok {
+		t.Fatal("expected tool part ok")
+	}
+	if m.InputJSON == "" || !strings.Contains(m.InputJSON, `"command"`) || !strings.Contains(m.InputJSON, `"cwd"`) {
+		t.Fatalf("InputJSON missing full input: %q", m.InputJSON)
 	}
 }
 

@@ -169,6 +169,74 @@ func codexMessageText(payload json.RawMessage) (role, text string) {
 	return p.Role, b.String()
 }
 
+// codexResponseItem maps one Codex response_item payload onto zero or more
+// neutral SessionMessages. Handles message, function_call, and
+// function_call_output (previously skipped).
+func codexResponseItem(payload json.RawMessage) []SessionMessage {
+	var probe struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(payload, &probe) != nil {
+		return nil
+	}
+	switch probe.Type {
+	case "message":
+		role, text := codexMessageText(payload)
+		if text == "" || (role != "user" && role != "assistant") {
+			return nil
+		}
+		if role == "user" && isCodexInjectedText(text) {
+			return nil
+		}
+		return []SessionMessage{{Role: role, Text: clampText(text)}}
+	case "function_call":
+		var p struct {
+			Name      string `json:"name"`
+			Arguments string `json:"arguments"`
+			CallID    string `json:"call_id"`
+		}
+		if json.Unmarshal(payload, &p) != nil || p.Name == "" {
+			return nil
+		}
+		inputJSON := p.Arguments
+		// Prefer compact JSON; if arguments is already a JSON object string, keep it.
+		if inputJSON != "" {
+			var raw any
+			if json.Unmarshal([]byte(inputJSON), &raw) == nil {
+				if b, err := json.Marshal(raw); err == nil {
+					inputJSON = string(b)
+				}
+			}
+		}
+		summary := p.Name
+		if inputJSON != "" {
+			summary = claudeToolUseSummary(p.Name, json.RawMessage(inputJSON))
+		}
+		return []SessionMessage{{
+			Role:      "toolCall",
+			Text:      clampText(summary),
+			ToolName:  p.Name,
+			ToolUseID: p.CallID,
+			InputJSON: clampText(inputJSON),
+		}}
+	case "function_call_output":
+		var p struct {
+			CallID string `json:"call_id"`
+			Output string `json:"output"`
+		}
+		if json.Unmarshal(payload, &p) != nil {
+			return nil
+		}
+		return []SessionMessage{{
+			Role:      "toolResult",
+			Text:      clampText(p.Output),
+			ToolUseID: p.CallID,
+		}}
+	default:
+		return nil
+	}
+}
+
 // codexFindTranscriptPath locates a rollout file by session id (uuid). Used by the
 // transcript RPC so it never accepts a caller-supplied path.
 func codexFindTranscriptPath(home, sessionID string) string {
@@ -220,14 +288,7 @@ func codexTranscript(home, sessionID string, sinceLine int) (SessionTranscriptRe
 		if json.Unmarshal(sc.Bytes(), &env) != nil || env.Type != "response_item" {
 			continue
 		}
-		role, text := codexMessageText(env.Payload)
-		if text == "" || (role != "user" && role != "assistant") {
-			continue
-		}
-		if role == "user" && isCodexInjectedText(text) {
-			continue
-		}
-		msgs = append(msgs, SessionMessage{Role: role, Text: clampText(text)})
+		msgs = append(msgs, codexResponseItem(env.Payload)...)
 	}
 	return SessionTranscriptResult{Messages: msgs, NextLine: idx, ResetRequired: false}, nil
 }
