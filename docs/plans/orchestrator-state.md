@@ -1,6 +1,27 @@
 # Orchestrator state — Fable swarm dashboard
 
-## ⚡ HANDOFF 2026-07-12 ~09:00 — OWNER P0: duplicate command-center rows in Workspaces (3-lane fix in flight)
+## ⚡ HANDOFF 2026-07-12 ~10:45 — P0 CLOSED (PRs #95–#98 merged, dogfood-proven); new owner asks queued
+
+**All four lanes merged to master (`33aa0fdd`):**
+- **#95** lane T repo bucketing (Cursor grok; codex review found Home-label + badge/list mismatch, fixed; live sim gate: one command-center row + PONG round-trip).
+- **#96** lane W daemon cwd hygiene (Cursor grok; Fable full-diff review caught resolveDispatchCWD-is-Stat-only → explicit IsAbs guard `a07cba25`; **live-proven post hot-swap: `restoreQueue: pruned 5 stale approval(s)`** — the empty-RunID ghosts).
+- **#97** lane V chat-loop robustness (2 blocking review findings fixed `4fc63e18`, re-review approve; live gate: close-mid-run → new chat round-trips, Retry ×2 recovered real reconnect races, reopened thread shows real transcript).
+- **#98** lane X tilde fix (owner phone showed 16/1/0 command-center rows on the merged build — added repo stored as `~/…` sandbox-expanded on iOS into a bogus root; `NSString.isAbsolutePath` counts `~` as absolute. Fixture reproduces exact phone state; review approve; owner phone reinstalled with this build).
+- **Dogfood gate PASSED (owner's new done-bar, saved to memory):** agent dispatched FROM Lancer's sim composer fixed all 25 `SiriRelevanceCoordinator` warnings; Edit approval approved on the owner's physical phone; receipt + exit 0; committed `226f2307`.
+
+**Relay ops state:** owner phone paired on **code 116955** (fresh — a sim-gate `lancerd pair` wiped the backend's in-memory 208937 registration; the owner's phone auto-retry against the dead code was ALSO what kept kicking the sim off, ~2s re-pair loop). Daemon binary = master post-#96 (`lancerd.bak-pre-p96` backup). Sim app stopped. ⚠️ NEW RULE: never run bare `lancerd pair` while the owner holds the slot — it replaces the pairing AND kills the old backend registration; `--help` is not parsed (it executed twice).
+
+**New owner asks (2026-07-12, this session) — dispatch next, in recommended order:**
+1. **Context uploads + artifact rendering** (composer Context sheet is affordance-only, `ContextAttachView.swift:132`; = readiness-audit gap #1, both directions). 
+2. **Full terminal support** (owner reversed the 2026-06-30 deferral): phased plan in `docs/product/2026-07-12-orca-terminal-port-map.md` — Phase 1 re-wire existing block terminal (ui), Phase 2 lancerd-owned terminal sessions over relay (sensitive), Phase 3 mobile input kit (ui).
+3. Proof card placement: receipt chip in chat, full card in Flight Recorder (decided, backlogged).
+4. Verify Agents section populates on the owner's phone now that pairing is stable (feature exists: last-60 observed sessions, tap-to-continue via #94). If still "Machine unreachable" while connected → bug lane.
+5. Readiness audit for the "full-time on Lancer" goal: `docs/product/2026-07-12-full-time-readiness-audit.md` (top gaps: uploads/artifacts ↔, first-send-after-reconnect race, diff review card, plan-limits #22, webapp preview).
+**Reliability backlog (seen ×3 live today):** first send after a fresh pairing/reconnect races the relay re-key → "machine didn't respond"; Retry recovers. Root-cause lane recommended before terminal Phase 2 touches the relay.
+
+Pre-existing backlog (#22–#28 owner-asks ledger) unchanged below.
+
+## PREVIOUS HANDOFF 2026-07-12 ~09:00 — OWNER P0: duplicate command-center rows in Workspaces (3-lane fix in flight)
 
 **Owner P0 (screenshot + owner's words "Multiple instances of command-center — make sure we can
 only have one"):** Workspaces shows THREE command-center rows plus a "roshansilva" row. Confirmed

@@ -1,8 +1,17 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-11 (Phase 0 executed — see `plans/orchestrator-state.md`)
-**Active branch:** `feat/chat-overhaul-w0a` (W0.A dogfood in flight, dirty tree) — re-check
+**Last updated:** 2026-07-12 (P0 cwd/bucketing swarm — PRs #95–#98 merged; see `plans/orchestrator-state.md` top handoff)
+**Active branch:** `master` (all P0 lanes merged; owner phone runs `b4b5b638`-content build) — re-check
 `git rev-parse HEAD` / `gh pr list` before citing anything here.
+
+> **2026-07-12 in one line:** owner P0 "multiple command-center rows" fixed end-to-end
+> (#95 app bucketing · #96 daemon cwd hygiene + prunable approvals · #97 chat-loop
+> close-mid-run/retry/reopen · #98 tilde sandbox-expansion — the on-device recurrence);
+> proven by a live dogfood run (agent fixed real compiler warnings via Lancer itself,
+> approval on the owner's phone, `226f2307`). New owner asks queued: full terminal
+> (`product/2026-07-12-orca-terminal-port-map.md`), context uploads + readiness gaps
+> (`product/2026-07-12-full-time-readiness-audit.md`). ⚠️ Relay ops: owner pairing is now
+> code 116955 (the 208937 backend registration was wiped by a sim-gate `lancerd pair`).
 **Direction SSOT:** [`docs/product/2026-07-10-lancer-daily-driver-definition.md`](product/2026-07-10-lancer-daily-driver-definition.md)
 **Build how:** [`docs/product/2026-07-10-lancer-agent-build-roadmap.md`](product/2026-07-10-lancer-agent-build-roadmap.md)
 
