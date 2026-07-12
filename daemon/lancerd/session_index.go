@@ -39,10 +39,43 @@ const recentlyActiveWindow = 3 * time.Minute
 // the sessions that command knows about (backgrounded/active ones only —
 // interactive sessions started directly in a terminal are not covered, which
 // is expected), and returns the merged, lastActivity-descending list.
+// sessionIndexCache memoizes buildSessionIndex results for a short TTL. The
+// phone's Agents section polls every ~5s over the relay; without a cache each
+// poll re-walked ~/.claude/projects and ~/.codex/sessions (observed at 778MB /
+// hundreds of JSONL files), which is wasted work even now that handlers run
+// off the message loop.
+var sessionIndexCache struct {
+	mu      sync.Mutex
+	home    string
+	result  []SessionInfo
+	fetched time.Time
+}
+
+const sessionIndexCacheTTL = 5 * time.Second
+
 func buildSessionIndex(home string) ([]SessionInfo, error) {
 	if home == "" {
 		home = agentHomeDir()
 	}
+	sessionIndexCache.mu.Lock()
+	if sessionIndexCache.home == home && time.Since(sessionIndexCache.fetched) < sessionIndexCacheTTL && sessionIndexCache.result != nil {
+		cached := sessionIndexCache.result
+		sessionIndexCache.mu.Unlock()
+		return cached, nil
+	}
+	sessionIndexCache.mu.Unlock()
+	result, err := buildSessionIndexUncached(home)
+	if err == nil {
+		sessionIndexCache.mu.Lock()
+		sessionIndexCache.home = home
+		sessionIndexCache.result = result
+		sessionIndexCache.fetched = time.Now()
+		sessionIndexCache.mu.Unlock()
+	}
+	return result, err
+}
+
+func buildSessionIndexUncached(home string) ([]SessionInfo, error) {
 	projectsDir := filepath.Join(home, ".claude", "projects")
 	bare, err := scanTranscripts(projectsDir)
 	if err != nil {
