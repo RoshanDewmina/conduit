@@ -872,8 +872,10 @@ public struct LiveThreadView: View {
         sshChannel: DaemonChannel?,
         relayBridge: E2ERelayBridge?
     ) async throws -> AttachmentUploader.ChunkResult {
-        if let sshChannel {
-            let result = try await sshChannel.putAttachment(
+        // The prompt dispatches to the conversation's relay machine (ShellLiveBridge),
+        // so the file must land on that same host; SSH is the no-relay fallback.
+        if let relayBridge {
+            let result = try await relayBridge.relayPutAttachment(
                 conversationId: params.conversationId,
                 name: params.name,
                 totalBytes: params.totalBytes,
@@ -883,8 +885,8 @@ public struct LiveThreadView: View {
             )
             return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
         }
-        guard let relayBridge else { throw AttachmentUploadError.noTransport }
-        let result = try await relayBridge.relayPutAttachment(
+        guard let sshChannel else { throw AttachmentUploadError.noTransport }
+        let result = try await sshChannel.putAttachment(
             conversationId: params.conversationId,
             name: params.name,
             totalBytes: params.totalBytes,

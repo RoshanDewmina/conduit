@@ -251,16 +251,17 @@ public struct NewChatComposerView: View {
                         drafts, id: draft.id, state: .error(message: AttachmentUploadError.noTransport.localizedDescription)
                     )
                 }
-                attachments = drafts
+                publishDrafts(&drafts)
                 isUploadingAttachments = false
                 return
             }
             for draft in drafts {
+                guard attachments.contains(where: { $0.id == draft.id }) else { continue }
                 guard case .pending = draft.state else { continue }
                 drafts = AttachmentDraftStore.withState(
                     drafts, id: draft.id, state: .uploading(progress: 0)
                 )
-                attachments = drafts
+                publishDrafts(&drafts)
                 do {
                     let path = try await AttachmentUploader.upload(
                         draft: draft,
@@ -276,18 +277,22 @@ public struct NewChatComposerView: View {
                             drafts = AttachmentDraftStore.withState(
                                 drafts, id: draft.id, state: .uploading(progress: progress)
                             )
-                            attachments = drafts
+                            publishDrafts(&drafts)
                         }
                     )
+                    if !attachments.contains(where: { $0.id == draft.id }) {
+                        isUploadingAttachments = false
+                        return
+                    }
                     drafts = AttachmentDraftStore.withState(
                         drafts, id: draft.id, state: .done(hostPath: path)
                     )
-                    attachments = drafts
+                    publishDrafts(&drafts)
                 } catch {
                     drafts = AttachmentDraftStore.withState(
                         drafts, id: draft.id, state: .error(message: error.localizedDescription)
                     )
-                    attachments = drafts
+                    publishDrafts(&drafts)
                     isUploadingAttachments = false
                     return
                 }
@@ -304,15 +309,21 @@ public struct NewChatComposerView: View {
         dismiss()
     }
 
-    /// Prefer the attached SSH `DaemonChannel` (same priority as CommandGateway
-    /// run-control / status), then the paired relay bridge.
+    private func publishDrafts(_ drafts: inout [AttachmentDraft]) {
+        let surviving = Set(attachments.map(\.id))
+        drafts.removeAll { !surviving.contains($0.id) }
+        attachments = drafts
+    }
+
+    /// The prompt dispatches through the relay machine (onSend → ShellLiveBridge),
+    /// so the file must land on that same host; SSH is the no-relay fallback.
     private func putAttachmentChunk(
         _ params: AttachmentUploader.ChunkParams,
         sshChannel: DaemonChannel?,
         relayBridge: E2ERelayBridge?
     ) async throws -> AttachmentUploader.ChunkResult {
-        if let sshChannel {
-            let result = try await sshChannel.putAttachment(
+        if let relayBridge {
+            let result = try await relayBridge.relayPutAttachment(
                 conversationId: params.conversationId,
                 name: params.name,
                 totalBytes: params.totalBytes,
@@ -322,8 +333,8 @@ public struct NewChatComposerView: View {
             )
             return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
         }
-        guard let relayBridge else { throw AttachmentUploadError.noTransport }
-        let result = try await relayBridge.relayPutAttachment(
+        guard let sshChannel else { throw AttachmentUploadError.noTransport }
+        let result = try await sshChannel.putAttachment(
             conversationId: params.conversationId,
             name: params.name,
             totalBytes: params.totalBytes,
