@@ -943,6 +943,71 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		s.writeResult(msg.ID, result)
 
+	case "repo.turnDiff":
+		var req repoTurnDiffRequest
+		if err := json.Unmarshal(msg.Params, &req); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		result, err := s.repoTurnDiff(req)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
+	case "repo.sessionDiff":
+		var req repoSessionDiffRequest
+		if err := json.Unmarshal(msg.Params, &req); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		result, err := s.repoSessionDiff(req)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
+	case "repo.fileDiff":
+		var req repoFileDiffRequest
+		if err := json.Unmarshal(msg.Params, &req); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		result, err := s.repoFileDiff(req)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
+	case "repo.tree":
+		var req repoTreeRequest
+		if err := json.Unmarshal(msg.Params, &req); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		result, err := s.repoTree(req)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
+	case "repo.file":
+		var req repoFileRequest
+		if err := json.Unmarshal(msg.Params, &req); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		result, err := s.repoFile(req)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, result)
+
 	case "lancer.device.register":
 		var info registeredDevice
 		if err := json.Unmarshal(msg.Params, &info); err != nil {
@@ -1815,6 +1880,9 @@ func (s *server) persistConversationEvent(method string, params any) {
 		}
 		if err := s.conversations.appendRunStatus(runID, status, exitCode, errMsg); err != nil {
 			logConversationPersistError("appendRunStatus", runID, err)
+		}
+		if isTerminalRunStatus(status) {
+			s.stampTurnBaselineEndForRun(runID, turnID)
 		}
 
 	case "agent.artifact":

@@ -653,6 +653,74 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("agentConversationsAttachObservedSessionResult", data)
 
+	case "repoTurnDiff":
+		var req repoTurnDiffRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			log.Printf("e2e: unmarshal repoTurnDiff failed: %v", err)
+			return
+		}
+		result, err := r.server.repoTurnDiff(req)
+		payloadOut := conversationRelayPayload(result, err)
+		msg := map[string]interface{}{"type": "repoTurnDiffResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("repoTurnDiffResult", data)
+
+	case "repoSessionDiff":
+		var req repoSessionDiffRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			log.Printf("e2e: unmarshal repoSessionDiff failed: %v", err)
+			return
+		}
+		result, err := r.server.repoSessionDiff(req)
+		payloadOut := conversationRelayPayload(result, err)
+		msg := map[string]interface{}{"type": "repoSessionDiffResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("repoSessionDiffResult", data)
+
+	case "repoFileDiff":
+		var req repoFileDiffRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			log.Printf("e2e: unmarshal repoFileDiff failed: %v", err)
+			return
+		}
+		result, err := r.server.repoFileDiff(req)
+		payloadOut := conversationRelayPayload(result, err)
+		msg := map[string]interface{}{"type": "repoFileDiffResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("repoFileDiffResult", data)
+
+	case "repoTree":
+		var req repoTreeRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			log.Printf("e2e: unmarshal repoTree failed: %v", err)
+			return
+		}
+		result, err := r.server.repoTree(req)
+		// SSH returns the directory-entry array as the JSON-RPC result; mirror
+		// that on the relay (conversationRelayPayload expects a struct/map).
+		var payloadOut interface{} = result
+		if result == nil {
+			payloadOut = []repoTreeEntry{}
+		}
+		if err != nil {
+			payloadOut = map[string]interface{}{"error": err.Error()}
+		}
+		msg := map[string]interface{}{"type": "repoTreeResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("repoTreeResult", data)
+
+	case "repoFile":
+		var req repoFileRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			log.Printf("e2e: unmarshal repoFile failed: %v", err)
+			return
+		}
+		result, err := r.server.repoFile(req)
+		payloadOut := conversationRelayPayload(result, err)
+		msg := map[string]interface{}{"type": "repoFileResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("repoFileResult", data)
+
 	default:
 		log.Printf("e2e: unhandled message type: %s", msgType)
 	}
