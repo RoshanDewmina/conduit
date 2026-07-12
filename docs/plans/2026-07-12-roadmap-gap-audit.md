@@ -44,8 +44,12 @@ hot-swap + identity badges, Orca terminal port map, readiness audit.
 
 **On-device test (Tier-0 re-proof + LA-4): READY NOW except one blocker.**
 The relay session lifecycle (phone slot churn on reconnect/re-pair; backend slot TTL; first-send
-race) is the single flakiest surface — it interrupted THIS audit's sim pass. It's owner-visible
-("machine didn't respond", pairing losses) and would poison a tester's first hour.
+race) is the single flakiest surface — it interrupted THIS audit's sim pass **terminally**: after
+an app relaunch, every phone-role websocket was closed by the backend within ~500ms, across TWO
+fresh pairing codes, even after successful pairing handshakes (oslog 13:40–13:49; reproducible).
+The #101 long-thread rendering sim gate could not complete because of it (rendering fixes remain
+unit + build gated; daemon-side import verified via sqlite: correct title, 35 turns, 1036 events).
+It's owner-visible ("machine didn't respond", pairing losses) and would poison a tester's first hour.
 → Fix-before-testers: **REL-1 relay session robustness lane** (backend slot handling + client
 identity re-pair + first-send retry) — sensitive, needs its own spec; ~1–2 lanes.
 
