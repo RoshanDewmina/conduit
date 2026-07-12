@@ -70,7 +70,7 @@ struct FileViewerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView([.horizontal, .vertical]) {
-                VStack(alignment: .leading, spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     if content.truncated {
                         Text("Truncated preview")
                             .font(.system(size: 12, weight: .medium))
@@ -94,6 +94,8 @@ struct FileViewerView: View {
                         }
                         .padding(.vertical, 1)
                         .padding(.horizontal, 8)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text("Line \(index + 1), \(String(line))"))
                     }
                 }
                 .padding(.vertical, 8)

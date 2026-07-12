@@ -4,7 +4,6 @@ import SwiftUI
 /// Collapsible hunk: "Lines X–Y +a −d" + unified diff lines.
 struct DiffHunkView: View {
     let hunk: RepoDiffHunk
-    let path: String
     var expandAll: Bool
     var onComment: (DiffDisplayRow) -> Void
 
@@ -32,11 +31,14 @@ struct DiffHunkView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(isExpanded ? "Collapse" : "Expand") \(hunk.sectionTitle)"))
 
             if isExpanded {
-                ForEach(DiffHunkPresentation.rows(from: hunk)) { row in
-                    DiffLineRow(row: row) {
-                        onComment(row)
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(DiffHunkPresentation.rows(from: hunk)) { row in
+                        DiffLineRow(row: row) {
+                            onComment(row)
+                        }
                     }
                 }
             }

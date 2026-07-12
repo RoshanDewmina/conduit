@@ -29,6 +29,7 @@ public struct TurnDiffCard: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text("Open review, \(summary.cardSummaryLabel)"))
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {

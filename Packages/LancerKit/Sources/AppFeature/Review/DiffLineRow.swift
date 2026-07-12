@@ -31,6 +31,20 @@ struct DiffLineRow: View {
         .buttonStyle(.plain)
         .disabled(onTap == nil)
         .accessibilityIdentifier("diff-line-\(row.displayLineNumber ?? 0)")
+        .accessibilityLabel(Text(accessibilityDescription))
+    }
+
+    private var accessibilityDescription: String {
+        let kindLabel: String
+        switch row.kind {
+        case .add: kindLabel = "Added"
+        case .del: kindLabel = "Removed"
+        case .context: kindLabel = "Context"
+        }
+        if let n = row.displayLineNumber {
+            return "\(kindLabel) line \(n), \(row.text)"
+        }
+        return "\(kindLabel), \(row.text)"
     }
 
     private var lineNumberLabel: String {

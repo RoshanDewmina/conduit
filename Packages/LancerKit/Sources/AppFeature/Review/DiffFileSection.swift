@@ -6,6 +6,7 @@ struct DiffFileSection: View {
     let file: RepoDiffFile
     let fileDiff: RepoFileDiff?
     let isLoading: Bool
+    var loadError: String? = nil
     var expandAll: Bool
     var onOpenViewer: () -> Void
     var onComment: (DiffDisplayRow) -> Void
@@ -26,15 +27,23 @@ struct DiffFileSection: View {
                             .foregroundStyle(.secondary)
                     }
                     .padding(14)
+                } else if let loadError {
+                    Text(loadError)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.orange)
+                        .padding(14)
                 } else if let fileDiff {
-                    ForEach(fileDiff.hunks) { hunk in
-                        DiffHunkView(
-                            hunk: hunk,
-                            path: file.path,
-                            expandAll: expandAll,
-                            onComment: onComment
-                        )
-                        Divider()
+                    if fileDiff.hunks.isEmpty {
+                        emptyHunksBody
+                    } else {
+                        ForEach(fileDiff.hunks) { hunk in
+                            DiffHunkView(
+                                hunk: hunk,
+                                expandAll: expandAll,
+                                onComment: onComment
+                            )
+                            Divider()
+                        }
                     }
                     if fileDiff.truncated {
                         Text("Diff truncated")
@@ -56,6 +65,33 @@ struct DiffFileSection: View {
         .onAppear { isExpanded = expandAll }
     }
 
+    private var emptyHunksBody: some View {
+        Text(emptyHunksMessage)
+            .font(.system(size: 13))
+            .foregroundStyle(.secondary)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(Text(emptyHunksMessage))
+    }
+
+    private var emptyHunksMessage: String {
+        switch file.statusLabel {
+        case "deleted":
+            return "File deleted"
+        case "renamed", "copied":
+            return "Renamed — no textual changes"
+        case "added" where file.added == 0 && file.removed == 0:
+            return "Binary or empty file"
+        case "binary":
+            return "Binary file"
+        default:
+            if file.added == 0 && file.removed == 0 {
+                return "Mode-only or binary change"
+            }
+            return "No textual hunks"
+        }
+    }
+
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Button {
@@ -71,9 +107,17 @@ struct DiffFileSection: View {
                         .frame(width: 14)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(file.fileName)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.primary)
+                        HStack(spacing: 8) {
+                            Text(file.fileName)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            Text(file.statusLabel)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(statusForeground)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(statusBackground))
+                        }
                         if !file.directoryPath.isEmpty {
                             Text(file.directoryPath)
                                 .font(.system(size: 12))
@@ -90,6 +134,7 @@ struct DiffFileSection: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(isExpanded ? "Collapse" : "Expand") \(file.fileName), \(file.statusLabel)"))
 
             Button(action: onOpenViewer) {
                 Image(systemName: "arrow.up.right.square")
@@ -103,6 +148,24 @@ struct DiffFileSection: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    private var statusForeground: Color {
+        switch file.statusLabel {
+        case "added": return .green
+        case "deleted": return .red
+        case "renamed", "copied": return .orange
+        default: return .secondary
+        }
+    }
+
+    private var statusBackground: Color {
+        switch file.statusLabel {
+        case "added": return Color.green.opacity(0.14)
+        case "deleted": return Color.red.opacity(0.14)
+        case "renamed", "copied": return Color.orange.opacity(0.14)
+        default: return Color(.tertiarySystemFill)
+        }
     }
 }
 #endif

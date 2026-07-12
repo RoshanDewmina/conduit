@@ -171,6 +171,9 @@ struct ThreadDetailView: View {
                         reviewPresentation = ReviewPresentation(scope: .session)
                     }
                 }
+                if !queuedReviewComments.isEmpty {
+                    reviewCommentChips
+                }
                 Button {
                     isFollowUpPresented = true
                 } label: {
@@ -277,13 +280,34 @@ struct ThreadDetailView: View {
     }
 
     private func loadReviewDiffs() async {
-        var next: [String: RepoDiffSummary] = [:]
-        for turn in turns where turn.status != .failed {
-            if let diff = try? await reviewDataSource.turnDiff(
-                conversationID: thread.id,
-                turnID: turn.id
-            ), diff.hasChanges {
-                next[turn.id] = diff
+        let pending = turns.filter { $0.status != .failed && turnDiffByTurnID[$0.id] == nil }
+        var next = turnDiffByTurnID
+        await withTaskGroup(of: (String, RepoDiffSummary?).self) { group in
+            let cap = 4
+            var iterator = pending.makeIterator()
+            var inFlight = 0
+            func enqueueNext() {
+                while inFlight < cap, let turn = iterator.next() {
+                    inFlight += 1
+                    let turnID = turn.id
+                    let conversationID = thread.id
+                    let source = reviewDataSource
+                    group.addTask {
+                        let diff = try? await source.turnDiff(
+                            conversationID: conversationID,
+                            turnID: turnID
+                        )
+                        return (turnID, (diff?.hasChanges == true) ? diff : nil)
+                    }
+                }
+            }
+            enqueueNext()
+            for await (turnID, diff) in group {
+                inFlight -= 1
+                if let diff {
+                    next[turnID] = diff
+                }
+                enqueueNext()
             }
         }
         turnDiffByTurnID = next
@@ -293,6 +317,34 @@ struct ThreadDetailView: View {
         } else {
             sessionDiff = nil
         }
+    }
+
+    private var reviewCommentChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(queuedReviewComments) { comment in
+                    HStack(spacing: 6) {
+                        Text(comment.chipLabel)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Button {
+                            queuedReviewComments.removeAll { $0.id == comment.id }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("Remove comment"))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color(.secondarySystemFill)))
+                }
+            }
+        }
+        .accessibilityIdentifier("review-comment-chips")
     }
 
     private func handleSend(_ prompt: String, _ cwd: String) {

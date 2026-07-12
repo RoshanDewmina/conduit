@@ -50,6 +50,68 @@ import Testing
         #expect(diff.hunks[0].lines[2].newNo == 15)
     }
 
+    @Test("decodes fileDiff when omitempty drops truncated")
+    func decodeFileDiffOmittedKeys() throws {
+        let diff: RepoFileDiff = try FixtureReviewDataSource.decode(
+            #"{"hunks":[{"header":"@@ -1,1 +1,1 @@","oldStart":1,"newStart":1,"lines":[{"kind":"context","oldNo":1,"newNo":1,"text":"x"}]}]}"#
+        )
+        #expect(diff.truncated == false)
+        #expect(diff.hunks.count == 1)
+        #expect(diff.hunks[0].lines[0].text == "x")
+
+        let empty: RepoFileDiff = try FixtureReviewDataSource.decode(#"{"hunks":[]}"#)
+        #expect(empty.hunks.isEmpty)
+        #expect(empty.truncated == false)
+
+        let bare: RepoFileDiff = try FixtureReviewDataSource.decode(#"{}"#)
+        #expect(bare.hunks.isEmpty)
+        #expect(bare.truncated == false)
+    }
+
+    @Test("decodes file content when omitempty drops false/zero fields")
+    func decodeFileContentOmittedKeys() throws {
+        let file: RepoFileContent = try FixtureReviewDataSource.decode(
+            #"{"content":"hello"}"#
+        )
+        #expect(file.content == "hello")
+        #expect(file.truncated == false)
+        #expect(file.size == 0)
+        #expect(file.binary == false)
+
+        let binary: RepoFileContent = try FixtureReviewDataSource.decode(
+            #"{"binary":true,"size":1024}"#
+        )
+        #expect(binary.binary == true)
+        #expect(binary.size == 1024)
+        #expect(binary.content.isEmpty)
+        #expect(binary.truncated == false)
+    }
+
+    @Test("lineRangeLabel uses the side that has lines")
+    func lineRangeLabelSides() {
+        let addOnly = RepoDiffHunk(
+            header: "@@ -10,0 +11,2 @@",
+            oldStart: 10,
+            newStart: 11,
+            lines: [
+                RepoDiffLine(kind: .add, newNo: 11, text: "a"),
+                RepoDiffLine(kind: .add, newNo: 12, text: "b"),
+            ]
+        )
+        #expect(addOnly.lineRangeLabel == "Lines 11–12")
+
+        let delOnly = RepoDiffHunk(
+            header: "@@ -20,2 +20,0 @@",
+            oldStart: 20,
+            newStart: 20,
+            lines: [
+                RepoDiffLine(kind: .del, oldNo: 20, text: "x"),
+                RepoDiffLine(kind: .del, oldNo: 21, text: "y"),
+            ]
+        )
+        #expect(delOnly.lineRangeLabel == "Lines 20–21")
+    }
+
     @Test("decodes tree and file fixtures")
     func decodeTreeAndFile() throws {
         let tree: [RepoTreeEntry] = try FixtureReviewDataSource.decode(

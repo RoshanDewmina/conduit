@@ -101,6 +101,9 @@ struct FileTreeView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(node.isDir
+            ? "\(node.isExpanded ? "Collapse" : "Expand") folder \(node.name)"
+            : "File \(node.name)"))
     }
 
     private func flatten(_ nodes: [ReviewTreeNode], depth: Int) -> [(node: ReviewTreeNode, depth: Int)] {

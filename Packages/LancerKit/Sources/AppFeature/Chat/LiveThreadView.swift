@@ -500,13 +500,35 @@ public struct LiveThreadView: View {
 
     private func refreshReviewDiffs() async {
         let conversationID = bridge.activeConversationID ?? "fixture"
-        var next: [String: RepoDiffSummary] = [:]
-        for turn in bridge.transcriptTurns where turn.status != .failed {
-            if let diff = try? await reviewDataSource.turnDiff(
-                conversationID: conversationID,
-                turnID: turn.id
-            ), diff.hasChanges {
-                next[turn.id] = diff
+        let pending = bridge.transcriptTurns.filter {
+            $0.status != .failed && turnDiffByTurnID[$0.id] == nil
+        }
+        var next = turnDiffByTurnID
+        await withTaskGroup(of: (String, RepoDiffSummary?).self) { group in
+            let cap = 4
+            var iterator = pending.makeIterator()
+            var inFlight = 0
+            func enqueueNext() {
+                while inFlight < cap, let turn = iterator.next() {
+                    inFlight += 1
+                    let turnID = turn.id
+                    let source = reviewDataSource
+                    group.addTask {
+                        let diff = try? await source.turnDiff(
+                            conversationID: conversationID,
+                            turnID: turnID
+                        )
+                        return (turnID, (diff?.hasChanges == true) ? diff : nil)
+                    }
+                }
+            }
+            enqueueNext()
+            for await (turnID, diff) in group {
+                inFlight -= 1
+                if let diff {
+                    next[turnID] = diff
+                }
+                enqueueNext()
             }
         }
         turnDiffByTurnID = next

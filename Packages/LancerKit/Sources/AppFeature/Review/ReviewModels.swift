@@ -59,6 +59,13 @@ public struct RepoDiffFile: Codable, Equatable, Sendable, Identifiable {
     }
 
     public var countsLabel: String { "+\(added) −\(removed)" }
+
+    /// Short status for the file header (added / deleted / renamed / modified / …).
+    public var statusLabel: String {
+        let raw = status.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return "modified" }
+        return raw.lowercased()
+    }
 }
 
 /// `repo.fileDiff` response.
@@ -66,9 +73,15 @@ public struct RepoFileDiff: Codable, Equatable, Sendable {
     public var hunks: [RepoDiffHunk]
     public var truncated: Bool
 
-    public init(hunks: [RepoDiffHunk], truncated: Bool) {
+    public init(hunks: [RepoDiffHunk], truncated: Bool = false) {
         self.hunks = hunks
         self.truncated = truncated
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hunks = try c.decodeIfPresent([RepoDiffHunk].self, forKey: .hunks) ?? []
+        truncated = try c.decodeIfPresent(Bool.self, forKey: .truncated) ?? false
     }
 }
 
@@ -91,11 +104,22 @@ public struct RepoDiffHunk: Codable, Equatable, Sendable, Identifiable {
     public var removedCount: Int { lines.filter { $0.kind == .del }.count }
 
     /// Last old/new line numbers present in the hunk (for "Lines X–Y").
+    /// Uses the side that actually has lines so add-only / del-only hunks don't mix sides.
     public var lineRangeLabel: String {
         let oldNos = lines.compactMap(\.oldNo)
         let newNos = lines.compactMap(\.newNo)
-        let start = min(oldNos.first ?? newStart, newNos.first ?? newStart)
-        let end = max(oldNos.last ?? oldStart, newNos.last ?? newStart)
+        let nos: [Int]
+        if oldNos.isEmpty && newNos.isEmpty {
+            nos = [newStart]
+        } else if oldNos.isEmpty {
+            nos = newNos
+        } else if newNos.isEmpty {
+            nos = oldNos
+        } else {
+            nos = [oldNos.first!, oldNos.last!, newNos.first!, newNos.last!]
+        }
+        let start = nos.min() ?? newStart
+        let end = nos.max() ?? start
         if start == end { return "Lines \(start)" }
         return "Lines \(start)–\(end)"
     }
@@ -178,11 +202,19 @@ public struct RepoFileContent: Codable, Equatable, Sendable {
     public var size: Int
     public var binary: Bool
 
-    public init(content: String, truncated: Bool, size: Int, binary: Bool) {
+    public init(content: String, truncated: Bool = false, size: Int = 0, binary: Bool = false) {
         self.content = content
         self.truncated = truncated
         self.size = size
         self.binary = binary
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        content = try c.decodeIfPresent(String.self, forKey: .content) ?? ""
+        truncated = try c.decodeIfPresent(Bool.self, forKey: .truncated) ?? false
+        size = try c.decodeIfPresent(Int.self, forKey: .size) ?? 0
+        binary = try c.decodeIfPresent(Bool.self, forKey: .binary) ?? false
     }
 }
 

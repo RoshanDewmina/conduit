@@ -17,6 +17,7 @@ public struct ReviewSheetView: View {
     @State private var tab: Tab = .modified
     @State private var summary: RepoDiffSummary?
     @State private var fileDiffs: [String: RepoFileDiff] = [:]
+    @State private var fileDiffErrors: [String: String] = [:]
     @State private var loadingPaths: Set<String> = []
     @State private var expandAll = true
     @State private var isLoadingSummary = true
@@ -163,6 +164,7 @@ public struct ReviewSheetView: View {
                                 file: file,
                                 fileDiff: fileDiffs[file.path],
                                 isLoading: loadingPaths.contains(file.path),
+                                loadError: fileDiffErrors[file.path],
                                 expandAll: expandAll,
                                 onOpenViewer: { viewerPath = file.path },
                                 onComment: { row in
@@ -210,7 +212,7 @@ public struct ReviewSheetView: View {
     }
 
     private func loadFileDiff(path: String) async {
-        guard fileDiffs[path] == nil, !loadingPaths.contains(path) else { return }
+        guard fileDiffs[path] == nil, fileDiffErrors[path] == nil, !loadingPaths.contains(path) else { return }
         loadingPaths.insert(path)
         let turnID: String? = {
             if case .turn(let id) = scope { return id }
@@ -223,8 +225,9 @@ public struct ReviewSheetView: View {
                 turnID: turnID
             )
             fileDiffs[path] = diff
+            fileDiffErrors.removeValue(forKey: path)
         } catch {
-            // Leave empty; section shows "No hunks".
+            fileDiffErrors[path] = error.localizedDescription
         }
         loadingPaths.remove(path)
     }
