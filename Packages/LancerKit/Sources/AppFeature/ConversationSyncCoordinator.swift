@@ -147,17 +147,37 @@ public actor ConversationSyncCoordinator {
         publish(.syncing, for: conversationID)
         let local = try await chatRepo.conversation(id: conversationID)
         do {
-            let response = try await transport.fetch(
-                ConversationFetchRequest(conversationId: conversationID, sinceSeq: local?.lastHostSeq ?? 0, limit: 2000)
+            let nextSeq = try await fetchAndMergeAllPages(
+                conversationID: conversationID,
+                sinceSeq: local?.lastHostSeq ?? 0,
+                transport: transport
             )
-            try await mergeFetchResponse(response)
             publish(.synced, for: conversationID)
-            return response.nextSeq
+            return nextSeq
+        } catch let partial as ConversationSyncPartialError {
+            // Page cap hit — everything fetched so far is merged and
+            // lastHostSeq advanced; honest hint instead of claiming synced.
+            publish(.cloudStale, for: conversationID)
+            return partial.nextSeq
         } catch {
             publish(.hostOffline, for: conversationID)
             throw error
         }
     }
+
+    /// Thrown by `fetchAndMergeAllPages` when `maxFetchPages` was reached with
+    /// `hasMore` still true. All fetched pages are already merged; `nextSeq`
+    /// is the resume cursor for the next refresh.
+    public struct ConversationSyncPartialError: Error, Sendable {
+        public let nextSeq: Int
+    }
+
+    /// Bound on how many `agent.conversations.fetch` pages a single refresh will pull.
+    public static let maxFetchPages = 20
+    /// Page size for host event fetch during refresh / conflict recovery.
+    public static let fetchPageLimit = 2000
+    /// Page size when reading mirrored events back for assistant-text assembly.
+    public static let localEventsPageLimit = 5000
 
     /// A live stream of sync-state changes for one conversation, for the
     /// banner view to observe. The current state (or `.synced` if never
@@ -255,13 +275,47 @@ public actor ConversationSyncCoordinator {
         conversationID: String, transport: ConversationTransport
     ) async throws -> Int {
         let local = try await chatRepo.conversation(id: conversationID)
-        let response = try await transport.fetch(
-            ConversationFetchRequest(
-                conversationId: conversationID, sinceSeq: local?.lastHostSeq ?? 0, limit: 2000
+        do {
+            return try await fetchAndMergeAllPages(
+                conversationID: conversationID,
+                sinceSeq: local?.lastHostSeq ?? 0,
+                transport: transport
             )
-        )
-        try await mergeFetchResponse(response)
-        return response.nextSeq
+        } catch let partial as ConversationSyncPartialError {
+            // Recovery proceeds from what merged; remainder syncs next refresh.
+            return partial.nextSeq
+        }
+    }
+
+    /// Pulls host fetch pages until `hasMore` is false, merging page-by-page;
+    /// throws `ConversationSyncPartialError` when `maxFetchPages` is reached
+    /// with more remaining (already-fetched pages stay merged).
+    private func fetchAndMergeAllPages(
+        conversationID: String, sinceSeq: Int, transport: ConversationTransport
+    ) async throws -> Int {
+        // Each page merges immediately: a transport failure or the page cap
+        // keeps everything already fetched (lastHostSeq advances per page), so
+        // the next refresh resumes from the last good page instead of
+        // re-pulling — and never discards partial progress.
+        var cursor = sinceSeq
+        var pages = 0
+
+        while pages < Self.maxFetchPages {
+            pages += 1
+            let response = try await transport.fetch(
+                ConversationFetchRequest(
+                    conversationId: conversationID,
+                    sinceSeq: cursor,
+                    limit: Self.fetchPageLimit
+                )
+            )
+            try await mergeFetchResponse(response)
+            cursor = response.nextSeq
+            if !response.hasMore { return cursor }
+        }
+        // Page cap hit with more remaining: surface partial sync instead of
+        // claiming .synced — the next refresh continues from cursor.
+        throw ConversationSyncPartialError(nextSeq: cursor)
     }
 
     private func blockConflict(conversationID: String, message: String?) async -> TurnOutcome {
@@ -431,7 +485,7 @@ public actor ConversationSyncCoordinator {
         // ITS OWN mirrored events (this fetch's plus whatever was already
         // stored) before writing the turn row, so a device that never
         // streamed a turn live still renders its content in ChatHistoryView.
-        let allEvents = (try? await chatRepo.events(conversationID: response.conversation.id, sinceSeq: 0, limit: 5000)) ?? []
+        let allEvents = (try? await loadAllMirroredEvents(conversationID: response.conversation.id)) ?? []
         let eventsByTurn = Dictionary(grouping: allEvents, by: { $0.turnID })
         for turnEnvelope in response.turns {
             var turn = Self.mapTurn(turnEnvelope, conversationID: response.conversation.id)
@@ -487,6 +541,25 @@ public actor ConversationSyncCoordinator {
             .sorted { $0.seq < $1.seq }
             .compactMap(\.text)
             .joined()
+    }
+
+    /// Pages through the local event mirror so long turns aren't truncated at
+    /// `localEventsPageLimit` when assembling `assistantText`.
+    private func loadAllMirroredEvents(conversationID: String) async throws -> [ChatEvent] {
+        var all: [ChatEvent] = []
+        var sinceSeq = 0
+        while true {
+            let page = try await chatRepo.events(
+                conversationID: conversationID,
+                sinceSeq: sinceSeq,
+                limit: Self.localEventsPageLimit
+            )
+            if page.isEmpty { break }
+            all.append(contentsOf: page)
+            sinceSeq = page[page.count - 1].seq
+            if page.count < Self.localEventsPageLimit { break }
+        }
+        return all
     }
 
     private func publish(_ state: ConversationSyncUIState, for conversationID: String) {

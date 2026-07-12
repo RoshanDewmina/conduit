@@ -399,8 +399,8 @@ public actor ChatConversationRepository {
                 ON CONFLICT(id) DO UPDATE SET
                     title = excluded.title,
                     status = excluded.status,
-                    updated_at = excluded.updated_at,
-                    last_activity_at = excluded.last_activity_at,
+                    updated_at = MAX(updated_at, excluded.updated_at),
+                    last_activity_at = MAX(last_activity_at, excluded.last_activity_at),
                     source_host_id = excluded.source_host_id,
                     source_host_name = excluded.source_host_name,
                     last_host_seq = excluded.last_host_seq,

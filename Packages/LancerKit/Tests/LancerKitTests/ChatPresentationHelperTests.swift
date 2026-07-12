@@ -149,6 +149,33 @@ import Foundation
         #expect(ChatMarkdownBlockParser.parse("").isEmpty)
     }
 
+    @Test func parseMemoizesIdenticalInput() {
+        let md = """
+        Hello memo-\(UUID().uuidString)
+
+        ```swift
+        let x = 1
+        ```
+        """
+        let first = ChatMarkdownBlockParser.parseWithCacheInfoForTesting(md)
+        #expect(!first.wasCached)
+        let second = ChatMarkdownBlockParser.parseWithCacheInfoForTesting(md)
+        #expect(second.wasCached)
+        #expect(first.blocks == second.blocks)
+    }
+
+    @Test func unterminatedFenceOverCapUsesPlainTextFallback() {
+        let filler = String(repeating: "x", count: ChatMarkdownBlockParser.maxAttributedBlockUTF8Count + 1)
+        let md = "```swift\n" + filler
+        let blocks = ChatMarkdownBlockParser.parse(md)
+        #expect(blocks.count == 1)
+        guard case .prose(let text) = blocks[0] else {
+            Issue.record("unterminated fence must yield a single prose block"); return
+        }
+        #expect(ChatMarkdownBlockParser.shouldUsePlainTextFallback(text))
+        #expect(!ChatMarkdownBlockParser.shouldUsePlainTextFallback("short"))
+    }
+
     // MARK: - ChatMarkdownAttributedString
 
     @Test func attributedStringMarksInlineCode() {

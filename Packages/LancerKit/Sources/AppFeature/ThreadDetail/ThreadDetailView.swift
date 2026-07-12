@@ -11,11 +11,26 @@ struct ThreadDetailView: View {
     @State private var isFollowUpPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
     @State private var turns: [ChatTurn] = []
+    /// How many of the most-recent turns to render. Extended via "Show earlier…".
+    @State private var visibleTurnLimit = Self.initialWindowSize
+
+    private static let initialWindowSize = 100
+    private static let windowExtendStep = 100
 
     let thread: ThreadListItem
 
     init(thread: ThreadListItem) {
         self.thread = thread
+    }
+
+    /// Most-recent `visibleTurnLimit` turns (oldest→newest within the window).
+    private var visibleTurns: [ChatTurn] {
+        guard turns.count > visibleTurnLimit else { return turns }
+        return Array(turns.suffix(visibleTurnLimit))
+    }
+
+    private var hasEarlierTurns: Bool {
+        turns.count > visibleTurnLimit
     }
 
     public var body: some View {
@@ -30,7 +45,7 @@ struct ThreadDetailView: View {
                     .padding(.bottom, 4)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    LazyVStack(alignment: .leading, spacing: 18) {
                         Text(thread.title)
                             .font(.system(size: 22, weight: .bold))
                             .padding(.top, 16)
@@ -56,7 +71,23 @@ struct ThreadDetailView: View {
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         } else {
-                            ForEach(turns) { turn in
+                            if hasEarlierTurns {
+                                Button {
+                                    visibleTurnLimit = min(
+                                        turns.count,
+                                        visibleTurnLimit + Self.windowExtendStep
+                                    )
+                                } label: {
+                                    Text("Show earlier…")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(Text("Show earlier turns"))
+                            }
+
+                            ForEach(visibleTurns) { turn in
                                 VStack(alignment: .leading, spacing: 12) {
                                     ChatUserBubble(text: turn.prompt)
                                     threadAssistant(turn)
