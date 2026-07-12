@@ -8,8 +8,7 @@ the known-flaky `waitForAnyConnected` test (deflaked once in #61; ConnectionStat
 by the diff; local app-target build + full suite green) — flake, not regression; deflake again
 if it repeats. **Owner relay pairing RESTORED** (code 208937, daemon hot-reloaded + reconnected;
 phone auto-reconnects via stable identity — no code needed). ~/.cursor/mcp.json restored ✓.
-**Device build from master `c49ec4f5` SUCCEEDED; phone disconnected — reconnect monitor armed;
-install + launch on reconnect, then ping owner.** Owner review list: ① thread badges clear on
+**Device build from master `c49ec4f5` INSTALLED + LAUNCHED on the owner's phone (2026-07-12 ~08:36); pairing auto-restored on code 208937 (stable identity, zero taps). ⚠️ One stale approval card on the phone ("git log", empty-RunID so #92's prune correctly kept it; agent process dead) — owner taps Deny once.** Owner review list: ① thread badges clear on
 foreground ② receipt card + Proof Reel after a run ③ Flight Recorder rows in thread detail
 ④ Agents row opens the chat directly. Remaining owner-gated: APNs lock-screen co-test ·
 emergency-stop verify · Cursor-dashboard plan-usage check (ledger #2).
