@@ -45,6 +45,10 @@ public struct LiveThreadView: View {
     @State private var liveStatusFirstAt: Date?
     @State private var liveStatusLastAt: Date?
     @State private var liveStatusNow: Date = .now
+    @State private var turnDiffByTurnID: [String: RepoDiffSummary] = [:]
+    @State private var sessionDiff: RepoDiffSummary?
+    @State private var reviewPresentation: ReviewPresentation?
+    @State private var queuedReviewComments: [QueuedReviewComment] = []
     @FocusState private var isFollowUpFocused: Bool
     #if DEBUG
     @State private var hasAutoAnsweredQuestion = false
@@ -52,6 +56,21 @@ public struct LiveThreadView: View {
     #endif
 
     private static let scrollTailID = "live-tail"
+    private var reviewDataSource: any ReviewDataSource { FixtureReviewDataSource.shared }
+
+    private struct ReviewPresentation: Identifiable {
+        enum Scope {
+            case turn(String)
+            case session
+        }
+        let scope: Scope
+        var id: String {
+            switch scope {
+            case .turn(let turnID): return "turn:\(turnID)"
+            case .session: return "session"
+            }
+        }
+    }
 
     public init(prompt: String, cwd: String) {
         self.prompt = prompt
@@ -139,6 +158,19 @@ public struct LiveThreadView: View {
                         .padding(.bottom, 12)
                 }
 
+                if let sessionDiff {
+                    SessionDiffPill(summary: sessionDiff) {
+                        reviewPresentation = ReviewPresentation(scope: .session)
+                    }
+                    .padding(.bottom, 4)
+                }
+
+                if !queuedReviewComments.isEmpty {
+                    reviewCommentChips
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 4)
+                }
+
                 VStack(spacing: 0) {
                     followUpAttachChrome
                     ChatFollowUpComposerBar(
@@ -201,6 +233,22 @@ public struct LiveThreadView: View {
         .task(id: receiptRefreshToken) {
             await refreshReceipts()
             await refreshTranscriptExtras()
+            await refreshReviewDiffs()
+        }
+        .sheet(item: $reviewPresentation) { presentation in
+            ReviewSheetView(
+                conversationID: bridge.activeConversationID ?? "fixture",
+                scope: {
+                    switch presentation.scope {
+                    case .turn(let turnID): return .turn(turnID: turnID)
+                    case .session: return .session
+                    }
+                }(),
+                dataSource: reviewDataSource,
+                onAttachComment: { comment in
+                    queuedReviewComments.append(comment)
+                }
+            )
         }
         .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { note in
             let conversationID = note.userInfo?["conversationID"] as? String
@@ -208,6 +256,7 @@ public struct LiveThreadView: View {
             Task {
                 await refreshReceipts()
                 await refreshTranscriptExtras()
+                await refreshReviewDiffs()
             }
         }
         #if DEBUG
@@ -271,7 +320,9 @@ public struct LiveThreadView: View {
     }
 
     private var canSendFollowUp: Bool {
-        !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasText = !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasComments = !queuedReviewComments.isEmpty
+        return (hasText || hasComments)
             && !bridge.isSendInFlight
             && bridge.canAcceptFollowUp
     }
@@ -360,6 +411,11 @@ public struct LiveThreadView: View {
                 if let receipt = receiptsByRunID[turn.runID] {
                     ReceiptChipRow(receipt: receipt)
                 }
+                if let diff = turnDiffByTurnID[turn.id], diff.hasChanges {
+                    TurnDiffCard(summary: diff) {
+                        reviewPresentation = ReviewPresentation(scope: .turn(turn.id))
+                    }
+                }
             }
         }
     }
@@ -442,6 +498,76 @@ public struct LiveThreadView: View {
         )
     }
 
+    private func refreshReviewDiffs() async {
+        let conversationID = bridge.activeConversationID ?? "fixture"
+        let pending = bridge.transcriptTurns.filter {
+            $0.status != .failed && turnDiffByTurnID[$0.id] == nil
+        }
+        var next = turnDiffByTurnID
+        let source = reviewDataSource
+        await withTaskGroup(of: (String, RepoDiffSummary?).self) { group in
+            let cap = 4
+            var iterator = pending.makeIterator()
+            var inFlight = 0
+            func enqueueNext() {
+                while inFlight < cap, let turn = iterator.next() {
+                    inFlight += 1
+                    let turnID = turn.id
+                    group.addTask {
+                        let diff = try? await source.turnDiff(
+                            conversationID: conversationID,
+                            turnID: turnID
+                        )
+                        return (turnID, (diff?.hasChanges == true) ? diff : nil)
+                    }
+                }
+            }
+            enqueueNext()
+            for await (turnID, diff) in group {
+                inFlight -= 1
+                if let diff {
+                    next[turnID] = diff
+                }
+                enqueueNext()
+            }
+        }
+        turnDiffByTurnID = next
+        if let session = try? await reviewDataSource.sessionDiff(conversationID: conversationID),
+           session.hasChanges {
+            sessionDiff = session
+        } else {
+            sessionDiff = nil
+        }
+    }
+
+    private var reviewCommentChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(queuedReviewComments) { comment in
+                    HStack(spacing: 6) {
+                        Text(comment.chipLabel)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Button {
+                            queuedReviewComments.removeAll { $0.id == comment.id }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("Remove comment"))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color(.secondarySystemFill)))
+                }
+            }
+        }
+        .accessibilityIdentifier("review-comment-chips")
+    }
+
     // MARK: - Reply state (Orca rule: working indicator and visible reply text
     // are mutually exclusive on screen — except degraded, which never claims
     // "Working…" over stale data)
@@ -478,6 +604,11 @@ public struct LiveThreadView: View {
                         .onAppear { streamingPacer.reset(to: turn.assistantText) }
                     if let receipt = receiptsByRunID[turn.runID] {
                         ReceiptChipRow(receipt: receipt)
+                    }
+                    if let diff = turnDiffByTurnID[turn.id], diff.hasChanges {
+                        TurnDiffCard(summary: diff) {
+                            reviewPresentation = ReviewPresentation(scope: .turn(turn.id))
+                        }
                     }
                 }
             }
@@ -887,7 +1018,11 @@ public struct LiveThreadView: View {
 
     private func sendFollowUp() async {
         let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, bridge.canAcceptFollowUp, canSendFollowUpWithAttachments else { return }
+        let composed = ReviewCommentFormatting.composerPrefix(
+            comments: queuedReviewComments,
+            prompt: text
+        )
+        guard !composed.isEmpty, bridge.canAcceptFollowUp, canSendFollowUpWithAttachments else { return }
 
         var drafts = followUpAttachments
         if !drafts.isEmpty {
@@ -959,11 +1094,12 @@ public struct LiveThreadView: View {
         }
 
         let prefixed = AttachmentPromptPrefix.apply(
-            userPrompt: text,
+            userPrompt: composed,
             hostPaths: AttachmentDraftStore.hostPaths(drafts)
         )
         followUpText = ""
         followUpAttachments = []
+        queuedReviewComments.removeAll()
         isFollowUpFocused = false
         if let conversationID = bridge.activeConversationID {
             await bridge.sendFollowUp(prompt: prefixed, conversationID: conversationID, cwd: cwd)
