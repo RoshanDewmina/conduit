@@ -18,6 +18,12 @@ public final class E2ERelayClient: ObservableObject {
 
     @Published public private(set) var connectionState: ConnectionState = .disconnected
     @Published public private(set) var pairingState: PairingState = .unpaired
+    /// TTL for the CURRENT unconfirmed pairing code, from the relay's
+    /// "waiting" frame (`expiresAt`, RFC3339). `nil` when not applicable —
+    /// no pairing attempt in flight, or a code that already completed its
+    /// exchange (the relay omits `expiresAt` once paired, since a paired
+    /// code never expires). The pairing sheet renders a countdown from this.
+    @Published public private(set) var pairingExpiresAt: Date?
 
     public enum ConnectionState: Sendable, Equatable, CustomStringConvertible {
         case disconnected
@@ -40,6 +46,13 @@ public final class E2ERelayClient: ObservableObject {
         case waitingForPeer
         case paired
         case pairingFailed(String)
+        /// The relay rejected this pairing code as `code_expired` — it never
+        /// completed a key exchange within `pairConfirmWindow` and can never
+        /// succeed again. Distinct from `.pairingFailed` (a generic, possibly
+        /// transient relay error) so the UI can render an unambiguous
+        /// "generate a new code" affordance instead of a bare error string,
+        /// and so `handleDisconnect` knows to stop redialing a dead code.
+        case codeExpired
 
         public var description: String {
             switch self {
@@ -47,6 +60,7 @@ public final class E2ERelayClient: ObservableObject {
             case .waitingForPeer: return "waiting for peer"
             case .paired: return "paired"
             case .pairingFailed(let reason): return "failed: \(reason)"
+            case .codeExpired: return "pairing code expired"
             }
         }
     }
@@ -365,6 +379,7 @@ public final class E2ERelayClient: ObservableObject {
         sendSeq = 0
         recv.reset()
         pairingState = .unpaired
+        pairingExpiresAt = nil
         connectionState = .connecting
         connectGeneration += 1
         let generation = connectGeneration
@@ -384,6 +399,7 @@ public final class E2ERelayClient: ObservableObject {
         webSocketTask = nil
         connectionState = .disconnected
         pairingState = .unpaired
+        pairingExpiresAt = nil
         sessionKey = nil
         sendSeq = 0
         recv.reset()
@@ -401,6 +417,15 @@ public final class E2ERelayClient: ObservableObject {
     ) {
         connectionState = connection
         pairingState = pairing
+    }
+
+    /// Test-only seam: feed a raw relay text frame through the real
+    /// `handleMessage` parsing/state-transition logic (waiting/peer_joined/
+    /// error/etc.) without a live websocket — proves the code_expired
+    /// reconnect-discipline and expiresAt-decoding behavior against the
+    /// actual production code path, not a re-description of it.
+    public func simulateIncomingFrameForTesting(_ text: String) {
+        handleMessage(text)
     }
 #endif
 
@@ -532,6 +557,11 @@ public final class E2ERelayClient: ObservableObject {
         else { return }
 
         switch msg.type {
+        case "waiting":
+            Self.logger.info("handleMessage: waiting for peer")
+            pairingState = .waitingForPeer
+            pairingExpiresAt = msg.expiresAt.flatMap { Self.iso8601Formatter.date(from: $0) }
+
         case "peer_joined":
             Self.logger.info("handleMessage: peer_joined received, deriving session key")
             guard let peerKey = msg.peerPublicKey else { return }
@@ -539,6 +569,7 @@ public final class E2ERelayClient: ObservableObject {
                 try deriveSessionKey(withPeerPublicKey: peerKey)
                 Self.logger.info("handleMessage: session key derived, pairing complete")
                 pairingState = .paired
+                pairingExpiresAt = nil
                 reconnectDelay = 1.0
 
                 // Namespaced under self.machineID — see persistPairing() below.
@@ -586,7 +617,17 @@ public final class E2ERelayClient: ObservableObject {
 
         case "error":
             Self.logger.error("handleMessage: relay error: \(msg.message ?? "none", privacy: .public)")
-            pairingState = .pairingFailed(msg.message ?? "Relay error")
+            // Prefer the structured "code" field (additive on the backend);
+            // fall back to the substring match for an older backend that
+            // only sends "message".
+            let isCodeExpired = msg.code == "code_expired"
+                || (msg.code == nil && (msg.message ?? "").lowercased().contains("expired"))
+            if isCodeExpired {
+                stopReconnectingDeadCode()
+            } else {
+                pairingState = .pairingFailed(msg.message ?? "Relay error")
+                pairingExpiresAt = nil
+            }
 
         default:
             break
@@ -596,7 +637,20 @@ public final class E2ERelayClient: ObservableObject {
     private func handleDisconnect() {
         let cc = webSocketTask?.closeCode
         let cr = webSocketTask?.closeReason
-        Self.logger.info("handleDisconnect: connection lost, scheduling reconnect in \(self.reconnectDelay)s closeCode=\(cc?.rawValue ?? -1, privacy: .public) closeReason=\(cr?.base64EncodedString() ?? "nil", privacy: .public)")
+        Self.logger.info("handleDisconnect: connection lost closeCode=\(cc?.rawValue ?? -1, privacy: .public) closeReason=\(cr?.base64EncodedString() ?? "nil", privacy: .public)")
+
+        // A code_expired rejection already stopped this client via
+        // stopReconnectingDeadCode() -- the relay's own connection close (which
+        // follows its error frame) still fires this one more time. Redialing a
+        // code the relay just told us is dead would loop the same rejection
+        // forever (the 2026-07-12 bug this closes); preserve `.codeExpired` for
+        // the UI instead of clobbering it back to `.unpaired`.
+        guard pairingState != .codeExpired else {
+            connectionState = .disconnected
+            webSocketTask = nil
+            return
+        }
+
         connectionState = .disconnected
         pairingState = .unpaired
         sessionKey = nil
@@ -604,6 +658,15 @@ public final class E2ERelayClient: ObservableObject {
         recv.reset()
         webSocketTask = nil
 
+        // Reconnecting on an empty/invalid pairing code loops the relay's
+        // HTTP 400 forever — mirrors connect()'s guard, extended to the
+        // reconnect path (mirrors the 2026-07-03 empty-code hygiene fix).
+        guard Self.isValidPairingCode(pairingCode) else {
+            Self.logger.info("handleDisconnect: no valid pairing code — not reconnecting")
+            return
+        }
+
+        Self.logger.info("handleDisconnect: scheduling reconnect in \(self.reconnectDelay)s")
         let delay = reconnectDelay
         reconnectDelay = min(reconnectDelay * 2, 30)
 
@@ -619,6 +682,34 @@ public final class E2ERelayClient: ObservableObject {
             }
         }
     }
+
+    /// Reaction to a relay `code_expired` rejection: this pairing code never
+    /// completed its first key exchange within the relay's confirm window
+    /// and can never succeed again. Cancels the reconnect loop (redialing a
+    /// dead code forever is the exact bug this closes), clears the persisted
+    /// code so a relaunch doesn't restore it, and surfaces `.codeExpired` so
+    /// the pairing sheet can render an explicit re-pair affordance instead of
+    /// a generic error.
+    private func stopReconnectingDeadCode() {
+        Self.logger.info("stopReconnectingDeadCode: pairing code expired — stopping reconnect loop")
+        connectGeneration += 1
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        keepaliveTask?.cancel()
+        keepaliveTask = nil
+        webSocketTask?.cancel(with: .normalClosure, reason: nil)
+        webSocketTask = nil
+        connectionState = .disconnected
+        pairingState = .codeExpired
+        pairingExpiresAt = nil
+        sessionKey = nil
+        sendSeq = 0
+        recv.reset()
+        Self.deleteStoredPairing(machineID: machineID)
+        pairingCode = ""
+    }
+
+    private static let iso8601Formatter = ISO8601DateFormatter()
 
     /// Derive the session key from the daemon's public key.
     ///
@@ -669,6 +760,14 @@ struct RelayIncomingMessage: Codable {
     var payload: String?
     var peerPublicKey: String?
     var message: String?
+    /// Machine-readable discriminant on "error" frames (`code_expired`,
+    /// `key_mismatch`) — additive on the backend, so an older backend that
+    /// only sends `message` decodes this as nil and callers fall back to a
+    /// substring match on `message`.
+    var code: String?
+    /// RFC3339 TTL on "waiting" frames for a code that hasn't completed its
+    /// first key exchange yet; absent once paired.
+    var expiresAt: String?
 }
 
 struct E2EInnerMessage<T: Codable>: Codable {

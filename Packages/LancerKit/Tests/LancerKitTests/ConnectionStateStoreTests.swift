@@ -24,6 +24,11 @@ import Testing
         #expect(ConnectionStateStore.derive(pairingUsable: true, pairing: .paired, connection: .connected) == S.connected)
         // A rejected pairing needs a human even while the socket keeps trying.
         #expect(ConnectionStateStore.derive(pairingUsable: true, pairing: .pairingFailed("relay error"), connection: .connected) == S.pairingInvalid)
+        // An expired-unconfirmed code (REL-1 C) needs a human re-pair too —
+        // must NOT fall through to the connection-based .reconnecting/.hostOffline
+        // branch, since nothing about it recovers on its own.
+        #expect(ConnectionStateStore.derive(pairingUsable: true, pairing: .codeExpired, connection: .connected) == S.pairingInvalid)
+        #expect(ConnectionStateStore.derive(pairingUsable: true, pairing: .codeExpired, connection: .disconnected) == S.pairingInvalid)
         // An unusable stored pairing (2026-07-03 missing-Keychain-key bug) is
         // pairingInvalid no matter what the socket reports.
         #expect(ConnectionStateStore.derive(pairingUsable: false, pairing: .unpaired, connection: .disconnected) == S.pairingInvalid)

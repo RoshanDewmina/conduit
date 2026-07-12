@@ -37,6 +37,8 @@ public struct RelayPairingSheet: View {
         return Self.humanizePairingFailure(reason)
     }
 
+    private var isCodeExpired: Bool { client.pairingState == .codeExpired }
+
     public var body: some View {
         NavigationStack {
             Form {
@@ -67,14 +69,22 @@ public struct RelayPairingSheet: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    if client.connectionState != .disconnected || pairingFailureReason != nil {
+                    if client.connectionState != .disconnected || pairingFailureReason != nil || isCodeExpired {
                         Section("Status") {
                             LabeledContent("Relay", value: "\(client.connectionState)")
                             LabeledContent("Pairing", value: "\(client.pairingState)")
+                            if client.pairingState == .waitingForPeer, let expiresAt = client.pairingExpiresAt {
+                                pairingCountdown(until: expiresAt)
+                            }
                         }
                     }
 
-                    if let pairingFailureReason {
+                    if isCodeExpired {
+                        Section {
+                            Text("Pairing code expired — generate a new one on your machine, then enter it above.")
+                                .foregroundStyle(.red)
+                        }
+                    } else if let pairingFailureReason {
                         Section {
                             Text(pairingFailureReason)
                                 .foregroundStyle(.red)
@@ -105,6 +115,21 @@ public struct RelayPairingSheet: View {
         .onDisappear {
             if client.pairingState != .paired {
                 client.disconnect()
+            }
+        }
+    }
+
+    /// Live TTL countdown for an unconfirmed pairing code, driven by
+    /// `TimelineView` rather than a `Timer`/`Task.sleep` — no extra state to
+    /// tear down when the sheet dismisses mid-wait.
+    @ViewBuilder
+    private func pairingCountdown(until expiresAt: Date) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let remaining = Int(expiresAt.timeIntervalSince(context.date).rounded(.up))
+            if remaining > 0 {
+                LabeledContent("Expires", value: "\(remaining / 60):\(String(format: "%02d", remaining % 60))")
+            } else {
+                LabeledContent("Expires", value: "any moment")
             }
         }
     }
