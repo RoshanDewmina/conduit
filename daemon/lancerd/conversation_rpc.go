@@ -128,6 +128,12 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 	}
 	// Validate before beginTurn so a relative/missing cwd cannot leave a
 	// garbage ledger row when the later launch fails the same check.
+	// resolveDispatchCWD only Stats the path — a relative cwd that happens to
+	// exist under the daemon process's own working directory would pass and
+	// persist verbatim, so reject non-absolute paths explicitly first.
+	if resolvedCWD != "" && !filepath.IsAbs(resolvedCWD) {
+		return conversationAppendResponse{}, fmt.Errorf("cwd must be an absolute path")
+	}
 	var err error
 	resolvedCWD, err = resolveDispatchCWD(resolvedCWD)
 	if err != nil {

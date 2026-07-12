@@ -24,6 +24,15 @@ func TestConversationsAppendRejectsRelativeCWDWithoutPersisting(t *testing.T) {
 	s := newServer(home)
 	defer s.poller.stopForTest()
 
+	// Make the relative path really exist under the process cwd: a Stat-only
+	// check would pass it and persist the relative string verbatim, so this
+	// proves the explicit IsAbs guard does the rejecting.
+	procCWD := t.TempDir()
+	if err := os.Mkdir(filepath.Join(procCWD, "command-center"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Chdir(procCWD)
+
 	before := conversationCount(t, s.conversations)
 	_, err := s.conversationsAppend(conversationAppendRequest{
 		ClientTurnID: "rel-cwd-1",
