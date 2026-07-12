@@ -99,34 +99,40 @@ struct ThreadDetailView: View {
                                 }
                             }
 
+                            // Tail marker doubles as the bar-clearance spacer
+                            // (96pt): anchoring it .bottom lands the last
+                            // message fully above the ZStack-overlaid follow-up
+                            // bar, and its visibility drives the jump arrow
+                            // (geometry math went stale under keyboard resize).
                             Color.clear
-                                .frame(height: 1)
+                                .frame(height: 96)
                                 .id(Self.scrollTailID)
+                                .onScrollVisibilityChange(threshold: 0.1) { visible in
+                                    withAnimation { showScrollToBottom = !visible }
+                                }
                         }
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 96)
-                    }
-                    .onScrollGeometryChange(for: Double.self) { geometry in
-                        ChatScrollPolicy.distanceFromBottom(
-                            contentHeight: geometry.contentSize.height,
-                            viewportHeight: geometry.containerSize.height,
-                            contentOffsetY: geometry.contentOffset.y
-                        )
-                    } action: { _, distance in
-                        showScrollToBottom = ChatScrollPolicy.shouldShowJumpToLatest(
-                            distanceFromBottom: distance
-                        )
                     }
                     .overlay(alignment: .bottom) {
                         if showScrollToBottom {
                             ChatScrollToBottomButton {
-                                withAnimation {
-                                    proxy.scrollTo(Self.scrollTailID, anchor: .bottom)
+                                // Two hops: land on the last lazy item to force
+                                // tail layout, then anchor the true tail marker
+                                // (direct marker scrollTo no-ops from far away;
+                                // single-hop leaves the tail under the bar —
+                                // both sim-reproduced).
+                                if let last = visibleTurns.last {
+                                    proxy.scrollTo(last.id, anchor: .bottom)
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                                    withAnimation {
+                                        proxy.scrollTo(Self.scrollTailID, anchor: .bottom)
+                                    }
                                 }
                             }
-                            // Clear the follow-up bar, which overlays the scroll
-                            // view's bottom and otherwise wins the hit test
-                            // (caught live: tapping the arrow opened the composer).
+                            // This view's root ZStack overlays the follow-up bar
+                            // on the scroll bottom; 108 clears it or the bar wins
+                            // the hit test (sim-reproduced twice).
                             .padding(.bottom, 108)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
@@ -152,11 +158,12 @@ struct ThreadDetailView: View {
                 initialRepo: thread.cwd.isEmpty
                     ? nil
                     : WorkspaceRepo(
-                        name: thread.repoName ?? WorkspaceRepoCatalog.displayName(forCwd: thread.cwd),
+                        name: WorkspaceRepoCatalog.displayName(forCwd: thread.cwd),
                         cwd: thread.cwd,
                         threadCount: 0,
                         isUserAdded: false
                     ),
+                lockRepo: true,
                 onSend: handleSend
             )
         }
@@ -191,7 +198,18 @@ struct ThreadDetailView: View {
                 let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
                 ChatMarkdownBody(markdown: body)
             }
+            // Same proof chip as the live view — reopened threads previously
+            // dropped receipts entirely (owner report 2026-07-12).
+            if let receipt = receiptForTurn(turn) {
+                ReceiptChipRow(receipt: receipt)
+            }
         }
+    }
+
+    private func receiptForTurn(_ turn: ChatTurn) -> ProofReceipt? {
+        guard let event = (eventsByTurnID[turn.id] ?? []).last(where: { $0.kind == "receipt" }),
+              let payload = event.payloadJSON?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(ProofReceipt.self, from: payload)
     }
 
 

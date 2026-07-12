@@ -65,6 +65,15 @@ public struct LiveThreadView: View {
 
                             replyState
                                 .id(Self.scrollTailID)
+
+                            // Tail visibility drives the jump arrow — geometry
+                            // math goes stale when the keyboard resizes the
+                            // viewport (arrow showed while at the tail).
+                            Color.clear
+                                .frame(height: 4)
+                                .onScrollVisibilityChange(threshold: 0.1) { visible in
+                                    withAnimation { showScrollToBottom = !visible }
+                                }
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 16)
@@ -78,9 +87,6 @@ public struct LiveThreadView: View {
                         )
                     } action: { _, distance in
                         isNearBottom = ChatScrollPolicy.isNearBottom(distanceFromBottom: distance)
-                        showScrollToBottom = ChatScrollPolicy.shouldShowJumpToLatest(
-                            distanceFromBottom: distance
-                        )
                     }
                     .onChange(of: bridge.sendState) { _, _ in
                         scrollToTailIfFollowing(proxy)
@@ -105,9 +111,7 @@ public struct LiveThreadView: View {
                                 showScrollToBottom = false
                                 scrollToTail(proxy)
                             }
-                            // Clear the composer/approval area overlaying the
-                            // scroll bottom — it wins the hit test otherwise.
-                            .padding(.bottom, 108)
+                            .padding(.bottom, 12)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                     }
@@ -304,7 +308,7 @@ public struct LiveThreadView: View {
             VStack(alignment: .leading, spacing: 12) {
                 turnTranscriptBody(turn)
                 if let receipt = receiptsByRunID[turn.runID] {
-                    ReceiptCardView(receipt: receipt)
+                    ReceiptChipRow(receipt: receipt)
                 }
             }
         }
@@ -413,7 +417,7 @@ public struct LiveThreadView: View {
                     turnTranscriptBody(turn)
                         .onAppear { streamingPacer.reset(to: turn.assistantText) }
                     if let receipt = receiptsByRunID[turn.runID] {
-                        ReceiptCardView(receipt: receipt)
+                        ReceiptChipRow(receipt: receipt)
                     }
                 }
             }
