@@ -770,6 +770,9 @@ func methodToRelayType(method string) string {
 		return "agentRunOutput"
 	case "agent.run.status":
 		return "agentRunStatus"
+	case "agent.run.liveStatus":
+		// Ephemeral status pill — never ledger-persisted (G3).
+		return "runStatus"
 	case "agent.run.receipt":
 		return "runReceipt"
 	case "agent.tool.start":

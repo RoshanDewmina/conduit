@@ -629,6 +629,17 @@ public final class E2ERelayBridge: ObservableObject {
                 userInfo: ["params": env.payload, "machineID": self.machineID]
             )
 
+        case "runStatus":
+            // Ephemeral live-status pill (G3). Never ledger-persisted.
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<LiveRunStatusParams>.self, from: message.payload
+            ) else { return }
+            NotificationCenter.default.post(
+                name: Notification.Name("lancerE2ELiveRunStatus"),
+                object: nil,
+                userInfo: ["params": env.payload, "machineID": self.machineID]
+            )
+
         case "agentToolStart":
             // The agent ran a tool (Bash/Edit/Read…) — surfaces as a terminal block
             // card in the transcript. Mirrors the run-output/status fan-out.
@@ -932,3 +943,42 @@ public enum RelayConversationError: Error, LocalizedError {
 }
 
 #endif
+
+import Foundation
+
+/// Ephemeral live-status ticker from lancerd (`agent.run.liveStatus` → relay
+/// `runStatus`). Drives the chat status pill only — never a ledger row.
+public struct LiveRunStatusParams: Codable, Sendable, Hashable {
+    public let runId: String
+    public let state: String
+    public let toolName: String?
+    public let target: String?
+    public let at: String?
+
+    public init(
+        runId: String,
+        state: String,
+        toolName: String? = nil,
+        target: String? = nil,
+        at: String? = nil
+    ) {
+        self.runId = runId
+        self.state = state
+        self.toolName = toolName
+        self.target = target
+        self.at = at
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case runId, state, toolName, target, at
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        runId = try c.decodeIfPresent(String.self, forKey: .runId) ?? ""
+        state = try c.decodeIfPresent(String.self, forKey: .state) ?? ""
+        toolName = try c.decodeIfPresent(String.self, forKey: .toolName)
+        target = try c.decodeIfPresent(String.self, forKey: .target)
+        at = try c.decodeIfPresent(String.self, forKey: .at)
+    }
+}

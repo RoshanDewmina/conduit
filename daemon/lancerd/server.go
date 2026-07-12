@@ -1773,6 +1773,10 @@ func (s *server) emitNotification(method string, params any) {
 // run's output/status/artifacts survive daemon restarts and are visible via
 // agent.conversations.fetch. See the cross-device sync build handoff's Task 4.
 //
+// EPHEMERAL: agent.run.liveStatus (relay type runStatus) is intentionally NOT
+// in the persist switch — it drives the phone's live status pill only and must
+// never become a ledger row.
+//
 // STRICTLY BEST-EFFORT: a nil store, an unrecognized method, a malformed
 // params shape, or any store error is swallowed here — logged once (no dedup)
 // via logConversationPersistError, never returned, never allowed to panic past
