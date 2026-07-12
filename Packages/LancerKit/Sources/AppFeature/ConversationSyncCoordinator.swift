@@ -362,9 +362,11 @@ public actor ConversationSyncCoordinator {
 
     /// Best-effort discovery merge for `agent.conversations.list` results —
     /// lets `AppRoot.refreshCursorLiveBridge` surface a conversation started
-    /// on another device without waiting on CloudKit. Only upserts summary
-    /// fields (title/state/hostName/timestamps); turns/events are untouched
-    /// here and hydrate on thread-open via the existing `refreshConversation`.
+    /// on another device without waiting on CloudKit. Upserts summary fields
+    /// (title/state/hostName/timestamps). When the host sends additive
+    /// `lastTurnID` + `lastTurnStatus`, also advances a locally-`.running`
+    /// mirror turn to that status — never inventing a status when fields are
+    /// absent, and never regressing a locally terminal turn.
     ///
     /// Two invariants a bulk list merge must not violate (unlike a single
     /// authoritative fetch, a list summary can be stale relative to what this
@@ -388,7 +390,31 @@ public actor ConversationSyncCoordinator {
             _ = try? await chatRepo.upsertConversationMirror(
                 conversation, lastHostSeq: mergedSeq, syncState: existing?.syncState ?? .synced
             )
+            await applyLastTurnStatusFromSummary(summary)
         }
+    }
+
+    /// Applies host `lastTurnID`/`lastTurnStatus` onto a matching local mirror
+    /// turn when that turn is still `.running`. Fail-closed: missing fields,
+    /// unknown turn id, or a locally terminal status → no-op.
+    private func applyLastTurnStatusFromSummary(_ summary: ConversationSummary) async {
+        guard let turnID = summary.lastTurnID, !turnID.isEmpty,
+              let hostStatus = summary.lastTurnStatus, !hostStatus.isEmpty
+        else { return }
+        let mapped = LancerCore.ChatTurn.Status.fromHostStatus(hostStatus)
+        let turns = (try? await chatRepo.turns(conversationID: summary.id)) ?? []
+        guard var local = turns.first(where: { $0.id == turnID }) else { return }
+        // Never regress a locally terminal status (completed/failed).
+        guard local.status == .running else { return }
+        guard mapped != .running else { return }
+        local.status = mapped
+        local.completedAt = local.completedAt ?? .now
+        _ = try? await chatRepo.upsertTurnMirror(
+            local,
+            vendorSessionID: local.vendorSessionID,
+            hostSeqStart: local.hostSeqStart,
+            hostSeqEnd: local.hostSeqEnd
+        )
     }
 
     private func mergeFetchResponse(_ response: ConversationFetchResponse) async throws {

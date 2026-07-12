@@ -663,6 +663,106 @@ struct ConversationSyncCoordinatorTests {
         #expect(mirrored?.lastHostSeq == 5)
     }
 
+    @Test("mergeConversationSummaries applies running→failed from enriched list lastTurnStatus")
+    func mergeConversationSummariesAppliesRunningToFailed() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-orphan", title: "Orphaned", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 2, syncState: .synced)
+        let running = ChatTurn(
+            id: "turn-orphan", conversationID: "conv-orphan", ordinal: 0,
+            prompt: "go", runID: "run-orphan", status: .running
+        )
+        _ = try await repo.upsertTurnMirror(
+            running, vendorSessionID: nil, hostSeqStart: nil, hostSeqEnd: nil
+        )
+
+        let summary = ConversationSummary(
+            id: "conv-orphan", title: "Orphaned", provider: "claudeCode", agentID: "claudeCode",
+            hostName: "Mac", cwd: "/proj", state: "active", source: "app",
+            createdAt: "2026-07-08T00:00:00Z", updatedAt: "2026-07-08T00:01:00Z",
+            lastActivityAt: "2026-07-08T00:01:00Z", lastSeq: 2,
+            lastTurnID: "turn-orphan", lastTurnStatus: "failed"
+        )
+        await coordinator.mergeConversationSummaries([summary], hostName: "Mac", hostID: nil)
+
+        let turns = try await repo.turns(conversationID: "conv-orphan")
+        #expect(turns.count == 1)
+        #expect(turns[0].status == .failed)
+        let kind = WorkspaceRepoCatalog.statusKind(conversation: seed, lastTurn: turns[0])
+        #expect(kind == .failed)
+        #expect(kind != .working)
+    }
+
+    @Test("mergeConversationSummaries does not overwrite a locally-completed turn")
+    func mergeConversationSummariesDoesNotRegressCompleted() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-done", title: "Done", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 4, syncState: .synced)
+        let completed = ChatTurn(
+            id: "turn-done", conversationID: "conv-done", ordinal: 0,
+            prompt: "go", runID: "run-done", status: .completed
+        )
+        _ = try await repo.upsertTurnMirror(
+            completed, vendorSessionID: nil, hostSeqStart: nil, hostSeqEnd: nil
+        )
+
+        // Stale/hostile host status must not regress a terminal local turn.
+        let summary = ConversationSummary(
+            id: "conv-done", title: "Done", provider: "claudeCode", agentID: "claudeCode",
+            hostName: "Mac", cwd: "/proj", state: "active", source: "app",
+            createdAt: "2026-07-08T00:00:00Z", updatedAt: "2026-07-08T00:01:00Z",
+            lastActivityAt: "2026-07-08T00:01:00Z", lastSeq: 4,
+            lastTurnID: "turn-done", lastTurnStatus: "running"
+        )
+        await coordinator.mergeConversationSummaries([summary], hostName: "Mac", hostID: nil)
+
+        let turns = try await repo.turns(conversationID: "conv-done")
+        #expect(turns[0].status == .completed)
+        let kind = WorkspaceRepoCatalog.statusKind(conversation: seed, lastTurn: turns[0])
+        #expect(kind == .completed)
+        #expect(kind != .working)
+    }
+
+    @Test("mergeConversationSummaries ignores summaries without lastTurn fields")
+    func mergeConversationSummariesIgnoresAbsentLastTurnFields() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-old", title: "Old daemon", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 1, syncState: .synced)
+        let running = ChatTurn(
+            id: "turn-old", conversationID: "conv-old", ordinal: 0,
+            prompt: "go", runID: "run-old", status: .running
+        )
+        _ = try await repo.upsertTurnMirror(
+            running, vendorSessionID: nil, hostSeqStart: nil, hostSeqEnd: nil
+        )
+
+        let summary = ConversationSummary(
+            id: "conv-old", title: "Old daemon", provider: "claudeCode", agentID: "claudeCode",
+            hostName: "Mac", cwd: "/proj", state: "active", source: "app",
+            createdAt: "2026-07-08T00:00:00Z", updatedAt: "2026-07-08T00:01:00Z",
+            lastActivityAt: "2026-07-08T00:01:00Z", lastSeq: 1
+        )
+        await coordinator.mergeConversationSummaries([summary], hostName: "Mac", hostID: nil)
+
+        let turns = try await repo.turns(conversationID: "conv-old")
+        #expect(turns[0].status == .running, "absent lastTurn fields must not invent a status")
+    }
+
     @Test("observeSyncState immediately yields the current state, then updates on transitions")
     func observeSyncStateStream() async throws {
         let db = try AppDatabase.inMemory()

@@ -80,7 +80,7 @@ import Foundation
         "hostID":"host_abc","hostName":"Roshan MacBook","cwd":"/Users/roshan/project","model":"sonnet",\
         "budgetUSD":5.0,"state":"active","source":"phone","createdAt":"2026-07-03T00:30:00Z",\
         "updatedAt":"2026-07-03T01:00:00Z","lastActivityAt":"2026-07-03T01:00:00Z","lastSeq":42,\
-        "archivedAt":"2026-07-03T02:00:00Z"}
+        "archivedAt":"2026-07-03T02:00:00Z","lastTurnID":"turn_9","lastTurnStatus":"failed"}
         """
         let summary = try JSONDecoder().decode(ConversationSummary.self, from: Data(wireJSON.utf8))
         #expect(summary.id == "conv_1")
@@ -96,11 +96,13 @@ import Foundation
         #expect(summary.source == "phone")
         #expect(summary.lastSeq == 42)
         #expect(summary.archivedAt == "2026-07-03T02:00:00Z")
+        #expect(summary.lastTurnID == "turn_9")
+        #expect(summary.lastTurnStatus == "failed")
     }
 
     @Test("ConversationSummary decodes with all omitempty fields absent")
     func conversationSummaryDecodesMinimalShape() throws {
-        // hostID/model/budgetUSD/archivedAt all have `,omitempty` in Go and are
+        // hostID/model/budgetUSD/archivedAt/lastTurn* all have `,omitempty` in Go and are
         // omitted entirely (not null) when zero-valued — this is the shape a
         // freshly created conversation actually has.
         let wireJSON = """
@@ -114,6 +116,8 @@ import Foundation
         #expect(summary.model == nil)
         #expect(summary.budgetUSD == nil)
         #expect(summary.archivedAt == nil)
+        #expect(summary.lastTurnID == nil)
+        #expect(summary.lastTurnStatus == nil)
         #expect(summary.lastSeq == 1)
     }
 

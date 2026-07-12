@@ -779,12 +779,18 @@ public struct ConversationSummary: Codable, Sendable, Hashable, Identifiable {
     public let lastActivityAt: String
     public let lastSeq: Int
     public let archivedAt: String?
+    /// Latest turn id from `agent.conversations.list` (additive; absent on
+    /// older daemons / conversations with no turns).
+    public let lastTurnID: String?
+    /// Latest turn status from list (e.g. `running` / `completed` / `failed`).
+    public let lastTurnStatus: String?
 
     public init(
         id: String, title: String, provider: String, agentID: String, hostID: String? = nil,
         hostName: String, cwd: String, model: String? = nil, budgetUSD: Double? = nil,
         state: String, source: String, createdAt: String, updatedAt: String,
-        lastActivityAt: String, lastSeq: Int, archivedAt: String? = nil
+        lastActivityAt: String, lastSeq: Int, archivedAt: String? = nil,
+        lastTurnID: String? = nil, lastTurnStatus: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -802,6 +808,8 @@ public struct ConversationSummary: Codable, Sendable, Hashable, Identifiable {
         self.lastActivityAt = lastActivityAt
         self.lastSeq = lastSeq
         self.archivedAt = archivedAt
+        self.lastTurnID = lastTurnID
+        self.lastTurnStatus = lastTurnStatus
     }
 }
 

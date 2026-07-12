@@ -177,7 +177,38 @@ public struct AppRoot: View {
             ))
             _relayApprovalIngest = State(initialValue: RelayApprovalIngest(database: env.database))
             _relayQuestionIngest = State(initialValue: RelayQuestionIngest(chatRepo: env.chatRepo))
-            _workspaceDataStore = State(initialValue: WorkspaceDataStore(chatRepo: env.chatRepo))
+            let workspaceStore = WorkspaceDataStore(chatRepo: env.chatRepo)
+            let coordinator = env.conversationSyncCoordinator
+            // Capture the same fleet instance wired into ShellLiveBridge so
+            // list-status refresh uses the live relay bridge when connected.
+            let fleet = fleetStore
+            workspaceStore.syncRunningStatuses = {
+                // Same hydration race as ShellLiveBridge.waitForConnectedMachine
+                // (2026-07-10): firstConnectedMachine read once at call time is
+                // nil during launch/reconnect. Wait briefly for the relay to
+                // come back before giving up on this refresh cycle.
+                var connected = fleet.firstConnectedMachine
+                let deadline = Date().addingTimeInterval(8)
+                while connected == nil, Date() < deadline {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    connected = fleet.firstConnectedMachine
+                }
+                guard let machine = connected else { return }
+                do {
+                    let response = try await machine.bridge.relayListConversations(
+                        ConversationListRequest(limit: 50)
+                    )
+                    if let error = response.error, !error.isEmpty { return }
+                    await coordinator.mergeConversationSummaries(
+                        response.conversations,
+                        hostName: machine.record.displayName,
+                        hostID: machine.id.uuidString
+                    )
+                } catch {
+                    // No transport / not connected — list keeps rendering local rows.
+                }
+            }
+            _workspaceDataStore = State(initialValue: workspaceStore)
         } catch {
             _environment = State(initialValue: .failure(error.localizedDescription))
             _shellLiveBridge = State(initialValue: nil)
