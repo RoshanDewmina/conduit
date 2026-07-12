@@ -644,9 +644,11 @@ public final class WorkspaceDataStore {
         )
     }
 
-    /// Sum of per-repo thread counts — equals All Repos badge (empty cwd excluded).
+    /// All Repos badge — must equal the row count the All Repos tap shows
+    /// (`threads(forCwd: nil, allRepos: true)`), which includes empty-cwd
+    /// "No folder" conversations even though they are excluded from repo rows.
     public var allReposThreadCount: Int {
-        repos.reduce(0) { $0 + $1.threadCount }
+        conversations.count
     }
 
     @discardableResult
