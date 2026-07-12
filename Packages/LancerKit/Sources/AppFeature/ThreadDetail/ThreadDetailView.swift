@@ -162,7 +162,7 @@ struct ThreadDetailView: View {
 
     private func handleSend(_ prompt: String, _ cwd: String) {
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
-        guard !normalized.isEmpty else { return }
+        guard WorkspaceRepoCatalog.isAbsoluteSendTarget(normalized) else { return }
         activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized)
     }
 
