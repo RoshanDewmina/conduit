@@ -169,6 +169,8 @@ func (s *conversationStore) migrate() error {
 			started_at TEXT NOT NULL,
 			completed_at TEXT,
 			error_message TEXT,
+			baseline_start_oid TEXT,
+			baseline_end_oid TEXT,
 			UNIQUE(conversation_id, ordinal),
 			UNIQUE(conversation_id, client_turn_id),
 			UNIQUE(run_id)
@@ -213,7 +215,24 @@ func (s *conversationStore) migrate() error {
 			return fmt.Errorf("exec %q: %w", firstLine(stmt), err)
 		}
 	}
+	// Additive columns for DBs created before G1 turn-diff baselines.
+	for _, alter := range []string{
+		`ALTER TABLE conversation_turns ADD COLUMN baseline_start_oid TEXT`,
+		`ALTER TABLE conversation_turns ADD COLUMN baseline_end_oid TEXT`,
+	} {
+		if _, err := s.db.Exec(alter); err != nil && !isSQLiteDuplicateColumn(err) {
+			return fmt.Errorf("exec %q: %w", firstLine(alter), err)
+		}
+	}
 	return nil
+}
+
+func isSQLiteDuplicateColumn(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "duplicate column")
 }
 
 func firstLine(s string) string {
@@ -308,6 +327,10 @@ type conversationTurn struct {
 	StartedAt       string `json:"startedAt"`
 	CompletedAt     string `json:"completedAt,omitempty"`
 	ErrorMessage    string `json:"errorMessage,omitempty"`
+	// BaselineStartOID / BaselineEndOID are shadow git tree OIDs stamped at
+	// turn start/end (turn_baseline.go). Empty when cwd is not a git repo.
+	BaselineStartOID string `json:"baselineStartOid,omitempty"`
+	BaselineEndOID   string `json:"baselineEndOid,omitempty"`
 }
 
 type conversationEvent struct {
@@ -554,7 +577,8 @@ func scanConversationRow(row rowScanner) (conversationSummary, error) {
 
 func (s *conversationStore) loadTurns(conversationID string) ([]conversationTurn, error) {
 	rows, err := s.db.Query(`SELECT id, conversation_id, ordinal, client_turn_id, prompt, run_id,
-		provider, vendor_session_id, status, started_at, completed_at, error_message
+		provider, vendor_session_id, status, started_at, completed_at, error_message,
+		baseline_start_oid, baseline_end_oid
 		FROM conversation_turns WHERE conversation_id = ? ORDER BY ordinal ASC`, conversationID)
 	if err != nil {
 		return nil, err
@@ -568,14 +592,19 @@ func (s *conversationStore) loadTurns(conversationID string) ([]conversationTurn
 			vendorSessionID sql.NullString
 			completedAt     sql.NullString
 			errorMessage    sql.NullString
+			startOID        sql.NullString
+			endOID          sql.NullString
 		)
 		if err := rows.Scan(&t.ID, &t.ConversationID, &t.Ordinal, &t.ClientTurnID, &t.Prompt, &t.RunID,
-			&t.Provider, &vendorSessionID, &t.Status, &t.StartedAt, &completedAt, &errorMessage); err != nil {
+			&t.Provider, &vendorSessionID, &t.Status, &t.StartedAt, &completedAt, &errorMessage,
+			&startOID, &endOID); err != nil {
 			return nil, err
 		}
 		t.VendorSessionID = vendorSessionID.String
 		t.CompletedAt = completedAt.String
 		t.ErrorMessage = errorMessage.String
+		t.BaselineStartOID = startOID.String
+		t.BaselineEndOID = endOID.String
 		turns = append(turns, t)
 	}
 	return turns, rows.Err()
@@ -1176,6 +1205,45 @@ func stringFromMap(m map[string]any, keys ...string) string {
 // model/budget defaults for a follow-up.
 func (s *conversationStore) conversationByID(conversationID string) (conversationSummary, error) {
 	return scanConversationRow(s.db.QueryRow(conversationSelectByID, conversationID))
+}
+
+// setTurnBaselineStart stores the shadow tree OID stamped at turn start.
+func (s *conversationStore) setTurnBaselineStart(turnID, oid string) error {
+	_, err := s.db.Exec(`UPDATE conversation_turns SET baseline_start_oid = ? WHERE id = ?`, oid, turnID)
+	return err
+}
+
+// setTurnBaselineEnd stores the shadow tree OID stamped at turn end.
+func (s *conversationStore) setTurnBaselineEnd(turnID, oid string) error {
+	_, err := s.db.Exec(`UPDATE conversation_turns SET baseline_end_oid = ? WHERE id = ?`, oid, turnID)
+	return err
+}
+
+// turnBaselineOIDs returns start/end shadow tree OIDs for a turn belonging to
+// conversationID. sql.ErrNoRows when the turn is missing or mismatched.
+func (s *conversationStore) turnBaselineOIDs(conversationID, turnID string) (startOID, endOID string, err error) {
+	var start, end sql.NullString
+	err = s.db.QueryRow(`SELECT baseline_start_oid, baseline_end_oid FROM conversation_turns
+		WHERE id = ? AND conversation_id = ?`, turnID, conversationID).Scan(&start, &end)
+	if err != nil {
+		return "", "", err
+	}
+	return start.String, end.String, nil
+}
+
+// firstTurnBaselineStart returns the earliest turn's baseline_start_oid for a
+// conversation (session-diff baseline), or "" when none is stamped.
+func (s *conversationStore) firstTurnBaselineStart(conversationID string) (string, error) {
+	var oid sql.NullString
+	err := s.db.QueryRow(`SELECT baseline_start_oid FROM conversation_turns
+		WHERE conversation_id = ? ORDER BY ordinal ASC LIMIT 1`, conversationID).Scan(&oid)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return oid.String, nil
 }
 
 // latestVendorSessionID returns the most recently bound vendor session id

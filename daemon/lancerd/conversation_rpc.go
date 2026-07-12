@@ -205,6 +205,9 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 		return resp, nil
 	}
 
+	// Fresh turn — stamp shadow git baseline before launch (never touches user index).
+	s.stampTurnBaselinesForAppend(res.CWD, res.TurnID)
+
 	// Fresh turn — dispatch it. A vendor session id already bound to an
 	// EARLIER turn on this conversation (from a prior reply's captured
 	// session/thread id) is what lets THIS follow-up use resumeArgv (exact
@@ -268,6 +271,9 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 			if conv, err := s.conversations.conversationByID(res.ConversationID); err == nil {
 				resp.NextSeq = conv.LastSeq
 			}
+		}
+		if isTerminalRunStatus(launchResult.Status) {
+			s.stampTurnBaselineEndForRun(runID, res.TurnID)
 		}
 	}
 
