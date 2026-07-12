@@ -147,9 +147,10 @@ public struct ProofReelView: View {
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
-                    if let startedAt = command.startedAt {
-                        Text(startedAt)
-                            .font(.system(size: 11, design: .monospaced))
+                    if let startedAt = command.startedAt,
+                       let formatted = ProofReelModel.localizedTimestamp(startedAt) {
+                        Text(formatted)
+                            .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }

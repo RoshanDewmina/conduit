@@ -1,11 +1,14 @@
 import Foundation
 import LancerCore
+import os
 
 /// Derives a chronologically ordered scrub timeline from a `ProofReceipt`.
 ///
 /// Also decodes receipt payloads from the shapes `ChatConversationRepository`
 /// stores: `.receipt` artifacts and mirrored `chat_events` rows (`kind == "receipt"`).
 public enum ProofReelModel {
+    private static let logger = Logger(subsystem: "dev.lancer.mobile", category: "ProofReel")
+
     public enum StopKind: Equatable, Sendable {
         case command(ProofReceipt.Command)
         case file(ProofReceipt.FileTouched)
@@ -53,8 +56,16 @@ public enum ProofReelModel {
     }
 
     public static func decodeReceiptPayload(_ payloadJSON: String) -> ProofReceipt? {
-        guard let data = payloadJSON.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(ProofReceipt.self, from: data)
+        guard let data = payloadJSON.data(using: .utf8) else {
+            logger.error("Receipt payload is not valid UTF-8")
+            return nil
+        }
+        do {
+            return try JSONDecoder().decode(ProofReceipt.self, from: data)
+        } catch {
+            logger.error("Receipt decode failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     // MARK: - Stops
@@ -160,7 +171,13 @@ public enum ProofReelModel {
         return String(ref.prefix(7))
     }
 
-    private static func iso8601Date(from raw: String?) -> Date? {
+    /// Localized display for a receipt/command ISO8601 timestamp; nil if unparseable.
+    public static func localizedTimestamp(_ raw: String?) -> String? {
+        guard let date = iso8601Date(from: raw) else { return nil }
+        return localizedTimestampFormatter.string(from: date)
+    }
+
+    static func iso8601Date(from raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -169,4 +186,11 @@ public enum ProofReelModel {
         plain.formatOptions = [.withInternetDateTime]
         return plain.date(from: raw)
     }
+
+    private static let localizedTimestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .medium
+        return formatter
+    }()
 }

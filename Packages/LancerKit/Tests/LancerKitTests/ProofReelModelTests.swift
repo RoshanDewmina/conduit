@@ -249,4 +249,14 @@ import LancerCore
         #expect(ProofReelModel.shortGitRef("abc") == "abc")
         #expect(ProofReelModel.shortGitRef(nil) == nil)
     }
+
+    @Test("iso8601Date accepts fractional and plain internet timestamps")
+    func iso8601FractionalAndPlain() {
+        let fractional = ProofReelModel.iso8601Date(from: "2026-07-12T08:30:00.123Z")
+        let plain = ProofReelModel.iso8601Date(from: "2026-07-12T08:30:00Z")
+        #expect(fractional != nil)
+        #expect(plain != nil)
+        #expect(ProofReelModel.localizedTimestamp("2026-07-12T08:30:00.123Z") != nil)
+        #expect(ProofReelModel.localizedTimestamp("not-a-date") == nil)
+    }
 }

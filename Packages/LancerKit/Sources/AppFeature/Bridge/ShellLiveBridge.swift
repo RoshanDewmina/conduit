@@ -86,6 +86,14 @@ public final class ShellLiveBridge {
     /// follow-ups keep using `agent.observedSession.continue`.
     public private(set) var boundObservedContinue: ObservedContinueTarget?
 
+    /// Last send/follow-up/observed-continue attempt — Retry re-dispatches this
+    /// instead of the sheet's initial `prompt` (which is wrong after a follow-up
+    /// failure and empty on observed-adopt sheets).
+    public private(set) var lastAttempt: LastSendAttempt?
+
+    /// Bumped by `resetForNewThread` so abandoned poll loops stop mutating UI.
+    private var sessionEpoch: UInt64 = 0
+
     /// True while a send/follow-up is still awaiting a terminal turn
     /// (including degraded unreachable polling). Composer must stay disabled.
     public var isSendInFlight: Bool {
@@ -135,6 +143,13 @@ public final class ShellLiveBridge {
         public let cwd: String
     }
 
+    /// What Retry should re-dispatch — never the sheet's original prompt alone.
+    public enum LastSendAttempt: Equatable, Sendable {
+        case newConversation(prompt: String, cwd: String)
+        case followUp(prompt: String, conversationID: String, cwd: String)
+        case observedContinue(prompt: String, cwd: String, target: ObservedContinueTarget)
+    }
+
     public init(
         relayFleetStore: RelayFleetStore,
         conversationSyncCoordinator: ConversationSyncCoordinator,
@@ -143,6 +158,45 @@ public final class ShellLiveBridge {
         self.relayFleetStore = relayFleetStore
         self.conversationSyncCoordinator = conversationSyncCoordinator
         self.chatRepo = chatRepo
+    }
+
+    /// Clears in-flight UI state when the live sheet dismisses so the next New
+    /// Chat is not wedged behind a stale `isSendInFlight` / prior transcript.
+    /// The host-side run may keep going; list sync keeps its status honest.
+    public func resetForNewThread() {
+        sessionEpoch &+= 1
+        sendState = .idle
+        activeConversationID = nil
+        transcriptTurns = []
+        inFlightPrompt = nil
+        activeMachineID = nil
+        lastAttempt = nil
+        pendingObservedContinue = nil
+        boundObservedContinue = nil
+    }
+
+    /// Re-dispatches `lastAttempt` without inventing a brand-new conversation
+    /// when the failure was a follow-up / observed continue.
+    public func retryLastAttempt() async {
+        guard let lastAttempt else { return }
+        switch lastAttempt {
+        case .newConversation(let prompt, let cwd):
+            await send(prompt: prompt, cwd: cwd)
+        case .followUp(let prompt, let conversationID, let cwd):
+            await sendFollowUp(prompt: prompt, conversationID: conversationID, cwd: cwd)
+        case .observedContinue(let prompt, let cwd, let target):
+            guard !isSendInFlight else { return }
+            guard let machine = await waitForConnectedMachine() else {
+                pendingObservedContinue = nil
+                boundObservedContinue = nil
+                sendState = .failed("No connected machine. Pair one in Settings → Trusted Machines.")
+                return
+            }
+            activeMachineID = machine.id
+            pendingObservedContinue = nil
+            boundObservedContinue = target
+            await sendObservedContinue(prompt: prompt, cwd: cwd, target: target, machine: machine)
+        }
     }
 
     /// Adopts an armed observed session without sending: resolves a connected
@@ -208,12 +262,14 @@ public final class ShellLiveBridge {
         if let target = pendingObservedContinue {
             pendingObservedContinue = nil
             boundObservedContinue = target
+            lastAttempt = .observedContinue(prompt: prompt, cwd: cwd, target: target)
             await sendObservedContinue(prompt: prompt, cwd: cwd, target: target, machine: machine)
             return
         }
 
         // Brand-new conversation — drop any stale observed bind from a prior sheet.
         boundObservedContinue = nil
+        lastAttempt = .newConversation(prompt: prompt, cwd: cwd)
         sendState = .working
         activeConversationID = nil
         transcriptTurns = []
@@ -303,7 +359,9 @@ public final class ShellLiveBridge {
     }
 
     /// Observed continue writes into the vendor transcript (not the conversation
-    /// ledger). Re-poll `agent.sessions.transcript` for a new assistant turn.
+    /// ledger). Re-poll `agent.sessions.transcript` until a terminal run-status
+    /// is observed and the transcript has stopped growing — never stamp
+    /// `.completed` from a bounded timeout alone.
     private func pollObservedTranscriptReply(
         sessionId: String,
         prompt: String,
@@ -311,6 +369,7 @@ public final class ShellLiveBridge {
         priorTurns: [LancerCore.ChatTurn],
         bridge: E2ERelayBridge
     ) async {
+        let epoch = sessionEpoch
         let conversationID = "observed:\(sessionId)"
         activeConversationID = conversationID
         let turnID = UUID().uuidString
@@ -332,73 +391,136 @@ public final class ShellLiveBridge {
             assistantText: "",
             vendorSessionID: sessionId
         )
+        guard epoch == sessionEpoch else { return }
         transcriptTurns = priorTurns + [turn]
         sendState = .working
 
-        for _ in 0..<20 {
-            do {
-                try await Task.sleep(nanoseconds: 2_000_000_000)
-            } catch {
-                return
-            }
-            guard let result = try? await bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: 0)
-            else { continue }
+        var tracker = LivePollPolicy.Tracker()
+        var lastAssistantText = ""
+        var stagnantPolls = 0
+        let terminalSignal = ObservedTerminalSignal()
 
-            let newMessages = Array(result.messages.dropFirst(baselineCount))
-            let assistantText = newMessages
-                .filter { $0.role == .assistant }
-                .map(\.text)
-                .joined(separator: "\n\n")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if !assistantText.isEmpty {
-                turn.assistantText = assistantText
-                turn.status = .running
-                transcriptTurns = priorTurns + [turn]
-                sendState = .streaming(turn)
-                // Keep polling briefly for more chunks, then complete.
-                for _ in 0..<5 {
-                    do {
-                        try await Task.sleep(nanoseconds: 2_000_000_000)
-                    } catch {
-                        inFlightPrompt = nil
-                        turn.status = .completed
-                        turn.completedAt = .now
-                        transcriptTurns = priorTurns + [turn]
-                        sendState = .completed(turn)
-                        return
-                    }
-                    if let later = try? await bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: 0) {
-                        let laterText = Array(later.messages.dropFirst(baselineCount))
-                            .filter { $0.role == .assistant }
-                            .map(\.text)
-                            .joined(separator: "\n\n")
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                        if laterText.count > assistantText.count {
-                            turn.assistantText = laterText
-                            transcriptTurns = priorTurns + [turn]
-                            sendState = .streaming(turn)
-                        }
-                    }
-                }
-                inFlightPrompt = nil
-                turn.status = .completed
-                turn.completedAt = .now
-                transcriptTurns = priorTurns + [turn]
-                sendState = .completed(turn)
+        let statusWatch = Task { @MainActor in
+            for await notification in NotificationCenter.default.notifications(
+                named: Notification.Name("lancerE2ERunStatus")
+            ) {
+                guard let params = notification.userInfo?["params"] as? RunStatusParams,
+                      params.runId == runID,
+                      let terminal = ObservedRunTerminal(params: params)
+                else { continue }
+                terminalSignal.value = terminal
                 return
             }
         }
+        defer { statusWatch.cancel() }
 
-        // Started but no transcript reply appeared — still a successful continue.
-        inFlightPrompt = nil
-        turn.status = .completed
-        turn.completedAt = .now
-        turn.assistantText = turn.assistantText.isEmpty
-            ? "Continued on the host. Open the session again to see later output."
-            : turn.assistantText
-        transcriptTurns = priorTurns + [turn]
-        sendState = .completed(turn)
+        while true {
+            guard epoch == sessionEpoch else { return }
+
+            let now = Date()
+            do {
+                let result = try await bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: 0)
+                _ = LivePollPolicy.recordRefreshSuccess(&tracker, at: now)
+
+                let newMessages = Array(result.messages.dropFirst(baselineCount))
+                let assistantText = newMessages
+                    .filter { $0.role == .assistant }
+                    .map(\.text)
+                    .joined(separator: "\n\n")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if assistantText != lastAssistantText {
+                    lastAssistantText = assistantText
+                    stagnantPolls = 0
+                    if !assistantText.isEmpty {
+                        turn.assistantText = assistantText
+                        turn.status = .running
+                        guard epoch == sessionEpoch else { return }
+                        transcriptTurns = priorTurns + [turn]
+                        sendState = .streaming(turn)
+                    } else if !tracker.isDegraded {
+                        sendState = .working
+                    }
+                } else if !assistantText.isEmpty {
+                    stagnantPolls += 1
+                }
+
+                // Complete only when a real run-status terminal arrived and the
+                // transcript has stopped growing (at least one stagnant tick after
+                // first text, or immediately if terminal arrives with empty text).
+                if let terminal = terminalSignal.value {
+                    let transcriptSettled = assistantText.isEmpty || stagnantPolls >= 1
+                    if transcriptSettled {
+                        inFlightPrompt = nil
+                        switch terminal {
+                        case .completed:
+                            turn.status = .completed
+                            turn.completedAt = .now
+                            turn.assistantText = assistantText
+                            guard epoch == sessionEpoch else { return }
+                            transcriptTurns = priorTurns + [turn]
+                            sendState = .completed(turn)
+                        case .failed(let message):
+                            turn.status = .failed
+                            turn.errorMessage = message
+                            turn.completedAt = .now
+                            turn.assistantText = assistantText
+                            guard epoch == sessionEpoch else { return }
+                            transcriptTurns = priorTurns + [turn]
+                            sendState = .failed(message)
+                        }
+                        return
+                    }
+                }
+            } catch {
+                let result = LivePollPolicy.recordRefreshFailure(&tracker, at: now)
+                switch result {
+                case .enteredDegraded, .stillDegraded:
+                    let message = LivePollPolicy.degradedMessage(
+                        lastSuccessfulRefreshAt: tracker.lastSuccessfulRefreshAt,
+                        now: now
+                    )
+                    guard epoch == sessionEpoch else { return }
+                    sendState = .degraded(message: message, turn: turn.assistantText.isEmpty ? nil : turn)
+                case .failing, .healthy, .recovered:
+                    break
+                }
+            }
+
+            do {
+                try await Task.sleep(nanoseconds: LivePollPolicy.pollIntervalNanoseconds)
+            } catch {
+                return
+            }
+        }
+    }
+
+    private final class ObservedTerminalSignal: @unchecked Sendable {
+        var value: ObservedRunTerminal?
+    }
+
+    private enum ObservedRunTerminal: Sendable {
+        case completed
+        case failed(String)
+
+        init?(params: RunStatusParams) {
+            switch params.status {
+            case "exited":
+                if params.exitCode == 0 || params.exitCode == nil {
+                    self = .completed
+                } else {
+                    self = .failed("Run exited with code \(params.exitCode ?? -1)")
+                }
+            case "failed":
+                self = .failed("Run failed")
+            case "completed", "succeeded":
+                self = .completed
+            case "cancelled", "stopped":
+                self = .failed("Run \(params.status)")
+            default:
+                return nil
+            }
+        }
     }
 
     /// Appends a follow-up turn to the active conversation and polls for the
@@ -430,6 +552,7 @@ public final class ShellLiveBridge {
             activeMachineID = machine.id
             pendingObservedContinue = nil
             boundObservedContinue = target
+            lastAttempt = .observedContinue(prompt: prompt, cwd: cwd, target: target)
             await sendObservedContinue(prompt: prompt, cwd: cwd, target: target, machine: machine)
             return
         }
@@ -447,6 +570,7 @@ public final class ShellLiveBridge {
             selected: DispatchModelSelection.load()
         )
 
+        lastAttempt = .followUp(prompt: prompt, conversationID: conversationID, cwd: cwd)
         sendState = .working
         inFlightPrompt = prompt
 
@@ -488,8 +612,10 @@ public final class ShellLiveBridge {
     /// published every tick. N consecutive refresh failures → degraded
     /// (honest data-age copy) while retries continue in the background.
     private func pollUntilTerminal(runID: String, conversationID: String, transport: ConversationTransport) async {
+        let epoch = sessionEpoch
         var tracker = LivePollPolicy.Tracker()
         while true {
+            guard epoch == sessionEpoch else { return }
             let now = Date()
             do {
                 _ = try await conversationSyncCoordinator.refreshConversation(
@@ -505,22 +631,26 @@ public final class ShellLiveBridge {
                         lastSuccessfulRefreshAt: tracker.lastSuccessfulRefreshAt,
                         now: now
                     )
+                    guard epoch == sessionEpoch else { return }
                     sendState = .degraded(message: message, turn: turn)
                 case .failing, .healthy, .recovered:
                     break
                 }
             }
 
+            guard epoch == sessionEpoch else { return }
             await refreshTranscript(conversationID: conversationID)
 
             if let turn = try? await chatRepo.turnByRunID(runID) {
                 switch turn.status {
                 case .completed:
                     inFlightPrompt = nil
+                    guard epoch == sessionEpoch else { return }
                     sendState = .completed(turn)
                     return
                 case .failed:
                     inFlightPrompt = nil
+                    guard epoch == sessionEpoch else { return }
                     sendState = .failed(turn.errorMessage ?? "Run failed")
                     return
                 case .running:
