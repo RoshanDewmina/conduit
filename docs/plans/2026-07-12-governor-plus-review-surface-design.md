@@ -58,10 +58,12 @@ from agent hooks, not stream parsing (we already have hooks).
 Order: G1 → G2/G3 parallel. After the current tester-blocker queue (REL-1 first) per the
 standing priority; G3 can ride earlier since it's small and event-additive.
 
-## Open questions asked of owner (answers to be appended)
+## Interaction decisions (owner delegated 2026-07-12: "go with what seems best")
 
-1. Line-comment Attach → next-send context (Codex behavior) — confirm, or send immediately as
-   its own follow-up?
-2. Session pill baseline: conversation start (first dispatched turn) or repo HEAD at thread
-   open? (Codex uses the task/session start.)
-3. All Files tree scope: conversation cwd only (recommended, path-jailed) or any added repo?
+1. **Line-comment Attach queues into the composer** as context for the next send, rendered as
+   an attached chip ("Status.md:16 · 1 comment") the user can remove before sending; the sent
+   follow-up embeds "file:line — quoted line — comment" blocks. No auto-send.
+2. **Session pill baseline = conversation start** (shadow ref stamped at the first dispatched
+   turn; observed-imported threads fall back to the earliest turn baseline available).
+3. **All Files browser is path-jailed to the conversation's repo cwd** (same fail-closed jail
+   as `repo.file`/`repo.tree`); other repos are reachable by opening their own threads.

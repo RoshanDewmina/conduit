@@ -103,6 +103,40 @@ private extension URLRequest {
         #expect(posted?["approvalId"] as? String == approvalID)
         #expect(posted?["decision"] as? String == DaemonChannel.decisionWireValue(for: .approved))
         #expect(posted?["sessionId"] as? String == "sess-cold")
+        #expect(posted?["contentHash"] == nil, "without a local row or caller-supplied hash, contentHash is omitted")
+    }
+
+    @Test("enqueue with a caller-supplied contentHash (APNs userInfo) posts that hash even with no local row")
+    func enqueueWithCallerContentHashPostsHash() async throws {
+        URLProtocol.registerClass(DecisionCapturingURLProtocol.self)
+        defer { URLProtocol.unregisterClass(DecisionCapturingURLProtocol.self) }
+        capturedDecisionPost.set(nil)
+
+        let kc = Keychain(service: "test.lockscreen.relayCreds.hash", inMemory: true)
+        try await kc.write(Data("https://relay.test".utf8), account: "backendURL")
+        try await kc.write(Data("sess-cold".utf8), account: "sessionID")
+        try await kc.write(Data("tok-cold".utf8), account: "relayToken")
+
+        let relay = ApprovalRelay()
+        relay.credentialKeychain = kc
+
+        let db = try AppDatabase.inMemory()
+        let approvalID = UUID().uuidString
+        let hash = "c5fca73ef15566810d568ca87f42cf1d917e78ce9c51d9b641a6d783c4c5c7b3"
+
+        await relay.enqueue(
+            approvalID: approvalID,
+            decision: .rejected,
+            db: db,
+            hostID: "",
+            contentHash: hash
+        )
+
+        let posted = capturedDecisionPost.body
+        #expect(posted != nil, "a row-less cold-launch decision with APNs contentHash must still be forwarded")
+        #expect(posted?["approvalId"] as? String == approvalID)
+        #expect(posted?["decision"] as? String == DaemonChannel.decisionWireValue(for: .rejected))
+        #expect(posted?["contentHash"] as? String == hash)
     }
 
     // NOTE: the "already-resolved local approval is a no-op" branch of `enqueue`

@@ -205,9 +205,10 @@ func TestPostApprovalPush(t *testing.T) {
 	}
 
 	event := ApprovalEvent{
-		ApprovalID: "approval-abc",
-		Command:    "ls /tmp",
-		Risk:       1, // medium
+		ApprovalID:  "approval-abc",
+		Command:     "ls /tmp",
+		Risk:        1, // medium
+		ContentHash: "c5fca73ef15566810d568ca87f42cf1d917e78ce9c51d9b641a6d783c4c5c7b3",
 	}
 
 	s.postApprovalPush(dev, event)
@@ -224,5 +225,8 @@ func TestPostApprovalPush(t *testing.T) {
 	}
 	if payload["risk"] != "medium" {
 		t.Errorf("risk = %v, want medium", payload["risk"])
+	}
+	if payload["contentHash"] != event.ContentHash {
+		t.Errorf("contentHash = %v, want %s", payload["contentHash"], event.ContentHash)
 	}
 }
