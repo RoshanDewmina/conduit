@@ -31,6 +31,12 @@ public struct SearchView: View {
     }
 
     public var body: some View {
+        NavigationStack {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             RepoSheetHeader(title: "Search") { dismiss() }
                 .padding(.horizontal, 20)
@@ -59,7 +65,12 @@ public struct SearchView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(filteredResults) { thread in
-                            ThreadListRow(thread: thread, showsRepoName: true)
+                            NavigationLink {
+                                ThreadDetailView(thread: thread)
+                            } label: {
+                                ThreadListRow(thread: thread, showsRepoName: true)
+                            }
+                            .buttonStyle(.plain)
                             Divider()
                                 .padding(.leading, 40)
                         }
