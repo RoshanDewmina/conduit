@@ -30,10 +30,12 @@ tonight). Sim identity pinned to dead codes — clean-reinstall sim before any s
 #84 picker/haiku · #85 markdown+pacer · #86 Agents section · #87 handlers off messageLoop ·
 #88 orphan-turn reconciliation. Sim-gate evidence: docs/test-runs/2026-07-11-sim-live-loop-gate/.
 
-**In-flight worktrees:** p2-proof-reel + p2-flight-recorder (Grok DONE, uncommitted — verify,
-commit, gate, PR) · p1-repo-match (Grok running) · s27-deep-integration (S27-0 committed,
-plan committed; NEXT: S27-2a Live-Activity restore) · fix-router-async + fix-orphan-turns
-(merged — REMOVE worktrees; NB fix-orphan-turns is nested INSIDE fix-router-async).
+**Open PRs awaiting sim gate (all tests green, ui risk):** #89 repo-match · #90 proof reel ·
+#91 flight recorder. Gate each with a real haiku run (receipt needed for #90), merge, then
+ONE device build to owner. s27-deep-integration branch: S27-0 committed; NEXT S27-2a
+Live-Activity restore. Cleanup: remove merged worktrees fix-router-async + fix-orphan-turns
++ nested p1-repo-match (3-deep nesting bug), fix-git-timeout, fix-model-argv, p2-* after
+merge. Background procs: all stopped (test daemon /tmp/lth killed; monitors expired).
 
 **Operational gotchas:** cursor headless dies on big ~/.cursor/mcp.json → `mv` to
 .headless-hold during dispatch, ALWAYS restore · daemon redeploy = stop→mv→bootstrap, NEVER
