@@ -285,6 +285,7 @@ public struct FlightRecorderView: View {
         switch kind {
         case .dispatch: return "paperplane"
         case .output: return "text.alignleft"
+        case .tool: return "wrench"
         case .approval: return "checkmark.shield"
         case .question: return "questionmark"
         case .receipt: return "doc.text"

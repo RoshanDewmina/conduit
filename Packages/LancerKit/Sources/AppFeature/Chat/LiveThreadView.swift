@@ -2,6 +2,7 @@
 import SwiftUI
 import LancerCore
 import Foundation
+import PersistenceKit
 import SessionFeature
 
 /// M3: the real, live conversation view — reached only from the New Chat
@@ -30,11 +31,17 @@ public struct LiveThreadView: View {
     @State private var followUpText: String = ""
     @State private var streamingPacer = ChatStreamingTextPacer()
     @State private var receiptsByRunID: [String: ProofReceipt] = [:]
+    @State private var eventsByTurnID: [String: [ChatEvent]] = [:]
+    @State private var toolArtifactsByTurnID: [String: [ChatArtifact]] = [:]
+    @State private var showScrollToBottom = false
+    @State private var isNearBottom = true
     @FocusState private var isFollowUpFocused: Bool
     #if DEBUG
     @State private var hasAutoAnsweredQuestion = false
     @State private var hasAutoFollowedUp = false
     #endif
+
+    private static let scrollTailID = "live-tail"
 
     public init(prompt: String, cwd: String) {
         self.prompt = prompt
@@ -57,26 +64,51 @@ public struct LiveThreadView: View {
                             }
 
                             replyState
-                                .id("live-tail")
+                                .id(Self.scrollTailID)
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 16)
                         .padding(.bottom, 12)
                     }
+                    .onScrollGeometryChange(for: Double.self) { geometry in
+                        ChatScrollPolicy.distanceFromBottom(
+                            contentHeight: geometry.contentSize.height,
+                            viewportHeight: geometry.containerSize.height,
+                            contentOffsetY: geometry.contentOffset.y
+                        )
+                    } action: { _, distance in
+                        isNearBottom = ChatScrollPolicy.isNearBottom(distanceFromBottom: distance)
+                        showScrollToBottom = ChatScrollPolicy.shouldShowJumpToLatest(
+                            distanceFromBottom: distance
+                        )
+                    }
                     .onChange(of: bridge.sendState) { _, _ in
-                        scrollToTail(proxy)
+                        scrollToTailIfFollowing(proxy)
                     }
                     .onChange(of: bridge.transcriptTurns.count) { _, _ in
-                        scrollToTail(proxy)
+                        scrollToTailIfFollowing(proxy)
+                        Task { await refreshTranscriptExtras() }
                     }
                     .onChange(of: streamingAssistantText) { _, newValue in
                         if !newValue.isEmpty {
                             streamingPacer.ingest(newValue)
                         }
-                        scrollToTail(proxy)
+                        scrollToTailIfFollowing(proxy)
                     }
                     .onChange(of: streamingPacer.displayText) { _, _ in
-                        scrollToTail(proxy)
+                        scrollToTailIfFollowing(proxy)
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        if showScrollToBottom {
+                            ChatScrollToBottomButton {
+                                isNearBottom = true
+                                showScrollToBottom = false
+                                scrollToTail(proxy)
+                            }
+                            .padding(.trailing, 8)
+                            .padding(.bottom, 8)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        }
                     }
                 }
 
@@ -123,11 +155,15 @@ public struct LiveThreadView: View {
         }
         .task(id: receiptRefreshToken) {
             await refreshReceipts()
+            await refreshTranscriptExtras()
         }
         .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { note in
             let conversationID = note.userInfo?["conversationID"] as? String
             guard conversationID == nil || conversationID == bridge.activeConversationID else { return }
-            Task { await refreshReceipts() }
+            Task {
+                await refreshReceipts()
+                await refreshTranscriptExtras()
+            }
         }
         #if DEBUG
         // Simulator HID taps are unreliable on this iOS build (see
@@ -244,8 +280,13 @@ public struct LiveThreadView: View {
 
     private func scrollToTail(_ proxy: ScrollViewProxy) {
         withAnimation {
-            proxy.scrollTo("live-tail", anchor: .bottom)
+            proxy.scrollTo(Self.scrollTailID, anchor: .bottom)
         }
+    }
+
+    private func scrollToTailIfFollowing(_ proxy: ScrollViewProxy) {
+        guard isNearBottom else { return }
+        scrollToTail(proxy)
     }
 
     @ViewBuilder
@@ -260,13 +301,58 @@ public struct LiveThreadView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
-                ChatMarkdownBody(markdown: body)
+                turnTranscriptBody(turn)
                 if let receipt = receiptsByRunID[turn.runID] {
                     ReceiptCardView(receipt: receipt)
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func turnTranscriptBody(_ turn: LancerCore.ChatTurn) -> some View {
+        let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+        let artifactChips = (toolArtifactsByTurnID[turn.id] ?? []).map(ToolChipItem.init(artifact:))
+        let merged = mergeToolArtifacts(into: eventItems, artifacts: artifactChips)
+        if merged.contains(where: {
+            switch $0 {
+            case .toolChip, .thinking: return true
+            case .prose(let p): return !p.text.isEmpty
+            }
+        }) {
+            TurnTranscriptItemsView(
+                items: merged,
+                emptyFallback: turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+            )
+        } else {
+            let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+            ChatMarkdownBody(markdown: body)
+        }
+    }
+
+    /// Prefer structured event chips; append live tool artifacts not already paired by toolUseId.
+    private func mergeToolArtifacts(
+        into items: [TurnTranscriptItem],
+        artifacts: [ToolChipItem]
+    ) -> [TurnTranscriptItem] {
+        guard !artifacts.isEmpty else { return items }
+        let existingIDs = Set(items.compactMap { item -> String? in
+            if case .toolChip(let chip) = item { return chip.toolUseId }
+            return nil
+        })
+        var merged = items
+        for artifact in artifacts where !existingIDs.contains(artifact.toolUseId) {
+            merged.append(.toolChip(artifact))
+        }
+        // If events had no prose but the turn has assistantText, keep prose from assistantText.
+        let hasProse = merged.contains {
+            if case .prose(let p) = $0 { return !p.text.isEmpty }
+            return false
+        }
+        if !hasProse {
+            // Caller supplies assistantText via emptyFallback / separate path when merged is tool-only.
+        }
+        return merged
     }
 
     /// Stable token so receipt refresh re-runs when turns land or complete.
@@ -287,6 +373,20 @@ public struct LiveThreadView: View {
         receiptsByRunID = next
     }
 
+    private func refreshTranscriptExtras() async {
+        guard let conversationID = bridge.activeConversationID,
+              let db = try? AppDatabase.openShared()
+        else { return }
+        let repo = ChatConversationRepository(db)
+        let events = (try? await repo.events(conversationID: conversationID, limit: 10_000)) ?? []
+        eventsByTurnID = Dictionary(grouping: events.filter { $0.turnID != nil }, by: { $0.turnID! })
+        let artifacts = (try? await repo.artifacts(conversationID: conversationID)) ?? []
+        toolArtifactsByTurnID = Dictionary(
+            grouping: artifacts.filter { $0.kind == .tool },
+            by: \.turnID
+        )
+    }
+
     // MARK: - Reply state (Orca rule: working indicator and visible reply text
     // are mutually exclusive on screen — except degraded, which never claims
     // "Working…" over stale data)
@@ -300,14 +400,16 @@ public struct LiveThreadView: View {
             workingIndicator
                 .onAppear { streamingPacer.reset() }
         case .streaming(let turn):
-            streamingAssistantBody(target: turn.assistantText)
+            VStack(alignment: .leading, spacing: 12) {
+                liveToolChips(for: turn)
+                streamingAssistantBody(target: turn.assistantText)
+            }
         case .completed(let turn):
             if turn.status == .failed {
                 errorState(turn.errorMessage ?? "Run failed")
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
-                    ChatMarkdownBody(markdown: body)
+                    turnTranscriptBody(turn)
                         .onAppear { streamingPacer.reset(to: turn.assistantText) }
                     if let receipt = receiptsByRunID[turn.runID] {
                         ReceiptCardView(receipt: receipt)
@@ -355,6 +457,38 @@ public struct LiveThreadView: View {
         .onAppear { streamingPacer.ingest(target) }
         .onChange(of: target) { _, newValue in
             streamingPacer.ingest(newValue)
+        }
+    }
+
+    @ViewBuilder
+    private func liveToolChips(for turn: LancerCore.ChatTurn) -> some View {
+        let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+        let artifactChips = (toolArtifactsByTurnID[turn.id] ?? []).map(ToolChipItem.init(artifact:))
+        let merged = mergeToolArtifacts(into: eventItems, artifacts: artifactChips)
+        let chips = merged.compactMap { item -> ToolChipItem? in
+            if case .toolChip(let chip) = item { return chip }
+            return nil
+        }
+        let thinking = merged.compactMap { item -> TurnThinkingItem? in
+            if case .thinking(let t) = item { return t }
+            return nil
+        }
+        if !thinking.isEmpty || !chips.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(thinking) { row in
+                    ThinkingRow(text: row.text)
+                }
+                if !chips.isEmpty {
+                    let grouped = TurnTranscriptAssembler.groupedForDisplay(
+                        chips.map { .toolChip($0) }
+                    )
+                    ForEach(grouped) { item in
+                        if case .toolChips(let group) = item {
+                            ToolCallChipView(chips: group)
+                        }
+                    }
+                }
+            }
         }
     }
 

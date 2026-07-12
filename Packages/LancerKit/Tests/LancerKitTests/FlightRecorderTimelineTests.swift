@@ -144,6 +144,33 @@ struct FlightRecorderTimelineTests {
         #expect(question?.latency == 12.5)
     }
 
+    @Test("tool_call / tool_result map to tool steps with tool name as title")
+    func toolCallAndResultSteps() {
+        let events = [
+            event(seq: 1, kind: "turn_started", at: 0),
+            event(
+                seq: 2,
+                kind: "tool_call",
+                payloadJSON: #"{"name":"Edit","toolUseId":"toolu_1","input":{"file_path":"A.swift"}}"#,
+                at: 1
+            ),
+            event(
+                seq: 3,
+                kind: "tool_result",
+                text: "patched",
+                payloadJSON: #"{"name":"Edit","toolUseId":"toolu_1","isError":false}"#,
+                at: 2
+            ),
+            event(seq: 4, kind: "status", payloadJSON: #"{"status":"exited"}"#, at: 3),
+            event(seq: 5, kind: "receipt", payloadJSON: "{}", at: 4),
+        ]
+        let timeline = FlightRecorderAssembler.assemble(events: events, turnID: turn)
+        let toolSteps = timeline.steps.filter { $0.kind == .tool }
+        #expect(toolSteps.count == 2)
+        #expect(toolSteps[0].title == "Edit")
+        #expect(toolSteps[1].title == "Edit result")
+    }
+
     @Test("filters to the requested turn and ignores sibling turn events")
     func filtersByTurnID() {
         let events = [
