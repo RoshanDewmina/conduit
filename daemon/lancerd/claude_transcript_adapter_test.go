@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -40,9 +42,15 @@ func TestParseClaudeTranscriptRolesAndOrder(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFixture(t, dir, fixtureTranscriptLines(), false)
 
-	msgs, nextLine, err := parseClaudeTranscript(path, 0)
+	msgs, nextLine, truncated, aiTitle, err := parseClaudeTranscript(path, 0)
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
+	}
+	if truncated {
+		t.Fatal("small fixture should not be truncated")
+	}
+	if aiTitle != "fix-dead-buttons" {
+		t.Errorf("aiTitle = %q, want fix-dead-buttons", aiTitle)
 	}
 	if nextLine != len(fixtureTranscriptLines()) {
 		t.Fatalf("nextLine = %d, want %d", nextLine, len(fixtureTranscriptLines()))
@@ -83,7 +91,7 @@ func TestParseClaudeTranscriptIncrementalSinceLine(t *testing.T) {
 	lines := fixtureTranscriptLines()
 	path := writeFixture(t, dir, lines, false)
 
-	first, nextLine, err := parseClaudeTranscript(path, 0)
+	first, nextLine, _, _, err := parseClaudeTranscript(path, 0)
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -94,7 +102,7 @@ func TestParseClaudeTranscriptIncrementalSinceLine(t *testing.T) {
 	more := append(lines, `{"type":"assistant","sessionId":"`+fixtureSessionID+`","message":{"role":"assistant","content":[{"type":"text","text":"one more thing"}]},"timestamp":"2026-06-22T13:00:09Z"}`)
 	path = writeFixture(t, dir, more, false)
 
-	second, nextLine2, err := parseClaudeTranscript(path, nextLine)
+	second, nextLine2, _, _, err := parseClaudeTranscript(path, nextLine)
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -113,7 +121,7 @@ func TestParseClaudeTranscriptTruncatedFinalLineTolerated(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFixture(t, dir, fixtureTranscriptLines(), true)
 
-	msgs, nextLine, err := parseClaudeTranscript(path, 0)
+	msgs, nextLine, _, _, err := parseClaudeTranscript(path, 0)
 	if err != nil {
 		t.Fatalf("truncated final line should not error, got: %v", err)
 	}
@@ -133,7 +141,7 @@ func TestParseClaudeTranscriptUnknownTypeNeverCrashes(t *testing.T) {
 	}
 	path := writeFixture(t, dir, lines, false)
 
-	msgs, _, err := parseClaudeTranscript(path, 0)
+	msgs, _, _, _, err := parseClaudeTranscript(path, 0)
 	if err != nil {
 		t.Fatalf("should never error on bad lines, got: %v", err)
 	}
@@ -143,8 +151,77 @@ func TestParseClaudeTranscriptUnknownTypeNeverCrashes(t *testing.T) {
 }
 
 func TestParseClaudeTranscriptMissingFileErrors(t *testing.T) {
-	_, _, err := parseClaudeTranscript(filepath.Join(t.TempDir(), "missing.jsonl"), 0)
+	_, _, _, _, err := parseClaudeTranscript(filepath.Join(t.TempDir(), "missing.jsonl"), 0)
 	if err == nil {
 		t.Fatal("expected error for missing file")
+	}
+}
+
+// TestParseClaudeTranscriptKeepsNewestWhenOverBudget proves that when the
+// accumulated message text exceeds maxTranscriptBytes, we drop from the FRONT
+// (oldest) so the newest end of a long session is what remains.
+func TestParseClaudeTranscriptKeepsNewestWhenOverBudget(t *testing.T) {
+	dir := t.TempDir()
+	// Per-message text is capped at maxMessageTextBytes (16KB), so we need
+	// enough messages that the capped sum exceeds maxTranscriptBytes (2MB).
+	perMsg := strings.Repeat("X", maxMessageTextBytes)
+	need := (maxTranscriptBytes / maxMessageTextBytes) + 3
+	lines := make([]string, 0, need+1)
+	lines = append(lines, fmt.Sprintf(
+		`{"type":"user","sessionId":"%s","message":{"role":"user","content":"OLD_MARKER %s"},"timestamp":"2026-01-01T00:00:00Z"}`,
+		fixtureSessionID, perMsg))
+	for i := 1; i < need-1; i++ {
+		lines = append(lines, fmt.Sprintf(
+			`{"type":"assistant","sessionId":"%s","message":{"role":"assistant","content":[{"type":"text","text":"MID_%d %s"}]},"timestamp":"2026-01-01T00:%02d:00Z"}`,
+			fixtureSessionID, i, perMsg, i%60))
+	}
+	lines = append(lines, fmt.Sprintf(
+		`{"type":"assistant","sessionId":"%s","message":{"role":"assistant","content":[{"type":"text","text":"NEW_MARKER %s"}]},"timestamp":"2026-01-01T23:59:00Z"}`,
+		fixtureSessionID, perMsg))
+	path := writeFixture(t, dir, lines, false)
+
+	msgs, _, truncated, _, err := parseClaudeTranscript(path, 0)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if !truncated {
+		t.Fatal("expected truncated=true when over maxTranscriptBytes")
+	}
+	if len(msgs) == 0 {
+		t.Fatal("expected some newest messages to remain")
+	}
+	joined := ""
+	for _, m := range msgs {
+		joined += m.Text
+	}
+	if strings.Contains(joined, "OLD_MARKER") {
+		t.Fatal("oldest front message should have been dropped to stay under budget")
+	}
+	if !strings.Contains(joined, "NEW_MARKER") {
+		t.Fatal("newest message must be kept when the byte cap trips")
+	}
+	total := 0
+	for _, m := range msgs {
+		total += len(m.Text)
+	}
+	if total > maxTranscriptBytes {
+		t.Fatalf("kept %d bytes, want <= %d", total, maxTranscriptBytes)
+	}
+}
+
+func TestParseClaudeTranscriptAITitleLatestWins(t *testing.T) {
+	dir := t.TempDir()
+	lines := []string{
+		`{"type":"ai-title","aiTitle":"first-title","sessionId":"` + fixtureSessionID + `"}`,
+		`{"type":"user","sessionId":"` + fixtureSessionID + `","message":{"role":"user","content":"hello"},"timestamp":"2026-01-01T00:00:00Z"}`,
+		`{"type":"ai-title","aiTitle":"latest-title","sessionId":"` + fixtureSessionID + `"}`,
+	}
+	path := writeFixture(t, dir, lines, false)
+	_, _, _, aiTitle, err := parseClaudeTranscript(path, 0)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if aiTitle != "latest-title" {
+		t.Fatalf("aiTitle = %q, want latest-title", aiTitle)
 	}
 }

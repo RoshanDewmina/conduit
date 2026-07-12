@@ -50,13 +50,18 @@ type claudeLine struct {
 
 // parseClaudeTranscript parses the JSONL transcript at path, skipping the first
 // sinceLine lines (already consumed by the caller), and returns the neutral
-// messages found after that plus the new total line count. It tolerates a
+// messages found after that plus the new total line count. When the accumulated
+// message text exceeds maxTranscriptBytes it drops from the FRONT (oldest) so
+// the newest end of a long session is kept — matching loadFullObservedTranscript's
+// "full session should end up in the ledger" intent for the tail that fits.
+// truncated is true when that front-trim ran. aiTitle is the latest
+// {"type":"ai-title","aiTitle":…} value seen (empty if none). It tolerates a
 // malformed/partially-written final line and never errors on bad individual
 // lines — only a failure to open the file is returned as err.
-func parseClaudeTranscript(path string, sinceLine int) (msgs []SessionMessage, nextLine int, err error) {
+func parseClaudeTranscript(path string, sinceLine int) (msgs []SessionMessage, nextLine int, truncated bool, aiTitle string, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, sinceLine, err
+		return nil, sinceLine, false, "", err
 	}
 	defer f.Close()
 
@@ -80,10 +85,16 @@ func parseClaudeTranscript(path string, sinceLine int) (msgs []SessionMessage, n
 	lineNo := len(lines)
 	totalBytes := 0
 	for i, raw := range lines {
-		if i+1 <= sinceLine {
+		if len(strings.TrimSpace(string(raw))) == 0 {
 			continue
 		}
-		if len(strings.TrimSpace(string(raw))) == 0 {
+		// Capture ai-title from the whole file (including skipped prefix lines)
+		// so attachObservedSession still gets the session title after a tail load.
+		var probe claudeLine
+		if json.Unmarshal(raw, &probe) == nil && probe.Type == "ai-title" && probe.AITitle != "" {
+			aiTitle = probe.AITitle
+		}
+		if i+1 <= sinceLine {
 			continue
 		}
 		msg, ok := parseClaudeLine(raw)
@@ -96,12 +107,20 @@ func parseClaudeTranscript(path string, sinceLine int) (msgs []SessionMessage, n
 			}
 			totalBytes += len(msg[j].Text)
 		}
-		if totalBytes > maxTranscriptBytes {
-			break
-		}
 		msgs = append(msgs, msg...)
 	}
-	return msgs, lineNo, nil
+
+	// Over budget: drop leading (oldest) messages until we fit. Prefer keeping
+	// the newest end — a phone importing a long Claude session cares about
+	// recent turns, not the first 2MB of preamble.
+	if totalBytes > maxTranscriptBytes {
+		truncated = true
+		for len(msgs) > 0 && totalBytes > maxTranscriptBytes {
+			totalBytes -= len(msgs[0].Text)
+			msgs = msgs[1:]
+		}
+	}
+	return msgs, lineNo, truncated, aiTitle, nil
 }
 
 // parseClaudeLine converts one raw JSONL line into zero or more neutral

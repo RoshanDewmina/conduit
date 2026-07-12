@@ -309,6 +309,12 @@ type SessionTranscriptResult struct {
 	Messages      []SessionMessage `json:"messages"`
 	NextLine      int              `json:"nextLine"`
 	ResetRequired bool             `json:"resetRequired"`
+	// Truncated is true when message text exceeded maxTranscriptBytes and
+	// oldest messages were dropped so the newest end remains.
+	Truncated bool `json:"truncated,omitempty"`
+	// Title is the latest Claude ai-title value when present (attach imports
+	// use this; live transcript RPCs may leave it empty for other providers).
+	Title string `json:"title,omitempty"`
 }
 
 // loadSessionTranscript resolves sessionID to its on-disk transcript path
@@ -350,14 +356,20 @@ func loadSessionTranscript(home, sessionID string, sinceLine int) (SessionTransc
 			sinceLine = n - maxObservedTailLines
 		}
 	}
-	msgs, nextLine, err := parseClaudeTranscript(path, sinceLine)
+	msgs, nextLine, truncated, aiTitle, err := parseClaudeTranscript(path, sinceLine)
 	if err != nil {
 		return SessionTranscriptResult{}, err
 	}
 	if msgs == nil {
 		msgs = []SessionMessage{}
 	}
-	return SessionTranscriptResult{Messages: msgs, NextLine: nextLine, ResetRequired: resetRequired}, nil
+	return SessionTranscriptResult{
+		Messages:      msgs,
+		NextLine:      nextLine,
+		ResetRequired: resetRequired,
+		Truncated:     truncated,
+		Title:         aiTitle,
+	}, nil
 }
 
 // loadFullObservedTranscript is like loadSessionTranscript but always returns
@@ -384,14 +396,14 @@ func loadFullObservedTranscript(home, sessionID string) (SessionTranscriptResult
 		}
 		return SessionTranscriptResult{}, errUnknownSessionID
 	}
-	msgs, _, err := parseClaudeTranscript(path, 0)
+	msgs, _, truncated, aiTitle, err := parseClaudeTranscript(path, 0)
 	if err != nil {
 		return SessionTranscriptResult{}, err
 	}
 	if msgs == nil {
 		msgs = []SessionMessage{}
 	}
-	return SessionTranscriptResult{Messages: msgs}, nil
+	return SessionTranscriptResult{Messages: msgs, Truncated: truncated, Title: aiTitle}, nil
 }
 
 func countTranscriptLines(path string) int {
