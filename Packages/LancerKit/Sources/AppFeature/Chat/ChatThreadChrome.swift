@@ -4,27 +4,53 @@ import UIKit
 
 /// Renders assistant markdown as plain body text (not a bubble): prose via native
 /// `AttributedString(markdown:)` with inline-code chips, plus fenced blocks with copy.
+/// Block splits are memoized in `ChatMarkdownBlockParser`; oversized single blocks skip
+/// markdown attribution and render as plain monospaced text.
 struct ChatMarkdownBody: View {
     let markdown: String
     var bodyFontSize: CGFloat = 16
 
+    @State private var blocks: [ChatMarkdownBlock]
+
+    init(markdown: String, bodyFontSize: CGFloat = 16) {
+        self.markdown = markdown
+        self.bodyFontSize = bodyFontSize
+        _blocks = State(initialValue: ChatMarkdownBlockParser.parse(markdown))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ForEach(Array(ChatMarkdownBlockParser.parse(markdown).enumerated()), id: \.offset) { _, block in
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .prose(let text):
-                    proseView(text)
+                    if ChatMarkdownBlockParser.shouldUsePlainTextFallback(text) {
+                        plainMonospaceView(text)
+                    } else {
+                        proseView(text)
+                    }
                 case .codeFence(let language, let code):
                     ChatCodeFenceBlock(language: language, code: code)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task(id: markdown) {
+            blocks = ChatMarkdownBlockParser.parse(markdown)
+        }
     }
 
     private func proseView(_ text: String) -> some View {
         Text(styledProse(text))
             .font(.system(size: bodyFontSize))
+            .foregroundStyle(.primary)
+            .lineSpacing(4)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func plainMonospaceView(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: bodyFontSize, design: .monospaced))
             .foregroundStyle(.primary)
             .lineSpacing(4)
             .textSelection(.enabled)

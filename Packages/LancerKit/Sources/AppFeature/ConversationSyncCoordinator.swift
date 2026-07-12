@@ -147,17 +147,25 @@ public actor ConversationSyncCoordinator {
         publish(.syncing, for: conversationID)
         let local = try await chatRepo.conversation(id: conversationID)
         do {
-            let response = try await transport.fetch(
-                ConversationFetchRequest(conversationId: conversationID, sinceSeq: local?.lastHostSeq ?? 0, limit: 2000)
+            let nextSeq = try await fetchAndMergeAllPages(
+                conversationID: conversationID,
+                sinceSeq: local?.lastHostSeq ?? 0,
+                transport: transport
             )
-            try await mergeFetchResponse(response)
             publish(.synced, for: conversationID)
-            return response.nextSeq
+            return nextSeq
         } catch {
             publish(.hostOffline, for: conversationID)
             throw error
         }
     }
+
+    /// Bound on how many `agent.conversations.fetch` pages a single refresh will pull.
+    public static let maxFetchPages = 20
+    /// Page size for host event fetch during refresh / conflict recovery.
+    public static let fetchPageLimit = 2000
+    /// Page size when reading mirrored events back for assistant-text assembly.
+    public static let localEventsPageLimit = 5000
 
     /// A live stream of sync-state changes for one conversation, for the
     /// banner view to observe. The current state (or `.synced` if never
@@ -255,13 +263,58 @@ public actor ConversationSyncCoordinator {
         conversationID: String, transport: ConversationTransport
     ) async throws -> Int {
         let local = try await chatRepo.conversation(id: conversationID)
-        let response = try await transport.fetch(
-            ConversationFetchRequest(
-                conversationId: conversationID, sinceSeq: local?.lastHostSeq ?? 0, limit: 2000
+        return try await fetchAndMergeAllPages(
+            conversationID: conversationID,
+            sinceSeq: local?.lastHostSeq ?? 0,
+            transport: transport
+        )
+    }
+
+    /// Pulls host fetch pages until `hasMore` is false (or `maxFetchPages`), merges
+    /// once with the combined payload so long threads aren't truncated at the first page.
+    private func fetchAndMergeAllPages(
+        conversationID: String, sinceSeq: Int, transport: ConversationTransport
+    ) async throws -> Int {
+        var cursor = sinceSeq
+        var lastNextSeq = sinceSeq
+        var turnsByID: [String: ConversationTurnEnvelope] = [:]
+        var allEvents: [ConversationEvent] = []
+        var allArtifacts: [ConversationArtifactEnvelope] = []
+        var lastSummary: ConversationSummary?
+        var pages = 0
+
+        while pages < Self.maxFetchPages {
+            pages += 1
+            let response = try await transport.fetch(
+                ConversationFetchRequest(
+                    conversationId: conversationID,
+                    sinceSeq: cursor,
+                    limit: Self.fetchPageLimit
+                )
+            )
+            lastSummary = response.conversation
+            lastNextSeq = response.nextSeq
+            for turn in response.turns {
+                turnsByID[turn.id] = turn
+            }
+            allEvents.append(contentsOf: response.events)
+            allArtifacts.append(contentsOf: response.artifacts)
+            cursor = response.nextSeq
+            if !response.hasMore { break }
+        }
+
+        guard let summary = lastSummary else { return lastNextSeq }
+        try await mergeFetchResponse(
+            ConversationFetchResponse(
+                conversation: summary,
+                turns: turnsByID.values.sorted { $0.ordinal < $1.ordinal },
+                events: allEvents,
+                artifacts: allArtifacts,
+                nextSeq: lastNextSeq,
+                hasMore: false
             )
         )
-        try await mergeFetchResponse(response)
-        return response.nextSeq
+        return lastNextSeq
     }
 
     private func blockConflict(conversationID: String, message: String?) async -> TurnOutcome {
@@ -431,7 +484,7 @@ public actor ConversationSyncCoordinator {
         // ITS OWN mirrored events (this fetch's plus whatever was already
         // stored) before writing the turn row, so a device that never
         // streamed a turn live still renders its content in ChatHistoryView.
-        let allEvents = (try? await chatRepo.events(conversationID: response.conversation.id, sinceSeq: 0, limit: 5000)) ?? []
+        let allEvents = (try? await loadAllMirroredEvents(conversationID: response.conversation.id)) ?? []
         let eventsByTurn = Dictionary(grouping: allEvents, by: { $0.turnID })
         for turnEnvelope in response.turns {
             var turn = Self.mapTurn(turnEnvelope, conversationID: response.conversation.id)
@@ -487,6 +540,25 @@ public actor ConversationSyncCoordinator {
             .sorted { $0.seq < $1.seq }
             .compactMap(\.text)
             .joined()
+    }
+
+    /// Pages through the local event mirror so long turns aren't truncated at
+    /// `localEventsPageLimit` when assembling `assistantText`.
+    private func loadAllMirroredEvents(conversationID: String) async throws -> [ChatEvent] {
+        var all: [ChatEvent] = []
+        var sinceSeq = 0
+        while true {
+            let page = try await chatRepo.events(
+                conversationID: conversationID,
+                sinceSeq: sinceSeq,
+                limit: Self.localEventsPageLimit
+            )
+            if page.isEmpty { break }
+            all.append(contentsOf: page)
+            sinceSeq = page[page.count - 1].seq
+            if page.count < Self.localEventsPageLimit { break }
+        }
+        return all
     }
 
     private func publish(_ state: ConversationSyncUIState, for conversationID: String) {

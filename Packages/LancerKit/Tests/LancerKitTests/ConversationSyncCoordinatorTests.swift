@@ -433,6 +433,109 @@ struct ConversationSyncCoordinatorTests {
         #expect(events.map(\.seq) == [1, 2])
     }
 
+    @Test("refreshConversation pages until hasMore is false and merges all events")
+    func refreshConversationPagesUntilComplete() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .syncing)
+
+        let fetchCount = Counter()
+        let summary = ConversationSummary(
+            id: "conv-1", title: "Long thread", provider: "claudeCode", agentID: "claudeCode",
+            hostName: "h", cwd: "/proj", state: "active", source: "app",
+            createdAt: "2026-07-02T00:00:00Z", updatedAt: "2026-07-02T03:00:00Z",
+            lastActivityAt: "2026-07-02T03:00:00Z", lastSeq: 6
+        )
+        let turn = ConversationTurnEnvelope(
+            id: "turn-1", conversationId: "conv-1", ordinal: 0, clientTurnId: "device-2:1",
+            prompt: "long reply", runId: "run-long-1", provider: "claudeCode",
+            vendorSessionId: "sess-1", status: "completed", startedAt: "2026-07-02T00:30:00Z"
+        )
+
+        let transport = makeTransport(fetch: { req in
+            #expect(req.conversationId == "conv-1")
+            #expect(req.limit == ConversationSyncCoordinator.fetchPageLimit)
+            let n = await fetchCount.increment()
+            switch n {
+            case 1:
+                #expect(req.sinceSeq == 0)
+                return ConversationFetchResponse(
+                    conversation: summary,
+                    turns: [turn],
+                    events: [
+                        ConversationEvent(
+                            conversationId: "conv-1", seq: 1, turnId: "turn-1", runId: "run-long-1",
+                            kind: "prompt", role: "user", text: "long reply", createdAt: "2026-07-02T00:30:00Z"
+                        ),
+                        ConversationEvent(
+                            conversationId: "conv-1", seq: 2, turnId: "turn-1", runId: "run-long-1",
+                            kind: "output", role: "assistant", text: "part-a-", createdAt: "2026-07-02T00:31:00Z"
+                        ),
+                    ],
+                    nextSeq: 2,
+                    hasMore: true
+                )
+            case 2:
+                #expect(req.sinceSeq == 2)
+                return ConversationFetchResponse(
+                    conversation: summary,
+                    turns: [turn],
+                    events: [
+                        ConversationEvent(
+                            conversationId: "conv-1", seq: 3, turnId: "turn-1", runId: "run-long-1",
+                            kind: "output", role: "assistant", text: "part-b-", createdAt: "2026-07-02T00:32:00Z"
+                        ),
+                        ConversationEvent(
+                            conversationId: "conv-1", seq: 4, turnId: "turn-1", runId: "run-long-1",
+                            kind: "output", role: "assistant", text: "part-c-", createdAt: "2026-07-02T00:33:00Z"
+                        ),
+                    ],
+                    nextSeq: 4,
+                    hasMore: true
+                )
+            case 3:
+                #expect(req.sinceSeq == 4)
+                return ConversationFetchResponse(
+                    conversation: summary,
+                    turns: [turn],
+                    events: [
+                        ConversationEvent(
+                            conversationId: "conv-1", seq: 5, turnId: "turn-1", runId: "run-long-1",
+                            kind: "output", role: "assistant", text: "part-d", createdAt: "2026-07-02T00:34:00Z"
+                        ),
+                        ConversationEvent(
+                            conversationId: "conv-1", seq: 6, turnId: "turn-1", runId: "run-long-1",
+                            kind: "status", payloadJson: "{\"status\":\"exited\",\"exitCode\":0}",
+                            createdAt: "2026-07-02T00:35:00Z"
+                        ),
+                    ],
+                    nextSeq: 6,
+                    hasMore: false
+                )
+            default:
+                Issue.record("unexpected fetch #\(n) sinceSeq=\(req.sinceSeq)")
+                return ConversationFetchResponse(conversation: summary, nextSeq: 6, hasMore: false)
+            }
+        })
+
+        let nextSeq = try await coordinator.refreshConversation(conversationID: "conv-1", transport: transport)
+        #expect(nextSeq == 6)
+        #expect(await fetchCount.value == 3)
+
+        let mirrored = try await repo.conversation(id: "conv-1")
+        #expect(mirrored?.lastHostSeq == 6)
+        #expect(mirrored?.title == "Long thread")
+
+        let events = try await repo.events(conversationID: "conv-1")
+        #expect(events.map(\.seq) == [1, 2, 3, 4, 5, 6])
+
+        let turns = try await repo.turns(conversationID: "conv-1")
+        #expect(turns.count == 1)
+        #expect(turns.first?.assistantText == "part-a-part-b-part-c-part-d")
+    }
+
     @Test("refreshConversation maps host 'exited' turn status to .completed (not .running)")
     func refreshMapsExitedHostStatusToCompleted() async throws {
         // Daemon persist uses process-lifecycle "exited" on success. Phone
