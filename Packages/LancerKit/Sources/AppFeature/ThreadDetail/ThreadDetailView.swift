@@ -1,5 +1,7 @@
 #if os(iOS)
 import SwiftUI
+import LancerCore
+import PersistenceKit
 
 /// Thread detail for a real conversation row. Live transcript lives in
 /// `LiveThreadView` (owned by chat-polish); this surface shows honest
@@ -9,6 +11,7 @@ struct ThreadDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isFollowUpPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
+    @State private var turns: [ChatTurn] = []
 
     let thread: ThreadListItem
 
@@ -52,6 +55,34 @@ struct ThreadDetailView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+
+                        if !turns.isEmpty {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Turns")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.bottom, 8)
+
+                                ForEach(turns) { turn in
+                                    NavigationLink {
+                                        FlightRecorderView(
+                                            conversationID: thread.id,
+                                            turnID: turn.id,
+                                            prompt: turn.prompt,
+                                            runID: turn.runID
+                                        )
+                                    } label: {
+                                        flightRecorderRow(turn)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if turn.id != turns.last?.id {
+                                        Divider()
+                                    }
+                                }
+                            }
+                            .padding(.top, 8)
+                        }
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 96)
@@ -70,6 +101,7 @@ struct ThreadDetailView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .task { await loadTurns() }
         .sheet(isPresented: $isFollowUpPresented) {
             NewChatComposerView(
                 initialRepo: thread.cwd.isEmpty
@@ -84,6 +116,40 @@ struct ThreadDetailView: View {
             )
         }
         .liveThreadPresentation($activeLiveThread)
+    }
+
+    private func flightRecorderRow(_ turn: ChatTurn) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "waveform.path.ecg")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Flight Recorder")
+                    .font(.system(size: 15, weight: .medium))
+                Text(turn.prompt)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .accessibilityLabel(Text("Flight Recorder for turn \(turn.ordinal + 1)"))
+    }
+
+    private func loadTurns() async {
+        guard thread.id != "preview" else { return }
+        guard let db = try? AppDatabase.openShared() else { return }
+        let repo = ChatConversationRepository(db)
+        turns = (try? await repo.turns(conversationID: thread.id)) ?? []
     }
 
     private func handleSend(_ prompt: String, _ cwd: String) {
