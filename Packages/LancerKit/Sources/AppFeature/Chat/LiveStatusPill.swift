@@ -99,6 +99,50 @@ public enum LiveStatusPresentation: Sendable {
         iso.formatOptions = [.withInternetDateTime]
         return iso.date(from: at)
     }
+
+    /// Clear the pill on run end only. Do **not** clear on `.working` —
+    /// daemon liveStatus dedupes `(state,tool,target)` per run and will not
+    /// re-emit the same key after degraded→working (or any) re-entry, so a
+    /// wipe here leaves a blank pill until the next distinct state.
+    public static func shouldClearOnSendStatePhase(_ phase: LiveStatusSendPhase) -> Bool {
+        switch phase {
+        case .idle, .completed, .failed:
+            return true
+        case .working, .streaming, .degraded:
+            return false
+        }
+    }
+
+    /// Accept a liveStatus notification only when there is a live turn to
+    /// attribute it to, run IDs match, and the event's machine matches the
+    /// active machine (mirrors other `lancerE2E*` observers).
+    public static func shouldAcceptLiveRunStatus(
+        eventRunID: String,
+        eventMachineID: UUID?,
+        liveTurnRunID: String?,
+        activeMachineID: UUID?
+    ) -> Bool {
+        guard let liveTurnRunID, !liveTurnRunID.isEmpty,
+              liveTurnRunID == eventRunID,
+              let activeMachineID,
+              let eventMachineID,
+              eventMachineID == activeMachineID
+        else {
+            return false
+        }
+        return true
+    }
+}
+
+/// Send-state phases that drive live-status pill clearing (subset of
+/// `ShellLiveBridge.SendState` — kept string-free for unit tests).
+public enum LiveStatusSendPhase: Sendable, Equatable {
+    case idle
+    case working
+    case streaming
+    case completed
+    case failed
+    case degraded
 }
 
 #if os(iOS)

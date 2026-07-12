@@ -112,6 +112,62 @@ struct LiveStatusPresentationTests {
         )
         #expect(text == "Starting… · 12s")
     }
+
+    @Test("pill survives working re-entry — clear only on idle/terminal")
+    func workingReentryDoesNotClear() {
+        #expect(LiveStatusPresentation.shouldClearOnSendStatePhase(.working) == false)
+        #expect(LiveStatusPresentation.shouldClearOnSendStatePhase(.streaming) == false)
+        #expect(LiveStatusPresentation.shouldClearOnSendStatePhase(.degraded) == false)
+        #expect(LiveStatusPresentation.shouldClearOnSendStatePhase(.idle) == true)
+        #expect(LiveStatusPresentation.shouldClearOnSendStatePhase(.completed) == true)
+        #expect(LiveStatusPresentation.shouldClearOnSendStatePhase(.failed) == true)
+    }
+
+    @Test("other-machine event ignored; nil live turn rejects ingest")
+    func machineAndLiveTurnGate() {
+        let mine = UUID()
+        let other = UUID()
+        #expect(
+            LiveStatusPresentation.shouldAcceptLiveRunStatus(
+                eventRunID: "r1",
+                eventMachineID: mine,
+                liveTurnRunID: "r1",
+                activeMachineID: mine
+            )
+        )
+        #expect(
+            !LiveStatusPresentation.shouldAcceptLiveRunStatus(
+                eventRunID: "r1",
+                eventMachineID: other,
+                liveTurnRunID: "r1",
+                activeMachineID: mine
+            )
+        )
+        #expect(
+            !LiveStatusPresentation.shouldAcceptLiveRunStatus(
+                eventRunID: "r1",
+                eventMachineID: mine,
+                liveTurnRunID: nil,
+                activeMachineID: mine
+            )
+        )
+        #expect(
+            !LiveStatusPresentation.shouldAcceptLiveRunStatus(
+                eventRunID: "r2",
+                eventMachineID: mine,
+                liveTurnRunID: "r1",
+                activeMachineID: mine
+            )
+        )
+        #expect(
+            !LiveStatusPresentation.shouldAcceptLiveRunStatus(
+                eventRunID: "r1",
+                eventMachineID: nil,
+                liveTurnRunID: "r1",
+                activeMachineID: mine
+            )
+        )
+    }
 }
 
 @Suite("LiveRunStatusParams wire")

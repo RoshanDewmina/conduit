@@ -162,14 +162,24 @@ public struct LiveThreadView: View {
             await observeLiveRunStatus()
         }
         .onChange(of: bridge.sendState) { _, newValue in
+            let phase: LiveStatusSendPhase
             switch newValue {
-            case .idle, .completed, .failed:
+            case .idle: phase = .idle
+            case .working: phase = .working
+            case .streaming: phase = .streaming
+            case .completed: phase = .completed
+            case .failed: phase = .failed
+            case .degraded: phase = .degraded
+            }
+            if LiveStatusPresentation.shouldClearOnSendStatePhase(phase) {
                 clearLiveRunStatus()
-            case .working:
-                // Fresh turn — drop any leftover pill from a prior run.
+            }
+        }
+        .onChange(of: liveTurnRunID) { previous, next in
+            // Cross-run leftovers: drop the pill when the bound run changes.
+            // (runID filtering already blocks ingest of foreign runs.)
+            if previous != next {
                 clearLiveRunStatus()
-            case .streaming, .degraded:
-                break
             }
         }
         .task(id: receiptRefreshToken) {
@@ -506,7 +516,13 @@ public struct LiveThreadView: View {
                 guard let params = notification.userInfo?["params"] as? LiveRunStatusParams else {
                     continue
                 }
-                if let runID = liveTurnRunID, params.runId != runID {
+                let eventMachineID = (notification.userInfo?["machineID"] as? RelayMachineID)?.raw
+                guard LiveStatusPresentation.shouldAcceptLiveRunStatus(
+                    eventRunID: params.runId,
+                    eventMachineID: eventMachineID,
+                    liveTurnRunID: liveTurnRunID,
+                    activeMachineID: bridge.activeMachineID?.raw
+                ) else {
                     continue
                 }
                 ingestLiveRunStatus(params)

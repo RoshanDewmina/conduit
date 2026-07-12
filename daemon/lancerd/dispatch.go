@@ -1191,7 +1191,9 @@ func emitRunStatus(emit emitFunc, runID, status string, code *int) {
 		params["exitCode"] = *code
 	}
 	emit("agent.run.status", params)
-	if status == "exited" || status == "failed" || status == "cancelled" || status == "budget-exceeded" {
+	// Call sites only pass "running" | "exited" | "failed" (see rg emitRunStatus).
+	// cancelled / budget-exceeded are dispatcher Status values, never emitRunStatus args.
+	if status == "exited" || status == "failed" {
 		clearLiveStatus(runID)
 	}
 }
