@@ -21,6 +21,7 @@ public struct LiveThreadView: View {
     @Environment(RelayApprovalIngest.self) private var approvalIngest
     @Environment(RelayQuestionIngest.self) private var questionIngest
     @Environment(RelayFleetStore.self) private var relayFleetStore
+    @Environment(WorkspaceDataStore.self) private var workspaceData
 
     let prompt: String
     let cwd: String
@@ -28,6 +29,7 @@ public struct LiveThreadView: View {
     @State private var hasSentInitialPrompt = false
     @State private var followUpText: String = ""
     @State private var streamingPacer = ChatStreamingTextPacer()
+    @State private var receiptsByRunID: [String: ProofReceipt] = [:]
     @FocusState private var isFollowUpFocused: Bool
     #if DEBUG
     @State private var hasAutoAnsweredQuestion = false
@@ -111,6 +113,14 @@ public struct LiveThreadView: View {
             guard !hasSentInitialPrompt else { return }
             hasSentInitialPrompt = true
             await bridge.send(prompt: prompt, cwd: cwd)
+        }
+        .task(id: receiptRefreshToken) {
+            await refreshReceipts()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lancerChatArtifactPersisted)) { note in
+            let conversationID = note.userInfo?["conversationID"] as? String
+            guard conversationID == nil || conversationID == bridge.activeConversationID else { return }
+            Task { await refreshReceipts() }
         }
         #if DEBUG
         // Simulator HID taps are unreliable on this iOS build (see
@@ -242,9 +252,32 @@ public struct LiveThreadView: View {
                     .foregroundStyle(.secondary)
             }
         } else {
-            let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
-            ChatMarkdownBody(markdown: body)
+            VStack(alignment: .leading, spacing: 12) {
+                let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+                ChatMarkdownBody(markdown: body)
+                if let receipt = receiptsByRunID[turn.runID] {
+                    ReceiptCardView(receipt: receipt)
+                }
+            }
         }
+    }
+
+    /// Stable token so receipt refresh re-runs when turns land or complete.
+    private var receiptRefreshToken: String {
+        bridge.transcriptTurns.map { "\($0.runID):\($0.status.rawValue)" }.joined(separator: "|")
+    }
+
+    private func refreshReceipts() async {
+        var next: [String: ProofReceipt] = [:]
+        for turn in bridge.transcriptTurns {
+            if let receipt = await workspaceData.receipt(
+                runID: turn.runID,
+                conversationID: turn.conversationID
+            ) {
+                next[turn.runID] = receipt
+            }
+        }
+        receiptsByRunID = next
     }
 
     // MARK: - Reply state (Orca rule: working indicator and visible reply text
@@ -265,9 +298,14 @@ public struct LiveThreadView: View {
             if turn.status == .failed {
                 errorState(turn.errorMessage ?? "Run failed")
             } else {
-                let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
-                ChatMarkdownBody(markdown: body)
-                    .onAppear { streamingPacer.reset(to: turn.assistantText) }
+                VStack(alignment: .leading, spacing: 12) {
+                    let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+                    ChatMarkdownBody(markdown: body)
+                        .onAppear { streamingPacer.reset(to: turn.assistantText) }
+                    if let receipt = receiptsByRunID[turn.runID] {
+                        ReceiptCardView(receipt: receipt)
+                    }
+                }
             }
         case .failed(let message):
             errorState(message)
