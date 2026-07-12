@@ -604,6 +604,11 @@ public final class WorkspaceDataStore {
     /// Set from `AppRoot`; nil / failure → list still renders local data.
     public var syncRunningStatuses: (() async -> Void)?
 
+    /// Pulls one conversation's turns/events from the host into the local
+    /// mirror (fetch-on-open). Backfilled threads otherwise open empty —
+    /// the list backfill copies summaries only. Set from `AppRoot`.
+    public var refreshThreadFromHost: ((_ conversationID: String) async -> Void)?
+
     public init(chatRepo: ChatConversationRepository, addedRepos: AddedRepoStore = AddedRepoStore()) {
         self.chatRepo = chatRepo
         self.addedRepos = addedRepos

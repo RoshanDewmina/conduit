@@ -8,6 +8,7 @@ import PersistenceKit
 /// send into the thread's real cwd.
 struct ThreadDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(WorkspaceDataStore.self) private var workspaceData
     @State private var isFollowUpPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
     @State private var turns: [ChatTurn] = []
@@ -218,6 +219,12 @@ struct ThreadDetailView: View {
         guard let db = try? AppDatabase.openShared() else { return }
         let repo = ChatConversationRepository(db)
         turns = (try? await repo.turns(conversationID: thread.id)) ?? []
+        // Backfilled conversations carry summaries only — pull the turns and
+        // events from the host on first open (fetch-on-open), then re-read.
+        if turns.isEmpty, let refresh = workspaceData.refreshThreadFromHost {
+            await refresh(thread.id)
+            turns = (try? await repo.turns(conversationID: thread.id)) ?? []
+        }
         let events = (try? await repo.events(conversationID: thread.id, limit: 10_000)) ?? []
         eventsByTurnID = Dictionary(grouping: events.filter { $0.turnID != nil }, by: { $0.turnID! })
     }
