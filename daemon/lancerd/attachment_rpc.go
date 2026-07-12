@@ -111,6 +111,11 @@ func (s *server) handleAttachmentPut(p attachmentPutParams) (attachmentPutResult
 
 	key := attachmentUploadKey(p.ConversationID, sanitized)
 	up, exists := hub.uploads[key]
+	if exists && p.Seq == 0 {
+		// Client aborted mid-upload and is retrying from scratch — replace.
+		exists = false
+		delete(hub.uploads, key)
+	}
 	if !exists {
 		if p.Seq != 0 {
 			return attachmentPutResult{}, fmt.Errorf("unexpected seq %d for new upload", p.Seq)

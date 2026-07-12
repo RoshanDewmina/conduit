@@ -359,6 +359,16 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		var params attachmentPutParams
 		if err := json.Unmarshal(payload, &params); err != nil {
 			log.Printf("e2e: unmarshal attachmentPut failed: %v", err)
+			payloadOut := map[string]interface{}{
+				"ok":    false,
+				"error": err.Error(),
+			}
+			msg := map[string]interface{}{
+				"type":    "attachmentPutResult",
+				"payload": payloadOut,
+			}
+			data, _ := json.Marshal(msg)
+			_ = r.client.sendMessage("attachmentPutResult", data)
 			return
 		}
 		res, err := r.server.handleAttachmentPut(params)

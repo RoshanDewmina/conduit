@@ -318,6 +318,15 @@ public final class E2ERelayBridge: ObservableObject {
                 done: done
             )
         )
+        attachmentPutContinuation?.resume(throwing: E2EError.superseded)
+        attachmentPutContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            guard let self, !Task.isCancelled else { return }
+            self.attachmentPutContinuation?.resume(throwing: E2EError.timedOut)
+            self.attachmentPutContinuation = nil
+        }
+        defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.attachmentPutContinuation = c
         }

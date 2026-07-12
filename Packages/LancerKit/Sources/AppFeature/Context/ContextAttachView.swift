@@ -148,7 +148,10 @@ public struct ContextAttachView: View {
             loadError = "At most \(AttachmentLimits.maxFiles) files"
             return
         }
-        guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+        guard let data = image.jpegData(compressionQuality: 0.9) else {
+            loadError = "Couldn't read that photo"
+            return
+        }
         guard data.count <= AttachmentLimits.maxBytesPerFile else {
             loadError = "Each file must be ≤ 20 MB"
             return
@@ -163,9 +166,20 @@ public struct ContextAttachView: View {
 
     private func ingestPhotos(_ items: [PhotosPickerItem], defaultName: String) async {
         var added: [AttachmentDraft] = []
+        var sawLoadFailure = false
         for (index, item) in items.enumerated() {
             guard attachments.count + added.count < AttachmentLimits.maxFiles else { break }
-            guard let data = try? await item.loadTransferable(type: Data.self), !data.isEmpty else { continue }
+            let data: Data
+            do {
+                guard let loaded = try await item.loadTransferable(type: Data.self), !loaded.isEmpty else {
+                    sawLoadFailure = true
+                    continue
+                }
+                data = loaded
+            } catch {
+                sawLoadFailure = true
+                continue
+            }
             guard data.count <= AttachmentLimits.maxBytesPerFile else {
                 await MainActor.run { loadError = "Each file must be ≤ 20 MB" }
                 continue
@@ -176,7 +190,11 @@ public struct ContextAttachView: View {
         }
         await MainActor.run {
             attachments = AttachmentDraftStore.appending(attachments, newItems: added)
-            if !added.isEmpty { loadError = nil }
+            if !added.isEmpty {
+                loadError = nil
+            } else if sawLoadFailure {
+                loadError = "Couldn't load that photo"
+            }
         }
     }
 
@@ -186,11 +204,22 @@ public struct ContextAttachView: View {
             await MainActor.run { loadError = error.localizedDescription }
         case .success(let urls):
             var added: [AttachmentDraft] = []
+            var sawLoadFailure = false
             for url in urls {
                 guard attachments.count + added.count < AttachmentLimits.maxFiles else { break }
                 let accessed = url.startAccessingSecurityScopedResource()
                 defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                guard let data = try? Data(contentsOf: url), !data.isEmpty else { continue }
+                let data: Data
+                do {
+                    data = try Data(contentsOf: url)
+                    guard !data.isEmpty else {
+                        sawLoadFailure = true
+                        continue
+                    }
+                } catch {
+                    sawLoadFailure = true
+                    continue
+                }
                 guard data.count <= AttachmentLimits.maxBytesPerFile else {
                     await MainActor.run { loadError = "Each file must be ≤ 20 MB" }
                     continue
@@ -199,7 +228,11 @@ public struct ContextAttachView: View {
             }
             await MainActor.run {
                 attachments = AttachmentDraftStore.appending(attachments, newItems: added)
-                if !added.isEmpty { loadError = nil }
+                if !added.isEmpty {
+                    loadError = nil
+                } else if sawLoadFailure {
+                    loadError = "Couldn't load that file"
+                }
             }
         }
     }
@@ -234,9 +267,17 @@ struct AttachmentChipView: View {
                     .foregroundStyle(.green)
             }
 
-            Text(draft.displayLabel)
-                .font(.system(size: 13, weight: .medium))
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(draft.displayLabel)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                if case .error(let message) = draft.state {
+                    Text(message)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                }
+            }
 
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")

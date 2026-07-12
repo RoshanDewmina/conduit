@@ -217,6 +217,80 @@ func TestAttachmentPutFileCap(t *testing.T) {
 	}
 }
 
+func TestAttachmentPutRetryAfterAbort(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+
+	// Start an upload, then abort mid-way (leave hub entry with nextSeq=1).
+	if _, err := s.handleAttachmentPut(attachmentPutParams{
+		Name:       "retry.txt",
+		TotalBytes: 4,
+		Seq:        0,
+		DataBase64: base64.StdEncoding.EncodeToString([]byte("ab")),
+		Done:       false,
+	}); err != nil {
+		t.Fatalf("first chunk: %v", err)
+	}
+
+	// Without restart semantics, seq 0 would fail with "expected seq 1".
+	payload := []byte("ok!!")
+	r, err := s.handleAttachmentPut(attachmentPutParams{
+		Name:       "retry.txt",
+		TotalBytes: int64(len(payload)),
+		Seq:        0,
+		DataBase64: base64.StdEncoding.EncodeToString(payload),
+		Done:       true,
+	})
+	if err != nil {
+		t.Fatalf("retry from seq 0: %v", err)
+	}
+	if r.Path == "" || !r.OK {
+		t.Fatalf("retry result = %+v", r)
+	}
+	got, err := os.ReadFile(r.Path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(got) != string(payload) {
+		t.Fatalf("content = %q, want %q", got, payload)
+	}
+}
+
+func TestE2ERouterAttachmentPutUnmarshalError(t *testing.T) {
+	srv := newServer(t.TempDir())
+	defer srv.poller.stopForTest()
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	router.handleMessage("attachmentPut", []byte(`{not-json`))
+
+	msgType, raw := client.lastMessage()
+	if msgType != "attachmentPutResult" {
+		t.Fatalf("expected attachmentPutResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string `json:"type"`
+		Payload struct {
+			OK    bool   `json:"ok"`
+			Error string `json:"error"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(raw, &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if env.Payload.OK {
+		t.Fatal("expected ok=false")
+	}
+	if env.Payload.Error == "" {
+		t.Fatal("expected error field set")
+	}
+}
+
 func TestE2ERouterAttachmentPut(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

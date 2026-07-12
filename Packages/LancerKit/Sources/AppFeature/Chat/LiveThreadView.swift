@@ -4,6 +4,7 @@ import LancerCore
 import Foundation
 import PersistenceKit
 import SessionFeature
+import SSHTransport
 
 /// M3: the real, live conversation view — reached only from the New Chat
 /// composer's send action (a brand-new conversation flow). This is
@@ -32,6 +33,7 @@ public struct LiveThreadView: View {
     @State private var followUpAttachments: [AttachmentDraft] = []
     @State private var isContextPresented = false
     @State private var isUploadingAttachments = false
+    @State private var followUpUploadTask: Task<Void, Never>?
     @State private var streamingPacer = ChatStreamingTextPacer()
     @State private var receiptsByRunID: [String: ProofReceipt] = [:]
     @State private var eventsByTurnID: [String: [ChatEvent]] = [:]
@@ -134,7 +136,10 @@ public struct LiveThreadView: View {
                         isFocused: $isFollowUpFocused,
                         isDisabled: bridge.isSendInFlight || isUploadingAttachments,
                         canSend: canSendFollowUpWithAttachments,
-                        onSend: { Task { await sendFollowUp() } }
+                        onSend: {
+                            followUpUploadTask?.cancel()
+                            followUpUploadTask = Task { await sendFollowUp() }
+                        }
                     )
                 }
             }
@@ -734,7 +739,7 @@ public struct LiveThreadView: View {
                     HStack(spacing: 8) {
                         ForEach(followUpAttachments) { draft in
                             AttachmentChipView(draft: draft) {
-                                followUpAttachments.removeAll { $0.id == draft.id }
+                                removeFollowUpAttachment(draft)
                             }
                         }
                     }
@@ -759,6 +764,22 @@ public struct LiveThreadView: View {
         }
     }
 
+    private func removeFollowUpAttachment(_ draft: AttachmentDraft) {
+        followUpAttachments.removeAll { $0.id == draft.id }
+        if case .uploading = draft.state {
+            followUpUploadTask?.cancel()
+            followUpUploadTask = nil
+            isUploadingAttachments = false
+        }
+    }
+
+    /// Writes progress/state updates without restoring chips the user removed.
+    private func publishFollowUpDrafts(_ drafts: inout [AttachmentDraft]) {
+        let surviving = Set(followUpAttachments.map(\.id))
+        drafts.removeAll { !surviving.contains($0.id) }
+        followUpAttachments = drafts
+    }
+
     private func sendFollowUp() async {
         let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, bridge.canAcceptFollowUp, canSendFollowUpWithAttachments else { return }
@@ -766,58 +787,64 @@ public struct LiveThreadView: View {
         var drafts = followUpAttachments
         if !drafts.isEmpty {
             isUploadingAttachments = true
-            guard let machine = relayFleetStore.machines.first(where: { $0.id == bridge.activeMachineID })
-                    ?? relayFleetStore.firstConnectedMachine
-            else {
+            let sshChannel = ApprovalRelay.shared.channel
+            let relayMachine = relayFleetStore.machines.first(where: { $0.id == bridge.activeMachineID })
+                ?? relayFleetStore.firstConnectedMachine
+            guard sshChannel != nil || relayMachine != nil else {
                 drafts = drafts.map { draft in
                     guard case .pending = draft.state else { return draft }
                     var copy = draft
                     copy.state = .error(message: AttachmentUploadError.noTransport.localizedDescription)
                     return copy
                 }
-                followUpAttachments = drafts
+                publishFollowUpDrafts(&drafts)
                 isUploadingAttachments = false
                 return
             }
-            let e2e = machine.bridge
             let conversationID = bridge.activeConversationID
             for draft in drafts {
+                if Task.isCancelled { isUploadingAttachments = false; return }
+                guard followUpAttachments.contains(where: { $0.id == draft.id }) else { continue }
                 guard case .pending = draft.state else { continue }
                 drafts = AttachmentDraftStore.withState(
                     drafts, id: draft.id, state: .uploading(progress: 0)
                 )
-                followUpAttachments = drafts
+                publishFollowUpDrafts(&drafts)
                 do {
                     let path = try await AttachmentUploader.upload(
                         draft: draft,
                         conversationId: conversationID,
                         sendChunk: { params in
-                            let result = try await e2e.relayPutAttachment(
-                                conversationId: params.conversationId,
-                                name: params.name,
-                                totalBytes: params.totalBytes,
-                                seq: params.seq,
-                                dataBase64: params.dataBase64,
-                                done: params.done
+                            try Task.checkCancellation()
+                            return try await self.putAttachmentChunk(
+                                params,
+                                sshChannel: sshChannel,
+                                relayBridge: relayMachine?.bridge
                             )
-                            return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
                         },
                         onProgress: { progress in
                             drafts = AttachmentDraftStore.withState(
                                 drafts, id: draft.id, state: .uploading(progress: progress)
                             )
-                            followUpAttachments = drafts
+                            publishFollowUpDrafts(&drafts)
                         }
                     )
+                    if Task.isCancelled || !followUpAttachments.contains(where: { $0.id == draft.id }) {
+                        isUploadingAttachments = false
+                        return
+                    }
                     drafts = AttachmentDraftStore.withState(
                         drafts, id: draft.id, state: .done(hostPath: path)
                     )
-                    followUpAttachments = drafts
+                    publishFollowUpDrafts(&drafts)
+                } catch is CancellationError {
+                    isUploadingAttachments = false
+                    return
                 } catch {
                     drafts = AttachmentDraftStore.withState(
                         drafts, id: draft.id, state: .error(message: error.localizedDescription)
                     )
-                    followUpAttachments = drafts
+                    publishFollowUpDrafts(&drafts)
                     isUploadingAttachments = false
                     return
                 }
@@ -838,6 +865,34 @@ public struct LiveThreadView: View {
             return
         }
         await bridge.send(prompt: prefixed, cwd: cwd)
+    }
+
+    private func putAttachmentChunk(
+        _ params: AttachmentUploader.ChunkParams,
+        sshChannel: DaemonChannel?,
+        relayBridge: E2ERelayBridge?
+    ) async throws -> AttachmentUploader.ChunkResult {
+        if let sshChannel {
+            let result = try await sshChannel.putAttachment(
+                conversationId: params.conversationId,
+                name: params.name,
+                totalBytes: params.totalBytes,
+                seq: params.seq,
+                dataBase64: params.dataBase64,
+                done: params.done
+            )
+            return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
+        }
+        guard let relayBridge else { throw AttachmentUploadError.noTransport }
+        let result = try await relayBridge.relayPutAttachment(
+            conversationId: params.conversationId,
+            name: params.name,
+            totalBytes: params.totalBytes,
+            seq: params.seq,
+            dataBase64: params.dataBase64,
+            done: params.done
+        )
+        return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
     }
 }
 #endif

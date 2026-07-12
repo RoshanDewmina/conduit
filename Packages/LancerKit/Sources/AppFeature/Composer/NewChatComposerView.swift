@@ -2,6 +2,7 @@
 import SwiftUI
 import PersistenceKit
 import SessionFeature
+import SSHTransport
 
 /// New Chat composer — repo picker uses the real workspace list; send
 /// requires a selected repo cwd (never a guessed `~/name`). Attachments
@@ -242,7 +243,9 @@ public struct NewChatComposerView: View {
         var drafts = attachments
         if !drafts.isEmpty {
             isUploadingAttachments = true
-            guard let machine = relayFleetStore.firstConnectedMachine else {
+            let sshChannel = ApprovalRelay.shared.channel
+            let relayMachine = relayFleetStore.firstConnectedMachine
+            guard sshChannel != nil || relayMachine != nil else {
                 for draft in drafts where draft.state == .pending {
                     drafts = AttachmentDraftStore.withState(
                         drafts, id: draft.id, state: .error(message: AttachmentUploadError.noTransport.localizedDescription)
@@ -252,7 +255,6 @@ public struct NewChatComposerView: View {
                 isUploadingAttachments = false
                 return
             }
-            let bridge = machine.bridge
             for draft in drafts {
                 guard case .pending = draft.state else { continue }
                 drafts = AttachmentDraftStore.withState(
@@ -264,15 +266,11 @@ public struct NewChatComposerView: View {
                         draft: draft,
                         conversationId: nil,
                         sendChunk: { params in
-                            let result = try await bridge.relayPutAttachment(
-                                conversationId: params.conversationId,
-                                name: params.name,
-                                totalBytes: params.totalBytes,
-                                seq: params.seq,
-                                dataBase64: params.dataBase64,
-                                done: params.done
+                            try await self.putAttachmentChunk(
+                                params,
+                                sshChannel: sshChannel,
+                                relayBridge: relayMachine?.bridge
                             )
-                            return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
                         },
                         onProgress: { progress in
                             drafts = AttachmentDraftStore.withState(
@@ -304,6 +302,36 @@ public struct NewChatComposerView: View {
         )
         onSend(prefixed, cwd)
         dismiss()
+    }
+
+    /// Prefer the attached SSH `DaemonChannel` (same priority as CommandGateway
+    /// run-control / status), then the paired relay bridge.
+    private func putAttachmentChunk(
+        _ params: AttachmentUploader.ChunkParams,
+        sshChannel: DaemonChannel?,
+        relayBridge: E2ERelayBridge?
+    ) async throws -> AttachmentUploader.ChunkResult {
+        if let sshChannel {
+            let result = try await sshChannel.putAttachment(
+                conversationId: params.conversationId,
+                name: params.name,
+                totalBytes: params.totalBytes,
+                seq: params.seq,
+                dataBase64: params.dataBase64,
+                done: params.done
+            )
+            return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
+        }
+        guard let relayBridge else { throw AttachmentUploadError.noTransport }
+        let result = try await relayBridge.relayPutAttachment(
+            conversationId: params.conversationId,
+            name: params.name,
+            totalBytes: params.totalBytes,
+            seq: params.seq,
+            dataBase64: params.dataBase64,
+            done: params.done
+        )
+        return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
     }
 
     private var repoBranchLabel: AttributedString {
