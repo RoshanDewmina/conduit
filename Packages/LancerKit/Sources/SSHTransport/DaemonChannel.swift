@@ -883,6 +883,32 @@ public actor DaemonChannel {
         return try JSONDecoder().decode(SecretsListResult.self, from: rd)
     }
 
+    // MARK: - Attachments (context files → ~/.lancer/attachments/)
+
+    /// Uploads one chunk of an attachment via `attachment.put`. Call with
+    /// increasing `seq` until `done` — the final response carries `path`.
+    public func putAttachment(
+        conversationId: String? = nil,
+        name: String,
+        totalBytes: Int,
+        seq: Int,
+        dataBase64: String,
+        done: Bool
+    ) async throws -> AttachmentPutResult {
+        var params: [String: Any] = [
+            "name": name,
+            "totalBytes": totalBytes,
+            "seq": seq,
+            "dataBase64": dataBase64,
+            "done": done,
+        ]
+        if let conversationId, !conversationId.isEmpty {
+            params["conversationId"] = conversationId
+        }
+        let data = try await sendRPC(method: "attachment.put", params: params)
+        return try Self.decodeResult(data, as: AttachmentPutResult.self)
+    }
+
     // MARK: - Private helpers
 
     private static func decodeResultObject(_ data: Data) throws -> [String: Any] {
@@ -922,4 +948,17 @@ public enum DaemonChannelError: Error, Sendable {
     case badResponse
     case disconnected
     case rpc(String)
+}
+
+/// Result of one `attachment.put` chunk (final chunk includes `path`).
+public struct AttachmentPutResult: Codable, Sendable, Equatable {
+    public var path: String?
+    public var ok: Bool?
+    public var error: String?
+
+    public init(path: String? = nil, ok: Bool? = nil, error: String? = nil) {
+        self.path = path
+        self.ok = ok
+        self.error = error
+    }
 }

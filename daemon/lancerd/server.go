@@ -225,6 +225,9 @@ type server struct {
 	// takes priority over stderr when persisting a failed turn's error_message.
 	runResultErrorMu sync.Mutex
 	runResultError   map[string]string
+	// attachments reassembles attachment.put chunks (attachment_rpc.go).
+	attachmentsOnce sync.Once
+	attachments     *attachmentUploadHub
 }
 
 type loopState struct {
@@ -1325,6 +1328,19 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		}
 		_ = json.Unmarshal(msg.Params, &p)
 		res, err := s.fsList(p.Path)
+		if err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, res)
+
+	case "attachment.put":
+		var p attachmentPutParams
+		if err := json.Unmarshal(msg.Params, &p); err != nil {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		res, err := s.handleAttachmentPut(p)
 		if err != nil {
 			s.writeError(msg.ID, -32000, err.Error())
 			return
