@@ -27,6 +27,7 @@ private struct LiveThreadPresentationModifier: ViewModifier {
     @Environment(RelayApprovalIngest.self) private var relayApprovalIngest
     @Environment(RelayQuestionIngest.self) private var relayQuestionIngest
     @Environment(RelayFleetStore.self) private var relayFleetStore
+    @Environment(WorkspaceDataStore.self) private var workspaceDataStore
 
     func body(content: Content) -> some View {
         content
@@ -36,6 +37,7 @@ private struct LiveThreadPresentationModifier: ViewModifier {
                     .environment(relayApprovalIngest)
                     .environment(relayQuestionIngest)
                     .environment(relayFleetStore)
+                    .environment(workspaceDataStore)
             }
     }
 }

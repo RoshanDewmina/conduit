@@ -487,4 +487,24 @@ public final class WorkspaceDataStore {
     public func addRepo(name: String, cwd: String) -> AddedRepo? {
         addedRepos.add(name: name, cwd: cwd)
     }
+
+    /// Resolves a run's `lancer.proof/v0` receipt for the live thread card.
+    /// Prefers the materialized `chat_artifacts` row; falls back to a mirrored
+    /// `chat_events` row (`kind == "receipt"`) when the artifact isn't present yet.
+    public func receipt(runID: String, conversationID: String) async -> ProofReceipt? {
+        if let artifacts = try? await chatRepo.artifacts(runID: runID) {
+            for artifact in artifacts where artifact.kind == .receipt {
+                if let receipt = ProofReelModel.decodeReceipt(from: artifact) {
+                    return receipt
+                }
+            }
+        }
+        let events = (try? await chatRepo.events(conversationID: conversationID, sinceSeq: 0, limit: 5000)) ?? []
+        for event in events.reversed() where event.kind == "receipt" && event.runID == runID {
+            if let receipt = ProofReelModel.decodeReceipt(from: event) {
+                return receipt
+            }
+        }
+        return nil
+    }
 }
