@@ -11,11 +11,14 @@ struct ThreadDetailView: View {
     @State private var isFollowUpPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
     @State private var turns: [ChatTurn] = []
+    @State private var eventsByTurnID: [String: [ChatEvent]] = [:]
     /// How many of the most-recent turns to render. Extended via "Show earlier…".
     @State private var visibleTurnLimit = Self.initialWindowSize
+    @State private var showScrollToBottom = false
 
     private static let initialWindowSize = 100
     private static let windowExtendStep = 100
+    private static let scrollTailID = "thread-detail-tail"
 
     let thread: ThreadListItem
 
@@ -44,71 +47,100 @@ struct ThreadDetailView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 4)
 
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
-                        Text(thread.title)
-                            .font(.system(size: 22, weight: .bold))
-                            .padding(.top, 16)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 18) {
+                            Text(thread.title)
+                                .font(.system(size: 22, weight: .bold))
+                                .padding(.top, 16)
 
-                        HStack(spacing: 8) {
-                            Text(thread.statusLabel)
-                                .font(.system(size: 14))
-                                .foregroundStyle(.secondary)
-                            if !thread.cwd.isEmpty {
-                                Text("·")
-                                    .foregroundStyle(.secondary)
-                                Text(thread.cwd)
+                            HStack(spacing: 8) {
+                                Text(thread.statusLabel)
                                     .font(.system(size: 14))
                                     .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                        }
-
-                        if turns.isEmpty {
-                            Text("No turns in the local mirror yet. Follow up below to continue in this repo.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        } else {
-                            if hasEarlierTurns {
-                                Button {
-                                    visibleTurnLimit = min(
-                                        turns.count,
-                                        visibleTurnLimit + Self.windowExtendStep
-                                    )
-                                } label: {
-                                    Text("Show earlier…")
-                                        .font(.system(size: 15, weight: .medium))
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
+                                if !thread.cwd.isEmpty {
+                                    Text("·")
+                                        .foregroundStyle(.secondary)
+                                    Text(thread.cwd)
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
                                 }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel(Text("Show earlier turns"))
                             }
 
-                            ForEach(visibleTurns) { turn in
-                                VStack(alignment: .leading, spacing: 12) {
-                                    ChatUserBubble(text: turn.prompt)
-                                    threadAssistant(turn)
-
-                                    NavigationLink {
-                                        FlightRecorderView(
-                                            conversationID: thread.id,
-                                            turnID: turn.id,
-                                            prompt: turn.prompt,
-                                            runID: turn.runID
+                            if turns.isEmpty {
+                                Text("No turns in the local mirror yet. Follow up below to continue in this repo.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                if hasEarlierTurns {
+                                    Button {
+                                        visibleTurnLimit = min(
+                                            turns.count,
+                                            visibleTurnLimit + Self.windowExtendStep
                                         )
                                     } label: {
-                                        flightRecorderRow(turn)
+                                        Text("Show earlier…")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 10)
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityLabel(Text("Show earlier turns"))
+                                }
+
+                                ForEach(visibleTurns) { turn in
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        ChatUserBubble(text: turn.prompt)
+                                        threadAssistant(turn)
+
+                                        NavigationLink {
+                                            FlightRecorderView(
+                                                conversationID: thread.id,
+                                                turnID: turn.id,
+                                                prompt: turn.prompt,
+                                                runID: turn.runID
+                                            )
+                                        } label: {
+                                            flightRecorderRow(turn)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
                             }
+
+                            Color.clear
+                                .frame(height: 1)
+                                .id(Self.scrollTailID)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 96)
+                    }
+                    .onScrollGeometryChange(for: Double.self) { geometry in
+                        ChatScrollPolicy.distanceFromBottom(
+                            contentHeight: geometry.contentSize.height,
+                            viewportHeight: geometry.containerSize.height,
+                            contentOffsetY: geometry.contentOffset.y
+                        )
+                    } action: { _, distance in
+                        showScrollToBottom = ChatScrollPolicy.shouldShowJumpToLatest(
+                            distanceFromBottom: distance
+                        )
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        if showScrollToBottom {
+                            ChatScrollToBottomButton {
+                                withAnimation {
+                                    proxy.scrollTo(Self.scrollTailID, anchor: .bottom)
+                                }
+                            }
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 88)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 96)
                 }
             }
 
@@ -152,8 +184,23 @@ struct ThreadDetailView: View {
                     .foregroundStyle(.secondary)
             }
         } else {
-            let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
-            ChatMarkdownBody(markdown: body)
+            let items = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+            if items.contains(where: {
+                if case .toolChip = $0 { return true }
+                if case .thinking = $0 { return true }
+                return false
+            }) || items.contains(where: {
+                if case .prose(let p) = $0 { return !p.text.isEmpty }
+                return false
+            }) {
+                TurnTranscriptItemsView(
+                    items: items,
+                    emptyFallback: turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+                )
+            } else {
+                let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+                ChatMarkdownBody(markdown: body)
+            }
         }
     }
 
@@ -189,6 +236,8 @@ struct ThreadDetailView: View {
         guard let db = try? AppDatabase.openShared() else { return }
         let repo = ChatConversationRepository(db)
         turns = (try? await repo.turns(conversationID: thread.id)) ?? []
+        let events = (try? await repo.events(conversationID: thread.id, limit: 10_000)) ?? []
+        eventsByTurnID = Dictionary(grouping: events.filter { $0.turnID != nil }, by: { $0.turnID! })
     }
 
     private func handleSend(_ prompt: String, _ cwd: String) {

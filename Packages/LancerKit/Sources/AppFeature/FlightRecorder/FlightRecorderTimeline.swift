@@ -6,6 +6,7 @@ public struct FlightRecorderStep: Identifiable, Sendable, Hashable {
     public enum Kind: String, Sendable, Hashable {
         case dispatch
         case output
+        case tool
         case approval
         case question
         case receipt
@@ -161,6 +162,26 @@ public enum FlightRecorderAssembler: Sendable {
                     previewText: preview,
                     isPreviewTruncated: truncated
                 ))
+
+            case "tool_call", "tool_result":
+                let payload = parseToolPayload(event.payloadJSON)
+                let toolName = payload.name
+                    ?? (event.kind == "tool_call" ? event.text : nil)
+                    ?? "Tool"
+                let title = event.kind == "tool_result" ? "\(toolName) result" : toolName
+                let previewSource = payload.preview
+                    ?? event.text
+                    ?? ""
+                let (preview, truncated) = cappedPreview(previewSource)
+                drafts.append(.init(
+                    kind: .tool,
+                    title: title,
+                    detail: payload.detail,
+                    events: [event],
+                    previewText: preview.isEmpty ? nil : preview,
+                    isPreviewTruncated: truncated
+                ))
+                index += 1
 
             case "approval":
                 let meta = parseDecisionPayload(event.payloadJSON, eventCreatedAt: event.createdAt)
@@ -382,5 +403,43 @@ public enum FlightRecorderAssembler: Sendable {
         if let schema = obj["schema"] as? String { return schema }
         if let status = obj["status"] as? String { return status }
         return nil
+    }
+
+    private struct ToolPayloadBits {
+        var name: String?
+        var detail: String?
+        var preview: String?
+    }
+
+    private static func parseToolPayload(_ payloadJSON: String?) -> ToolPayloadBits {
+        guard let payloadJSON,
+              let data = payloadJSON.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return ToolPayloadBits(name: nil, detail: nil, preview: nil)
+        }
+        let name = obj["name"] as? String
+        let toolUseId = (obj["toolUseId"] as? String) ?? (obj["tool_use_id"] as? String)
+        var detailParts: [String] = []
+        if let toolUseId, !toolUseId.isEmpty { detailParts.append(toolUseId) }
+        if let isError = obj["isError"] as? Bool, isError { detailParts.append("error") }
+        let preview: String? = {
+            if let content = obj["content"] as? String { return content }
+            if let result = obj["result"] as? String { return result }
+            if let input = obj["input"] {
+                if let s = input as? String { return s }
+                if JSONSerialization.isValidJSONObject(input),
+                   let data = try? JSONSerialization.data(withJSONObject: input),
+                   let s = String(data: data, encoding: .utf8) {
+                    return s
+                }
+            }
+            return nil
+        }()
+        return ToolPayloadBits(
+            name: name,
+            detail: detailParts.isEmpty ? nil : detailParts.joined(separator: " · "),
+            preview: preview
+        )
     }
 }

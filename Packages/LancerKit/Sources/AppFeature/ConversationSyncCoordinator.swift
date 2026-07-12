@@ -1,6 +1,468 @@
-#if os(iOS)
 import Foundation
 import LancerCore
+
+// MARK: - Turn transcript assembly (Z1 event kinds → ordered items)
+//
+// Patterns informed by Orca `native-chat-tool-fold` / `native-chat-tool-summary`
+// (MIT — stablyai/orca). UI rendering is original SwiftUI.
+
+/// One ordered segment inside a turn's assistant transcript.
+public enum TurnTranscriptItem: Sendable, Hashable, Identifiable {
+    case prose(TurnProseItem)
+    case toolChip(ToolChipItem)
+    case thinking(TurnThinkingItem)
+
+    public var id: String {
+        switch self {
+        case .prose(let item): return item.id
+        case .toolChip(let item): return item.id
+        case .thinking(let item): return item.id
+        }
+    }
+}
+
+public struct TurnProseItem: Sendable, Hashable, Identifiable {
+    public let id: String
+    public let text: String
+
+    public init(id: String, text: String) {
+        self.id = id
+        self.text = text
+    }
+}
+
+public struct TurnThinkingItem: Sendable, Hashable, Identifiable {
+    public let id: String
+    public let text: String
+
+    public init(id: String, text: String) {
+        self.id = id
+        self.text = text
+    }
+}
+
+/// Collapsed-by-default thinking caption (matches ThinkingRow).
+public enum ThinkingPresentation: Sendable {
+    public static let collapsedCaption = "Thinking…"
+    public static let isExpandedByDefault = false
+}
+
+public struct ToolChipItem: Sendable, Hashable, Identifiable {
+    public enum Status: String, Sendable, Hashable {
+        case running
+        case done
+        case failed
+    }
+
+    public let id: String
+    public let toolUseId: String
+    public let name: String
+    public let inputJSON: String?
+    public let resultText: String?
+    public let added: Int?
+    public let removed: Int?
+    public let isError: Bool
+    public let status: Status
+
+    public init(
+        id: String,
+        toolUseId: String,
+        name: String,
+        inputJSON: String? = nil,
+        resultText: String? = nil,
+        added: Int? = nil,
+        removed: Int? = nil,
+        isError: Bool = false,
+        status: Status = .done
+    ) {
+        self.id = id
+        self.toolUseId = toolUseId
+        self.name = name
+        self.inputJSON = inputJSON
+        self.resultText = resultText
+        self.added = added
+        self.removed = removed
+        self.isError = isError
+        self.status = isError ? .failed : status
+    }
+
+    /// Live `ChatArtifact.kind == .tool` → chip (persisted-but-never-rendered path).
+    public init(artifact: ChatArtifact) {
+        let payload = Self.parseObject(artifact.payloadJSON)
+        let toolUseId = (payload?["toolUseId"] as? String)
+            ?? (payload?["tool_use_id"] as? String)
+            ?? artifact.id
+        let name = (payload?["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            ?? artifact.title
+        let inputJSON: String? = {
+            if let input = payload?["input"] {
+                if let s = input as? String { return s }
+                if JSONSerialization.isValidJSONObject(input),
+                   let data = try? JSONSerialization.data(withJSONObject: input),
+                   let s = String(data: data, encoding: .utf8) {
+                    return s
+                }
+            }
+            return artifact.payloadJSON == "{}" ? nil : artifact.payloadJSON
+        }()
+        let added = Self.intValue(payload?["added"])
+        let removed = Self.intValue(payload?["removed"])
+        let isError = (payload?["isError"] as? Bool) ?? (artifact.status == .failed)
+        let status: Status = {
+            switch artifact.status {
+            case .running: return .running
+            case .failed: return .failed
+            case .done: return .done
+            }
+        }()
+        self.init(
+            id: artifact.id,
+            toolUseId: toolUseId,
+            name: name,
+            inputJSON: inputJSON,
+            resultText: artifact.summary,
+            added: added,
+            removed: removed,
+            isError: isError,
+            status: status
+        )
+    }
+
+    private static func parseObject(_ json: String?) -> [String: Any]? {
+        guard let json, let data = json.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return obj
+    }
+
+    private static func intValue(_ any: Any?) -> Int? {
+        if let i = any as? Int { return i }
+        if let n = any as? NSNumber { return n.intValue }
+        return nil
+    }
+}
+
+/// Render units after consecutive tool chips are grouped (view-layer input).
+public enum TurnTranscriptRenderItem: Sendable, Hashable, Identifiable {
+    case prose(TurnProseItem)
+    case thinking(TurnThinkingItem)
+    case toolChips([ToolChipItem])
+
+    public var id: String {
+        switch self {
+        case .prose(let item): return item.id
+        case .thinking(let item): return item.id
+        case .toolChips(let chips): return chips.map(\.id).joined(separator: "|")
+        }
+    }
+}
+
+/// Near-bottom / jump-to-latest policy — Orca `native-chat-autoscroll.ts` (MIT).
+public enum ChatScrollPolicy: Sendable {
+    /// Orca `NATIVE_CHAT_BOTTOM_THRESHOLD_PX`.
+    public static let nearBottomThreshold: Double = 48
+
+    public static func distanceFromBottom(
+        contentHeight: Double,
+        viewportHeight: Double,
+        contentOffsetY: Double
+    ) -> Double {
+        max(0, contentHeight - viewportHeight - contentOffsetY)
+    }
+
+    public static func isNearBottom(distanceFromBottom: Double) -> Bool {
+        distanceFromBottom <= nearBottomThreshold
+    }
+
+    public static func shouldShowJumpToLatest(distanceFromBottom: Double) -> Bool {
+        distanceFromBottom > nearBottomThreshold
+    }
+}
+
+/// Pure events → ordered turn items + chip title helpers.
+public enum TurnTranscriptAssembler: Sendable {
+    /// Matches Orca `MAX_TOOL_RESULT_CHARS = 4000`.
+    public static let detailByteCap = 4096
+
+    /// Prose-only concatenation for `ChatTurn.assistantText` (existing consumers).
+    public static func assistantText(from events: [ChatEvent]) -> String {
+        events
+            .filter { $0.kind == "output" }
+            .sorted { $0.seq < $1.seq }
+            .compactMap(\.text)
+            .joined()
+    }
+
+    /// Ordered `[prose | toolChip | thinking]`. Unknown kinds ignored (never invent).
+    public static func items(from events: [ChatEvent]) -> [TurnTranscriptItem] {
+        let sorted = events.sorted { $0.seq < $1.seq }
+        var resultsByToolUseId: [String: ToolResultBits] = [:]
+        for event in sorted where event.kind == "tool_result" {
+            let payload = parsePayload(event.payloadJSON)
+            let toolUseId = stringValue(payload, "toolUseId")
+                ?? stringValue(payload, "tool_use_id")
+                ?? event.text
+            guard let toolUseId, !toolUseId.isEmpty else { continue }
+            resultsByToolUseId[toolUseId] = ToolResultBits(
+                text: event.text ?? stringValue(payload, "content") ?? stringValue(payload, "result"),
+                isError: boolValue(payload, "isError") ?? boolValue(payload, "is_error") ?? false,
+                added: intValue(payload, "added"),
+                removed: intValue(payload, "removed")
+            )
+        }
+
+        var items: [TurnTranscriptItem] = []
+        var proseBuffer = ""
+        var proseStartSeq: Int?
+
+        func flushProse() {
+            let trimmed = proseBuffer
+            guard !trimmed.isEmpty, let start = proseStartSeq else {
+                proseBuffer = ""
+                proseStartSeq = nil
+                return
+            }
+            items.append(.prose(TurnProseItem(id: "prose-\(start)", text: trimmed)))
+            proseBuffer = ""
+            proseStartSeq = nil
+        }
+
+        for event in sorted {
+            switch event.kind {
+            case "output":
+                if let text = event.text, !text.isEmpty {
+                    if proseStartSeq == nil { proseStartSeq = event.seq }
+                    proseBuffer += text
+                }
+
+            case "thinking":
+                flushProse()
+                let text = event.text
+                    ?? stringValue(parsePayload(event.payloadJSON), "text")
+                    ?? ""
+                guard !text.isEmpty else { continue }
+                items.append(.thinking(TurnThinkingItem(id: "thinking-\(event.seq)", text: text)))
+
+            case "tool_call":
+                flushProse()
+                let payload = parsePayload(event.payloadJSON)
+                let name = stringValue(payload, "name")
+                    ?? event.text
+                    ?? "Tool"
+                let toolUseId = stringValue(payload, "toolUseId")
+                    ?? stringValue(payload, "tool_use_id")
+                    ?? "seq-\(event.seq)"
+                let inputJSON: String? = {
+                    guard let input = payload?["input"] else {
+                        return event.payloadJSON
+                    }
+                    if let s = input as? String { return s }
+                    if JSONSerialization.isValidJSONObject(input),
+                       let data = try? JSONSerialization.data(withJSONObject: input),
+                       let s = String(data: data, encoding: .utf8) {
+                        return s
+                    }
+                    return event.payloadJSON
+                }()
+                let result = resultsByToolUseId[toolUseId]
+                let added = intValue(payload, "added") ?? result?.added
+                let removed = intValue(payload, "removed") ?? result?.removed
+                let isError = result?.isError
+                    ?? boolValue(payload, "isError")
+                    ?? false
+                let status: ToolChipItem.Status = {
+                    if isError { return .failed }
+                    if result != nil { return .done }
+                    return .running
+                }()
+                items.append(.toolChip(ToolChipItem(
+                    id: "tool-\(event.seq)",
+                    toolUseId: toolUseId,
+                    name: name,
+                    inputJSON: inputJSON,
+                    resultText: result?.text,
+                    added: added,
+                    removed: removed,
+                    isError: isError,
+                    status: status
+                )))
+
+            default:
+                // Unknown kinds (status, receipt, approval, …): ignore for transcript items.
+                continue
+            }
+        }
+        flushProse()
+        return items
+    }
+
+    /// Collapse consecutive tool chips into groups for the compact chip row.
+    public static func groupedForDisplay(_ items: [TurnTranscriptItem]) -> [TurnTranscriptRenderItem] {
+        var out: [TurnTranscriptRenderItem] = []
+        var chipRun: [ToolChipItem] = []
+
+        func flushChips() {
+            guard !chipRun.isEmpty else { return }
+            out.append(.toolChips(chipRun))
+            chipRun = []
+        }
+
+        for item in items {
+            switch item {
+            case .prose(let prose):
+                flushChips()
+                out.append(.prose(prose))
+            case .thinking(let thinking):
+                flushChips()
+                out.append(.thinking(thinking))
+            case .toolChip(let chip):
+                chipRun.append(chip)
+            }
+        }
+        flushChips()
+        return out
+    }
+
+    /// Standalone one-line chip title (no trailing chevron).
+    public static func chipTitle(name: String, inputJSON: String?) -> String {
+        let normalized = normalizeToolName(name)
+        let target = briefTarget(from: inputJSON)
+        switch normalized {
+        case "edit":
+            return "Edited \(target ?? "a file")"
+        case "write":
+            return "Wrote \(target ?? "a file")"
+        case "read":
+            return "Read \(target ?? "a file")"
+        case "bash", "shell", "command":
+            return "Ran a command"
+        default:
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "Tool" : trimmed
+        }
+    }
+
+    /// Collapsed group label: "Read 3 files" or "Read a file, edited a file".
+    public static func groupedChipTitle(_ chips: [ToolChipItem]) -> String {
+        guard !chips.isEmpty else { return "Tools" }
+        if chips.count == 1 {
+            return chipTitle(name: chips[0].name, inputJSON: chips[0].inputJSON)
+        }
+        let normalized = chips.map { normalizeToolName($0.name) }
+        if normalized.allSatisfy({ $0 == "read" }) {
+            return "Read \(chips.count) files"
+        }
+        var parts: [String] = []
+        for (index, chip) in chips.enumerated() {
+            let phrase = groupMemberPhrase(name: chip.name)
+            if index == 0 {
+                parts.append(phrase.prefix(1).uppercased() + phrase.dropFirst())
+            } else {
+                parts.append(phrase)
+            }
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    public static func aggregatedDiff(chips: [ToolChipItem]) -> (added: Int, removed: Int)? {
+        let added = chips.compactMap(\.added).reduce(0, +)
+        let removed = chips.compactMap(\.removed).reduce(0, +)
+        let hasAny = chips.contains { $0.added != nil || $0.removed != nil }
+        guard hasAny else { return nil }
+        return (added, removed)
+    }
+
+    public static func cappedDetail(_ text: String) -> String {
+        let utf8 = Array(text.utf8)
+        guard utf8.count > detailByteCap else { return text }
+        var end = detailByteCap
+        while end > 0 && (utf8[end] & 0b1100_0000) == 0b1000_0000 {
+            end -= 1
+        }
+        return String(decoding: utf8[..<end], as: UTF8.self) + "…"
+    }
+
+    // MARK: - Private helpers
+
+    private struct ToolResultBits {
+        var text: String?
+        var isError: Bool
+        var added: Int?
+        var removed: Int?
+    }
+
+    static func normalizeToolName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private static func groupMemberPhrase(name: String) -> String {
+        switch normalizeToolName(name) {
+        case "edit": return "edited a file"
+        case "write": return "wrote a file"
+        case "read": return "read a file"
+        case "bash", "shell", "command": return "ran a command"
+        default:
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "used a tool" : trimmed.lowercased()
+        }
+    }
+
+    static func briefTarget(from inputJSON: String?) -> String? {
+        guard let inputJSON, let data = inputJSON.data(using: .utf8) else { return nil }
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let path = obj["file_path"] as? String ?? obj["path"] as? String
+                ?? obj["notebook_path"] as? String, !path.isEmpty
+            {
+                return ChatFileNameDisplay.displayName(for: path)
+            }
+            if let files = obj["files"] as? [Any], files.count > 1 {
+                return "\(files.count) files"
+            }
+            return nil
+        }
+        // Bare path string
+        let trimmed = inputJSON.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.contains("/") || trimmed.hasSuffix(".swift") {
+            return ChatFileNameDisplay.displayName(for: trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "\"")))
+        }
+        return nil
+    }
+
+    private static func parsePayload(_ json: String?) -> [String: Any]? {
+        guard let json, let data = json.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return obj
+    }
+
+    private static func stringValue(_ obj: [String: Any]?, _ key: String) -> String? {
+        guard let obj else { return nil }
+        if let s = obj[key] as? String { return s }
+        return nil
+    }
+
+    private static func intValue(_ obj: [String: Any]?, _ key: String) -> Int? {
+        guard let obj else { return nil }
+        if let i = obj[key] as? Int { return i }
+        if let n = obj[key] as? NSNumber { return n.intValue }
+        return nil
+    }
+
+    private static func boolValue(_ obj: [String: Any]?, _ key: String) -> Bool? {
+        guard let obj else { return nil }
+        if let b = obj[key] as? Bool { return b }
+        return nil
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        let t = trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
+}
+
+#if os(iOS)
 import PersistenceKit
 
 /// Transport-agnostic view of the `agent.conversations.*` RPCs, constructed
@@ -535,12 +997,9 @@ public actor ConversationSyncCoordinator {
     /// Concatenates a turn's `kind == "output"` events (the ledger's mirror of
     /// the run's raw stdout/stderr stream — see `appendRunOutput`) in seq
     /// order, the same text `RunOutputStore` accumulates live for an active run.
+    /// Tool/thinking kinds are excluded — see `TurnTranscriptAssembler.items`.
     private static func assistantText(from events: [ChatEvent]) -> String {
-        events
-            .filter { $0.kind == "output" }
-            .sorted { $0.seq < $1.seq }
-            .compactMap(\.text)
-            .joined()
+        TurnTranscriptAssembler.assistantText(from: events)
     }
 
     /// Pages through the local event mirror so long turns aren't truncated at
