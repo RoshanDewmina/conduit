@@ -4,9 +4,9 @@ import "testing"
 
 // conversation_attach_test.go covers Task 9 of the cross-device sync build
 // handoff: conversationStore.attachObservedSession, the create-from-import
-// path that turns an already-observed CLI session's transcript into a
-// single completed ledger turn. Exercised directly against the store (not
-// through the RPC layer) so it doesn't depend on a real on-disk
+// path that turns an already-observed CLI session's transcript into ledger
+// turns (segmented at each real user prompt). Exercised directly against the
+// store (not through the RPC layer) so it doesn't depend on a real on-disk
 // ~/.claude/projects transcript — see conversation_rpc_test.go's
 // TestConversationsAttachObservedSessionUnknownSessionErrorsIdentically for
 // the RPC-layer error-shape coverage.
@@ -39,11 +39,13 @@ func TestAttachObservedSessionImportsMessagesAsOneCompletedTurn(t *testing.T) {
 	if res.AlreadyAttached {
 		t.Fatal("expected AlreadyAttached=false on first attach")
 	}
-	if res.ImportedEvents != len(messages) {
-		t.Fatalf("ImportedEvents = %d, want %d", res.ImportedEvents, len(messages))
+	// User prompt becomes the turn prompt, not an output event.
+	wantEvents := len(messages) - 1
+	if res.ImportedEvents != wantEvents {
+		t.Fatalf("ImportedEvents = %d, want %d", res.ImportedEvents, wantEvents)
 	}
-	if res.LastSeq != int64(len(messages)) {
-		t.Fatalf("LastSeq = %d, want %d", res.LastSeq, len(messages))
+	if res.LastSeq != int64(wantEvents) {
+		t.Fatalf("LastSeq = %d, want %d", res.LastSeq, wantEvents)
 	}
 
 	fetched, err := s.fetch(res.ConversationID, 0, 100)
@@ -60,8 +62,11 @@ func TestAttachObservedSessionImportsMessagesAsOneCompletedTurn(t *testing.T) {
 		t.Fatalf("expected exactly one imported turn, got %d", len(fetched.Turns))
 	}
 	turn := fetched.Turns[0]
-	if turn.Status != "completed" {
-		t.Fatalf("turn.Status = %q, want completed", turn.Status)
+	if turn.Status != "exited" {
+		t.Fatalf("turn.Status = %q, want exited", turn.Status)
+	}
+	if turn.Prompt != "fix the flaky test" {
+		t.Fatalf("turn.Prompt = %q, want the user message", turn.Prompt)
 	}
 	// Binding the observed session id as vendorSessionId is what lets a later
 	// agent.conversations.append follow-up on this conversation use exact
@@ -69,15 +74,16 @@ func TestAttachObservedSessionImportsMessagesAsOneCompletedTurn(t *testing.T) {
 	if turn.VendorSessionID != "vendor-session-1" {
 		t.Fatalf("turn.VendorSessionID = %q, want vendor-session-1", turn.VendorSessionID)
 	}
-	if len(fetched.Events) != len(messages) {
-		t.Fatalf("len(Events) = %d, want %d", len(fetched.Events), len(messages))
+	if len(fetched.Events) != wantEvents {
+		t.Fatalf("len(Events) = %d, want %d", len(fetched.Events), wantEvents)
 	}
+	outputs := messages[1:]
 	for i, ev := range fetched.Events {
-		if ev.Text != messages[i].Text {
-			t.Fatalf("event[%d].Text = %q, want %q", i, ev.Text, messages[i].Text)
+		if ev.Text != outputs[i].Text {
+			t.Fatalf("event[%d].Text = %q, want %q", i, ev.Text, outputs[i].Text)
 		}
-		if ev.Role != messages[i].Role {
-			t.Fatalf("event[%d].Role = %q, want %q", i, ev.Role, messages[i].Role)
+		if ev.Role != outputs[i].Role {
+			t.Fatalf("event[%d].Role = %q, want %q", i, ev.Role, outputs[i].Role)
 		}
 	}
 
@@ -87,6 +93,109 @@ func TestAttachObservedSessionImportsMessagesAsOneCompletedTurn(t *testing.T) {
 	}
 	if sid != "vendor-session-1" {
 		t.Fatalf("latestVendorSessionID = %q, want vendor-session-1", sid)
+	}
+}
+
+// TestAttachObservedSessionSegmentsIntoRealTurns proves three user prompts
+// become three turns with correct ordinals/prompts, and assistant replies land
+// as that turn's output events.
+func TestAttachObservedSessionSegmentsIntoRealTurns(t *testing.T) {
+	s := newObservedTestStore(t)
+	messages := []SessionMessage{
+		{Role: "user", Text: "first prompt"},
+		{Role: "assistant", Text: "first reply"},
+		{Role: "user", Text: "second prompt"},
+		{Role: "assistant", Text: "second reply"},
+		{Role: "toolCall", Text: "Bash: ls", ToolName: "Bash"},
+		{Role: "user", Text: "third prompt"},
+		{Role: "assistant", Text: "third reply"},
+	}
+
+	res, err := s.attachObservedSession("claudeCode", "vendor-multi-turn", "/tmp/proj", "Session Title", messages)
+	if err != nil {
+		t.Fatalf("attachObservedSession: %v", err)
+	}
+
+	fetched, err := s.fetch(res.ConversationID, 0, 100)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(fetched.Turns) != 3 {
+		t.Fatalf("got %d turns, want 3", len(fetched.Turns))
+	}
+	wantPrompts := []string{"first prompt", "second prompt", "third prompt"}
+	for i, turn := range fetched.Turns {
+		if turn.Ordinal != i+1 {
+			t.Fatalf("turn[%d].Ordinal = %d, want %d", i, turn.Ordinal, i+1)
+		}
+		if turn.Prompt != wantPrompts[i] {
+			t.Fatalf("turn[%d].Prompt = %q, want %q", i, turn.Prompt, wantPrompts[i])
+		}
+		if turn.Status != "exited" {
+			t.Fatalf("turn[%d].Status = %q, want exited", i, turn.Status)
+		}
+		if turn.VendorSessionID != "vendor-multi-turn" {
+			t.Fatalf("turn[%d].VendorSessionID = %q", i, turn.VendorSessionID)
+		}
+	}
+
+	eventsByTurn := map[string][]conversationEvent{}
+	for _, ev := range fetched.Events {
+		eventsByTurn[ev.TurnID] = append(eventsByTurn[ev.TurnID], ev)
+	}
+	if got := eventsByTurn[fetched.Turns[0].ID]; len(got) != 1 || got[0].Text != "first reply" {
+		t.Fatalf("turn 1 events = %+v, want [first reply]", got)
+	}
+	if got := eventsByTurn[fetched.Turns[1].ID]; len(got) != 2 {
+		t.Fatalf("turn 2 events = %+v, want 2 (reply + toolCall)", got)
+	}
+	if got := eventsByTurn[fetched.Turns[2].ID]; len(got) != 1 || got[0].Text != "third reply" {
+		t.Fatalf("turn 3 events = %+v, want [third reply]", got)
+	}
+}
+
+func TestAttachObservedSessionTitleFromAITitleOrRealUser(t *testing.T) {
+	s := newObservedTestStore(t)
+
+	withTitle, err := s.attachObservedSession("claudeCode", "vendor-ai-title", "/tmp/proj", "fix-dead-buttons", []SessionMessage{
+		{Role: "user", Text: "<local-command-caveat>Caveat: The messages below were generated by the user."},
+		{Role: "user", Text: "please fix the dead button"},
+		{Role: "assistant", Text: "Sure."},
+	})
+	if err != nil {
+		t.Fatalf("attach with ai-title: %v", err)
+	}
+	fetched, err := s.fetch(withTitle.ConversationID, 0, 10)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if fetched.Conversation.Title != "fix-dead-buttons" {
+		t.Fatalf("Title = %q, want ai-title value", fetched.Conversation.Title)
+	}
+
+	s2 := newObservedTestStore(t)
+	withoutTitle, err := s2.attachObservedSession("claudeCode", "vendor-no-ai-title", "/tmp/proj", "", []SessionMessage{
+		{Role: "user", Text: "<local-command-caveat>Caveat: The messages below were generated by the user."},
+		{Role: "user", Text: "<command-name>/compact</command-name>"},
+		{Role: "user", Text: "<system-reminder>do not cite</system-reminder>"},
+		{Role: "user", Text: "real user question about the bug"},
+		{Role: "assistant", Text: "Looking."},
+	})
+	if err != nil {
+		t.Fatalf("attach without ai-title: %v", err)
+	}
+	fetched2, err := s2.fetch(withoutTitle.ConversationID, 0, 10)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if fetched2.Conversation.Title != "real user question about the bug" {
+		t.Fatalf("Title = %q, want first real user message (wrappers skipped)", fetched2.Conversation.Title)
+	}
+	if len(fetched2.Turns) != 1 {
+		t.Fatalf("expected 1 turn (wrappers skipped as turn starters), got %d", len(fetched2.Turns))
+	}
+	if fetched2.Turns[0].Prompt != "real user question about the bug" {
+		t.Fatalf("Prompt = %q, want real user question", fetched2.Turns[0].Prompt)
 	}
 }
 

@@ -1250,11 +1250,11 @@ type conversationImportResult struct {
 
 // attachObservedSession imports an already-observed CLI session's transcript
 // (e.g. a Claude Code session the user ran directly in a terminal, never
-// dispatched through agent.conversations.append) into the host ledger as a
-// single, already-completed turn, so it shows up and can be continued like
-// any other host-mediated conversation — importantly, binding vendorSessionID
-// means a follow-up append on the resulting conversation gets exact resume
-// (resumeArgv), not just "latest in cwd".
+// dispatched through agent.conversations.append) into the host ledger as one
+// or more already-completed turns (segmented at each real user prompt), so it
+// shows up and can be continued like any other host-mediated conversation —
+// importantly, binding vendorSessionID means a follow-up append on the
+// resulting conversation gets exact resume (resumeArgv), not just "latest in cwd".
 //
 // Idempotent: re-attaching the same provider+sessionID returns the
 // conversation the FIRST call created rather than importing a second copy.
@@ -1292,8 +1292,6 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 
 	now := conversationNow()
 	convID := "conv_" + newUUID()
-	runID := "observed_" + newUUID()
-	turnID := "turn_" + newUUID()
 	hostName, _ := os.Hostname()
 
 	convTitle := title
@@ -1314,22 +1312,41 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 		return conversationImportResult{}, err
 	}
 
-	if _, err := tx.Exec(`INSERT INTO conversation_turns
-		(id, conversation_id, ordinal, client_turn_id, prompt, run_id, provider,
-		 vendor_session_id, status, started_at, completed_at)
-		VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'completed', ?, ?)`,
-		turnID, convID, clientTurnID, firstUserMessagePreview(messages), runID, provider, sessionID, now, now); err != nil {
-		return conversationImportResult{}, err
-	}
-
+	segments := segmentObservedMessages(messages, convTitle)
 	var seq int64
-	for _, msg := range messages {
-		seq++
-		if _, err := tx.Exec(`INSERT INTO conversation_events
-			(conversation_id, seq, turn_id, run_id, kind, role, text, created_at)
-			VALUES (?, ?, ?, ?, 'output', ?, ?, ?)`,
-			convID, seq, turnID, runID, nullIfEmpty(msg.Role), msg.Text, now); err != nil {
+	var importedEvents int
+	var firstTurnID, firstRunID, lastTurnID, lastRunID string
+
+	for _, seg := range segments {
+		turnID := "turn_" + newUUID()
+		runID := "observed_" + newUUID()
+		ctID := clientTurnID
+		if seg.Ordinal > 1 {
+			ctID = fmt.Sprintf("%s:%d", clientTurnID, seg.Ordinal)
+		}
+		if _, err := tx.Exec(`INSERT INTO conversation_turns
+			(id, conversation_id, ordinal, client_turn_id, prompt, run_id, provider,
+			 vendor_session_id, status, started_at, completed_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'exited', ?, ?)`,
+			turnID, convID, seg.Ordinal, ctID, seg.Prompt, runID, provider, sessionID, now, now); err != nil {
 			return conversationImportResult{}, err
+		}
+		if firstTurnID == "" {
+			firstTurnID = turnID
+			firstRunID = runID
+		}
+		lastTurnID = turnID
+		lastRunID = runID
+
+		for _, msg := range seg.Outputs {
+			seq++
+			importedEvents++
+			if _, err := tx.Exec(`INSERT INTO conversation_events
+				(conversation_id, seq, turn_id, run_id, kind, role, text, created_at)
+				VALUES (?, ?, ?, ?, 'output', ?, ?, ?)`,
+				convID, seq, turnID, runID, nullIfEmpty(msg.Role), msg.Text, now); err != nil {
+				return conversationImportResult{}, err
+			}
 		}
 	}
 
@@ -1341,21 +1358,91 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 		return conversationImportResult{}, err
 	}
 
+	// Prefer the first turn for the idempotent clientTurnId binding surface;
+	// fall back to last if somehow empty (shouldn't happen — segments always
+	// yields ≥1 turn).
+	outTurn, outRun := firstTurnID, firstRunID
+	if outTurn == "" {
+		outTurn, outRun = lastTurnID, lastRunID
+	}
 	return conversationImportResult{
 		ConversationID: convID,
-		TurnID:         turnID,
-		RunID:          runID,
-		ImportedEvents: len(messages),
+		TurnID:         outTurn,
+		RunID:          outRun,
+		ImportedEvents: importedEvents,
 		LastSeq:        seq,
 	}, nil
 }
 
+// observedTurnSegment is one imported turn: a prompt plus the assistant/tool
+// output events that followed until the next real user message.
+type observedTurnSegment struct {
+	Ordinal int
+	Prompt  string
+	Outputs []SessionMessage
+}
+
+// segmentObservedMessages splits an observed transcript into turns. A new turn
+// starts at each real user message (role=="user", non-empty text, not a
+// Claude wrapper injection). Messages before the first real user prompt go
+// under an initial turn whose prompt is fallbackPrompt (typically the derived
+// conversation title). Always returns at least one turn so empty imports still
+// bind vendorSessionID for exact resume.
+func segmentObservedMessages(messages []SessionMessage, fallbackPrompt string) []observedTurnSegment {
+	if fallbackPrompt == "" {
+		fallbackPrompt = "Imported session"
+	}
+
+	var segments []observedTurnSegment
+	var current *observedTurnSegment
+
+	startTurn := func(prompt string) {
+		segments = append(segments, observedTurnSegment{
+			Ordinal: len(segments) + 1,
+			Prompt:  prompt,
+		})
+		current = &segments[len(segments)-1]
+	}
+
+	for _, msg := range messages {
+		if msg.Role == "user" && isObservedWrapperUserText(msg.Text) {
+			continue
+		}
+		if isRealObservedUserPrompt(msg) {
+			startTurn(msg.Text)
+			continue
+		}
+		if current == nil {
+			startTurn(fallbackPrompt)
+		}
+		current.Outputs = append(current.Outputs, msg)
+	}
+
+	if len(segments) == 0 {
+		startTurn(fallbackPrompt)
+	}
+	return segments
+}
+
+// isObservedWrapperUserText reports Claude-injected user-role wrappers that
+// must not become turn prompts or conversation titles.
+func isObservedWrapperUserText(text string) bool {
+	return strings.HasPrefix(text, "<local-command-caveat>") ||
+		strings.HasPrefix(text, "<command-name>") ||
+		strings.HasPrefix(text, "<system-reminder>")
+}
+
+func isRealObservedUserPrompt(m SessionMessage) bool {
+	return m.Role == "user" && strings.TrimSpace(m.Text) != "" && !isObservedWrapperUserText(m.Text)
+}
+
 // firstUserMessagePreview derives a short title/prompt-preview from the first
-// user-role message in an imported transcript, falling back to "" (callers
-// each have their own default for that case) when there is none.
+// real user-role message in an imported transcript (skipping Claude wrapper
+// injections), falling back to "" (callers each have their own default for
+// that case) when there is none.
 func firstUserMessagePreview(messages []SessionMessage) string {
 	for _, m := range messages {
-		if m.Role == "user" && m.Text != "" {
+		if isRealObservedUserPrompt(m) {
 			return deriveTitle(m.Text)
 		}
 	}

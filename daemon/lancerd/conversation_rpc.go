@@ -24,12 +24,13 @@ import (
 // its state without launching a second process.
 //
 // NOTE on agent.conversations.attachObservedSession (Task 9): imports an
-// already-observed terminal session's transcript into the ledger as one
-// completed turn via conversationStore.attachObservedSession — a
-// create-from-import path distinct from beginTurn's prompt/turn semantics.
-// The transcript itself is read fresh from disk here (loadFullObservedTranscript,
-// session_index.go) rather than accepting caller-supplied messages, so a
-// phone can't inject arbitrary ledger content through this RPC.
+// already-observed terminal session's transcript into the ledger as completed
+// turns (segmented at each real user prompt) via
+// conversationStore.attachObservedSession — a create-from-import path
+// distinct from beginTurn's prompt/turn semantics. The transcript itself is
+// read fresh from disk here (loadFullObservedTranscript, session_index.go)
+// rather than accepting caller-supplied messages, so a phone can't inject
+// arbitrary ledger content through this RPC.
 
 // conversationListRequest mirrors the agent.conversations.list RPC request.
 type conversationListRequest struct {
@@ -302,9 +303,10 @@ func (s *server) conversationsArchive(req conversationArchiveRequest) (conversat
 }
 
 // conversationsAttachObservedSession imports an observed session's full
-// on-disk transcript into the host ledger as one completed turn. See the
-// package doc comment above and conversationStore.attachObservedSession for
-// the idempotency/exact-resume-binding contract.
+// on-disk transcript into the host ledger as completed turns (one per real
+// user prompt). See the package doc comment above and
+// conversationStore.attachObservedSession for the idempotency/exact-resume-
+// binding contract.
 func (s *server) conversationsAttachObservedSession(req conversationAttachObservedSessionRequest) (conversationAttachObservedSessionResponse, error) {
 	if req.Provider == "" || req.SessionID == "" {
 		return conversationAttachObservedSessionResponse{}, fmt.Errorf("provider and sessionId are required")
@@ -326,7 +328,9 @@ func (s *server) conversationsAttachObservedSession(req conversationAttachObserv
 		return conversationAttachObservedSessionResponse{}, fmt.Errorf("attachObservedSession: %w", err)
 	}
 
-	res, err := s.conversations.attachObservedSession(req.Provider, req.SessionID, resolvedCWD, "", transcript.Messages)
+	// Prefer the transcript's ai-title (latest wins inside parseClaudeTranscript);
+	// attachObservedSession falls back to firstUserMessagePreview when empty.
+	res, err := s.conversations.attachObservedSession(req.Provider, req.SessionID, resolvedCWD, transcript.Title, transcript.Messages)
 	if err != nil {
 		return conversationAttachObservedSessionResponse{}, err
 	}
