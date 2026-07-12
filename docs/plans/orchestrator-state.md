@@ -18,6 +18,14 @@ as superseded. Re-queue lanes against the restored shell:
   the docs were wrong about which shell the owner meant. When a directive names a branch,
   attach a screenshot of what it looks like before acting on delete/keep decisions.
 
+## Wave 3+4 COMPLETE on master (2026-07-11 ~20:00): #82–#86 · device build ready, phone offline
+
+#86 Agents section merged (observed sessions list/transcript/continue; gate screenshot shows
+3 REAL sessions incl. the orchestrator itself). Final device build from `027e6ef4` SUCCEEDED;
+**install monitor armed — phone `unavailable`, installs+launches automatically on reconnect,
+then ping owner.** Owner review list: Model chip (Haiku default) · markdown on algebra prompt
+· streaming fluidity · Agents section listing Mac sessions. All lane worktrees cleaned.
+
 ## Dogfood wave 3 MERGED (2026-07-11 ~19:30): PRs #82–#85 — awaiting phone reconnect to install
 
 #82 model-argv (latent: ANY explicit-model dispatch instant-exited — picker exposed it) ·
