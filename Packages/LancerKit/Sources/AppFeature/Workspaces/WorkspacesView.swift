@@ -7,6 +7,7 @@ import PersistenceKit
 public struct WorkspacesView: View {
     @Environment(RelayFleetStore.self) private var relayFleetStore
     @Environment(WorkspaceDataStore.self) private var workspaceData
+    @Environment(ShellLiveBridge.self) private var shellLiveBridge
     @State private var isProfilePresented = false
     @State private var isComposerPresented = false
     @State private var isAddRepoPresented = false
@@ -98,6 +99,18 @@ public struct WorkspacesView: View {
                         .buttonStyle(.plain)
                         Divider()
                             .padding(.leading, 58)
+
+                        RunningAgentsSection { session, prompt in
+                            shellLiveBridge.armObservedContinue(
+                                vendor: session.provider,
+                                sessionId: session.sessionId,
+                                cwd: session.cwd
+                            )
+                            activeLiveThread = LiveThreadIdentifier(
+                                prompt: prompt,
+                                cwd: session.cwd
+                            )
+                        }
                     }
                     .padding(.bottom, 90)
                 }
