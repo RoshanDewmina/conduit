@@ -8,14 +8,15 @@ import SessionFeature
 public struct RunningAgentsSection: View {
     @Environment(RelayFleetStore.self) private var relayFleetStore
 
-    /// Called when the user continues an observed session into a Lancer live thread.
+    /// Called when the user opens an observed session into a Lancer live thread.
+    /// Prompt is empty on row tap — the live thread adopts/hydrates; the first
+    /// typed follow-up performs `agent.observedSession.continue`.
     private let onContinueInLancer: (ObservedSession, String) -> Void
 
     @State private var rows: [RunningAgentsMapping.Row] = []
     @State private var tracker = RunningAgentsFreshness.Tracker()
     @State private var statusMessage: String?
     @State private var totalRunningFromStatus: Int = 0
-    @State private var selectedRow: RunningAgentsMapping.Row?
 
     public init(onContinueInLancer: @escaping (ObservedSession, String) -> Void) {
         self.onContinueInLancer = onContinueInLancer
@@ -45,7 +46,17 @@ public struct RunningAgentsSection: View {
                 }
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                     Button {
-                        selectedRow = row
+                        let session = ObservedSession(
+                            sessionId: row.sessionId,
+                            provider: row.provider,
+                            title: row.title,
+                            cwd: row.cwd,
+                            state: row.state,
+                            source: .transcriptObserved,
+                            lastActivity: row.lastActivity,
+                            messageCount: 0
+                        )
+                        onContinueInLancer(session, "")
                     } label: {
                         agentRow(row)
                     }
@@ -58,26 +69,6 @@ public struct RunningAgentsSection: View {
         .accessibilityIdentifier("running-agents-section")
         .task {
             await pollLoop()
-        }
-        .navigationDestination(item: $selectedRow) { row in
-            ObservedSessionTranscriptView(
-                row: row,
-                onContinueInLancer: { prompt in
-                    let session = ObservedSession(
-                        sessionId: row.sessionId,
-                        provider: row.provider,
-                        title: row.title,
-                        cwd: row.cwd,
-                        state: row.state,
-                        source: .transcriptObserved,
-                        lastActivity: row.lastActivity,
-                        messageCount: 0
-                    )
-                    selectedRow = nil
-                    onContinueInLancer(session, prompt)
-                }
-            )
-            .environment(relayFleetStore)
         }
     }
 
