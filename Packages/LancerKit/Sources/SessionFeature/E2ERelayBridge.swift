@@ -35,6 +35,7 @@ public final class E2ERelayBridge: ObservableObject {
     private var conversationsAppendContinuation: CheckedContinuation<ConversationAppendResponse, Error>?
     private var conversationsArchiveContinuation: CheckedContinuation<ConversationArchiveResponse, Error>?
     private var conversationsAttachObservedSessionContinuation: CheckedContinuation<ConversationAttachObservedSessionResponse, Error>?
+    private var attachmentPutContinuation: CheckedContinuation<AttachmentPutResult, Error>?
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay, machineID: RelayMachineID) {
         self.relayClient = relayClient
@@ -283,6 +284,42 @@ public final class E2ERelayBridge: ObservableObject {
         defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.continueContinuation = c
+        }
+    }
+
+    /// Uploads one attachment chunk through the E2E relay (`attachmentPut` →
+    /// `attachmentPutResult`). Mirrors `DaemonChannel.putAttachment` / SSH
+    /// `attachment.put`. Chunks must stay ≤256KB pre-encryption.
+    public func relayPutAttachment(
+        conversationId: String?,
+        name: String,
+        totalBytes: Int,
+        seq: Int,
+        dataBase64: String,
+        done: Bool
+    ) async throws -> AttachmentPutResult {
+        guard isActive else { throw E2EError.notPaired }
+        struct PutParams: Codable, Sendable {
+            let conversationId: String?
+            let name: String
+            let totalBytes: Int
+            let seq: Int
+            let dataBase64: String
+            let done: Bool
+        }
+        try await relayClient.send(
+            type: "attachmentPut",
+            payload: PutParams(
+                conversationId: conversationId,
+                name: name,
+                totalBytes: totalBytes,
+                seq: seq,
+                dataBase64: dataBase64,
+                done: done
+            )
+        )
+        return try await withCheckedThrowingContinuation { c in
+            self.attachmentPutContinuation = c
         }
     }
 
@@ -868,6 +905,21 @@ public final class E2ERelayBridge: ObservableObject {
                 conversationsAttachObservedSessionContinuation?.resume(throwing: E2EError.decryptFailed)
             }
             conversationsAttachObservedSessionContinuation = nil
+
+        case "attachmentPutResult":
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<AttachmentPutResult>.self, from: message.payload
+            )
+            if let result = envelope?.payload {
+                if let err = result.error, !err.isEmpty {
+                    attachmentPutContinuation?.resume(throwing: RelayFSError.host(err))
+                } else {
+                    attachmentPutContinuation?.resume(returning: result)
+                }
+            } else {
+                attachmentPutContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            attachmentPutContinuation = nil
 
         default:
             break

@@ -29,6 +29,9 @@ public struct LiveThreadView: View {
 
     @State private var hasSentInitialPrompt = false
     @State private var followUpText: String = ""
+    @State private var followUpAttachments: [AttachmentDraft] = []
+    @State private var isContextPresented = false
+    @State private var isUploadingAttachments = false
     @State private var streamingPacer = ChatStreamingTextPacer()
     @State private var receiptsByRunID: [String: ProofReceipt] = [:]
     @State private var eventsByTurnID: [String: [ChatEvent]] = [:]
@@ -124,13 +127,16 @@ public struct LiveThreadView: View {
                         .padding(.bottom, 12)
                 }
 
-                ChatFollowUpComposerBar(
-                    text: $followUpText,
-                    isFocused: $isFollowUpFocused,
-                    isDisabled: bridge.isSendInFlight,
-                    canSend: canSendFollowUp,
-                    onSend: sendFollowUp
-                )
+                VStack(spacing: 0) {
+                    followUpAttachChrome
+                    ChatFollowUpComposerBar(
+                        text: $followUpText,
+                        isFocused: $isFollowUpFocused,
+                        isDisabled: bridge.isSendInFlight || isUploadingAttachments,
+                        canSend: canSendFollowUpWithAttachments,
+                        onSend: { Task { await sendFollowUp() } }
+                    )
+                }
             }
             .background(Color(.systemBackground))
             .navigationTitle("Chat")
@@ -229,6 +235,16 @@ public struct LiveThreadView: View {
         !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !bridge.isSendInFlight
             && bridge.canAcceptFollowUp
+    }
+
+    private var canSendFollowUpWithAttachments: Bool {
+        canSendFollowUp
+            && !isUploadingAttachments
+            && !followUpAttachments.contains(where: \.state.isError)
+            && !followUpAttachments.contains(where: {
+                if case .uploading = $0.state { return true }
+                return false
+            })
     }
 
     /// Turn id currently bound to `sendState` (streaming / completed / degraded /
@@ -710,18 +726,118 @@ public struct LiveThreadView: View {
 
     // MARK: - Follow-up composer (Cursor docked bar chrome; same send path)
 
-    private func sendFollowUp() {
+    @ViewBuilder
+    private var followUpAttachChrome: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !followUpAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(followUpAttachments) { draft in
+                            AttachmentChipView(draft: draft) {
+                                followUpAttachments.removeAll { $0.id == draft.id }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+            HStack {
+                Button {
+                    isContextPresented = true
+                } label: {
+                    Label("Attach", systemImage: "plus.circle")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                Spacer()
+            }
+        }
+        .padding(.top, followUpAttachments.isEmpty ? 4 : 8)
+        .sheet(isPresented: $isContextPresented) {
+            ContextAttachView(attachments: $followUpAttachments)
+        }
+    }
+
+    private func sendFollowUp() async {
         let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, bridge.canAcceptFollowUp else { return }
+        guard !text.isEmpty, bridge.canAcceptFollowUp, canSendFollowUpWithAttachments else { return }
+
+        var drafts = followUpAttachments
+        if !drafts.isEmpty {
+            isUploadingAttachments = true
+            guard let machine = relayFleetStore.machines.first(where: { $0.id == bridge.activeMachineID })
+                    ?? relayFleetStore.firstConnectedMachine
+            else {
+                drafts = drafts.map { draft in
+                    guard case .pending = draft.state else { return draft }
+                    var copy = draft
+                    copy.state = .error(message: AttachmentUploadError.noTransport.localizedDescription)
+                    return copy
+                }
+                followUpAttachments = drafts
+                isUploadingAttachments = false
+                return
+            }
+            let e2e = machine.bridge
+            let conversationID = bridge.activeConversationID
+            for draft in drafts {
+                guard case .pending = draft.state else { continue }
+                drafts = AttachmentDraftStore.withState(
+                    drafts, id: draft.id, state: .uploading(progress: 0)
+                )
+                followUpAttachments = drafts
+                do {
+                    let path = try await AttachmentUploader.upload(
+                        draft: draft,
+                        conversationId: conversationID,
+                        sendChunk: { params in
+                            let result = try await e2e.relayPutAttachment(
+                                conversationId: params.conversationId,
+                                name: params.name,
+                                totalBytes: params.totalBytes,
+                                seq: params.seq,
+                                dataBase64: params.dataBase64,
+                                done: params.done
+                            )
+                            return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
+                        },
+                        onProgress: { progress in
+                            drafts = AttachmentDraftStore.withState(
+                                drafts, id: draft.id, state: .uploading(progress: progress)
+                            )
+                            followUpAttachments = drafts
+                        }
+                    )
+                    drafts = AttachmentDraftStore.withState(
+                        drafts, id: draft.id, state: .done(hostPath: path)
+                    )
+                    followUpAttachments = drafts
+                } catch {
+                    drafts = AttachmentDraftStore.withState(
+                        drafts, id: draft.id, state: .error(message: error.localizedDescription)
+                    )
+                    followUpAttachments = drafts
+                    isUploadingAttachments = false
+                    return
+                }
+            }
+            isUploadingAttachments = false
+            guard AttachmentDraftStore.canSend(drafts) else { return }
+        }
+
+        let prefixed = AttachmentPromptPrefix.apply(
+            userPrompt: text,
+            hostPaths: AttachmentDraftStore.hostPaths(drafts)
+        )
         followUpText = ""
+        followUpAttachments = []
         isFollowUpFocused = false
-        // After empty-prompt adopt, `activeConversationID` is the synthetic
-        // `observed:…` id and `sendFollowUp` routes through observed continue.
         if let conversationID = bridge.activeConversationID {
-            Task { await bridge.sendFollowUp(prompt: text, conversationID: conversationID, cwd: cwd) }
+            await bridge.sendFollowUp(prompt: prefixed, conversationID: conversationID, cwd: cwd)
             return
         }
-        Task { await bridge.send(prompt: text, cwd: cwd) }
+        await bridge.send(prompt: prefixed, cwd: cwd)
     }
 }
 #endif

@@ -355,6 +355,27 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("fsReadResult", data)
 
+	case "attachmentPut":
+		var params attachmentPutParams
+		if err := json.Unmarshal(payload, &params); err != nil {
+			log.Printf("e2e: unmarshal attachmentPut failed: %v", err)
+			return
+		}
+		res, err := r.server.handleAttachmentPut(params)
+		payloadOut := map[string]interface{}{
+			"ok":   res.OK,
+			"path": res.Path,
+		}
+		if err != nil {
+			payloadOut["error"] = err.Error()
+		}
+		msg := map[string]interface{}{
+			"type":    "attachmentPutResult",
+			"payload": payloadOut,
+		}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("attachmentPutResult", data)
+
 	case "agentCommandsList":
 		var params struct {
 			Cwd    string `json:"cwd"`

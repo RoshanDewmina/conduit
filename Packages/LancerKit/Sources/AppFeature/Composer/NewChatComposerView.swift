@@ -1,18 +1,23 @@
 #if os(iOS)
 import SwiftUI
 import PersistenceKit
+import SessionFeature
 
 /// New Chat composer — repo picker uses the real workspace list; send
-/// requires a selected repo cwd (never a guessed `~/name`).
+/// requires a selected repo cwd (never a guessed `~/name`). Attachments
+/// upload via `attachment.put` before the prompt is dispatched.
 public struct NewChatComposerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(WorkspaceDataStore.self) private var workspaceData
+    @Environment(RelayFleetStore.self) private var relayFleetStore
     @State private var draftText: String = ""
     @FocusState private var isTextFieldFocused: Bool
     @State private var isRepoPickerPresented = false
     @State private var isModelPickerPresented = false
     @State private var isContextPresented = false
     @State private var selectedRepo: WorkspaceRepo?
+    @State private var attachments: [AttachmentDraft] = []
+    @State private var isUploadingAttachments = false
     @AppStorage(DispatchModelSelection.storageKey) private var selectedModelSlug: String =
         DispatchModelSelection.default.rawValue
     private let initiallyShowsRepoPicker: Bool
@@ -43,6 +48,12 @@ public struct NewChatComposerView: View {
             selectorRow
                 .padding(.horizontal, 16)
 
+            if !attachments.isEmpty {
+                attachmentChips
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
+
             textField
                 .padding(.top, 10)
 
@@ -55,7 +66,7 @@ public struct NewChatComposerView: View {
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .padding(.horizontal, 8)
         .padding(.top, 6)
-        .presentationDetents([.height(280)])
+        .presentationDetents([.height(attachments.isEmpty ? 280 : 340)])
         .presentationDragIndicator(.hidden)
         .presentationBackground(.clear)
         .onAppear {
@@ -87,7 +98,7 @@ public struct NewChatComposerView: View {
             }
         }
         .sheet(isPresented: $isContextPresented) {
-            ContextAttachView()
+            ContextAttachView(attachments: $attachments)
         }
     }
 
@@ -118,6 +129,18 @@ public struct NewChatComposerView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private var attachmentChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(attachments) { draft in
+                    AttachmentChipView(draft: draft) {
+                        attachments.removeAll { $0.id == draft.id }
+                    }
+                }
+            }
+        }
     }
 
     private var textField: some View {
@@ -176,16 +199,31 @@ public struct NewChatComposerView: View {
             Spacer()
 
             let trimmedDraft = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let canSend = !trimmedDraft.isEmpty && selectedRepo != nil
-            if canSend, let cwd = selectedRepo?.cwd {
+            // Pending attachments upload on send; errored chips must be removed first.
+            let sendAllowed = !trimmedDraft.isEmpty
+                && selectedRepo != nil
+                && !isUploadingAttachments
+                && !attachments.contains(where: \.state.isError)
+                && !attachments.contains(where: {
+                    if case .uploading = $0.state { return true }
+                    return false
+                })
+
+            if sendAllowed, let cwd = selectedRepo?.cwd {
                 Button {
-                    send(trimmedDraft, cwd: cwd)
+                    Task { await send(trimmedDraft, cwd: cwd) }
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(.tint)
+                    if isUploadingAttachments {
+                        ProgressView()
+                            .frame(width: 34, height: 34)
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 34))
+                            .foregroundStyle(.tint)
+                    }
                 }
                 .buttonStyle(.plain)
+                .disabled(isUploadingAttachments)
                 .accessibilityLabel(Text("Send"))
             } else {
                 Circle()
@@ -200,8 +238,71 @@ public struct NewChatComposerView: View {
         }
     }
 
-    private func send(_ prompt: String, cwd: String) {
-        onSend(prompt, cwd)
+    private func send(_ prompt: String, cwd: String) async {
+        var drafts = attachments
+        if !drafts.isEmpty {
+            isUploadingAttachments = true
+            guard let machine = relayFleetStore.firstConnectedMachine else {
+                for draft in drafts where draft.state == .pending {
+                    drafts = AttachmentDraftStore.withState(
+                        drafts, id: draft.id, state: .error(message: AttachmentUploadError.noTransport.localizedDescription)
+                    )
+                }
+                attachments = drafts
+                isUploadingAttachments = false
+                return
+            }
+            let bridge = machine.bridge
+            for draft in drafts {
+                guard case .pending = draft.state else { continue }
+                drafts = AttachmentDraftStore.withState(
+                    drafts, id: draft.id, state: .uploading(progress: 0)
+                )
+                attachments = drafts
+                do {
+                    let path = try await AttachmentUploader.upload(
+                        draft: draft,
+                        conversationId: nil,
+                        sendChunk: { params in
+                            let result = try await bridge.relayPutAttachment(
+                                conversationId: params.conversationId,
+                                name: params.name,
+                                totalBytes: params.totalBytes,
+                                seq: params.seq,
+                                dataBase64: params.dataBase64,
+                                done: params.done
+                            )
+                            return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
+                        },
+                        onProgress: { progress in
+                            drafts = AttachmentDraftStore.withState(
+                                drafts, id: draft.id, state: .uploading(progress: progress)
+                            )
+                            attachments = drafts
+                        }
+                    )
+                    drafts = AttachmentDraftStore.withState(
+                        drafts, id: draft.id, state: .done(hostPath: path)
+                    )
+                    attachments = drafts
+                } catch {
+                    drafts = AttachmentDraftStore.withState(
+                        drafts, id: draft.id, state: .error(message: error.localizedDescription)
+                    )
+                    attachments = drafts
+                    isUploadingAttachments = false
+                    return
+                }
+            }
+            isUploadingAttachments = false
+            guard AttachmentDraftStore.canSend(drafts) else { return }
+        }
+
+        let prefixed = AttachmentPromptPrefix.apply(
+            userPrompt: prompt,
+            hostPaths: AttachmentDraftStore.hostPaths(drafts)
+        )
+        onSend(prefixed, cwd)
         dismiss()
     }
 
@@ -226,6 +327,7 @@ public struct NewChatComposerView: View {
         .sheet(isPresented: .constant(true)) {
             NewChatComposerView(onSend: { _, _ in })
                 .environment(WorkspaceDataStore(chatRepo: ChatConversationRepository(db)))
+                .environment(RelayFleetStore())
         }
 }
 #endif
