@@ -16,12 +16,31 @@ struct ThreadDetailView: View {
     /// How many of the most-recent turns to render. Extended via "Show earlier…".
     @State private var visibleTurnLimit = Self.initialWindowSize
     @State private var showScrollToBottom = false
+    @State private var turnDiffByTurnID: [String: RepoDiffSummary] = [:]
+    @State private var sessionDiff: RepoDiffSummary?
+    @State private var reviewPresentation: ReviewPresentation?
+    @State private var queuedReviewComments: [QueuedReviewComment] = []
 
     private static let initialWindowSize = 100
     private static let windowExtendStep = 100
     private static let scrollTailID = "thread-detail-tail"
+    private var reviewDataSource: any ReviewDataSource { FixtureReviewDataSource.shared }
 
     let thread: ThreadListItem
+
+    private struct ReviewPresentation: Identifiable {
+        enum Scope {
+            case turn(String)
+            case session
+        }
+        let scope: Scope
+        var id: String {
+            switch scope {
+            case .turn(let turnID): return "turn:\(turnID)"
+            case .session: return "session"
+            }
+        }
+    }
 
     init(thread: ThreadListItem) {
         self.thread = thread
@@ -96,6 +115,11 @@ struct ThreadDetailView: View {
                                     VStack(alignment: .leading, spacing: 12) {
                                         ChatUserBubble(text: turn.prompt)
                                         threadAssistant(turn)
+                                        if let diff = turnDiffByTurnID[turn.id], diff.hasChanges {
+                                            TurnDiffCard(summary: diff) {
+                                                reviewPresentation = ReviewPresentation(scope: .turn(turn.id))
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -141,13 +165,20 @@ struct ThreadDetailView: View {
                 }
             }
 
-            Button {
-                isFollowUpPresented = true
-            } label: {
-                ChatFollowUpPlaceholderBar()
+            VStack(spacing: 8) {
+                if let sessionDiff {
+                    SessionDiffPill(summary: sessionDiff) {
+                        reviewPresentation = ReviewPresentation(scope: .session)
+                    }
+                }
+                Button {
+                    isFollowUpPresented = true
+                } label: {
+                    ChatFollowUpPlaceholderBar()
+                }
+                .buttonStyle(.plain)
+                .disabled(thread.cwd.isEmpty)
             }
-            .buttonStyle(.plain)
-            .disabled(thread.cwd.isEmpty)
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
         }
@@ -166,6 +197,21 @@ struct ThreadDetailView: View {
                     ),
                 lockRepo: true,
                 onSend: handleSend
+            )
+        }
+        .sheet(item: $reviewPresentation) { presentation in
+            ReviewSheetView(
+                conversationID: thread.id,
+                scope: {
+                    switch presentation.scope {
+                    case .turn(let turnID): return .turn(turnID: turnID)
+                    case .session: return .session
+                    }
+                }(),
+                dataSource: reviewDataSource,
+                onAttachComment: { comment in
+                    queuedReviewComments.append(comment)
+                }
             )
         }
         .liveThreadPresentation($activeLiveThread)
@@ -227,12 +273,37 @@ struct ThreadDetailView: View {
         }
         let events = (try? await repo.events(conversationID: thread.id, limit: 10_000)) ?? []
         eventsByTurnID = Dictionary(grouping: events.filter { $0.turnID != nil }, by: { $0.turnID! })
+        await loadReviewDiffs()
+    }
+
+    private func loadReviewDiffs() async {
+        var next: [String: RepoDiffSummary] = [:]
+        for turn in turns where turn.status != .failed {
+            if let diff = try? await reviewDataSource.turnDiff(
+                conversationID: thread.id,
+                turnID: turn.id
+            ), diff.hasChanges {
+                next[turn.id] = diff
+            }
+        }
+        turnDiffByTurnID = next
+        if let session = try? await reviewDataSource.sessionDiff(conversationID: thread.id),
+           session.hasChanges {
+            sessionDiff = session
+        } else {
+            sessionDiff = nil
+        }
     }
 
     private func handleSend(_ prompt: String, _ cwd: String) {
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
         guard WorkspaceRepoCatalog.isAbsoluteSendTarget(normalized) else { return }
-        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized)
+        let composed = ReviewCommentFormatting.composerPrefix(
+            comments: queuedReviewComments,
+            prompt: prompt
+        )
+        queuedReviewComments.removeAll()
+        activeLiveThread = LiveThreadIdentifier(prompt: composed, cwd: normalized)
     }
 
     private var topBar: some View {
