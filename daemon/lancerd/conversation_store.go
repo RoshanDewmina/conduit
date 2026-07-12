@@ -1341,10 +1341,11 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 		for _, msg := range seg.Outputs {
 			seq++
 			importedEvents++
+			kind, role, text, payload := observedEventFields(msg)
 			if _, err := tx.Exec(`INSERT INTO conversation_events
-				(conversation_id, seq, turn_id, run_id, kind, role, text, created_at)
-				VALUES (?, ?, ?, ?, 'output', ?, ?, ?)`,
-				convID, seq, turnID, runID, nullIfEmpty(msg.Role), msg.Text, now); err != nil {
+				(conversation_id, seq, turn_id, run_id, kind, role, text, payload_json, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				convID, seq, turnID, runID, kind, nullIfEmpty(role), text, nullIfEmpty(payload), now); err != nil {
 				return conversationImportResult{}, err
 			}
 		}
@@ -1434,6 +1435,37 @@ func isObservedWrapperUserText(text string) bool {
 
 func isRealObservedUserPrompt(m SessionMessage) bool {
 	return m.Role == "user" && strings.TrimSpace(m.Text) != "" && !isObservedWrapperUserText(m.Text)
+}
+
+// observedEventFields maps a neutral SessionMessage onto a conversation_events
+// row: structured tool/thinking kinds with payload_json, prose as kind=output.
+func observedEventFields(msg SessionMessage) (kind, role, text, payloadJSON string) {
+	switch msg.Role {
+	case "toolCall":
+		added, removed := computeEditStats(msg.ToolName, msg.InputJSON)
+		var input any
+		if msg.InputJSON != "" {
+			_ = json.Unmarshal([]byte(msg.InputJSON), &input)
+		}
+		b, _ := json.Marshal(map[string]any{
+			"name":      msg.ToolName,
+			"toolUseId": msg.ToolUseID,
+			"input":     input,
+			"added":     added,
+			"removed":   removed,
+		})
+		return "tool_call", msg.Role, clampText(msg.Text), string(b)
+	case "toolResult":
+		b, _ := json.Marshal(map[string]any{
+			"toolUseId": msg.ToolUseID,
+			"isError":   msg.IsError,
+		})
+		return "tool_result", msg.Role, clampText(msg.Text), string(b)
+	case "thinking":
+		return "thinking", msg.Role, clampText(msg.Text), ""
+	default:
+		return "output", msg.Role, msg.Text, ""
+	}
 }
 
 // firstUserMessagePreview derives a short title/prompt-preview from the first

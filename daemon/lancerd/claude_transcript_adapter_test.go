@@ -225,3 +225,70 @@ func TestParseClaudeTranscriptAITitleLatestWins(t *testing.T) {
 		t.Fatalf("aiTitle = %q, want latest-title", aiTitle)
 	}
 }
+
+// TestParseClaudeTranscriptStructuredBlocks asserts tool_use / tool_result /
+// thinking / redacted_thinking map onto the canonical SessionMessage fields
+// (ToolUseID, InputJSON, IsError, Role "thinking").
+func TestParseClaudeTranscriptStructuredBlocks(t *testing.T) {
+	dir := t.TempDir()
+	lines := []string{
+		`{"type":"user","sessionId":"` + fixtureSessionID + `","message":{"role":"user","content":"edit foo"},"timestamp":"2026-06-22T13:00:00Z"}`,
+		`{"type":"assistant","sessionId":"` + fixtureSessionID + `","message":{"role":"assistant","content":[{"type":"thinking","thinking":"I should edit the file"},{"type":"redacted_thinking"},{"type":"tool_use","id":"toolu_edit","name":"Edit","input":{"file_path":"/a.go","old_string":"a\nb","new_string":"a\nb\nc"}}]},"timestamp":"2026-06-22T13:00:01Z"}`,
+		`{"type":"user","sessionId":"` + fixtureSessionID + `","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_edit","is_error":true,"content":"permission denied"}]},"timestamp":"2026-06-22T13:00:02Z"}`,
+	}
+	path := writeFixture(t, dir, lines, false)
+	msgs, _, _, _, err := parseClaudeTranscript(path, 0)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	// user + thinking + redacted_thinking + toolCall + toolResult
+	if len(msgs) != 5 {
+		t.Fatalf("got %d msgs, want 5: %+v", len(msgs), msgs)
+	}
+	if msgs[1].Role != "thinking" || msgs[1].Text != "I should edit the file" {
+		t.Fatalf("thinking = %+v", msgs[1])
+	}
+	if msgs[2].Role != "thinking" || msgs[2].Text != "(redacted)" {
+		t.Fatalf("redacted_thinking = %+v", msgs[2])
+	}
+	tc := msgs[3]
+	if tc.Role != "toolCall" || tc.ToolName != "Edit" || tc.ToolUseID != "toolu_edit" {
+		t.Fatalf("toolCall = %+v", tc)
+	}
+	if tc.Text == "" || !strings.Contains(tc.Text, "Edit") {
+		t.Fatalf("toolCall summary Text empty or missing tool name: %q", tc.Text)
+	}
+	if !strings.Contains(tc.InputJSON, `"file_path"`) || !strings.Contains(tc.InputJSON, `/a.go`) {
+		t.Fatalf("InputJSON missing full input: %q", tc.InputJSON)
+	}
+	tr := msgs[4]
+	if tr.Role != "toolResult" || tr.ToolUseID != "toolu_edit" || !tr.IsError || tr.Text != "permission denied" {
+		t.Fatalf("toolResult = %+v", tr)
+	}
+}
+
+func TestComputeEditStats(t *testing.T) {
+	cases := []struct {
+		name     string
+		tool     string
+		input    string
+		wantAdd  int
+		wantRem  int
+	}{
+		{"edit", "Edit", `{"old_string":"a\nb","new_string":"a\nb\nc"}`, 3, 2},
+		{"write", "Write", `{"content":"line1\nline2\nline3"}`, 3, 0},
+		{"multi_edit", "MultiEdit", `{"edits":[{"old_string":"x","new_string":"x\ny"},{"old_string":"a\nb","new_string":"a"}]}`, 3, 3},
+		{"unknown tool", "Bash", `{"command":"ls"}`, 0, 0},
+		{"empty", "Edit", ``, 0, 0},
+		{"bad json", "Edit", `{`, 0, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gotAdd, gotRem := computeEditStats(c.tool, c.input)
+			if gotAdd != c.wantAdd || gotRem != c.wantRem {
+				t.Fatalf("computeEditStats(%q) = (+%d,-%d), want (+%d,-%d)",
+					c.name, gotAdd, gotRem, c.wantAdd, c.wantRem)
+			}
+		})
+	}
+}

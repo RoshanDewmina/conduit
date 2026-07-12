@@ -102,8 +102,35 @@ func kimiInspect(wire string) (title string, count int) {
 }
 
 // kimiMessage parses a context.append_message line into (role, text, toolName).
-// Returns ("","","") for non-message lines.
+// Returns ("","","") for non-message lines. toolName is the first tool call's
+// name when present (flat or nested function.name).
 func kimiMessage(line []byte) (role, text, tool string) {
+	msgs := kimiMessagesFromLine(line)
+	if len(msgs) == 0 {
+		return "", "", ""
+	}
+	// Preserve the historical helper contract: role/text from the first message,
+	// tool from the first toolCall (which may be msgs[0] or a later sibling).
+	role = msgs[0].Role
+	text = msgs[0].Text
+	for _, m := range msgs {
+		if m.Role == "toolCall" && m.ToolName != "" {
+			tool = m.ToolName
+			break
+		}
+	}
+	if role == "toolCall" {
+		// Assistant lines that are tool-only still report as assistant+tool for
+		// the inspect/title path; prefer the textual role when present.
+		role = "assistant"
+		text = ""
+	}
+	return role, text, tool
+}
+
+// kimiMessagesFromLine converts one wire.jsonl line into zero or more neutral
+// SessionMessages (assistant prose + toolCall entries with InputJSON).
+func kimiMessagesFromLine(line []byte) []SessionMessage {
 	var ev struct {
 		Type    string `json:"type"`
 		Message struct {
@@ -113,27 +140,95 @@ func kimiMessage(line []byte) (role, text, tool string) {
 				Text string `json:"text"`
 			} `json:"content"`
 			ToolCalls []struct {
-				Name string `json:"name"`
+				ID       string `json:"id"`
+				Name     string `json:"name"`
+				Arguments any    `json:"arguments"`
+				Function *struct {
+					Name      string `json:"name"`
+					Arguments any    `json:"arguments"`
+				} `json:"function"`
 			} `json:"toolCalls"`
 		} `json:"message"`
 	}
 	if json.Unmarshal(line, &ev) != nil || ev.Type != "context.append_message" {
-		return "", "", ""
+		return nil
 	}
-	var b strings.Builder
+	var text strings.Builder
 	for _, c := range ev.Message.Content {
 		if c.Text != "" {
-			if b.Len() > 0 {
-				b.WriteString("\n")
+			if text.Len() > 0 {
+				text.WriteString("\n")
 			}
-			b.WriteString(c.Text)
+			text.WriteString(c.Text)
 		}
 	}
-	t := ""
-	if len(ev.Message.ToolCalls) > 0 {
-		t = ev.Message.ToolCalls[0].Name
+	var out []SessionMessage
+	switch ev.Message.Role {
+	case "user":
+		if text.Len() > 0 && !isCodexInjectedText(text.String()) {
+			out = append(out, SessionMessage{Role: "user", Text: clampText(text.String())})
+		}
+	case "assistant":
+		if text.Len() > 0 {
+			out = append(out, SessionMessage{Role: "assistant", Text: clampText(text.String())})
+		}
+		for _, tc := range ev.Message.ToolCalls {
+			name := tc.Name
+			args := tc.Arguments
+			id := tc.ID
+			if tc.Function != nil {
+				if tc.Function.Name != "" {
+					name = tc.Function.Name
+				}
+				if tc.Function.Arguments != nil {
+					args = tc.Function.Arguments
+				}
+			}
+			if name == "" {
+				continue
+			}
+			inputJSON := kimiArgsJSON(args)
+			summary := name
+			if inputJSON != "" {
+				summary = claudeToolUseSummary(name, json.RawMessage(inputJSON))
+			}
+			out = append(out, SessionMessage{
+				Role:      "toolCall",
+				Text:      clampText(summary),
+				ToolName:  name,
+				ToolUseID: id,
+				InputJSON: clampText(inputJSON),
+			})
+		}
+	case "tool":
+		if text.Len() > 0 {
+			out = append(out, SessionMessage{Role: "toolResult", Text: clampText(text.String())})
+		}
 	}
-	return ev.Message.Role, b.String(), t
+	return out
+}
+
+func kimiArgsJSON(args any) string {
+	if args == nil {
+		return ""
+	}
+	switch v := args.(type) {
+	case string:
+		// OpenAI-style: arguments is a JSON string.
+		var raw any
+		if json.Unmarshal([]byte(v), &raw) == nil {
+			if b, err := json.Marshal(raw); err == nil {
+				return string(b)
+			}
+		}
+		return v
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return ""
+		}
+		return string(b)
+	}
 }
 
 func kimiFindWirePath(home, sessionID string) string {
@@ -169,29 +264,7 @@ func kimiTranscript(home, sessionID string, sinceLine int) (SessionTranscriptRes
 		if total > maxTranscriptBytes {
 			break
 		}
-		role, text, tool := kimiMessage(sc.Bytes())
-		if role == "" {
-			continue
-		}
-		switch role {
-		case "user":
-			// Skip injected context (system-reminders, plugin/session banners) so the
-			// transcript reads as the real exchange, not Kimi's harness scaffolding.
-			if text != "" && !isCodexInjectedText(text) {
-				msgs = append(msgs, SessionMessage{Role: "user", Text: clampText(text)})
-			}
-		case "assistant":
-			if text != "" {
-				msgs = append(msgs, SessionMessage{Role: "assistant", Text: clampText(text)})
-			}
-			if tool != "" {
-				msgs = append(msgs, SessionMessage{Role: "toolCall", ToolName: tool})
-			}
-		case "tool":
-			if text != "" {
-				msgs = append(msgs, SessionMessage{Role: "toolResult", Text: clampText(text)})
-			}
-		}
+		msgs = append(msgs, kimiMessagesFromLine(sc.Bytes())...)
 	}
 	return SessionTranscriptResult{Messages: msgs, NextLine: idx, ResetRequired: false}, nil
 }

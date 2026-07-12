@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 // conversation_attach_test.go covers Task 9 of the cross-device sync build
 // handoff: conversationStore.attachObservedSession, the create-from-import
@@ -264,5 +268,79 @@ func TestAttachObservedSessionWithNoMessagesImportsZeroEvents(t *testing.T) {
 	}
 	if fetched.Conversation.Title != "Empty session" {
 		t.Fatalf("Title = %q, want the explicit title passed in", fetched.Conversation.Title)
+	}
+}
+
+// TestAttachObservedSessionStructuredKindsRoundTrip proves toolCall / toolResult /
+// thinking persist as distinct event kinds with payload_json, and fetch returns
+// them verbatim (no flattening to kind=output).
+func TestAttachObservedSessionStructuredKindsRoundTrip(t *testing.T) {
+	s := newObservedTestStore(t)
+	messages := []SessionMessage{
+		{Role: "user", Text: "please edit"},
+		{Role: "thinking", Text: "planning the edit"},
+		{
+			Role: "toolCall", Text: "Edit: /a.go", ToolName: "Edit", ToolUseID: "toolu_1",
+			InputJSON: `{"file_path":"/a.go","old_string":"x","new_string":"x\ny"}`,
+		},
+		{Role: "toolResult", Text: "ok", ToolUseID: "toolu_1", IsError: false},
+		{Role: "assistant", Text: "done"},
+	}
+
+	res, err := s.attachObservedSession("claudeCode", "vendor-structured", "/tmp/proj", "", messages)
+	if err != nil {
+		t.Fatalf("attachObservedSession: %v", err)
+	}
+	fetched, err := s.fetch(res.ConversationID, 0, 100)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(fetched.Events) != 4 {
+		t.Fatalf("len(Events) = %d, want 4", len(fetched.Events))
+	}
+
+	wantKinds := []string{"thinking", "tool_call", "tool_result", "output"}
+	for i, kind := range wantKinds {
+		if fetched.Events[i].Kind != kind {
+			t.Fatalf("event[%d].Kind = %q, want %q", i, fetched.Events[i].Kind, kind)
+		}
+	}
+	if fetched.Events[0].Text != "planning the edit" || fetched.Events[0].PayloadJSON != "" {
+		t.Fatalf("thinking event = %+v", fetched.Events[0])
+	}
+
+	var toolPayload map[string]any
+	if err := json.Unmarshal([]byte(fetched.Events[1].PayloadJSON), &toolPayload); err != nil {
+		t.Fatalf("tool_call payload: %v (%q)", err, fetched.Events[1].PayloadJSON)
+	}
+	if toolPayload["name"] != "Edit" || toolPayload["toolUseId"] != "toolu_1" {
+		t.Fatalf("tool_call payload = %#v", toolPayload)
+	}
+	if toolPayload["added"] != float64(2) || toolPayload["removed"] != float64(1) {
+		t.Fatalf("diff stats in payload = %#v", toolPayload)
+	}
+	input, _ := toolPayload["input"].(map[string]any)
+	if input["file_path"] != "/a.go" {
+		t.Fatalf("payload input = %#v", toolPayload["input"])
+	}
+	if fetched.Events[1].Text != "Edit: /a.go" {
+		t.Fatalf("tool_call text = %q", fetched.Events[1].Text)
+	}
+
+	var resultPayload map[string]any
+	if err := json.Unmarshal([]byte(fetched.Events[2].PayloadJSON), &resultPayload); err != nil {
+		t.Fatalf("tool_result payload: %v", err)
+	}
+	if resultPayload["toolUseId"] != "toolu_1" || resultPayload["isError"] != false {
+		t.Fatalf("tool_result payload = %#v", resultPayload)
+	}
+	if fetched.Events[2].Text != "ok" {
+		t.Fatalf("tool_result text = %q", fetched.Events[2].Text)
+	}
+	if fetched.Events[3].Kind != "output" || fetched.Events[3].Role != "assistant" || fetched.Events[3].Text != "done" {
+		t.Fatalf("assistant output = %+v", fetched.Events[3])
+	}
+	if !strings.Contains(fetched.Events[1].PayloadJSON, `"input"`) {
+		t.Fatal("tool_call payload missing input key")
 	}
 }

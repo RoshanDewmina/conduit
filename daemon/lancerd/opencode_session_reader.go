@@ -158,8 +158,13 @@ func openCodePartToMessage(raw, messageRole string) (SessionMessage, bool) {
 		msg.Role = "toolCall"
 		msg.ToolName = p.Tool
 		msg.Text = clampText(openCodeToolSummary(p.Tool, p.State.Input))
+		if p.State.Input != nil {
+			if b, err := json.Marshal(p.State.Input); err == nil {
+				msg.InputJSON = clampText(string(b))
+			}
+		}
 	case "reasoning":
-		msg.Role = "system"
+		msg.Role = "thinking"
 		msg.Text = clampText(p.Text)
 	default:
 		return SessionMessage{}, false
