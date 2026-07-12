@@ -56,4 +56,52 @@ struct LiveThreadTranscriptTests {
         #expect(LiveThreadTranscript.liveTurn(turns: [first, live], liveTurnID: "t1")?.assistantText == "partial")
         #expect(LiveThreadTranscript.priorTurns(turns: [first, live], liveTurnID: "t1").map(\.id) == ["t0"])
     }
+
+    @Test("empty or whitespace prompt skips the initial live send (observed-continue adopt)")
+    func emptyPromptSkipsInitialSend() {
+        #expect(LiveThreadTranscript.shouldSendInitialPrompt("") == false)
+        #expect(LiveThreadTranscript.shouldSendInitialPrompt("   \n") == false)
+        #expect(LiveThreadTranscript.shouldSendInitialPrompt("continue this") == true)
+    }
+
+    @Test("observed SessionMessages pair into completed ChatTurns")
+    func observedMessagesPairIntoTurns() {
+        let messages = [
+            SessionMessage(role: .user, text: "first ask"),
+            SessionMessage(role: .assistant, text: "first reply"),
+            SessionMessage(role: .user, text: "second ask"),
+            SessionMessage(role: .assistant, text: "second reply"),
+        ]
+        let turns = LiveThreadTranscript.turns(
+            fromObservedMessages: messages,
+            conversationID: "observed:sess-1",
+            vendorSessionID: "sess-1"
+        )
+        #expect(turns.count == 2)
+        #expect(turns[0].prompt == "first ask")
+        #expect(turns[0].assistantText == "first reply")
+        #expect(turns[0].status == .completed)
+        #expect(turns[0].conversationID == "observed:sess-1")
+        #expect(turns[0].vendorSessionID == "sess-1")
+        #expect(turns[0].ordinal == 0)
+        #expect(turns[1].prompt == "second ask")
+        #expect(turns[1].assistantText == "second reply")
+        #expect(turns[1].ordinal == 1)
+    }
+
+    @Test("trailing user message without assistant still becomes a completed turn")
+    func trailingUserOnlyTurn() {
+        let messages = [
+            SessionMessage(role: .user, text: "alone"),
+        ]
+        let turns = LiveThreadTranscript.turns(
+            fromObservedMessages: messages,
+            conversationID: "observed:s",
+            vendorSessionID: "s"
+        )
+        #expect(turns.count == 1)
+        #expect(turns[0].prompt == "alone")
+        #expect(turns[0].assistantText.isEmpty)
+        #expect(turns[0].status == .completed)
+    }
 }

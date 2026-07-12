@@ -112,7 +112,14 @@ public struct LiveThreadView: View {
         .task {
             guard !hasSentInitialPrompt else { return }
             hasSentInitialPrompt = true
-            await bridge.send(prompt: prompt, cwd: cwd)
+            if LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
+                await bridge.send(prompt: prompt, cwd: cwd)
+            } else {
+                await bridge.adoptArmedObservedContinue(fallbackCwd: cwd)
+                if case .idle = bridge.sendState {
+                    isFollowUpFocused = true
+                }
+            }
         }
         .task(id: receiptRefreshToken) {
             await refreshReceipts()
@@ -185,7 +192,7 @@ public struct LiveThreadView: View {
     private var canSendFollowUp: Bool {
         !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !bridge.isSendInFlight
-            && bridge.activeConversationID != nil
+            && bridge.canAcceptFollowUp
     }
 
     /// Turn id currently bound to `sendState` (streaming / completed / degraded /
@@ -218,7 +225,7 @@ public struct LiveThreadView: View {
         if let inFlight = bridge.inFlightPrompt {
             return inFlight
         }
-        if bridge.transcriptTurns.isEmpty {
+        if bridge.transcriptTurns.isEmpty, LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
             return prompt
         }
         return nil
@@ -563,10 +570,16 @@ public struct LiveThreadView: View {
 
     private func sendFollowUp() {
         let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let conversationID = bridge.activeConversationID else { return }
+        guard !text.isEmpty, bridge.canAcceptFollowUp else { return }
         followUpText = ""
         isFollowUpFocused = false
-        Task { await bridge.sendFollowUp(prompt: text, conversationID: conversationID, cwd: cwd) }
+        // After empty-prompt adopt, `activeConversationID` is the synthetic
+        // `observed:…` id and `sendFollowUp` routes through observed continue.
+        if let conversationID = bridge.activeConversationID {
+            Task { await bridge.sendFollowUp(prompt: text, conversationID: conversationID, cwd: cwd) }
+            return
+        }
+        Task { await bridge.send(prompt: text, cwd: cwd) }
     }
 }
 #endif

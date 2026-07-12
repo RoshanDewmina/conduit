@@ -27,4 +27,77 @@ public enum LiveThreadTranscript: Sendable {
         }
         return nil
     }
+
+    /// Observed-continue adoption opens `LiveThreadView` with an empty prompt —
+    /// skip the initial `send` so the first typed follow-up performs continue.
+    public static func shouldSendInitialPrompt(_ prompt: String) -> Bool {
+        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Pairs flat `agent.sessions.transcript` messages into `ChatTurn` rows for
+    /// the live thread's frozen history (user bubble + assistant body).
+    public static func turns(
+        fromObservedMessages messages: [SessionMessage],
+        conversationID: String,
+        vendorSessionID: String
+    ) -> [ChatTurn] {
+        var turns: [ChatTurn] = []
+        var prompt = ""
+        var assistantText = ""
+        var open = false
+
+        func flush() {
+            guard open else { return }
+            let ordinal = turns.count
+            turns.append(
+                ChatTurn(
+                    conversationID: conversationID,
+                    ordinal: ordinal,
+                    prompt: prompt,
+                    runID: "observed:\(vendorSessionID):\(ordinal)",
+                    transportKind: "relay",
+                    status: .completed,
+                    assistantText: assistantText,
+                    completedAt: .now,
+                    vendorSessionID: vendorSessionID
+                )
+            )
+            prompt = ""
+            assistantText = ""
+            open = false
+        }
+
+        for message in messages {
+            switch message.role {
+            case .user:
+                if open { flush() }
+                prompt = message.text
+                open = true
+            case .assistant:
+                if !open {
+                    open = true
+                }
+                if assistantText.isEmpty {
+                    assistantText = message.text
+                } else {
+                    assistantText += "\n\n" + message.text
+                }
+            case .toolCall, .toolResult:
+                if !open {
+                    open = true
+                }
+                let label = message.toolName.map { "\($0)\n" } ?? ""
+                let chunk = label + message.text
+                if assistantText.isEmpty {
+                    assistantText = chunk
+                } else {
+                    assistantText += "\n\n" + chunk
+                }
+            case .system, .unknown:
+                break
+            }
+        }
+        flush()
+        return turns
+    }
 }

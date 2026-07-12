@@ -102,6 +102,8 @@ public struct WorkspacesView: View {
                             .padding(.leading, 58)
 
                         RunningAgentsSection { session, prompt in
+                            // Agents row tap passes an empty prompt: arm + present
+                            // LiveThread directly; adopt hydrates, first follow-up continues.
                             shellLiveBridge.armObservedContinue(
                                 vendor: session.provider,
                                 sessionId: session.sessionId,
