@@ -16,6 +16,17 @@ public final class E2ERelayBridge: ObservableObject {
     private let relayClient: E2ERelayClient
     private let approvalRelay: ApprovalRelay
     private var messageTask: Task<Void, Never>?
+    /// Wall-clock time of the most recent transition into `isActive` (session
+    /// key derived AND peer_joined observed) — every fresh pairing AND every
+    /// re-pair after a reconnect, not just the first ever. Used to gate the
+    /// one-shot dispatch retry below: a send that times out shortly after a
+    /// re-key event is the known race (2026-07-12), not a genuinely
+    /// unresponsive host.
+    private var lastReadyAt: Date?
+    /// Window after a re-key event within which a `sendDispatch` timeout is
+    /// assumed to be the first-send race rather than a real non-response, so
+    /// it gets ONE automatic retry instead of surfacing to the user.
+    static let firstSendRetryWindow: TimeInterval = 5
     private var dispatchContinuation: CheckedContinuation<DispatchResult, Error>?
     private var continueContinuation: CheckedContinuation<DispatchResult, Error>?
     private var fsListContinuation: CheckedContinuation<RelayDirListing, Error>?
@@ -58,6 +69,9 @@ public final class E2ERelayBridge: ObservableObject {
             for await state in self.relayClient.$pairingState.values {
                 let wasActive = self.isActive
                 self.isActive = (state == .paired)
+                if self.isActive {
+                    self.lastReadyAt = Date()
+                }
                 // A machine coming back online may have decisions sitting in
                 // ApprovalRelay's queue that failed to send while it was down
                 // (the queue's SSH-attach drain never fires for a relay-only
@@ -175,6 +189,15 @@ public final class E2ERelayBridge: ObservableObject {
 
     /// Dispatch an agent run through the E2E relay.
     /// Returns the dispatch result, or nil if the relay is not active.
+    ///
+    /// If the FIRST attempt times out shortly after a re-key event
+    /// (`isFirstSendRace`), retries exactly once — the narrowest fix for the
+    /// 2026-07-12 race where a dispatch sent in the window between
+    /// socket-connected and session-key derivation/peer ack is lost, surfacing
+    /// as "machine didn't respond" even though a manual Retry always recovers
+    /// (re-sending the same dispatch envelope is already idempotent — Retry
+    /// proves it). Deliberately not a general retry queue: only this one
+    /// bounded, narrowly-gated retry.
     public func sendDispatch(
         agent: String, cwd: String, prompt: String, budgetUSD: Double?, model: String?,
         contract: ProofReceipt.Contract? = nil
@@ -182,6 +205,19 @@ public final class E2ERelayBridge: ObservableObject {
         guard isActive else {
             throw E2EError.notPaired
         }
+        let attemptedAt = Date()
+        do {
+            return try await sendDispatchOnce(agent: agent, cwd: cwd, prompt: prompt, budgetUSD: budgetUSD, model: model, contract: contract)
+        } catch E2EError.timedOut where Self.isFirstSendRace(attemptedAt: attemptedAt, lastReadyAt: lastReadyAt) {
+            Self.logger.warning("sendDispatch: first attempt timed out within \(Self.firstSendRetryWindow, privacy: .public)s of a re-key event (machine=\(self.machineID.uuidString, privacy: .public)) — retrying once")
+            return try await sendDispatchOnce(agent: agent, cwd: cwd, prompt: prompt, budgetUSD: budgetUSD, model: model, contract: contract)
+        }
+    }
+
+    private func sendDispatchOnce(
+        agent: String, cwd: String, prompt: String, budgetUSD: Double?, model: String?,
+        contract: ProofReceipt.Contract?
+    ) async throws -> DispatchResult {
         let params = E2ERelayMessage.DispatchParams(
             agent: agent, cwd: cwd, prompt: prompt,
             model: model, budgetUSD: budgetUSD ?? 0, contract: contract
@@ -204,6 +240,16 @@ public final class E2ERelayBridge: ObservableObject {
         return try await withCheckedThrowingContinuation { c in
             self.dispatchContinuation = c
         }
+    }
+
+    /// Pure readiness-gate check (unit-testable without a live relay): was
+    /// `attemptedAt` within `firstSendRetryWindow` of the most recent re-key
+    /// event? A `nil` lastReadyAt (never paired this bridge instance) is never
+    /// a race — there's no re-key to blame.
+    static func isFirstSendRace(attemptedAt: Date, lastReadyAt: Date?) -> Bool {
+        guard let lastReadyAt else { return false }
+        let delta = attemptedAt.timeIntervalSince(lastReadyAt)
+        return delta >= 0 && delta < firstSendRetryWindow
     }
 
     /// Sends a run-control action (stop / pause / resume) for a dispatched relay
