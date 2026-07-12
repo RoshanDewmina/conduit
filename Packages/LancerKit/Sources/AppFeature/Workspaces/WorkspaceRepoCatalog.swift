@@ -82,12 +82,24 @@ public enum WorkspaceRepoCatalog {
         let trimmed = cwd.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
 
-        var path = (trimmed as NSString).expandingTildeInPath
-        path = resolveSymlinksWherePossible(path)
+        // Never expand "~": these are HOST paths, and on iOS
+        // NSHomeDirectory() is the app sandbox — expansion mints a bogus
+        // absolute path that splits into its own repo bucket (owner-phone
+        // triple-row bug, 2026-07-12). Tilde paths keep their prefix and are
+        // suffix-matched in bucketKey; the daemon expands host-side.
+        var path = trimmed
+        if !isTildeCwd(path) {
+            path = resolveSymlinksWherePossible(path)
+        }
         if path.hasSuffix("/") && path.count > 1 {
             path = String(path.dropLast())
         }
         return path
+    }
+
+    /// True for "~" or "~/…" — a host-home-relative path.
+    public static func isTildeCwd(_ path: String) -> Bool {
+        path == "~" || path.hasPrefix("~/")
     }
 
     /// Resolve the deepest existing path prefix via `realpath`, then reattach
@@ -154,7 +166,7 @@ public enum WorkspaceRepoCatalog {
         guard !normalized.isEmpty else { return "No folder" }
         if pathsMatch(normalized, homeDirectory) { return "Home" }
         if isHostHomePath(normalized) { return "Home" }
-        if !isAbsoluteCwd(normalized) { return normalized }
+        if !isAbsoluteCwd(normalized) && !isTildeCwd(normalized) { return normalized }
         let base = (normalized as NSString).lastPathComponent
         return base.isEmpty ? normalized : base
     }
@@ -173,11 +185,15 @@ public enum WorkspaceRepoCatalog {
     /// kind of target live sends may use.
     public static func isAbsoluteSendTarget(_ cwd: String) -> Bool {
         let normalized = normalizeCwd(cwd)
-        return !normalized.isEmpty && isAbsoluteCwd(normalized)
+        // Tilde paths are valid targets: the daemon expands "~" against the
+        // HOST home and then fail-closed validates (resolveDispatchCWD).
+        return !normalized.isEmpty && (isAbsoluteCwd(normalized) || isTildeCwd(normalized))
     }
 
     public static func isAbsoluteCwd(_ cwd: String) -> Bool {
-        (cwd as NSString).isAbsolutePath
+        // NSString.isAbsolutePath counts "~/…" as absolute; for bucketing a
+        // tilde path is host-relative until the daemon expands it.
+        !isTildeCwd(cwd) && (cwd as NSString).isAbsolutePath
     }
 
     /// True when the relative path from `ancestor` to `descendant` crosses a
@@ -243,6 +259,22 @@ public enum WorkspaceRepoCatalog {
         guard !normalized.isEmpty else { return nil }
 
         let normalizedRoots = roots.map(normalizeCwd).filter { !$0.isEmpty }
+
+        if isTildeCwd(normalized) {
+            // "~/Documents/x" is a host path: fold into the unique absolute
+            // root ending in the same component suffix ("/documents/x").
+            let suffixKey = pathKey(String(normalized.dropFirst()))
+            let matches = normalizedRoots.filter { root in
+                isAbsoluteCwd(root)
+                    && (suffixKey.isEmpty
+                        ? isHostHomePath(root)
+                        : pathKey(root).hasSuffix(suffixKey))
+            }
+            if matches.count == 1 {
+                return matches[0]
+            }
+            return normalized
+        }
 
         if !isAbsoluteCwd(normalized) {
             let matches = normalizedRoots.filter { root in
@@ -319,20 +351,25 @@ public enum WorkspaceRepoCatalog {
             )
         }
 
-        for (key, addedRepo) in addedByKey {
+        for (_, addedRepo) in addedByKey {
+            // Bucket added cwds with the same rule as conversations, so a
+            // "~/…" or aliased added repo folds into the discovered root
+            // instead of minting a duplicate row.
+            let bucket = bucketKey(forCwd: addedRepo.cwd, among: roots) ?? addedRepo.cwd
+            let key = pathKey(bucket)
             if let existing = byKey[key] {
                 byKey[key] = WorkspaceRepo(
                     name: addedRepo.name.isEmpty ? existing.name : addedRepo.name,
-                    cwd: addedRepo.cwd,
+                    cwd: existing.cwd,
                     threadCount: existing.threadCount,
                     isUserAdded: true
                 )
             } else {
                 byKey[key] = WorkspaceRepo(
                     name: addedRepo.name.isEmpty
-                        ? displayName(forCwd: addedRepo.cwd, homeDirectory: homeDirectory)
+                        ? displayName(forCwd: bucket, homeDirectory: homeDirectory)
                         : addedRepo.name,
-                    cwd: addedRepo.cwd,
+                    cwd: bucket,
                     threadCount: 0,
                     isUserAdded: true
                 )

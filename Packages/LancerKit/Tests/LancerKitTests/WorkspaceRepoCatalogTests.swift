@@ -6,11 +6,13 @@ import LancerCore
 @Suite("WorkspaceRepoCatalog")
 struct WorkspaceRepoCatalogTests {
 
-    @Test("normalizeCwd expands tilde, strips trailing slash, resolves /tmp symlink")
+    @Test("normalizeCwd preserves tilde (host path), strips trailing slash, resolves /tmp symlink")
     func normalizeCwd() {
-        let home = NSHomeDirectory()
-        #expect(WorkspaceRepoCatalog.normalizeCwd("~/Documents/my-app/") == "\(home)/Documents/my-app")
-        #expect(WorkspaceRepoCatalog.normalizeCwd("~") == home)
+        // "~" is a HOST path: expanding it on iOS yields the app sandbox and
+        // splits repos into duplicate buckets. It stays tilde-prefixed here;
+        // only the daemon expands it, against the host home.
+        #expect(WorkspaceRepoCatalog.normalizeCwd("~/Documents/my-app/") == "~/Documents/my-app")
+        #expect(WorkspaceRepoCatalog.normalizeCwd("~") == "~")
         #expect(WorkspaceRepoCatalog.normalizeCwd("/Users/dev/repos/conduit/") == "/Users/dev/repos/conduit")
         #expect(WorkspaceRepoCatalog.normalizeCwd("/tmp/demo") == "/private/tmp/demo")
         #expect(WorkspaceRepoCatalog.normalizeCwd("  /tmp/demo/  ") == "/private/tmp/demo")
@@ -151,6 +153,43 @@ struct WorkspaceRepoCatalogTests {
         )
         Self.assertOwnerFixtureRepos(repos, home: home, cc: cc)
         Self.assertOwnerFixtureFilters(conversations, home: home, cc: cc)
+    }
+
+    @Test("owner phone repro: tilde-added repo folds into the discovered root, not a duplicate row")
+    func tildeAddedRepoFolds() {
+        let home = "/Users/u"
+        let cc = "/Users/u/Documents/command-center"
+        let conversations = Self.ownerFixtureConversations(home: home, cc: cc)
+        // The phone's Add Repo entry was stored tilde-relative. Pre-fix this
+        // sandbox-expanded on device into a bogus second absolute root: its
+        // own 0-thread row PLUS the relative conversations un-merging into a
+        // third row (owner screenshot 2026-07-12: command-center 16/1/0).
+        let repos = WorkspaceRepoCatalog.deriveRepos(
+            conversations: conversations,
+            added: [AddedRepo(name: "command-center", cwd: "~/Documents/command-center")],
+            homeDirectory: home
+        )
+        let ccRepos = repos.filter { $0.name == "command-center" }
+        #expect(ccRepos.count == 1)
+        #expect(ccRepos.first?.threadCount == 22)
+        #expect(ccRepos.first?.cwd == cc)
+        #expect(ccRepos.first?.isUserAdded == true)
+    }
+
+    @Test("tilde paths: no sandbox expansion, suffix bucketing, valid send target")
+    func tildePathHandling() {
+        #expect(WorkspaceRepoCatalog.normalizeCwd("~/Documents/x/") == "~/Documents/x")
+        #expect(WorkspaceRepoCatalog.isAbsoluteSendTarget("~/Documents/x"))
+        #expect(WorkspaceRepoCatalog.isAbsoluteSendTarget("~"))
+        #expect(!WorkspaceRepoCatalog.isAbsoluteSendTarget("command-center"))
+        let roots = ["/Users/u/Documents/command-center", "/Users/u", "/tmp/other"]
+        #expect(WorkspaceRepoCatalog.bucketKey(forCwd: "~/Documents/Command-Center", among: roots)
+            == "/Users/u/Documents/command-center")
+        #expect(WorkspaceRepoCatalog.bucketKey(forCwd: "~", among: roots) == "/Users/u")
+        // Ambiguous suffix stays its own bucket rather than guessing.
+        let ambiguous = roots + ["/srv/Documents/command-center"]
+        #expect(WorkspaceRepoCatalog.bucketKey(forCwd: "~/Documents/command-center", among: ambiguous)
+            == "~/Documents/command-center")
     }
 
     private static func assertOwnerFixtureRepos(
