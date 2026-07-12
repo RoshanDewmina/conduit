@@ -154,10 +154,22 @@ public actor ConversationSyncCoordinator {
             )
             publish(.synced, for: conversationID)
             return nextSeq
+        } catch let partial as ConversationSyncPartialError {
+            // Page cap hit — everything fetched so far is merged and
+            // lastHostSeq advanced; honest hint instead of claiming synced.
+            publish(.cloudStale, for: conversationID)
+            return partial.nextSeq
         } catch {
             publish(.hostOffline, for: conversationID)
             throw error
         }
+    }
+
+    /// Thrown by `fetchAndMergeAllPages` when `maxFetchPages` was reached with
+    /// `hasMore` still true. All fetched pages are already merged; `nextSeq`
+    /// is the resume cursor for the next refresh.
+    public struct ConversationSyncPartialError: Error, Sendable {
+        public let nextSeq: Int
     }
 
     /// Bound on how many `agent.conversations.fetch` pages a single refresh will pull.
@@ -263,24 +275,29 @@ public actor ConversationSyncCoordinator {
         conversationID: String, transport: ConversationTransport
     ) async throws -> Int {
         let local = try await chatRepo.conversation(id: conversationID)
-        return try await fetchAndMergeAllPages(
-            conversationID: conversationID,
-            sinceSeq: local?.lastHostSeq ?? 0,
-            transport: transport
-        )
+        do {
+            return try await fetchAndMergeAllPages(
+                conversationID: conversationID,
+                sinceSeq: local?.lastHostSeq ?? 0,
+                transport: transport
+            )
+        } catch let partial as ConversationSyncPartialError {
+            // Recovery proceeds from what merged; remainder syncs next refresh.
+            return partial.nextSeq
+        }
     }
 
-    /// Pulls host fetch pages until `hasMore` is false (or `maxFetchPages`), merges
-    /// once with the combined payload so long threads aren't truncated at the first page.
+    /// Pulls host fetch pages until `hasMore` is false, merging page-by-page;
+    /// throws `ConversationSyncPartialError` when `maxFetchPages` is reached
+    /// with more remaining (already-fetched pages stay merged).
     private func fetchAndMergeAllPages(
         conversationID: String, sinceSeq: Int, transport: ConversationTransport
     ) async throws -> Int {
+        // Each page merges immediately: a transport failure or the page cap
+        // keeps everything already fetched (lastHostSeq advances per page), so
+        // the next refresh resumes from the last good page instead of
+        // re-pulling — and never discards partial progress.
         var cursor = sinceSeq
-        var lastNextSeq = sinceSeq
-        var turnsByID: [String: ConversationTurnEnvelope] = [:]
-        var allEvents: [ConversationEvent] = []
-        var allArtifacts: [ConversationArtifactEnvelope] = []
-        var lastSummary: ConversationSummary?
         var pages = 0
 
         while pages < Self.maxFetchPages {
@@ -292,29 +309,13 @@ public actor ConversationSyncCoordinator {
                     limit: Self.fetchPageLimit
                 )
             )
-            lastSummary = response.conversation
-            lastNextSeq = response.nextSeq
-            for turn in response.turns {
-                turnsByID[turn.id] = turn
-            }
-            allEvents.append(contentsOf: response.events)
-            allArtifacts.append(contentsOf: response.artifacts)
+            try await mergeFetchResponse(response)
             cursor = response.nextSeq
-            if !response.hasMore { break }
+            if !response.hasMore { return cursor }
         }
-
-        guard let summary = lastSummary else { return lastNextSeq }
-        try await mergeFetchResponse(
-            ConversationFetchResponse(
-                conversation: summary,
-                turns: turnsByID.values.sorted { $0.ordinal < $1.ordinal },
-                events: allEvents,
-                artifacts: allArtifacts,
-                nextSeq: lastNextSeq,
-                hasMore: false
-            )
-        )
-        return lastNextSeq
+        // Page cap hit with more remaining: surface partial sync instead of
+        // claiming .synced — the next refresh continues from cursor.
+        throw ConversationSyncPartialError(nextSeq: cursor)
     }
 
     private func blockConflict(conversationID: String, message: String?) async -> TurnOutcome {
