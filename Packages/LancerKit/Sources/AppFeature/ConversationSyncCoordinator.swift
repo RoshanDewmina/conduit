@@ -543,11 +543,25 @@ public actor ConversationSyncCoordinator {
 
     // `ISO8601DateFormatter` predates `Sendable`; it's only ever read here
     // (never mutated after creation), matching the pattern in AccountClient.swift.
-    nonisolated(unsafe) private static let dateFormatter = ISO8601DateFormatter()
+    // Try fractional seconds first — host RFC3339 often includes them; a plain
+    // formatter alone returns nil and the `?? .now` callers corrupt recency.
+    nonisolated(unsafe) private static let dateFormatterWithFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
-    private static func parseDate(_ s: String?) -> Date? {
+    nonisolated(unsafe) private static let dateFormatterPlain: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    /// Parses host wire timestamps (RFC3339 / ISO8601), with or without fractional seconds.
+    static func parseDate(_ s: String?) -> Date? {
         guard let s, !s.isEmpty else { return nil }
-        return dateFormatter.date(from: s)
+        if let date = dateFormatterWithFractionalSeconds.date(from: s) { return date }
+        return dateFormatterPlain.date(from: s)
     }
 
     private static func mapSummary(_ summary: ConversationSummary, fallback: ChatConversation?) -> ChatConversation {

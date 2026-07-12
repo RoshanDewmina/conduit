@@ -793,5 +793,18 @@ struct ConversationSyncCoordinatorTests {
         #expect(conflict == .conflict)
         _ = await outcome
     }
+
+    @Test("parseDate accepts fractional and plain ISO8601 host timestamps")
+    func parseDateFractionalAndPlain() {
+        let fractional = ConversationSyncCoordinator.parseDate("2026-07-12T08:30:00.123Z")
+        let plain = ConversationSyncCoordinator.parseDate("2026-07-12T08:30:00Z")
+        #expect(fractional != nil)
+        #expect(plain != nil)
+        // Same instant modulo fractional part — must not fall back to .now.
+        #expect(abs((fractional?.timeIntervalSince1970 ?? 0) - (plain?.timeIntervalSince1970 ?? 0)) < 1)
+        #expect(ConversationSyncCoordinator.parseDate(nil) == nil)
+        #expect(ConversationSyncCoordinator.parseDate("") == nil)
+        #expect(ConversationSyncCoordinator.parseDate("not-a-date") == nil)
+    }
 }
 #endif

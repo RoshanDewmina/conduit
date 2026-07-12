@@ -3,10 +3,9 @@ import SwiftUI
 import LancerCore
 import PersistenceKit
 
-/// Thread detail for a real conversation row. Live transcript lives in
-/// `LiveThreadView` (owned by chat-polish); this surface shows honest
-/// metadata + follow-up send into the thread's real cwd — no invented
-/// PR/markdown filler.
+/// Thread detail for a real conversation row. Renders the local-mirror
+/// transcript (user + assistant) with Flight Recorder per turn, plus follow-up
+/// send into the thread's real cwd.
 struct ThreadDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isFollowUpPresented = false
@@ -51,19 +50,17 @@ struct ThreadDetailView: View {
                             }
                         }
 
-                        Text("Full transcript opens from a live send. Follow up below to continue in this repo.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if turns.isEmpty {
+                            Text("No turns in the local mirror yet. Follow up below to continue in this repo.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            ForEach(turns) { turn in
+                                VStack(alignment: .leading, spacing: 12) {
+                                    ChatUserBubble(text: turn.prompt)
+                                    threadAssistant(turn)
 
-                        if !turns.isEmpty {
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text("Turns")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.bottom, 8)
-
-                                ForEach(turns) { turn in
                                     NavigationLink {
                                         FlightRecorderView(
                                             conversationID: thread.id,
@@ -75,13 +72,8 @@ struct ThreadDetailView: View {
                                         flightRecorderRow(turn)
                                     }
                                     .buttonStyle(.plain)
-
-                                    if turn.id != turns.last?.id {
-                                        Divider()
-                                    }
                                 }
                             }
-                            .padding(.top, 8)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -116,6 +108,22 @@ struct ThreadDetailView: View {
             )
         }
         .liveThreadPresentation($activeLiveThread)
+    }
+
+    @ViewBuilder
+    private func threadAssistant(_ turn: ChatTurn) -> some View {
+        if turn.status == .failed {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(turn.errorMessage ?? "Run failed")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+            ChatMarkdownBody(markdown: body)
+        }
     }
 
     private func flightRecorderRow(_ turn: ChatTurn) -> some View {
@@ -154,7 +162,7 @@ struct ThreadDetailView: View {
 
     private func handleSend(_ prompt: String, _ cwd: String) {
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
-        guard !normalized.isEmpty else { return }
+        guard WorkspaceRepoCatalog.isAbsoluteSendTarget(normalized) else { return }
         activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized)
     }
 

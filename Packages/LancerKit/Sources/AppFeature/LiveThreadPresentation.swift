@@ -38,6 +38,9 @@ private struct LiveThreadPresentationModifier: ViewModifier {
                     .environment(relayQuestionIngest)
                     .environment(relayFleetStore)
                     .environment(workspaceDataStore)
+                    .onDisappear {
+                        shellLiveBridge.resetForNewThread()
+                    }
             }
     }
 }

@@ -400,7 +400,15 @@ public struct LiveThreadView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
             Button("Retry") {
-                Task { await bridge.send(prompt: prompt, cwd: cwd) }
+                Task {
+                    if bridge.lastAttempt != nil {
+                        await bridge.retryLastAttempt()
+                    } else if LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
+                        await bridge.send(prompt: prompt, cwd: cwd)
+                    } else {
+                        await bridge.adoptArmedObservedContinue(fallbackCwd: cwd)
+                    }
+                }
             }
             .font(.system(size: 14, weight: .medium))
         }
