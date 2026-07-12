@@ -1,6 +1,34 @@
 # Orchestrator state — Fable swarm dashboard
 
-## ⚡ HANDOFF 2026-07-12 ~10:45 — P0 CLOSED (PRs #95–#98 merged, dogfood-proven); new owner asks queued
+## ⚡ HANDOFF 2026-07-12 ~12:10 — session 2: backfill + long-transcript lanes shipped (PRs #99–#101); hotswap/identity designed
+
+**Merged this block (on top of #95–#98):**
+- **#99** fresh-install backfill — the sync that mirrors the daemon ledger was gated on a local
+  running turn (impossible on a fresh install); now unconditional. Owner-phone-proven: reinstall
+  went from All Repos 1 → 50 with correct rows.
+- **#100** daemon long-transcript import: 2MB cap now keeps the NEWEST end (+truncated flag);
+  observed sessions segment into real turns at each user prompt (wrappers skipped, per-turn
+  vendorSessionID = exact resume); attach uses the transcript ai-title. Live-proven: this very
+  orchestrator session (5.6MB) re-attached as "Fix triple command-center rows with three-lane
+  P0 cwd hygiene", **35 turns, 1036 events** (was: garbage title, 1 turn, 911 oldest-end events).
+- **#101** iOS long-thread rendering: LazyVStack + recent-100 window ("Show earlier…"), NSCache
+  markdown memoization + >256KB plain-text fallback, page-by-page fetch merge with honest
+  partial-sync (.cloudStale) at the 20-page cap, and MAX() guard on last_activity_at (sweep major).
+- Fan-out sweep findings: `docs/plans/2026-07-12-edge-case-sweep-findings.md` (7 backlog minors).
+- Approved design (brainstormed w/ owner): `docs/plans/2026-07-12-account-hotswap-and-identity-design.md`
+  — identity badges lane (ui) FIRST, then Claude account hot-swap (sensitive → Sonnet).
+
+**Live state:** daemon = master post-#100 (`lancerd.bak-pre-p100` backup), owner code 116955.
+The re-attached long conversation is the newest ledger row — owner phone backfills it on refresh.
+**PENDING: final device install of the #101 build (phone was disconnected) + owner verification:
+search "fix triple" finds the conversation; it opens segmented and scrolls smoothly.**
+
+**Queue after that (owner-ordered):** ① context uploads + artifact rendering (both directions)
+② reconnect-race reliability ③ identity badges ④ account hot-swap ⑤ terminal Phase 1–3
+(`docs/product/2026-07-12-orca-terminal-port-map.md`) ⑥ "+" vs Add Repo dedupe · Proof card →
+Flight Recorder · backlog minors.
+
+## PREVIOUS HANDOFF 2026-07-12 ~10:45 — P0 CLOSED (PRs #95–#98 merged, dogfood-proven); new owner asks queued
 
 **All four lanes merged to master (`33aa0fdd`):**
 - **#95** lane T repo bucketing (Cursor grok; codex review found Home-label + badge/list mismatch, fixed; live sim gate: one command-center row + PONG round-trip).
