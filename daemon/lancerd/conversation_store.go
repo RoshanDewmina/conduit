@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -83,7 +84,35 @@ func openConversationStore(home string) (*conversationStore, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("conversation_store: migrate: %w", err)
 	}
+	if err := s.failOrphanedRunningTurns(); err != nil {
+		// Non-fatal: a reconciliation failure must not stop the daemon, but it
+		// is loud — orphans left 'running' spin phones forever.
+		log.Printf("conversation_store: orphan reconciliation failed: %v", err)
+	}
 	return s, nil
+}
+
+// failOrphanedRunningTurns marks every turn still 'running' at daemon startup
+// as failed. A turn can only be running while THIS daemon process supervises
+// its agent subprocess; after a restart no such process exists, so a
+// 'running' row is always a lie — and the phone polls it forever ("Working…"
+// with no way out; live incident 2026-07-11: a daemon restart killed an
+// in-flight run and the owner's thread spun indefinitely). The honest
+// terminal state is failed-with-reason; the phone renders the message and
+// offers follow-up/retry.
+func (s *conversationStore) failOrphanedRunningTurns() error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	res, err := s.db.Exec(
+		`UPDATE conversation_turns SET status='failed',
+			error_message='Interrupted: the daemon restarted while this run was in flight.',
+			completed_at=? WHERE status='running'`, now)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		log.Printf("conversation_store: marked %d orphaned running turn(s) failed after restart", n)
+	}
+	return nil
 }
 
 // loadOrCreateDaemonHostID returns a stable UUID persisted under ~/.lancer/host-id
