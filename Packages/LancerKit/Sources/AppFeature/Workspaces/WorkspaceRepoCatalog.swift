@@ -620,8 +620,11 @@ public final class WorkspaceDataStore {
         // Local rows render immediately; the host sync (which may wait for the
         // relay to reconnect) runs after, then local rows are re-read so a
         // cleared "Working" badge lands without blocking the first paint.
+        // The sync must run UNCONDITIONALLY: gating it on a local running
+        // turn meant a fresh install (empty mirror) never backfilled the
+        // host's conversation history at all (owner phone, 2026-07-12).
         await loadLocalRows()
-        if await hasLocalRunningLastTurn(), let syncRunningStatuses {
+        if let syncRunningStatuses {
             await syncRunningStatuses()
             await loadLocalRows()
         }
@@ -637,17 +640,6 @@ public final class WorkspaceDataStore {
         }
         conversations = recent
         lastTurnByConversationID = turns
-    }
-
-    private func hasLocalRunningLastTurn() async -> Bool {
-        let recent = (try? await chatRepo.recent(limit: 200)) ?? []
-        for conversation in recent {
-            if let last = try? await chatRepo.turns(conversationID: conversation.id).last,
-               last.status == .running {
-                return true
-            }
-        }
-        return false
     }
 
     public func search(_ query: String) async -> [ThreadListItem] {
