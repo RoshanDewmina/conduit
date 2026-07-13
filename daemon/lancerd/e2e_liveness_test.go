@@ -57,8 +57,8 @@ func TestDecideExpiryActionRemintsWhenUnconfirmed(t *testing.T) {
 	}
 }
 
-func TestDecideExpiryActionNeverRemintsConfirmedPairing(t *testing.T) {
-	if got := decideExpiryAction(true); got != expiryActionGiveUp {
-		t.Fatalf("decideExpiryAction(everConfirmed=true) = %v, want expiryActionGiveUp", got)
+func TestDecideExpiryActionReregistersConfirmedPairing(t *testing.T) {
+	if got := decideExpiryAction(true); got != expiryActionReregister {
+		t.Fatalf("decideExpiryAction(everConfirmed=true) = %v, want expiryActionReregister", got)
 	}
 }

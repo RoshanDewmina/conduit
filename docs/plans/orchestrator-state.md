@@ -1,5 +1,23 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ PAIRING DURABILITY 2026-07-12 ~18:55 — one-time onboarding (fix/pairing-durability)
+
+**Owner bar:** pairing is one-time onboarding. Do **not** expect re-pair on laptop reboot,
+LaunchAgent restart, lancerd binary replace, or phone app upgrade. New codes only for first
+onboarding, explicit `lancerd pair` / unpair, or true key/identity loss.
+
+**Today's 732590 re-pair was abnormal:** logs show confirmed prod code **818038** was stomped
+at ~17:13 by a **localhost** test relay (`ws://127.0.0.1:54xxx`), then a cascade of test
+pairings, then restore → **732590**. Not REL-1 remint of a confirmed phone; not POST-110
+install wiping identity. See `docs/plans/2026-07-12-pairing-durability.md`.
+
+**Fix branch:** `.worktrees/pairing-durability` (`fix/pairing-durability`) — persist
+`confirmedAt` in `~/.lancer/relay-pairing.json`, load into `everConfirmed` across restart,
+refuse silent overwrite of confirmed identity (explicit pair uses `writeRelayPairingReplacing`),
+confirmed `code_expired` re-registers same code (daemon+phone) instead of remint/wipe.
+Live file stamped `confirmedAt` for code **732590** (identity unchanged). Do NOT run bare
+`lancerd pair` while phone holds the slot.
+
 ## ⚡ SESSION 4 IN FLIGHT 2026-07-12 ~17:20 — rescue done, REL-1 dispatched
 
 **Merged this session:** #105 (scroll arrow + proof chips + fetch-on-open), #106 (G1 turn-diff

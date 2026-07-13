@@ -376,8 +376,15 @@ func checkRelayPairing(lancerDir string) checkResult {
 	return checkResult{
 		name:    "relay pairing",
 		status:  statusOK,
-		message: fmt.Sprintf("paired with relay %s", cfg.RelayURL),
+		message: fmt.Sprintf("paired with relay %s (%s)", cfg.RelayURL, confirmedState(cfg)),
 	}
+}
+
+func confirmedState(cfg relayPairConfig) string {
+	if cfg.isConfirmed() {
+		return "confirmed"
+	}
+	return "unconfirmed"
 }
 
 func joinComma(items []string) string {

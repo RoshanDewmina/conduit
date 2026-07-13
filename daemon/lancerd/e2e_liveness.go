@@ -82,22 +82,24 @@ type expiryAction int
 const (
 	// expiryActionRemint generates a fresh pairing code and reconnects on it.
 	expiryActionRemint expiryAction = iota
-	// expiryActionGiveUp stops the client and surfaces a log line instead.
-	expiryActionGiveUp
+	// expiryActionReregister keeps the same code+keys and lets connectLoop
+	// redial. Used when everConfirmed is true: the backend may have dropped
+	// its in-memory PairedAt (Cloud Run cold start) and then aged out a
+	// waiting re-registration — reminting would orphan the phone; giving up
+	// would leave the laptop offline forever. Same identity re-creates the
+	// relay slot on the next dial.
+	expiryActionReregister
 )
 
-// decideExpiryAction chooses remint vs giveUp for a code_expired rejection.
+// decideExpiryAction chooses remint vs reregister for a code_expired rejection.
 // A code that never completed its first key exchange (everConfirmed==false)
 // is provably dead — no phone ever derived a session key on it — so
-// re-minting cannot orphan a paired phone. everConfirmed==true means this
-// code DID complete an exchange at least once; the relay's own PairedAt
-// check already guarantees a paired code never expires, so seeing
-// code_expired here would mean something is misclassified upstream — the
-// safe daemon-side response is to give up rather than silently replace a
-// code a phone may still be legitimately using.
+// re-minting cannot orphan a paired phone. everConfirmed==true (persisted as
+// ConfirmedAt in relay-pairing.json) means this code DID complete an exchange
+// at least once; never remint it.
 func decideExpiryAction(everConfirmed bool) expiryAction {
 	if everConfirmed {
-		return expiryActionGiveUp
+		return expiryActionReregister
 	}
 	return expiryActionRemint
 }

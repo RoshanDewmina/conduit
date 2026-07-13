@@ -56,7 +56,9 @@ func beginPairing(params pairBeginParams) (*pairBeginResult, error) {
 		return nil, err
 	}
 
-	if err := writeRelayPairing(&relayPairConfig{
+	// Explicit agent.pair.begin is intentional re-onboarding — may replace a
+	// confirmed pairing (and orphan phones on the previous code).
+	if err := writeRelayPairingReplacing(&relayPairConfig{
 		RelayURL:   relayURL,
 		Code:       code,
 		PrivateKey: privB64,

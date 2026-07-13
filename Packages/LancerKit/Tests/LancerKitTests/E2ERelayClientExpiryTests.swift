@@ -28,6 +28,20 @@ import Foundation
         #expect(E2ERelayClient.storedPairingCode(machineID: client.machineID) == nil)
     }
 
+    @Test("code_expired on a confirmed pairing keeps the code (durable re-register)")
+    func codeExpiredOnConfirmedKeepsCode() {
+        let client = makeClient(code: "654321")
+        client.setEverConfirmedForTesting(true)
+        client.persistPairing()
+        #expect(E2ERelayClient.storedPairingCode(machineID: client.machineID) == "654321")
+        #expect(E2ERelayClient.storedPairingConfirmed(machineID: client.machineID))
+
+        client.simulateIncomingFrameForTesting(#"{"type":"error","code":"code_expired","message":"pairing code expired, generate a new one"}"#)
+
+        #expect(client.pairingState != .codeExpired)
+        #expect(E2ERelayClient.storedPairingCode(machineID: client.machineID) == "654321")
+    }
+
     @Test("older backend without the structured code field still falls back to substring match")
     func expiredSubstringFallback() {
         let client = makeClient()

@@ -106,7 +106,9 @@ func printRelayInstructions() {
 	}
 
 	// Persist the pairing config so the resident daemon connects to the relay.
-	if err := writeRelayPairing(&relayPairConfig{
+	// Explicit `lancerd pair` is intentional re-onboarding — may replace a
+	// confirmed pairing (and orphan phones on the previous code).
+	if err := writeRelayPairingReplacing(&relayPairConfig{
 		RelayURL:   relayURL,
 		Code:       code,
 		PrivateKey: privB64,

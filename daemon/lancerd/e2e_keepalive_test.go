@@ -162,3 +162,79 @@ func TestE2EClientRemintsOnExpiredUnconfirmedCode(t *testing.T) {
 		t.Fatalf("relay-pairing.json still has the dead code %s — remint did not run", oldCode)
 	}
 }
+
+// Confirmed pairings must keep their code on code_expired (backend may have
+// cold-started and aged out a waiting re-registration). Reminting would
+// orphan the phone — the exact durability bug this lane closes.
+func TestE2EClientDoesNotRemintConfirmedOnExpired(t *testing.T) {
+	dir := withStateDir(t)
+	t.Setenv("LANCER_STATE_DIR", dir)
+
+	var rejectCount int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/relay", func(w http.ResponseWriter, r *http.Request) {
+		websocket.Handler(func(conn *websocket.Conn) {
+			defer conn.Close()
+			conn.PayloadType = websocket.TextFrame
+			atomic.AddInt32(&rejectCount, 1)
+			_ = sendJSON(conn, map[string]any{
+				"type":    "error",
+				"code":    "code_expired",
+				"message": "pairing code expired, generate a new one",
+			})
+		}).ServeHTTP(w, r)
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	relayURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+	code := "654321"
+	if err := writeRelayPairing(&relayPairConfig{
+		RelayURL:    relayURL,
+		Code:        code,
+		PrivateKey:  "dGVzdC1wcml2LWtleS0zMi1ieXRlcyEhISE", // placeholder; client uses its own key
+		PublicKey:   "dGVzdC1wdWIta2V5LTMyLWJ5dGVzISEhISEh",
+		ConfirmedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("seed confirmed pairing: %v", err)
+	}
+
+	client := newE2ERelayClient(relayURL, code, nil)
+	if client == nil {
+		t.Fatal("newE2ERelayClient returned nil")
+	}
+	client.everConfirmed = true
+	client.start()
+	defer client.stop()
+
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			goto done
+		case <-time.After(50 * time.Millisecond):
+			if atomic.LoadInt32(&rejectCount) >= 2 {
+				goto done
+			}
+		}
+	}
+done:
+	if got := atomic.LoadInt32(&rejectCount); got < 2 {
+		t.Fatalf("want >=2 re-register dials after code_expired, got %d", got)
+	}
+
+	select {
+	case <-client.stopCh:
+		t.Fatal("confirmed client gave up / reminted — want keep redialing same code")
+	default:
+	}
+
+	cfg, err := readRelayPairing()
+	if err != nil {
+		t.Fatalf("readRelayPairing: %v", err)
+	}
+	if cfg.Code != code {
+		t.Fatalf("pairing code changed to %s — remint must not run for confirmed", cfg.Code)
+	}
+}

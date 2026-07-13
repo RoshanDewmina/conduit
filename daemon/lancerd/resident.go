@@ -319,6 +319,12 @@ func (r *resident) connectRelay(cfg *relayPairConfig) {
 		fmt.Fprintf(os.Stderr, "lancerd daemon: failed to create relay client\n")
 		return
 	}
+	// Durable confirmation survives process restart — seed everConfirmed
+	// before the first dial so a code_expired after backend cold-start never
+	// remints a phone that already completed exchange on this identity.
+	if cfg.isConfirmed() {
+		client.everConfirmed = true
+	}
 
 	router := newE2ERouter(client, r.core)
 	r.core.setE2ERouter(router)

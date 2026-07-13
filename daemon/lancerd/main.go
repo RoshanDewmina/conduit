@@ -71,7 +71,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "error generating keypair: %v\n", err)
 			os.Exit(1)
 		}
-		if err := writeRelayPairing(&relayPairConfig{
+		if err := writeRelayPairingReplacing(&relayPairConfig{
 			RelayURL:   relayURL,
 			Code:       code,
 			PrivateKey: base64URLEncode(priv[:]),
