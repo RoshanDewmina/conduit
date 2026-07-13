@@ -84,12 +84,32 @@ struct E2EReplayResistanceTests {
 
         #expect(client.acceptIncomingSequenceForTesting(5) == true)
         #expect(client.acceptIncomingSequenceForTesting(0) == false)
-
-        client.simulateIncomingFrameForTesting(#"{"type":"peer_left"}"#)
+        client.setSendSequenceForTesting(7)
 
         let peerB = PairingCrypto.generateKeyPair()
         client.simulateIncomingFrameForTesting(#"{"type":"peer_joined","peerPublicKey":"\#(peerB.publicKeyBase64URL)"}"#)
         #expect(client.pairingState == .paired)
         #expect(client.acceptIncomingSequenceForTesting(0) == true)
+        #expect(client.sendSequenceForTesting == 0)
+    }
+
+    @Test("invalid peer re-key preserves the active replay window")
+    @MainActor
+    func invalidPeerRekeyPreservesReplayWindow() {
+        let client = E2ERelayClient(
+            relayURL: URL(string: "https://relay.example.com")!,
+            pairingCode: "111222"
+        )
+
+        let peer = PairingCrypto.generateKeyPair()
+        client.simulateIncomingFrameForTesting(#"{"type":"peer_joined","peerPublicKey":"\#(peer.publicKeyBase64URL)"}"#)
+        #expect(client.pairingState == .paired)
+        #expect(client.acceptIncomingSequenceForTesting(5) == true)
+        client.setSendSequenceForTesting(7)
+
+        client.simulateIncomingFrameForTesting(#"{"type":"peer_joined","peerPublicKey":"not-a-valid-key"}"#)
+
+        #expect(client.acceptIncomingSequenceForTesting(0) == false)
+        #expect(client.sendSequenceForTesting == 7)
     }
 }

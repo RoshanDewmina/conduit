@@ -438,6 +438,16 @@ public final class E2ERelayClient: ObservableObject {
     func acceptIncomingSequenceForTesting(_ seq: UInt64) -> Bool {
         recv.accept(seq)
     }
+
+    /// Test-only seam for verifying that failed re-key attempts preserve the
+    /// active outbound replay generation as well as the inbound window.
+    func setSendSequenceForTesting(_ seq: UInt64) {
+        sendSeq = seq
+    }
+
+    var sendSequenceForTesting: UInt64 {
+        sendSeq
+    }
 #endif
 
     /// Send an encrypted message to the daemon through the relay.
@@ -580,12 +590,12 @@ public final class E2ERelayClient: ObservableObject {
 
         case "peer_joined":
             Self.logger.info("handleMessage: peer_joined received, deriving session key")
-            // A freshly derived session key defines a fresh replay generation.
-            sendSeq = 0
-            recv.reset()
             guard let peerKey = msg.peerPublicKey else { return }
             do {
                 try deriveSessionKey(withPeerPublicKey: peerKey)
+                // A successfully derived session key defines a fresh replay generation.
+                sendSeq = 0
+                recv.reset()
                 Self.logger.info("handleMessage: session key derived, pairing complete")
                 pairingState = .paired
                 pairingExpiresAt = nil
