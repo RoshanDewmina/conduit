@@ -110,6 +110,11 @@ public final class E2ERelayClient: ObservableObject {
     /// `e2eRelayClient.sendSeq`/`recv` reset on `peer_joined`.
     private var sendSeq: UInt64 = 0
     private var recv = ReplaySequencer()
+#if DEBUG
+    /// Test-only seam: bypasses websocket send so bridge timeout paths can be
+    /// exercised without a live relay socket.
+    var bypassSendForTesting = false
+#endif
 
     private lazy var messageStream: AsyncStream<ReceivedMessage> = {
         AsyncStream { continuation in
@@ -427,10 +432,21 @@ public final class E2ERelayClient: ObservableObject {
     public func simulateIncomingFrameForTesting(_ text: String) {
         handleMessage(text)
     }
+
+    /// Test-only seam: exercises the real replay sequencer state transitions
+    /// without needing a live websocket/crypto round trip in unit tests.
+    func acceptIncomingSequenceForTesting(_ seq: UInt64) -> Bool {
+        recv.accept(seq)
+    }
 #endif
 
     /// Send an encrypted message to the daemon through the relay.
     public func send(type: String, payload: some Codable) async throws {
+#if DEBUG
+        if bypassSendForTesting {
+            return
+        }
+#endif
         guard let key = sessionKey else {
             throw E2EError.notPaired
         }
@@ -564,6 +580,9 @@ public final class E2ERelayClient: ObservableObject {
 
         case "peer_joined":
             Self.logger.info("handleMessage: peer_joined received, deriving session key")
+            // A freshly derived session key defines a fresh replay generation.
+            sendSeq = 0
+            recv.reset()
             guard let peerKey = msg.peerPublicKey else { return }
             do {
                 try deriveSessionKey(withPeerPublicKey: peerKey)
@@ -586,6 +605,8 @@ public final class E2ERelayClient: ObservableObject {
         case "peer_left":
             Self.logger.info("handleMessage: peer_left")
             sessionKey = nil
+            sendSeq = 0
+            recv.reset()
             pairingState = .unpaired
 
         case "message":
