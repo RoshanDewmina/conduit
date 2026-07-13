@@ -34,6 +34,24 @@ public enum LiveThreadTranscript: Sendable {
         !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    static func isObservedWrapperUserText(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("<local-command-caveat>")
+            || trimmed.hasPrefix("<command-name>")
+            || trimmed.hasPrefix("<command-message>")
+            || trimmed.hasPrefix("<system-reminder>")
+            || trimmed.hasPrefix("<task-notification>")
+    }
+
+    static func shouldRenderTurn(_ turn: ChatTurn) -> Bool {
+        guard isObservedWrapperUserText(turn.prompt) else { return true }
+        return !turn.assistantText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    static func shouldRenderPromptBubble(for turn: ChatTurn) -> Bool {
+        !isObservedWrapperUserText(turn.prompt)
+    }
+
     /// Pairs flat `agent.sessions.transcript` messages into `ChatTurn` rows for
     /// the live thread's frozen history (user bubble + assistant body).
     public static func turns(

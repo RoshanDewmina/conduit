@@ -87,7 +87,9 @@ public struct LiveThreadView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
                             ForEach(priorTurns) { turn in
-                                ChatUserBubble(text: turn.prompt)
+                                if LiveThreadTranscript.shouldRenderPromptBubble(for: turn) {
+                                    ChatUserBubble(text: turn.prompt)
+                                }
                                 staticAssistant(turn)
                             }
 
@@ -362,19 +364,24 @@ public struct LiveThreadView: View {
     }
 
     private var priorTurns: [LancerCore.ChatTurn] {
-        LiveThreadTranscript.priorTurns(turns: bridge.transcriptTurns, liveTurnID: liveTurnID)
+        LiveThreadTranscript
+            .priorTurns(turns: bridge.transcriptTurns, liveTurnID: liveTurnID)
+            .filter(LiveThreadTranscript.shouldRenderTurn)
     }
 
     /// User bubble for the live exchange — prefers the mirrored live turn,
     /// then in-flight prompt, then the sheet's initial prompt when empty.
     private var liveUserPrompt: String? {
         if let live = LiveThreadTranscript.liveTurn(turns: bridge.transcriptTurns, liveTurnID: liveTurnID) {
+            guard LiveThreadTranscript.shouldRenderPromptBubble(for: live) else { return nil }
             return live.prompt
         }
         if let inFlight = bridge.inFlightPrompt {
+            guard !LiveThreadTranscript.isObservedWrapperUserText(inFlight) else { return nil }
             return inFlight
         }
         if bridge.transcriptTurns.isEmpty, LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
+            guard !LiveThreadTranscript.isObservedWrapperUserText(prompt) else { return nil }
             return prompt
         }
         return nil
@@ -603,7 +610,9 @@ public struct LiveThreadView: View {
                 streamingAssistantBody(target: turn.assistantText)
             }
         case .completed(let turn):
-            if turn.status == .failed {
+            if !LiveThreadTranscript.shouldRenderTurn(turn) {
+                EmptyView()
+            } else if turn.status == .failed {
                 errorState(turn.errorMessage ?? "Run failed")
             } else {
                 VStack(alignment: .leading, spacing: 12) {

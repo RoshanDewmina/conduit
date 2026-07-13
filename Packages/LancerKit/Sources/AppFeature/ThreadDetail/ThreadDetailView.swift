@@ -112,9 +112,11 @@ struct ThreadDetailView: View {
                                     .accessibilityLabel(Text("Show earlier turns"))
                                 }
 
-                                ForEach(visibleTurns.filter { !ClaudeMetaPrompt.isWrapperUserText($0.prompt) }) { turn in
+                                ForEach(visibleTurns.filter(LiveThreadTranscript.shouldRenderTurn)) { turn in
                                     VStack(alignment: .leading, spacing: 12) {
-                                        ChatUserBubble(text: turn.prompt)
+                                        if LiveThreadTranscript.shouldRenderPromptBubble(for: turn) {
+                                            ChatUserBubble(text: turn.prompt)
+                                        }
                                         threadAssistant(turn)
                                         if let diff = turnDiffByTurnID[turn.id], diff.hasChanges {
                                             TurnDiffCard(summary: diff) {

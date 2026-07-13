@@ -64,6 +64,55 @@ struct LiveThreadTranscriptTests {
         #expect(LiveThreadTranscript.shouldSendInitialPrompt("continue this") == true)
     }
 
+    @Test("observed wrapper prefixes use trimmed-prefix matching")
+    func observedWrapperPrefixDetection() {
+        let wrappers = [
+            "<local-command-caveat>read-only mode</local-command-caveat>",
+            "<command-name>ReadFile</command-name>",
+            "<command-message>reloading context</command-message>",
+            "<system-reminder>keep output concise</system-reminder>",
+            "<task-notification>Task completed</task-notification>",
+            "   \n\t<task-notification>leading whitespace</task-notification>",
+        ]
+        for text in wrappers {
+            #expect(LiveThreadTranscript.isObservedWrapperUserText(text))
+        }
+        #expect(LiveThreadTranscript.isObservedWrapperUserText("<html>real user prompt</html>") == false)
+    }
+
+    @Test("wrapper turns hide prompt bubble and hide whole turn when assistant text is empty")
+    func wrapperTurnRenderBehavior() {
+        let wrapperWithReply = turn(
+            id: "wrapper-with-reply",
+            ordinal: 0,
+            prompt: "<task-notification>task update</task-notification>",
+            status: .completed,
+            assistantText: "actual assistant reply"
+        )
+        #expect(LiveThreadTranscript.shouldRenderTurn(wrapperWithReply))
+        #expect(LiveThreadTranscript.shouldRenderPromptBubble(for: wrapperWithReply) == false)
+
+        let wrapperWithoutReply = turn(
+            id: "wrapper-no-reply",
+            ordinal: 1,
+            prompt: "<system-reminder>system note</system-reminder>",
+            status: .completed,
+            assistantText: "   \n"
+        )
+        #expect(LiveThreadTranscript.shouldRenderTurn(wrapperWithoutReply) == false)
+        #expect(LiveThreadTranscript.shouldRenderPromptBubble(for: wrapperWithoutReply) == false)
+
+        let normalTurn = turn(
+            id: "normal",
+            ordinal: 2,
+            prompt: "<html>keep this real user turn</html>",
+            status: .completed,
+            assistantText: ""
+        )
+        #expect(LiveThreadTranscript.shouldRenderTurn(normalTurn))
+        #expect(LiveThreadTranscript.shouldRenderPromptBubble(for: normalTurn))
+    }
+
     @Test("observed SessionMessages pair into completed ChatTurns")
     func observedMessagesPairIntoTurns() {
         let messages = [
