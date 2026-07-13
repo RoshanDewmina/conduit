@@ -56,7 +56,10 @@ public struct LiveThreadView: View {
     #endif
 
     private static let scrollTailID = "live-tail"
-    private var reviewDataSource: any ReviewDataSource { FixtureReviewDataSource.shared }
+    /// Live path must not use G2 fixtures — they painted a fake "4 files +442 −11"
+    /// pill on brand-new chats (owner phone 2026-07-13). Relay stub returns empty
+    /// until G1 RPCs are wired through E2E (Fable: live ReviewDataSource).
+    private var reviewDataSource: any ReviewDataSource { RelayReviewDataSource() }
 
     private struct ReviewPresentation: Identifiable {
         enum Scope {
@@ -172,7 +175,7 @@ public struct LiveThreadView: View {
                 }
 
                 VStack(spacing: 0) {
-                    followUpAttachChrome
+                    followUpAttachmentChips
                     ChatFollowUpComposerBar(
                         text: $followUpText,
                         isFocused: $isFollowUpFocused,
@@ -181,8 +184,12 @@ public struct LiveThreadView: View {
                         onSend: {
                             followUpUploadTask?.cancel()
                             followUpUploadTask = Task { await sendFollowUp() }
-                        }
+                        },
+                        onAddContext: { isContextPresented = true }
                     )
+                    .sheet(isPresented: $isContextPresented) {
+                        ContextAttachView(attachments: $followUpAttachments)
+                    }
                 }
             }
             .background(Color(.systemBackground))
@@ -967,36 +974,21 @@ public struct LiveThreadView: View {
 
     // MARK: - Follow-up composer (Cursor docked bar chrome; same send path)
 
+    /// Chip row only — context attach opens from the composer `+` (not a separate Attach label).
     @ViewBuilder
-    private var followUpAttachChrome: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !followUpAttachments.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(followUpAttachments) { draft in
-                            AttachmentChipView(draft: draft) {
-                                removeFollowUpAttachment(draft)
-                            }
+    private var followUpAttachmentChips: some View {
+        if !followUpAttachments.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(followUpAttachments) { draft in
+                        AttachmentChipView(draft: draft) {
+                            removeFollowUpAttachment(draft)
                         }
                     }
-                    .padding(.horizontal, 16)
                 }
-            }
-            HStack {
-                Button {
-                    isContextPresented = true
-                } label: {
-                    Label("Attach", systemImage: "plus.circle")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .buttonStyle(.plain)
                 .padding(.horizontal, 16)
-                Spacer()
             }
-        }
-        .padding(.top, followUpAttachments.isEmpty ? 4 : 8)
-        .sheet(isPresented: $isContextPresented) {
-            ContextAttachView(attachments: $followUpAttachments)
+            .padding(.top, 8)
         }
     }
 

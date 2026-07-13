@@ -7,8 +7,7 @@ import SessionFeature
 /// Launch-time hydration + shared add-machine plumbing for `RelayFleetStore`.
 /// Behavior mirrors the pre-wipe `AppRoot.hydrateRelayFleetStore` /
 /// `addRelayMachine` (see `git show 3789aa5f:…/AppRoot.swift`), trimmed to
-/// exactly what M2 (Settings pairing + trusted machines) needs — no push-token
-/// registration, no Live Activity tokens, no installed-agent-vendor fetch.
+/// what Settings pairing + trusted machines + New Chat vendor picker need.
 @MainActor
 public enum RelayFleetHydration {
 
@@ -27,6 +26,20 @@ public enum RelayFleetHydration {
             // leave the UI showing the machine as forever-disconnected.
             if restored {
                 client.connect()
+            }
+        }
+    }
+
+    /// Fetches `agent.agents.installed` for every currently-connected machine
+    /// so the New Chat agent picker can filter to real host CLIs. Best-effort:
+    /// failures leave `installedAgentVendors` nil (full catalog shown).
+    public static func refreshInstalledAgents(into store: RelayFleetStore) async {
+        for machine in store.machines where store.connectionStates.state(for: machine.id) == .connected {
+            do {
+                let vendors = try await machine.bridge.relayInstalledAgents()
+                store.setInstalledAgentVendors(vendors, for: machine.id)
+            } catch {
+                continue
             }
         }
     }

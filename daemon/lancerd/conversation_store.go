@@ -1496,9 +1496,14 @@ func segmentObservedMessages(messages []SessionMessage, fallbackPrompt string) [
 // isObservedWrapperUserText reports Claude-injected user-role wrappers that
 // must not become turn prompts or conversation titles.
 func isObservedWrapperUserText(text string) bool {
-	return strings.HasPrefix(text, "<local-command-caveat>") ||
-		strings.HasPrefix(text, "<command-name>") ||
-		strings.HasPrefix(text, "<system-reminder>")
+	trimmed := strings.TrimSpace(text)
+	return strings.HasPrefix(trimmed, "<local-command-caveat>") ||
+		strings.HasPrefix(trimmed, "<command-name>") ||
+		strings.HasPrefix(trimmed, "<command-message>") ||
+		strings.HasPrefix(trimmed, "<system-reminder>") ||
+		// Background-task completion envelopes (owner phone 2026-07-13: raw XML
+		// bubbles + "(no reply text)" in long imported threads).
+		strings.HasPrefix(trimmed, "<task-notification>")
 }
 
 func isRealObservedUserPrompt(m SessionMessage) bool {

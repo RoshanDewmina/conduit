@@ -177,6 +177,9 @@ func claudeUserMessages(l claudeLine, raw []byte) []SessionMessage {
 		if contentStr == "" {
 			return nil
 		}
+		if isObservedWrapperUserText(contentStr) {
+			return nil
+		}
 		return []SessionMessage{{Role: "user", Text: contentStr, Timestamp: l.Timestamp}}
 	}
 

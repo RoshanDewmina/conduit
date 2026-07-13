@@ -24,7 +24,8 @@ struct ThreadDetailView: View {
     private static let initialWindowSize = 100
     private static let windowExtendStep = 100
     private static let scrollTailID = "thread-detail-tail"
-    private var reviewDataSource: any ReviewDataSource { FixtureReviewDataSource.shared }
+    /// Same as LiveThreadView — never paint G2 fixture diffs on real threads.
+    private var reviewDataSource: any ReviewDataSource { RelayReviewDataSource() }
 
     let thread: ThreadListItem
 
@@ -111,7 +112,7 @@ struct ThreadDetailView: View {
                                     .accessibilityLabel(Text("Show earlier turns"))
                                 }
 
-                                ForEach(visibleTurns) { turn in
+                                ForEach(visibleTurns.filter { !ClaudeMetaPrompt.isWrapperUserText($0.prompt) }) { turn in
                                     VStack(alignment: .leading, spacing: 12) {
                                         ChatUserBubble(text: turn.prompt)
                                         threadAssistant(turn)
