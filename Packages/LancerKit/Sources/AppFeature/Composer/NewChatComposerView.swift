@@ -15,12 +15,15 @@ public struct NewChatComposerView: View {
     @FocusState private var isTextFieldFocused: Bool
     @State private var isRepoPickerPresented = false
     @State private var isModelPickerPresented = false
+    @State private var isVendorPickerPresented = false
     @State private var isContextPresented = false
     @State private var selectedRepo: WorkspaceRepo?
     @State private var attachments: [AttachmentDraft] = []
     @State private var isUploadingAttachments = false
     @AppStorage(DispatchModelSelection.storageKey) private var selectedModelSlug: String =
         DispatchModelSelection.default.rawValue
+    @AppStorage(DispatchVendorSelection.storageKey) private var selectedVendorSlug: String =
+        DispatchVendorSelection.default.rawValue
     private let initiallyShowsRepoPicker: Bool
     private let lockRepo: Bool
     /// Hands (prompt, cwd) to the presenting view. Cwd is always the selected
@@ -29,6 +32,10 @@ public struct NewChatComposerView: View {
 
     private var selectedModel: DispatchModelSelection {
         DispatchModelSelection.resolve(selectedModelSlug)
+    }
+
+    private var selectedVendor: DispatchVendorSelection {
+        DispatchVendorSelection.resolve(selectedVendorSlug)
     }
 
     public init(
@@ -104,8 +111,19 @@ public struct NewChatComposerView: View {
                 selectedModelSlug = model.rawValue
             }
         }
+        .sheet(isPresented: $isVendorPickerPresented) {
+            VendorPickerView(
+                selected: selectedVendor,
+                installed: relayFleetStore.firstConnectedMachine?.installedAgentVendors
+            ) { vendor in
+                selectedVendorSlug = vendor.rawValue
+            }
+        }
         .sheet(isPresented: $isContextPresented) {
             ContextAttachView(attachments: $attachments)
+        }
+        .task {
+            await refreshInstalledVendorsIfNeeded()
         }
     }
 
@@ -196,10 +214,10 @@ public struct NewChatComposerView: View {
             .accessibilityLabel(Text("Add context"))
 
             Button {
-                isModelPickerPresented = true
+                isVendorPickerPresented = true
             } label: {
                 HStack(spacing: 4) {
-                    Text(selectedModel.displayName)
+                    Text(selectedVendor.displayName)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.secondary)
                     Image(systemName: "chevron.down")
@@ -208,7 +226,24 @@ public struct NewChatComposerView: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("Model, \(selectedModel.displayName)"))
+            .accessibilityLabel(Text("Agent, \(selectedVendor.displayName)"))
+
+            if selectedVendor.usesClaudeModelPicker {
+                Button {
+                    isModelPickerPresented = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(selectedModel.displayName)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Model, \(selectedModel.displayName)"))
+            }
 
             Spacer()
 
@@ -369,6 +404,20 @@ public struct NewChatComposerView: View {
         )
         placeholder.foregroundColor = Color.secondary
         return placeholder
+    }
+
+    /// Pulls host-installed vendor CLIs once per machine so the agent picker
+    /// can hide CLIs that aren't on PATH. Best-effort — empty/failure keeps
+    /// the full catalog visible.
+    private func refreshInstalledVendorsIfNeeded() async {
+        guard let machine = relayFleetStore.firstConnectedMachine else { return }
+        if let existing = machine.installedAgentVendors, !existing.isEmpty { return }
+        do {
+            let vendors = try await machine.bridge.relayInstalledAgents()
+            relayFleetStore.setInstalledAgentVendors(vendors, for: machine.id)
+        } catch {
+            // Leave installedAgentVendors nil → picker shows full catalog.
+        }
     }
 }
 

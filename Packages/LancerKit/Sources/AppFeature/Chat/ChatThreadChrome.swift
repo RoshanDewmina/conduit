@@ -280,18 +280,26 @@ struct ChatFollowUpComposerBar: View {
     var isDisabled: Bool = false
     var canSend: Bool = false
     var onSend: () -> Void
+    /// Opens context attach (Photos / Files). Same affordance as New Chat `+`.
+    var onAddContext: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 10) {
-            Circle()
-                .strokeBorder(Color(.separator), lineWidth: 1)
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                )
-                .accessibilityHidden(true)
+            Button {
+                onAddContext?()
+            } label: {
+                Circle()
+                    .strokeBorder(Color(.separator), lineWidth: 1)
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(onAddContext == nil || isDisabled)
+            .accessibilityLabel(Text("Add context"))
 
             TextField(placeholder, text: $text)
                 .font(.system(size: 16))

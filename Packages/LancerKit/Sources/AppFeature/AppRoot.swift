@@ -259,6 +259,15 @@ public struct AppRoot: View {
                     await RelayFleetHydration.hydrate(into: relayFleetStore)
                     shellLiveBridge.markHydrated()
                     await workspaceDataStore.refresh()
+                    // Wait briefly for the relay to become connected, then
+                    // cache installed vendor CLIs for the New Chat agent picker.
+                    var connected = relayFleetStore.firstConnectedMachine
+                    let deadline = Date().addingTimeInterval(8)
+                    while connected == nil, Date() < deadline {
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        connected = relayFleetStore.firstConnectedMachine
+                    }
+                    await RelayFleetHydration.refreshInstalledAgents(into: relayFleetStore)
                     #if DEBUG
                     await DebugSeeder.seedIfNeeded(env: env)
                     await DebugSeeder.autoPairRelayIfRequested(into: relayFleetStore)

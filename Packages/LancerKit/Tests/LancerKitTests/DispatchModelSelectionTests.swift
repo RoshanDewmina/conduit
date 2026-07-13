@@ -76,4 +76,14 @@ struct DispatchModelSelectionTests {
             ) == "haiku"
         )
     }
+
+    @Test("dispatchSlug is Claude-only")
+    func dispatchSlugClaudeOnly() {
+        #expect(
+            DispatchModelSelection.dispatchSlug(for: .claudeCode, selected: .sonnet) == "sonnet"
+        )
+        #expect(DispatchModelSelection.dispatchSlug(for: .codex, selected: .haiku) == nil)
+        #expect(DispatchModelSelection.dispatchSlug(for: .opencode, selected: .opus) == nil)
+        #expect(DispatchModelSelection.dispatchSlug(for: .kimi, selected: .sonnet) == nil)
+    }
 }

@@ -46,4 +46,15 @@ public enum DispatchModelSelection: String, CaseIterable, Sendable, Hashable {
         if !trimmed.isEmpty { return trimmed }
         return selected.slug
     }
+
+    /// Slug to send on the wire for a new dispatch. Claude Code gets the
+    /// picker alias; other vendors omit a model so the CLI uses its own
+    /// default (OpenCode expects `provider/model`, not haiku/sonnet/opus).
+    public static func dispatchSlug(
+        for vendor: DispatchVendorSelection,
+        selected: DispatchModelSelection = .load()
+    ) -> String? {
+        guard vendor.usesClaudeModelPicker else { return nil }
+        return selected.slug
+    }
 }

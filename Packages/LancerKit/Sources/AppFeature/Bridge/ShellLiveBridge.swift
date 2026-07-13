@@ -12,11 +12,11 @@ import SessionFeature
 /// local GRDB mirror). Everything else in `Chat/` is display only; this type
 /// owns the send → poll-until-terminal → publish state machine.
 ///
-/// Hardcodes vendor `"claudeCode"` (no vendor picker UI exists yet — see the
-/// M3 brief). Polls `ChatConversationRepository.turnByRunID` after each host
-/// refresh and publishes partial `assistantText` while the turn is still
-/// `.running` (daemon ledger already streams stdout chunks; this bridge was
-/// the missing mid-run publisher — 2026-07-11 dogfood).
+/// Vendor comes from `DispatchVendorSelection` (New Chat agent picker). Polls
+/// `ChatConversationRepository.turnByRunID` after each host refresh and
+/// publishes partial `assistantText` while the turn is still `.running`
+/// (daemon ledger already streams stdout chunks; this bridge was the missing
+/// mid-run publisher — 2026-07-11 dogfood).
 @MainActor
 @Observable
 public final class ShellLiveBridge {
@@ -164,9 +164,6 @@ public final class ShellLiveBridge {
     private let relayFleetStore: RelayFleetStore
     private let conversationSyncCoordinator: ConversationSyncCoordinator
     private let chatRepo: ChatConversationRepository
-
-    /// This milestone hardcodes the vendor CLI — no picker UI exists yet.
-    private static let vendor = "claudeCode"
 
     public struct ObservedContinueTarget: Equatable, Sendable {
         public let vendor: String
@@ -328,9 +325,10 @@ public final class ShellLiveBridge {
         inFlightPrompt = prompt
 
         let transport = Self.transport(for: machine.bridge)
-        let model = DispatchModelSelection.load().slug
+        let vendor = DispatchVendorSelection.load()
+        let model = DispatchModelSelection.dispatchSlug(for: vendor)
         let outcome = await conversationSyncCoordinator.startConversation(
-            agent: "relay|\(machine.id.uuidString)|\(Self.vendor)",
+            agent: "relay|\(machine.id.uuidString)|\(vendor.wireID)",
             cwd: cwd,
             prompt: prompt,
             model: model,
