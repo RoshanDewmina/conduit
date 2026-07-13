@@ -10,6 +10,7 @@ import SSHTransport
 public final class E2ERelayBridge: ObservableObject {
 
     private nonisolated static let logger = Logger(subsystem: "dev.lancer.mobile", category: "E2ERelayBridge")
+    private nonisolated static let defaultBoundedRPCWaitTimeout: Duration = .seconds(15)
 
     @Published public private(set) var isActive: Bool = false
     public let machineID: RelayMachineID
@@ -47,6 +48,17 @@ public final class E2ERelayBridge: ObservableObject {
     private var conversationsArchiveContinuation: CheckedContinuation<ConversationArchiveResponse, Error>?
     private var conversationsAttachObservedSessionContinuation: CheckedContinuation<ConversationAttachObservedSessionResponse, Error>?
     private var attachmentPutContinuation: CheckedContinuation<AttachmentPutResult, Error>?
+#if DEBUG
+    var boundedRPCWaitTimeoutOverride: Duration?
+#endif
+
+    private var boundedRPCWaitTimeout: Duration {
+#if DEBUG
+        boundedRPCWaitTimeoutOverride ?? Self.defaultBoundedRPCWaitTimeout
+#else
+        Self.defaultBoundedRPCWaitTimeout
+#endif
+    }
 
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay, machineID: RelayMachineID) {
         self.relayClient = relayClient
@@ -387,6 +399,15 @@ public final class E2ERelayBridge: ObservableObject {
         guard isActive else { throw E2EError.notPaired }
         struct ListParams: Codable, Sendable { let path: String }
         try await relayClient.send(type: "agentFsList", payload: ListParams(path: path))
+        fsListContinuation?.resume(throwing: E2EError.superseded)
+        fsListContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+            guard let self, !Task.isCancelled else { return }
+            self.fsListContinuation?.resume(throwing: E2EError.timedOut)
+            self.fsListContinuation = nil
+        }
+        defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.fsListContinuation = c
         }
@@ -400,6 +421,15 @@ public final class E2ERelayBridge: ObservableObject {
         guard isActive else { throw E2EError.notPaired }
         struct ReadParams: Codable, Sendable { let path: String }
         try await relayClient.send(type: "agentFsRead", payload: ReadParams(path: path))
+        fsReadContinuation?.resume(throwing: E2EError.superseded)
+        fsReadContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+            guard let self, !Task.isCancelled else { return }
+            self.fsReadContinuation?.resume(throwing: E2EError.timedOut)
+            self.fsReadContinuation = nil
+        }
+        defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.fsReadContinuation = c
         }
@@ -412,6 +442,15 @@ public final class E2ERelayBridge: ObservableObject {
         guard isActive else { throw E2EError.notPaired }
         struct CmdParams: Codable, Sendable { let cwd: String; let vendor: String }
         try await relayClient.send(type: "agentCommandsList", payload: CmdParams(cwd: cwd, vendor: vendor))
+        commandsListContinuation?.resume(throwing: E2EError.superseded)
+        commandsListContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+            guard let self, !Task.isCancelled else { return }
+            self.commandsListContinuation?.resume(throwing: E2EError.timedOut)
+            self.commandsListContinuation = nil
+        }
+        defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.commandsListContinuation = c
         }
@@ -424,6 +463,15 @@ public final class E2ERelayBridge: ObservableObject {
         guard isActive else { throw E2EError.notPaired }
         struct ListParams: Codable, Sendable {}
         try await relayClient.send(type: "agentSessionsList", payload: ListParams())
+        sessionsListContinuation?.resume(throwing: E2EError.superseded)
+        sessionsListContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+            guard let self, !Task.isCancelled else { return }
+            self.sessionsListContinuation?.resume(throwing: E2EError.timedOut)
+            self.sessionsListContinuation = nil
+        }
+        defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.sessionsListContinuation = c
         }
@@ -434,6 +482,15 @@ public final class E2ERelayBridge: ObservableObject {
         guard isActive else { throw E2EError.notPaired }
         struct Empty: Codable, Sendable {}
         try await relayClient.send(type: "agentAgentsInstalled", payload: Empty())
+        installedAgentsContinuation?.resume(throwing: E2EError.superseded)
+        installedAgentsContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+            guard let self, !Task.isCancelled else { return }
+            self.installedAgentsContinuation?.resume(throwing: E2EError.timedOut)
+            self.installedAgentsContinuation = nil
+        }
+        defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.installedAgentsContinuation = c
         }

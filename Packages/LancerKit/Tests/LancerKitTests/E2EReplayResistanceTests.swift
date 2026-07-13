@@ -69,4 +69,27 @@ struct E2EReplayResistanceTests {
         let (replaySeq, _) = try SeqFrame.unwrap(replayedPlaintext)
         #expect(receiver.accept(replaySeq) == false, "a replayed frame must be rejected, not accepted a second time")
     }
+
+    @Test("peer re-key resets receive sequence space so seq=0 is accepted again")
+    @MainActor
+    func peerRekeyResetsReceiveSequenceSpace() {
+        let client = E2ERelayClient(
+            relayURL: URL(string: "https://relay.example.com")!,
+            pairingCode: "111222"
+        )
+
+        let peerA = PairingCrypto.generateKeyPair()
+        client.simulateIncomingFrameForTesting(#"{"type":"peer_joined","peerPublicKey":"\#(peerA.publicKeyBase64URL)"}"#)
+        #expect(client.pairingState == .paired)
+
+        #expect(client.acceptIncomingSequenceForTesting(5) == true)
+        #expect(client.acceptIncomingSequenceForTesting(0) == false)
+
+        client.simulateIncomingFrameForTesting(#"{"type":"peer_left"}"#)
+
+        let peerB = PairingCrypto.generateKeyPair()
+        client.simulateIncomingFrameForTesting(#"{"type":"peer_joined","peerPublicKey":"\#(peerB.publicKeyBase64URL)"}"#)
+        #expect(client.pairingState == .paired)
+        #expect(client.acceptIncomingSequenceForTesting(0) == true)
+    }
 }
