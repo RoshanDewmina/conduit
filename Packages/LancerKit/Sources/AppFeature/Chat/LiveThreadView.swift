@@ -366,7 +366,12 @@ public struct LiveThreadView: View {
     private var priorTurns: [LancerCore.ChatTurn] {
         LiveThreadTranscript
             .priorTurns(turns: bridge.transcriptTurns, liveTurnID: liveTurnID)
-            .filter(LiveThreadTranscript.shouldRenderTurn)
+            .filter {
+                LiveThreadTranscript.shouldRenderTurn(
+                    $0,
+                    hasAssistantArtifacts: hasAssistantArtifacts(for: $0)
+                )
+            }
     }
 
     /// User bubble for the live exchange — prefers the mirrored live turn,
@@ -447,12 +452,28 @@ public struct LiveThreadView: View {
         }) {
             TurnTranscriptItemsView(
                 items: merged,
-                emptyFallback: turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+                emptyFallback: LiveThreadTranscript.assistantFallback(for: turn)
             )
-        } else {
-            let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+        } else if let body = LiveThreadTranscript.assistantFallback(for: turn) {
             ChatMarkdownBody(markdown: body)
         }
+    }
+
+    private func hasAssistantArtifacts(for turn: LancerCore.ChatTurn) -> Bool {
+        let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+        let artifactChips = (toolArtifactsByTurnID[turn.id] ?? []).map(ToolChipItem.init(artifact:))
+        let merged = mergeToolArtifacts(into: eventItems, artifacts: artifactChips)
+        let hasTranscriptItems = merged.contains {
+            switch $0 {
+            case .toolChip, .thinking:
+                return true
+            case .prose(let prose):
+                return !prose.text.isEmpty
+            }
+        }
+        return hasTranscriptItems
+            || receiptsByRunID[turn.runID] != nil
+            || turnDiffByTurnID[turn.id]?.hasChanges == true
     }
 
     /// Prefer structured event chips; append live tool artifacts not already paired by toolUseId.
@@ -610,7 +631,10 @@ public struct LiveThreadView: View {
                 streamingAssistantBody(target: turn.assistantText)
             }
         case .completed(let turn):
-            if !LiveThreadTranscript.shouldRenderTurn(turn) {
+            if !LiveThreadTranscript.shouldRenderTurn(
+                turn,
+                hasAssistantArtifacts: hasAssistantArtifacts(for: turn)
+            ) {
                 EmptyView()
             } else if turn.status == .failed {
                 errorState(turn.errorMessage ?? "Run failed")

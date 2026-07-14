@@ -714,7 +714,7 @@ struct ConversationSyncCoordinatorTests {
         let mirrored = try await repo.conversation(id: "conv-remote-1")
         #expect(mirrored?.title == "Started on Mac")
         #expect(mirrored?.hostName == "MacBook Pro")
-        #expect(mirrored?.lastHostSeq == 6)
+        #expect(mirrored?.lastHostSeq == 0, "a list summary is not a hydrated event cursor")
         #expect(mirrored?.syncState == .synced)
     }
 
@@ -763,7 +763,87 @@ struct ConversationSyncCoordinatorTests {
 
         let mirrored = try await repo.conversation(id: "conv-relay")
         #expect(mirrored?.agentID == "relay|\(machineID)|claudeCode", "must not clobber the stored routing id with the bare provider token")
-        #expect(mirrored?.lastHostSeq == 5)
+        #expect(mirrored?.lastHostSeq == 2, "summary metadata must preserve the hydrated cursor")
+    }
+
+    @Test("refresh repairs a summary-poisoned cursor from locally hydrated events")
+    func refreshRepairsSummaryPoisonedCursor() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-poisoned", title: "Imported", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 1_036, syncState: .synced)
+
+        let transport = makeTransport(fetch: { request in
+            #expect(request.sinceSeq == 0)
+            return ConversationFetchResponse(
+                conversation: ConversationSummary(
+                    id: "conv-poisoned", title: "Imported", provider: "claudeCode",
+                    agentID: "claudeCode", hostName: "Mac", cwd: "/proj", state: "completed",
+                    source: "observed", createdAt: "2026-07-13T00:00:00Z",
+                    updatedAt: "2026-07-13T00:01:00Z", lastActivityAt: "2026-07-13T00:01:00Z",
+                    lastSeq: 1_036
+                ),
+                turns: [
+                    ConversationTurnEnvelope(
+                        id: "turn-1", conversationId: "conv-poisoned", ordinal: 0,
+                        clientTurnId: "observed:1", prompt: "hello", runId: "run-1",
+                        provider: "claudeCode", status: "completed",
+                        startedAt: "2026-07-13T00:00:00Z"
+                    ),
+                ],
+                events: [
+                    ConversationEvent(
+                        conversationId: "conv-poisoned", seq: 1, turnId: "turn-1",
+                        runId: "run-1", kind: "output", role: "assistant",
+                        text: "hydrated reply", createdAt: "2026-07-13T00:00:01Z"
+                    ),
+                ],
+                nextSeq: 1_036
+            )
+        })
+
+        _ = try await coordinator.refreshConversation(conversationID: "conv-poisoned", transport: transport)
+        let turns = try await repo.turns(conversationID: "conv-poisoned")
+        #expect(turns.first?.assistantText == "hydrated reply")
+    }
+
+    @Test("refresh resumes from the highest contiguous locally hydrated event")
+    func refreshUsesContiguousLocalEventCursor() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-partial", title: "Partial", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 1_036, syncState: .synced)
+        try await repo.appendEventsMirror(
+            conversationID: "conv-partial",
+            events: [
+                ChatEvent(conversationID: "conv-partial", seq: 1, kind: "output", text: "first"),
+                ChatEvent(conversationID: "conv-partial", seq: 30, kind: "output", text: "later chunk"),
+            ]
+        )
+
+        let transport = makeTransport(fetch: { request in
+            #expect(request.sinceSeq == 1)
+            return ConversationFetchResponse(
+                conversation: ConversationSummary(
+                    id: "conv-partial", title: "Partial", provider: "claudeCode",
+                    agentID: "claudeCode", hostName: "Mac", cwd: "/proj", state: "active",
+                    source: "observed", createdAt: "2026-07-13T00:00:00Z",
+                    updatedAt: "2026-07-13T00:01:00Z", lastActivityAt: "2026-07-13T00:01:00Z",
+                    lastSeq: 30
+                ),
+                turns: [], events: [], nextSeq: 30
+            )
+        })
+
+        _ = try await coordinator.refreshConversation(conversationID: "conv-partial", transport: transport)
     }
 
     @Test("mergeConversationSummaries applies running→failed from enriched list lastTurnStatus")

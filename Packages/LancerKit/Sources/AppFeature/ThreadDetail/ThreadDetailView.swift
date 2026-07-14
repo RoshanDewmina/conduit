@@ -53,6 +53,15 @@ struct ThreadDetailView: View {
         return Array(turns.suffix(visibleTurnLimit))
     }
 
+    private var renderedVisibleTurns: [ChatTurn] {
+        visibleTurns.filter {
+            LiveThreadTranscript.shouldRenderTurn(
+                $0,
+                hasAssistantArtifacts: hasAssistantArtifacts(for: $0)
+            )
+        }
+    }
+
     private var hasEarlierTurns: Bool {
         turns.count > visibleTurnLimit
     }
@@ -112,7 +121,7 @@ struct ThreadDetailView: View {
                                     .accessibilityLabel(Text("Show earlier turns"))
                                 }
 
-                                ForEach(visibleTurns.filter(LiveThreadTranscript.shouldRenderTurn)) { turn in
+                                ForEach(renderedVisibleTurns) { turn in
                                     VStack(alignment: .leading, spacing: 12) {
                                         if LiveThreadTranscript.shouldRenderPromptBubble(for: turn) {
                                             ChatUserBubble(text: turn.prompt)
@@ -149,7 +158,7 @@ struct ThreadDetailView: View {
                                 // (direct marker scrollTo no-ops from far away;
                                 // single-hop leaves the tail under the bar —
                                 // both sim-reproduced).
-                                if let last = visibleTurns.last {
+                                if let last = renderedVisibleTurns.last {
                                     proxy.scrollTo(last.id, anchor: .bottom)
                                 }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
@@ -245,10 +254,9 @@ struct ThreadDetailView: View {
             }) {
                 TurnTranscriptItemsView(
                     items: items,
-                    emptyFallback: turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+                    emptyFallback: LiveThreadTranscript.assistantFallback(for: turn)
                 )
-            } else {
-                let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+            } else if let body = LiveThreadTranscript.assistantFallback(for: turn) {
                 ChatMarkdownBody(markdown: body)
             }
             // Same proof chip as the live view — reopened threads previously
@@ -257,6 +265,21 @@ struct ThreadDetailView: View {
                 ReceiptChipRow(receipt: receipt)
             }
         }
+    }
+
+    private func hasAssistantArtifacts(for turn: ChatTurn) -> Bool {
+        let items = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+        let hasTranscriptItems = items.contains {
+            switch $0 {
+            case .toolChip, .thinking:
+                return true
+            case .prose(let prose):
+                return !prose.text.isEmpty
+            }
+        }
+        return hasTranscriptItems
+            || receiptForTurn(turn) != nil
+            || turnDiffByTurnID[turn.id]?.hasChanges == true
     }
 
     private func receiptForTurn(_ turn: ChatTurn) -> ProofReceipt? {
@@ -271,9 +294,14 @@ struct ThreadDetailView: View {
         guard let db = try? AppDatabase.openShared() else { return }
         let repo = ChatConversationRepository(db)
         turns = (try? await repo.turns(conversationID: thread.id)) ?? []
-        // Backfilled conversations carry summaries only — pull the turns and
-        // events from the host on first open (fetch-on-open), then re-read.
-        if turns.isEmpty, let refresh = workspaceData.refreshThreadFromHost {
+        let localEvents = (try? await repo.events(conversationID: thread.id, limit: 10_000)) ?? []
+        eventsByTurnID = Dictionary(grouping: localEvents.filter { $0.turnID != nil }, by: { $0.turnID! })
+        // Always reconcile on open. Older builds could create turn skeletons
+        // while incorrectly advancing the event cursor from a list summary;
+        // checking only `turns.isEmpty` made that poisoned mirror permanent.
+        // Local events render before this await so offline opens do not hide
+        // already-hydrated tool or assistant content during the timeout.
+        if let refresh = workspaceData.refreshThreadFromHost {
             await refresh(thread.id)
             turns = (try? await repo.turns(conversationID: thread.id)) ?? []
         }

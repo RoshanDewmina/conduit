@@ -72,6 +72,7 @@ struct LiveThreadTranscriptTests {
             "<command-message>reloading context</command-message>",
             "<system-reminder>keep output concise</system-reminder>",
             "<task-notification>Task completed</task-notification>",
+            "<local-command-stdout>Login successful.</local-command-stdout>",
             "   \n\t<task-notification>leading whitespace</task-notification>",
         ]
         for text in wrappers {
@@ -101,6 +102,7 @@ struct LiveThreadTranscriptTests {
         )
         #expect(LiveThreadTranscript.shouldRenderTurn(wrapperWithoutReply) == false)
         #expect(LiveThreadTranscript.shouldRenderPromptBubble(for: wrapperWithoutReply) == false)
+        #expect(LiveThreadTranscript.shouldRenderTurn(wrapperWithoutReply, hasAssistantArtifacts: true))
 
         let normalTurn = turn(
             id: "normal",
@@ -111,6 +113,27 @@ struct LiveThreadTranscriptTests {
         )
         #expect(LiveThreadTranscript.shouldRenderTurn(normalTurn))
         #expect(LiveThreadTranscript.shouldRenderPromptBubble(for: normalTurn))
+    }
+
+    @Test("empty assistant text has no placeholder fallback")
+    func assistantFallbackBehavior() {
+        let empty = turn(
+            id: "empty-assistant",
+            ordinal: 0,
+            prompt: "real user prompt",
+            status: .completed,
+            assistantText: "  \n"
+        )
+        #expect(LiveThreadTranscript.assistantFallback(for: empty) == nil)
+
+        let reply = turn(
+            id: "assistant-reply",
+            ordinal: 1,
+            prompt: "real user prompt",
+            status: .completed,
+            assistantText: "real assistant output"
+        )
+        #expect(LiveThreadTranscript.assistantFallback(for: reply) == "real assistant output")
     }
 
     @Test("observed SessionMessages pair into completed ChatTurns")
