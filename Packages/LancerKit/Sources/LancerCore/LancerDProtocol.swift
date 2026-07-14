@@ -813,6 +813,33 @@ public struct ConversationSummary: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// Structured attachment metadata for a conversation turn — transport-only
+/// `hostPath` must never surface in UI (see attachment message design).
+public struct ConversationAttachmentReference: Codable, Sendable, Hashable, Identifiable {
+    public enum Kind: String, Codable, Sendable { case image, file }
+
+    public let id: String
+    public let name: String
+    public let mimeType: String?
+    public let byteCount: Int
+    public let kind: Kind
+    public let hostPath: String
+    public let previewCacheKey: String
+
+    public init(
+        id: String, name: String, mimeType: String?, byteCount: Int, kind: Kind,
+        hostPath: String, previewCacheKey: String
+    ) {
+        self.id = id
+        self.name = name
+        self.mimeType = mimeType
+        self.byteCount = byteCount
+        self.kind = kind
+        self.hostPath = hostPath
+        self.previewCacheKey = previewCacheKey
+    }
+}
+
 /// Mirrors Go's `conversationTurn` (daemon/lancerd/conversation_store.go:218).
 public struct ConversationTurnEnvelope: Codable, Sendable, Hashable, Identifiable {
     public let id: String
@@ -827,11 +854,13 @@ public struct ConversationTurnEnvelope: Codable, Sendable, Hashable, Identifiabl
     public let startedAt: String
     public let completedAt: String?
     public let errorMessage: String?
+    public let attachments: [ConversationAttachmentReference]
 
     public init(
         id: String, conversationId: String, ordinal: Int, clientTurnId: String, prompt: String,
         runId: String, provider: String, vendorSessionId: String? = nil, status: String,
-        startedAt: String, completedAt: String? = nil, errorMessage: String? = nil
+        startedAt: String, completedAt: String? = nil, errorMessage: String? = nil,
+        attachments: [ConversationAttachmentReference] = []
     ) {
         self.id = id
         self.conversationId = conversationId
@@ -845,6 +874,48 @@ public struct ConversationTurnEnvelope: Codable, Sendable, Hashable, Identifiabl
         self.startedAt = startedAt
         self.completedAt = completedAt
         self.errorMessage = errorMessage
+        self.attachments = attachments
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, conversationId, ordinal, clientTurnId, prompt, runId, provider
+        case vendorSessionId, status, startedAt, completedAt, errorMessage, attachments
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        conversationId = try c.decode(String.self, forKey: .conversationId)
+        ordinal = try c.decode(Int.self, forKey: .ordinal)
+        clientTurnId = try c.decode(String.self, forKey: .clientTurnId)
+        prompt = try c.decode(String.self, forKey: .prompt)
+        runId = try c.decode(String.self, forKey: .runId)
+        provider = try c.decode(String.self, forKey: .provider)
+        vendorSessionId = try c.decodeIfPresent(String.self, forKey: .vendorSessionId)
+        status = try c.decode(String.self, forKey: .status)
+        startedAt = try c.decode(String.self, forKey: .startedAt)
+        completedAt = try c.decodeIfPresent(String.self, forKey: .completedAt)
+        errorMessage = try c.decodeIfPresent(String.self, forKey: .errorMessage)
+        attachments = try c.decodeIfPresent([ConversationAttachmentReference].self, forKey: .attachments) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(conversationId, forKey: .conversationId)
+        try c.encode(ordinal, forKey: .ordinal)
+        try c.encode(clientTurnId, forKey: .clientTurnId)
+        try c.encode(prompt, forKey: .prompt)
+        try c.encode(runId, forKey: .runId)
+        try c.encode(provider, forKey: .provider)
+        try c.encodeIfPresent(vendorSessionId, forKey: .vendorSessionId)
+        try c.encode(status, forKey: .status)
+        try c.encode(startedAt, forKey: .startedAt)
+        try c.encodeIfPresent(completedAt, forKey: .completedAt)
+        try c.encodeIfPresent(errorMessage, forKey: .errorMessage)
+        if !attachments.isEmpty {
+            try c.encode(attachments, forKey: .attachments)
+        }
     }
 }
 
@@ -1037,12 +1108,14 @@ public struct ConversationAppendRequest: Codable, Sendable {
     public let useWorktree: Bool?
     /// Optional run contract echoed in the terminal proof receipt.
     public let contract: ProofReceipt.Contract?
+    public let attachments: [ConversationAttachmentReference]?
 
     public init(
         conversationId: String? = nil, baseSeq: Int = 0, clientTurnId: String,
         agent: String? = nil, cwd: String? = nil, prompt: String, model: String? = nil,
         budgetUSD: Double? = nil, useWorktree: Bool? = nil,
-        contract: ProofReceipt.Contract? = nil
+        contract: ProofReceipt.Contract? = nil,
+        attachments: [ConversationAttachmentReference]? = nil
     ) {
         self.conversationId = conversationId
         self.baseSeq = baseSeq
@@ -1054,6 +1127,44 @@ public struct ConversationAppendRequest: Codable, Sendable {
         self.budgetUSD = budgetUSD
         self.useWorktree = useWorktree
         self.contract = contract
+        self.attachments = attachments
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case conversationId, baseSeq, clientTurnId, agent, cwd, prompt, model, budgetUSD
+        case useWorktree, contract, attachments
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(conversationId, forKey: .conversationId)
+        try c.encode(baseSeq, forKey: .baseSeq)
+        try c.encode(clientTurnId, forKey: .clientTurnId)
+        try c.encodeIfPresent(agent, forKey: .agent)
+        try c.encodeIfPresent(cwd, forKey: .cwd)
+        try c.encode(prompt, forKey: .prompt)
+        try c.encodeIfPresent(model, forKey: .model)
+        try c.encodeIfPresent(budgetUSD, forKey: .budgetUSD)
+        try c.encodeIfPresent(useWorktree, forKey: .useWorktree)
+        try c.encodeIfPresent(contract, forKey: .contract)
+        if let attachments, !attachments.isEmpty {
+            try c.encode(attachments, forKey: .attachments)
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        conversationId = try c.decodeIfPresent(String.self, forKey: .conversationId)
+        baseSeq = try c.decodeIfPresent(Int.self, forKey: .baseSeq) ?? 0
+        clientTurnId = try c.decode(String.self, forKey: .clientTurnId)
+        agent = try c.decodeIfPresent(String.self, forKey: .agent)
+        cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
+        prompt = try c.decode(String.self, forKey: .prompt)
+        model = try c.decodeIfPresent(String.self, forKey: .model)
+        budgetUSD = try c.decodeIfPresent(Double.self, forKey: .budgetUSD)
+        useWorktree = try c.decodeIfPresent(Bool.self, forKey: .useWorktree)
+        contract = try c.decodeIfPresent(ProofReceipt.Contract.self, forKey: .contract)
+        attachments = try c.decodeIfPresent([ConversationAttachmentReference].self, forKey: .attachments)
     }
 }
 
