@@ -78,6 +78,13 @@ public final class RelayFleetStore {
         machines.filter { connectionStates.state(for: $0.id) != .pairingInvalid }.count
     }
 
+    /// Live / restorable machines for the Trusted Machines "Paired" section.
+    /// Excludes `.pairingInvalid` so dead pairings are not listed twice (once
+    /// here and again under Dead pairings via `invalidMachines`).
+    public var pairedMachines: [Machine] {
+        machines.filter { connectionStates.state(for: $0.id) != .pairingInvalid }
+    }
+
     /// Machines permanently stuck in `.pairingInvalid` — their stored pairing
     /// cannot be restored without a fresh re-pair. The UI surfaces these so the
     /// user can bulk-clear them and free capacity for new real pairings.

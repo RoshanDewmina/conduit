@@ -118,7 +118,7 @@ public struct TrustedMachinesView: View {
 
     private var machinesList: some View {
         List {
-            if store.machines.isEmpty {
+            if store.pairedMachines.isEmpty {
                 Section {
                     Text("No machines paired")
                     Text("Pair a machine to approve agent actions from this phone.")
@@ -127,7 +127,7 @@ public struct TrustedMachinesView: View {
                 }
             } else {
                 Section("Paired") {
-                    ForEach(store.machines) { machine in
+                    ForEach(store.pairedMachines) { machine in
                         machineRow(machine)
                     }
                 }

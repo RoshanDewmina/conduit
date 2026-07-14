@@ -126,6 +126,27 @@ import Testing
         #expect(store.invalidMachines.first?.id == invalid.id)
     }
 
+    // SIM-2: TrustedMachinesView used to render store.machines in Paired and
+    // store.invalidMachines in Dead pairings — every .pairingInvalid row
+    // appeared twice. pairedMachines is the Paired-section source of truth.
+    @Test("pairedMachines excludes pairingInvalid; invalidMachines retains them")
+    func pairedMachinesExcludesInvalidWhileInvalidMachinesRetainsThem() async throws {
+        RelayMachineMigration.indexKeychain = Keychain(service: "dev.lancer.relay.test.\(UUID().uuidString)", inMemory: true)
+
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        let (valid, _) = makeMachine()
+        let (invalid, _) = makeMachine()
+        store.add(valid, pairingUsable: true)
+        store.add(invalid, pairingUsable: false)
+
+        #expect(store.machines.count == 2)
+        #expect(store.pairedMachines.count == 1)
+        #expect(store.pairedMachines.first?.id == valid.id)
+        #expect(store.invalidMachines.count == 1)
+        #expect(store.invalidMachines.first?.id == invalid.id)
+        #expect(Set(store.pairedMachines.map(\.id)).isDisjoint(with: Set(store.invalidMachines.map(\.id))))
+    }
+
     @Test("removeAllInvalid() removes only pairingInvalid machines and leaves valid ones")
     func removeAllInvalidLeavesValidMachines() async throws {
         RelayMachineMigration.indexKeychain = Keychain(service: "dev.lancer.relay.test.\(UUID().uuidString)", inMemory: true)
