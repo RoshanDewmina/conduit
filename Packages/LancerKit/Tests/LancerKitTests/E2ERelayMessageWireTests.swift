@@ -313,13 +313,24 @@ import Foundation
         #expect(response.resumeMode == "new")
         #expect(response.message == nil)
         #expect(response.rule == nil)
+        #expect(response.clientTurnId == nil, "legacy started shape without echo must still decode")
+    }
+
+    @Test("ConversationAppendResponse decodes optional clientTurnId echo")
+    func conversationAppendResponseDecodesClientTurnIdEcho() throws {
+        let wireJSON = """
+        {"status":"started","conversationId":"conv_1","turnId":"turn_1","runId":"run_1",\
+        "baseSeq":0,"nextSeq":1,"resumeMode":"new","clientTurnId":"ios-device-uuid:1"}
+        """
+        let response = try JSONDecoder().decode(ConversationAppendResponse.self, from: Data(wireJSON.utf8))
+        #expect(response.clientTurnId == "ios-device-uuid:1")
     }
 
     @Test("ConversationAppendResponse decodes a conflict shape with only the conflict fields present")
     func conversationAppendResponseDecodesConflictShape() throws {
         let wireJSON = """
         {"status":"conflict","conversationId":"conv_1","baseSeq":42,"nextSeq":45,\
-        "message":"Conversation changed. Refetch before appending."}
+        "message":"Conversation changed. Refetch before appending.","clientTurnId":"ios-uuid:conflict"}
         """
         let response = try JSONDecoder().decode(ConversationAppendResponse.self, from: Data(wireJSON.utf8))
         #expect(response.status == "conflict")
@@ -330,6 +341,7 @@ import Foundation
         #expect(response.runId == nil)
         #expect(response.vendorSessionId == nil)
         #expect(response.resumeMode == nil)
+        #expect(response.clientTurnId == "ios-uuid:conflict")
     }
 
     @Test("ConversationArchiveResponse decodes the daemon's shape (conversationArchiveResponse)")

@@ -1171,6 +1171,10 @@ public struct ConversationAppendRequest: Codable, Sendable {
 /// Response for `agent.conversations.append` — mirrors Go's `conversationAppendResponse`
 /// (daemon/lancerd/conversation_rpc.go:49), the RPC-layer superset of the store's
 /// `conversationAppendResult` (adds vendorSessionId/resumeMode/rule).
+///
+/// `clientTurnId` is optional for backward-compatible decode of older daemon
+/// responses that omitted the echo. The relay bridge fail-closes (drops) results
+/// that lack a matching echo so a late result for turn A cannot resolve wait B.
 public struct ConversationAppendResponse: Codable, Sendable {
     public let status: String
     public let conversationId: String
@@ -1185,6 +1189,10 @@ public struct ConversationAppendResponse: Codable, Sendable {
     public let rule: String?
     public let worktreePath: String?
     public let isolated: Bool?
+    /// Echo of the request's `clientTurnId` (daemon ≥ correlated-append). Optional
+    /// so legacy wire payloads still decode; bridge correlation treats missing
+    /// as non-matching (fail-closed).
+    public let clientTurnId: String?
     /// Relay-only failure signal — see `ConversationListResponse.error`.
     public let error: String?
 
@@ -1192,7 +1200,8 @@ public struct ConversationAppendResponse: Codable, Sendable {
         status: String, conversationId: String, turnId: String? = nil, runId: String? = nil,
         vendorSessionId: String? = nil, cwd: String? = nil, baseSeq: Int = 0, nextSeq: Int = 0,
         resumeMode: String? = nil, message: String? = nil, rule: String? = nil,
-        worktreePath: String? = nil, isolated: Bool? = nil, error: String? = nil
+        worktreePath: String? = nil, isolated: Bool? = nil, clientTurnId: String? = nil,
+        error: String? = nil
     ) {
         self.status = status
         self.conversationId = conversationId
@@ -1207,6 +1216,7 @@ public struct ConversationAppendResponse: Codable, Sendable {
         self.rule = rule
         self.worktreePath = worktreePath
         self.isolated = isolated
+        self.clientTurnId = clientTurnId
         self.error = error
     }
 }

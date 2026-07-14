@@ -50,6 +50,11 @@ type conversationFetchRequest struct {
 // response — a superset of conversationAppendResult (conversation_store.go)
 // with the fields that depend on vendor-dispatch knowledge the store layer
 // intentionally doesn't have (see that type's doc comment).
+//
+// ClientTurnID is echoed from the request on every started/conflict/idempotent
+// (and error-status) response so the phone can correlate append results to the
+// waiter that owns that logical turn — without it, a late result for turn A
+// can resolve an in-flight wait for turn B.
 type conversationAppendResponse struct {
 	Status          string `json:"status"`
 	ConversationID  string `json:"conversationId"`
@@ -64,6 +69,7 @@ type conversationAppendResponse struct {
 	Rule            string `json:"rule,omitempty"`
 	WorktreePath    string `json:"worktreePath,omitempty"`
 	Isolated        bool   `json:"isolated,omitempty"`
+	ClientTurnID    string `json:"clientTurnId,omitempty"`
 }
 
 // conversationArchiveRequest mirrors the agent.conversations.archive RPC request.
@@ -146,7 +152,11 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 	if req.UseWorktree && isNew && resolvedCWD != "" {
 		wt, err = s.createManagedWorktree(resolvedCWD, "", runID)
 		if err != nil {
-			return conversationAppendResponse{Status: "error", Message: err.Error()}, nil
+			return conversationAppendResponse{
+				Status:       "error",
+				Message:      err.Error(),
+				ClientTurnID: req.ClientTurnID,
+			}, nil
 		}
 		resolvedCWD = wt.Path
 	}
@@ -165,6 +175,7 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 		BaseSeq:        res.BaseSeq,
 		NextSeq:        res.NextSeq,
 		Message:        res.Message,
+		ClientTurnID:   req.ClientTurnID,
 	}
 
 	if res.Status != "started" {
