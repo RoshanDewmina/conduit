@@ -607,11 +607,11 @@ public actor ConversationSyncCoordinator {
         conversationID: String, transport: ConversationTransport
     ) async throws -> Int {
         publish(.syncing, for: conversationID)
-        let local = try await chatRepo.conversation(id: conversationID)
+        let hydratedSeq = try await chatRepo.hydratedEventCursor(conversationID: conversationID)
         do {
             let nextSeq = try await fetchAndMergeAllPages(
                 conversationID: conversationID,
-                sinceSeq: local?.lastHostSeq ?? 0,
+                sinceSeq: hydratedSeq,
                 transport: transport
             )
             publish(.synced, for: conversationID)
@@ -736,11 +736,11 @@ public actor ConversationSyncCoordinator {
     private func refetchConversationForRecovery(
         conversationID: String, transport: ConversationTransport
     ) async throws -> Int {
-        let local = try await chatRepo.conversation(id: conversationID)
+        let hydratedSeq = try await chatRepo.hydratedEventCursor(conversationID: conversationID)
         do {
             return try await fetchAndMergeAllPages(
                 conversationID: conversationID,
-                sinceSeq: local?.lastHostSeq ?? 0,
+                sinceSeq: hydratedSeq,
                 transport: transport
             )
         } catch let partial as ConversationSyncPartialError {
@@ -887,9 +887,9 @@ public actor ConversationSyncCoordinator {
     /// Two invariants a bulk list merge must not violate (unlike a single
     /// authoritative fetch, a list summary can be stale relative to what this
     /// device already mirrored from a live turn):
-    /// - never lower a mirror row's `lastHostSeq` below what's already stored
-    ///   (`upsertConversationMirror` overwrites it unconditionally, so the
-    ///   max is computed here before calling it);
+    /// - never advance the event hydration cursor from summary metadata. A
+    ///   list response carries no events, so new mirrors start at zero and an
+    ///   existing mirror keeps its current cursor;
     /// - never clobber a stored relay routing agentID (`relay|<id>|<vendor>`)
     ///   with a bare provider token — `mapSummary` preserves it via
     ///   `fallback`, and the repository's UPDATE clause never touches
@@ -902,7 +902,7 @@ public actor ConversationSyncCoordinator {
             var conversation = Self.mapSummary(summary, fallback: existing)
             if conversation.hostName.isEmpty { conversation.hostName = hostName }
             if conversation.hostID == nil { conversation.hostID = hostID }
-            let mergedSeq = max(summary.lastSeq, existing?.lastHostSeq ?? 0)
+            let mergedSeq = existing?.lastHostSeq ?? 0
             _ = try? await chatRepo.upsertConversationMirror(
                 conversation, lastHostSeq: mergedSeq, syncState: existing?.syncState ?? .synced
             )

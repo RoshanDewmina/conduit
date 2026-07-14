@@ -499,6 +499,25 @@ public actor ChatConversationRepository {
         }
     }
 
+    /// Highest contiguous host sequence hydrated into the local event mirror.
+    /// CloudKit turn chunks can arrive out of order, so `MAX(seq)` is unsafe:
+    /// a later chunk must not cause host fetches to skip an earlier hole.
+    public func hydratedEventCursor(conversationID: String) async throws -> Int {
+        try await db.dbWriter.read { db in
+            let sequences = try Int.fetchAll(
+                db,
+                sql: "SELECT seq FROM chat_events WHERE conversation_id = ? ORDER BY seq ASC",
+                arguments: [conversationID]
+            )
+            var cursor = 0
+            for sequence in sequences {
+                guard sequence == cursor + 1 else { break }
+                cursor = sequence
+            }
+            return cursor
+        }
+    }
+
     public func updateSyncState(conversationID: String, state: ChatConversation.SyncState) async throws {
         try await db.dbWriter.write { db in
             try db.execute(sql: """

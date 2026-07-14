@@ -87,7 +87,9 @@ public struct LiveThreadView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
                             ForEach(priorTurns) { turn in
-                                ChatUserBubble(text: turn.prompt)
+                                if LiveThreadTranscript.shouldRenderPromptBubble(for: turn) {
+                                    ChatUserBubble(text: turn.prompt)
+                                }
                                 staticAssistant(turn)
                             }
 
@@ -362,19 +364,29 @@ public struct LiveThreadView: View {
     }
 
     private var priorTurns: [LancerCore.ChatTurn] {
-        LiveThreadTranscript.priorTurns(turns: bridge.transcriptTurns, liveTurnID: liveTurnID)
+        LiveThreadTranscript
+            .priorTurns(turns: bridge.transcriptTurns, liveTurnID: liveTurnID)
+            .filter {
+                LiveThreadTranscript.shouldRenderTurn(
+                    $0,
+                    hasAssistantArtifacts: hasAssistantArtifacts(for: $0)
+                )
+            }
     }
 
     /// User bubble for the live exchange — prefers the mirrored live turn,
     /// then in-flight prompt, then the sheet's initial prompt when empty.
     private var liveUserPrompt: String? {
         if let live = LiveThreadTranscript.liveTurn(turns: bridge.transcriptTurns, liveTurnID: liveTurnID) {
+            guard LiveThreadTranscript.shouldRenderPromptBubble(for: live) else { return nil }
             return live.prompt
         }
         if let inFlight = bridge.inFlightPrompt {
+            guard !LiveThreadTranscript.isObservedWrapperUserText(inFlight) else { return nil }
             return inFlight
         }
         if bridge.transcriptTurns.isEmpty, LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
+            guard !LiveThreadTranscript.isObservedWrapperUserText(prompt) else { return nil }
             return prompt
         }
         return nil
@@ -440,12 +452,28 @@ public struct LiveThreadView: View {
         }) {
             TurnTranscriptItemsView(
                 items: merged,
-                emptyFallback: turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+                emptyFallback: LiveThreadTranscript.assistantFallback(for: turn)
             )
-        } else {
-            let body = turn.assistantText.isEmpty ? "(no reply text)" : turn.assistantText
+        } else if let body = LiveThreadTranscript.assistantFallback(for: turn) {
             ChatMarkdownBody(markdown: body)
         }
+    }
+
+    private func hasAssistantArtifacts(for turn: LancerCore.ChatTurn) -> Bool {
+        let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+        let artifactChips = (toolArtifactsByTurnID[turn.id] ?? []).map(ToolChipItem.init(artifact:))
+        let merged = mergeToolArtifacts(into: eventItems, artifacts: artifactChips)
+        let hasTranscriptItems = merged.contains {
+            switch $0 {
+            case .toolChip, .thinking:
+                return true
+            case .prose(let prose):
+                return !prose.text.isEmpty
+            }
+        }
+        return hasTranscriptItems
+            || receiptsByRunID[turn.runID] != nil
+            || turnDiffByTurnID[turn.id]?.hasChanges == true
     }
 
     /// Prefer structured event chips; append live tool artifacts not already paired by toolUseId.
@@ -603,7 +631,12 @@ public struct LiveThreadView: View {
                 streamingAssistantBody(target: turn.assistantText)
             }
         case .completed(let turn):
-            if turn.status == .failed {
+            if !LiveThreadTranscript.shouldRenderTurn(
+                turn,
+                hasAssistantArtifacts: hasAssistantArtifacts(for: turn)
+            ) {
+                EmptyView()
+            } else if turn.status == .failed {
                 errorState(turn.errorMessage ?? "Run failed")
             } else {
                 VStack(alignment: .leading, spacing: 12) {
