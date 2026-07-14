@@ -331,4 +331,27 @@ struct LancerDProtocolTests {
             _ = try JSONDecoder().decode(ConversationAttachmentReference.self, from: data)
         }
     }
+
+    @Test func conversationAttachmentDecodesLegacyWithoutContentDigest() throws {
+        let data = Data(ConversationAttachmentGoldenFixtures.attachmentImageWithMimeType.utf8)
+        let decoded = try JSONDecoder().decode(ConversationAttachmentReference.self, from: data)
+        #expect(decoded.contentDigest == nil)
+        #expect(decoded.id == "a1")
+    }
+
+    @Test func conversationAttachmentRoundTripsContentDigest() throws {
+        let digest = String(repeating: "ab", count: 32)
+        let ref = ConversationAttachmentReference(
+            id: "a1", name: "photo.jpg", mimeType: "image/jpeg",
+            byteCount: 12, kind: .image,
+            hostPath: "/Users/me/.lancer/attachments/objects/\(digest)",
+            previewCacheKey: "a1",
+            contentDigest: digest
+        )
+        let encoded = try JSONEncoder().encode(ref)
+        let obj = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(obj["contentDigest"] as? String == digest)
+        let decoded = try JSONDecoder().decode(ConversationAttachmentReference.self, from: encoded)
+        #expect(decoded == ref)
+    }
 }

@@ -266,6 +266,11 @@ type conversationLaunchParams struct {
 	VendorSessionID string // "" ⇒ no turn on this conversation has bound one yet
 	IsNew           bool   // true ⇒ first turn of a brand-new conversation
 
+	// Attachments are structured refs for this turn. Prompt stays the clean
+	// user-typed text for audit/run/ledger; hostPath is injected only into the
+	// ephemeral vendor prompt at the launch boundary (see vendorAttachmentPrompt).
+	Attachments []conversationAttachmentReference
+
 	// Contract mirrors dispatchParams.Contract — see conversationAppendRequest's
 	// identical field (conversation_store.go) for why this exists: without it,
 	// every receipt created through agent.conversations.append (the live
@@ -361,12 +366,12 @@ func runContractToReceipt(c *runContract) *receiptContract {
 }
 
 type dispatchParams struct {
-	Agent       string  `json:"agent"`
-	CWD         string  `json:"cwd"`
-	Prompt      string  `json:"prompt"`
-	BudgetUSD   float64 `json:"budgetUSD"`
-	Model       string  `json:"model"`
-	UseWorktree bool    `json:"useWorktree,omitempty"`
+	Agent       string       `json:"agent"`
+	CWD         string       `json:"cwd"`
+	Prompt      string       `json:"prompt"`
+	BudgetUSD   float64      `json:"budgetUSD"`
+	Model       string       `json:"model"`
+	UseWorktree bool         `json:"useWorktree,omitempty"`
 	Contract    *runContract `json:"contract,omitempty"`
 
 	// worktreePath/worktreeRepoRoot are set by runDispatch (never over the wire —
@@ -1232,6 +1237,11 @@ type dispatchRun struct {
 	// (and deleted) by dispatcher.handleControlRequest. Guarded by
 	// dispatcher.mu like every other dispatchRun field.
 	pendingControlAnswer map[string]controlAnswer
+	// Attachment privacy for phone-facing tool/artifact events: absolute
+	// paths under the attachment root (and known object paths) are redacted
+	// in wrapEmitForRun before relay/ledger. Vendor stdin is not altered.
+	attachmentRoot         string
+	attachmentPlaceholders map[string]string
 }
 
 // runTerminalCallback fires once when a launched run reaches a terminal process
@@ -1387,6 +1397,24 @@ func (d *dispatcher) emitAudit(e AuditEntry) {
 // the process launches.
 func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 	return func(method string, params any) {
+		// Phone-event privacy first: redact verified attachment absolute paths
+		// in tool/artifact/live-status/output/question JSON before receipt
+		// accumulation, relay, and ledger. Vendor stdin is not altered
+		// (redaction is emit-side only; replacement is bounded to this run's
+		// resolved attachments — not a global filesystem scrub).
+		if method == "agent.tool.start" || method == "agent.artifact" || method == liveStatusMethod ||
+			method == "agent.run.output" || method == "agent.question.raw" {
+			d.mu.Lock()
+			run := d.runs[runID]
+			var root string
+			var placeholders map[string]string
+			if run != nil {
+				root = run.attachmentRoot
+				placeholders = run.attachmentPlaceholders
+			}
+			d.mu.Unlock()
+			params = redactAttachmentPathsInParams(method, params, root, placeholders)
+		}
 		d.observeReceiptEmit(runID, method, params)
 		if method == "agent.run.vendorSession" {
 			m, _ := params.(map[string]any)
@@ -2314,8 +2342,21 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 // bindVendorSession (all keyed by run_id). The caller (conversationsAppend)
 // is responsible for never invoking this twice for the same ledger turn (an
 // idempotent clientTurnId replay must not double-launch).
+//
+// Desired semantic order (preserve when merging auth branch — do not reorder):
+//  1. clean policy command + attachment identity digest → ContentHash
+//  2. policy allow
+//  3. canonical / content validation (receipt, root, re-hash)
+//  4. Claude auth preflight (when integrated — not in this branch)
+//  5. ephemeral JSON attachment manifest
+//  6. run insert / launch
 func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
-	argv, _, ok := buildConversationArgv(p)
+	// 1. Policy/audit argv uses the CLEAN user prompt only. hostPath must never
+	// enter ApprovalEvent.Command, ContentHash command material, audit Command,
+	// or the in-memory run.Prompt (phone-visible surfaces / receipts).
+	policyParams := p
+	policyParams.Prompt = p.Prompt
+	policyArgv, _, ok := buildConversationArgv(policyParams)
 	if !ok {
 		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
 	}
@@ -2336,21 +2377,25 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		return dispatchResult{Status: "budgetExceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, p.BudgetUSD)}
 	}
 
-	// Policy gate (same risk scoring as dispatch/continueRun/resumeObservedSession).
-	command := "[conversation-append] " + strings.Join(argv, " ")
+	// ContentHash binds clean argv + attachment identity digest in toolInput
+	// (computeContentHash's existing 4th field) — not mutable hostPath text.
+	command := "[conversation-append] " + strings.Join(policyArgv, " ")
+	attDigest := attachmentIdentityDigest(p.Attachments)
 	event := ApprovalEvent{
 		ApprovalID:  newUUID(),
 		Agent:       normalizeAgentSource(p.Agent),
 		Kind:        "command",
 		Command:     command,
 		CWD:         p.CWD,
-		Risk:        d.launchRisk(argv),
+		Risk:        d.launchRisk(policyArgv),
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 		RunID:       runID,
-		ContentHash: computeContentHash(command, "", p.CWD, ""),
+		ContentHash: computeContentHash(command, "", p.CWD, attDigest),
 	}
+
+	// 2. Policy gate.
 	effect, rule, fromDefault := evalFn(event)
-	effect = relaxLaunchEscalation(effect, fromDefault, argv, d.hookWired)
+	effect = relaxLaunchEscalation(effect, fromDefault, policyArgv, d.hookWired)
 	switch effect {
 	case "deny":
 		audit(AuditEntry{Action: "conversation-append-denied", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
@@ -2360,7 +2405,47 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
-	// See dispatch()'s identical comment: the run record must exist before
+	// Adapter scope: path manifest only for audited Claude Code. Other agents
+	// with attachments fail closed with a path-free unsupported error — no
+	// launch and no path in argv/ps.
+	if len(p.Attachments) > 0 && normalizeAgentSource(p.Agent) != "claudeCode" {
+		audit(AuditEntry{Action: "conversation-append-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
+		return dispatchResult{Status: "error", Message: "attachments are not supported for this agent yet"}
+	}
+
+	// 3. Canonical path + content validation (receipt lookup, root trust
+	// boundary, re-hash). Errors name id/name only — never hostPath.
+	resolved, err := resolveAndVerifyAttachments(p.Attachments)
+	if err != nil {
+		audit(AuditEntry{Action: "conversation-append-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+
+	// 4. Claude auth preflight — when integrated (auth branch). Not present in
+	// this worktree; keep this comment as the merge-order anchor.
+
+	// 5. Ephemeral JSON attachment manifest (Claude only; empty → clean prompt).
+	vendorPrompt, err := vendorAttachmentPrompt(p.Prompt, resolved)
+	if err != nil {
+		audit(AuditEntry{Action: "conversation-append-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+	launchParams := p
+	launchParams.Prompt = vendorPrompt
+	launchArgv, _, ok := buildConversationArgv(launchParams)
+	if !ok {
+		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
+	}
+
+	attRoot := ""
+	placeholders := attachmentPathPlaceholders(resolved)
+	if len(resolved) > 0 {
+		if root, rerr := ensureAttachmentRoot(); rerr == nil {
+			attRoot = root
+		}
+	}
+
+	// 6. See dispatch()'s identical comment: the run record must exist before
 	// launch runs, or a fast-exiting process's terminal-status event races
 	// past a nil run and worktree cleanup silently no-ops.
 	d.mu.Lock()
@@ -2369,12 +2454,18 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		audit(AuditEntry{Action: "conversation-append-emergency-stopped", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt})
 		return emergencyStoppedResult()
 	}
-	d.runs[runID] = &dispatchRun{ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, Contract: p.Contract, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
+	// run.Prompt stays the clean user intent — never the vendor path prefix.
+	d.runs[runID] = &dispatchRun{
+		ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model,
+		Status: "running", BudgetUSD: p.BudgetUSD, Contract: p.Contract,
+		WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot,
+		attachmentRoot: attRoot, attachmentPlaceholders: placeholders,
+	}
 	d.mu.Unlock()
 	d.startReceiptAccum(runID, d.receiptStartFromDispatch(dispatchParams{
 		Agent: p.Agent, CWD: p.CWD, Model: p.Model, Contract: p.Contract, worktreePath: p.worktreePath, worktreeRepoRoot: p.worktreeRepoRoot,
 	}))
-	handle, err := d.launch(argv, p.CWD, runID, d.wrapEmitForRun(runID, true))
+	handle, err := d.launch(launchArgv, p.CWD, runID, d.wrapEmitForRun(runID, true))
 	if err != nil {
 		d.mu.Lock()
 		delete(d.runs, runID)

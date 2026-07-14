@@ -80,11 +80,15 @@ func TestAttachmentPutChunkReassembly(t *testing.T) {
 	if r2.Path == "" {
 		t.Fatal("expected path on final chunk")
 	}
-	if !strings.Contains(r2.Path, filepath.Join(home, ".lancer", "attachments")) {
-		t.Errorf("path %q not under attachments dir", r2.Path)
+	if r2.ID == "" || !isValidContentDigest(r2.ContentDigest) {
+		t.Fatalf("expected id+contentDigest on final chunk: %+v", r2)
 	}
-	if !strings.HasSuffix(r2.Path, "-note.txt") {
-		t.Errorf("path %q missing sanitized suffix", r2.Path)
+	wantDigest := sha256Hex(string(payload))
+	if r2.ContentDigest != wantDigest {
+		t.Fatalf("contentDigest = %q, want %q", r2.ContentDigest, wantDigest)
+	}
+	if !strings.Contains(r2.Path, filepath.Join(home, ".lancer", "attachments", "objects", wantDigest)) {
+		t.Errorf("path %q not under objects/%s", r2.Path, wantDigest)
 	}
 
 	got, err := os.ReadFile(r2.Path)
@@ -99,8 +103,8 @@ func TestAttachmentPutChunkReassembly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat: %v", err)
 	}
-	if info.Mode().Perm() != 0o600 {
-		t.Errorf("file mode = %o, want 0600", info.Mode().Perm())
+	if info.Mode().Perm() != 0o400 {
+		t.Errorf("file mode = %o, want 0400", info.Mode().Perm())
 	}
 	dirInfo, err := os.Stat(filepath.Dir(r2.Path))
 	if err != nil {
@@ -322,9 +326,11 @@ func TestE2ERouterAttachmentPut(t *testing.T) {
 	var env struct {
 		Type    string `json:"type"`
 		Payload struct {
-			Path  string `json:"path"`
-			OK    bool   `json:"ok"`
-			Error string `json:"error"`
+			Path          string `json:"path"`
+			ID            string `json:"id"`
+			ContentDigest string `json:"contentDigest"`
+			OK            bool   `json:"ok"`
+			Error         string `json:"error"`
 		} `json:"payload"`
 	}
 	if err := json.Unmarshal(raw, &env); err != nil {
@@ -335,6 +341,9 @@ func TestE2ERouterAttachmentPut(t *testing.T) {
 	}
 	if env.Payload.Path == "" || !env.Payload.OK {
 		t.Fatalf("payload = %+v", env.Payload)
+	}
+	if env.Payload.ID == "" || env.Payload.ContentDigest == "" {
+		t.Fatalf("missing id/contentDigest: %+v", env.Payload)
 	}
 	got, err := os.ReadFile(env.Payload.Path)
 	if err != nil {
