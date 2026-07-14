@@ -56,10 +56,19 @@ public struct LiveThreadView: View {
     #endif
 
     private static let scrollTailID = "live-tail"
-    /// Live path must not use G2 fixtures — they painted a fake "4 files +442 −11"
-    /// pill on brand-new chats (owner phone 2026-07-13). Relay stub returns empty
-    /// until G1 RPCs are wired through E2E (Fable: live ReviewDataSource).
-    private var reviewDataSource: any ReviewDataSource { RelayReviewDataSource() }
+    /// Live path must not use G2 fixtures — it should bind to the active machine's
+    /// relay bridge when available, and degrade to unsupported when no bridge is live.
+    private var reviewDataSource: any ReviewDataSource {
+        let connectedBridge: E2ERelayBridge? = {
+            if let machineID = bridge.activeMachineID,
+               relayFleetStore.isConnected(machineID),
+               let machine = relayFleetStore.machine(machineID) {
+                return machine.bridge
+            }
+            return relayFleetStore.firstConnectedMachine?.bridge
+        }()
+        return RelayReviewDataSource(bridge: connectedBridge)
+    }
 
     private struct ReviewPresentation: Identifiable {
         enum Scope {
