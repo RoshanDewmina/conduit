@@ -52,6 +52,13 @@ public final class E2ERelayBridge: ObservableObject {
     private var repoFileDiffContinuation: CheckedContinuation<Data, Error>?
     private var repoTreeContinuation: CheckedContinuation<Data, Error>?
     private var repoFileContinuation: CheckedContinuation<Data, Error>?
+    /// One gate per repo RPC family — serializes same-type calls so concurrent
+    /// UI fetches (e.g. four turnDiffs) cannot collide on the single continuation slot.
+    private let repoTurnDiffGate = E2ERelayRPCSerializationGate()
+    private let repoSessionDiffGate = E2ERelayRPCSerializationGate()
+    private let repoFileDiffGate = E2ERelayRPCSerializationGate()
+    private let repoTreeGate = E2ERelayRPCSerializationGate()
+    private let repoFileGate = E2ERelayRPCSerializationGate()
     private var attachmentPutContinuation: CheckedContinuation<AttachmentPutResult, Error>?
 #if DEBUG
     var boundedRPCWaitTimeoutOverride: Duration?
@@ -109,6 +116,21 @@ public final class E2ERelayBridge: ObservableObject {
             continuation.resume(returning: false)
         }
         pendingDecisionAcks.removeAll()
+        repoTurnDiffContinuation?.resume(throwing: E2EError.notPaired)
+        repoTurnDiffContinuation = nil
+        repoSessionDiffContinuation?.resume(throwing: E2EError.notPaired)
+        repoSessionDiffContinuation = nil
+        repoFileDiffContinuation?.resume(throwing: E2EError.notPaired)
+        repoFileDiffContinuation = nil
+        repoTreeContinuation?.resume(throwing: E2EError.notPaired)
+        repoTreeContinuation = nil
+        repoFileContinuation?.resume(throwing: E2EError.notPaired)
+        repoFileContinuation = nil
+        repoTurnDiffGate.cancelAll()
+        repoSessionDiffGate.cancelAll()
+        repoFileDiffGate.cancelAll()
+        repoTreeGate.cancelAll()
+        repoFileGate.cancelAll()
     }
 
     /// Send an approval decision through the E2E relay and wait for the
@@ -662,31 +684,40 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    // Request payloads for the read-only repo review RPCs — file-scope-visible
+    // because Swift forbids types nested in generic functions.
+    private struct RepoTurnDiffParams: Codable, Sendable { let conversationId: String; let turnId: String }
+    private struct RepoSessionDiffParams: Codable, Sendable { let conversationId: String }
+    private struct RepoFileDiffParams: Codable, Sendable { let conversationId: String; let path: String; let turnId: String? }
+    private struct RepoTreeParams: Codable, Sendable { let conversationId: String; let path: String }
+    private struct RepoFileParams: Codable, Sendable { let conversationId: String; let path: String; let maxBytes: Int }
+
     /// Read-only review RPC: per-turn repo diff summary for one conversation.
     public func relayRepoTurnDiff<Result: Decodable & Sendable>(
         conversationID: String,
         turnID: String,
         as type: Result.Type
     ) async throws -> Result {
-        guard isActive else { throw E2EError.notPaired }
-        struct Params: Codable, Sendable { let conversationId: String; let turnId: String }
-        try await relayClient.send(
-            type: "repoTurnDiff",
-            payload: Params(conversationId: conversationID, turnId: turnID)
-        )
-        repoTurnDiffContinuation?.resume(throwing: E2EError.superseded)
-        repoTurnDiffContinuation = nil
-        let timeout = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
-            guard let self, !Task.isCancelled else { return }
-            self.repoTurnDiffContinuation?.resume(throwing: E2EError.timedOut)
-            self.repoTurnDiffContinuation = nil
+        try await repoTurnDiffGate.withSerialization {
+            guard isActive else { throw E2EError.notPaired }
+            try await relayClient.send(
+                type: "repoTurnDiff",
+                payload: RepoTurnDiffParams(conversationId: conversationID, turnId: turnID)
+            )
+            repoTurnDiffContinuation?.resume(throwing: E2EError.superseded)
+            repoTurnDiffContinuation = nil
+            let timeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+                guard let self, !Task.isCancelled else { return }
+                self.repoTurnDiffContinuation?.resume(throwing: E2EError.timedOut)
+                self.repoTurnDiffContinuation = nil
+            }
+            defer { timeout.cancel() }
+            let payload = try await withCheckedThrowingContinuation { c in
+                self.repoTurnDiffContinuation = c
+            }
+            return try JSONDecoder().decode(type, from: payload)
         }
-        defer { timeout.cancel() }
-        let payload = try await withCheckedThrowingContinuation { c in
-            self.repoTurnDiffContinuation = c
-        }
-        return try JSONDecoder().decode(type, from: payload)
     }
 
     /// Read-only review RPC: whole-session repo diff summary for one conversation.
@@ -694,25 +725,26 @@ public final class E2ERelayBridge: ObservableObject {
         conversationID: String,
         as type: Result.Type
     ) async throws -> Result {
-        guard isActive else { throw E2EError.notPaired }
-        struct Params: Codable, Sendable { let conversationId: String }
-        try await relayClient.send(
-            type: "repoSessionDiff",
-            payload: Params(conversationId: conversationID)
-        )
-        repoSessionDiffContinuation?.resume(throwing: E2EError.superseded)
-        repoSessionDiffContinuation = nil
-        let timeout = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
-            guard let self, !Task.isCancelled else { return }
-            self.repoSessionDiffContinuation?.resume(throwing: E2EError.timedOut)
-            self.repoSessionDiffContinuation = nil
+        try await repoSessionDiffGate.withSerialization {
+            guard isActive else { throw E2EError.notPaired }
+            try await relayClient.send(
+                type: "repoSessionDiff",
+                payload: RepoSessionDiffParams(conversationId: conversationID)
+            )
+            repoSessionDiffContinuation?.resume(throwing: E2EError.superseded)
+            repoSessionDiffContinuation = nil
+            let timeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+                guard let self, !Task.isCancelled else { return }
+                self.repoSessionDiffContinuation?.resume(throwing: E2EError.timedOut)
+                self.repoSessionDiffContinuation = nil
+            }
+            defer { timeout.cancel() }
+            let payload = try await withCheckedThrowingContinuation { c in
+                self.repoSessionDiffContinuation = c
+            }
+            return try JSONDecoder().decode(type, from: payload)
         }
-        defer { timeout.cancel() }
-        let payload = try await withCheckedThrowingContinuation { c in
-            self.repoSessionDiffContinuation = c
-        }
-        return try JSONDecoder().decode(type, from: payload)
     }
 
     /// Read-only review RPC: unified diff hunks for a file, scoped to an optional turn.
@@ -722,25 +754,26 @@ public final class E2ERelayBridge: ObservableObject {
         turnID: String?,
         as type: Result.Type
     ) async throws -> Result {
-        guard isActive else { throw E2EError.notPaired }
-        struct Params: Codable, Sendable { let conversationId: String; let path: String; let turnId: String? }
-        try await relayClient.send(
-            type: "repoFileDiff",
-            payload: Params(conversationId: conversationID, path: path, turnId: turnID)
-        )
-        repoFileDiffContinuation?.resume(throwing: E2EError.superseded)
-        repoFileDiffContinuation = nil
-        let timeout = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
-            guard let self, !Task.isCancelled else { return }
-            self.repoFileDiffContinuation?.resume(throwing: E2EError.timedOut)
-            self.repoFileDiffContinuation = nil
+        try await repoFileDiffGate.withSerialization {
+            guard isActive else { throw E2EError.notPaired }
+            try await relayClient.send(
+                type: "repoFileDiff",
+                payload: RepoFileDiffParams(conversationId: conversationID, path: path, turnId: turnID)
+            )
+            repoFileDiffContinuation?.resume(throwing: E2EError.superseded)
+            repoFileDiffContinuation = nil
+            let timeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+                guard let self, !Task.isCancelled else { return }
+                self.repoFileDiffContinuation?.resume(throwing: E2EError.timedOut)
+                self.repoFileDiffContinuation = nil
+            }
+            defer { timeout.cancel() }
+            let payload = try await withCheckedThrowingContinuation { c in
+                self.repoFileDiffContinuation = c
+            }
+            return try JSONDecoder().decode(type, from: payload)
         }
-        defer { timeout.cancel() }
-        let payload = try await withCheckedThrowingContinuation { c in
-            self.repoFileDiffContinuation = c
-        }
-        return try JSONDecoder().decode(type, from: payload)
     }
 
     /// Read-only review RPC: one directory listing under the conversation's cwd.
@@ -749,25 +782,26 @@ public final class E2ERelayBridge: ObservableObject {
         path: String,
         as type: Result.Type
     ) async throws -> Result {
-        guard isActive else { throw E2EError.notPaired }
-        struct Params: Codable, Sendable { let conversationId: String; let path: String }
-        try await relayClient.send(
-            type: "repoTree",
-            payload: Params(conversationId: conversationID, path: path)
-        )
-        repoTreeContinuation?.resume(throwing: E2EError.superseded)
-        repoTreeContinuation = nil
-        let timeout = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
-            guard let self, !Task.isCancelled else { return }
-            self.repoTreeContinuation?.resume(throwing: E2EError.timedOut)
-            self.repoTreeContinuation = nil
+        try await repoTreeGate.withSerialization {
+            guard isActive else { throw E2EError.notPaired }
+            try await relayClient.send(
+                type: "repoTree",
+                payload: RepoTreeParams(conversationId: conversationID, path: path)
+            )
+            repoTreeContinuation?.resume(throwing: E2EError.superseded)
+            repoTreeContinuation = nil
+            let timeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+                guard let self, !Task.isCancelled else { return }
+                self.repoTreeContinuation?.resume(throwing: E2EError.timedOut)
+                self.repoTreeContinuation = nil
+            }
+            defer { timeout.cancel() }
+            let payload = try await withCheckedThrowingContinuation { c in
+                self.repoTreeContinuation = c
+            }
+            return try JSONDecoder().decode(type, from: payload)
         }
-        defer { timeout.cancel() }
-        let payload = try await withCheckedThrowingContinuation { c in
-            self.repoTreeContinuation = c
-        }
-        return try JSONDecoder().decode(type, from: payload)
     }
 
     /// Read-only review RPC: file-content preview under the conversation's cwd.
@@ -777,25 +811,26 @@ public final class E2ERelayBridge: ObservableObject {
         maxBytes: Int,
         as type: Result.Type
     ) async throws -> Result {
-        guard isActive else { throw E2EError.notPaired }
-        struct Params: Codable, Sendable { let conversationId: String; let path: String; let maxBytes: Int }
-        try await relayClient.send(
-            type: "repoFile",
-            payload: Params(conversationId: conversationID, path: path, maxBytes: maxBytes)
-        )
-        repoFileContinuation?.resume(throwing: E2EError.superseded)
-        repoFileContinuation = nil
-        let timeout = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
-            guard let self, !Task.isCancelled else { return }
-            self.repoFileContinuation?.resume(throwing: E2EError.timedOut)
-            self.repoFileContinuation = nil
+        try await repoFileGate.withSerialization {
+            guard isActive else { throw E2EError.notPaired }
+            try await relayClient.send(
+                type: "repoFile",
+                payload: RepoFileParams(conversationId: conversationID, path: path, maxBytes: maxBytes)
+            )
+            repoFileContinuation?.resume(throwing: E2EError.superseded)
+            repoFileContinuation = nil
+            let timeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+                guard let self, !Task.isCancelled else { return }
+                self.repoFileContinuation?.resume(throwing: E2EError.timedOut)
+                self.repoFileContinuation = nil
+            }
+            defer { timeout.cancel() }
+            let payload = try await withCheckedThrowingContinuation { c in
+                self.repoFileContinuation = c
+            }
+            return try JSONDecoder().decode(type, from: payload)
         }
-        defer { timeout.cancel() }
-        let payload = try await withCheckedThrowingContinuation { c in
-            self.repoFileContinuation = c
-        }
-        return try JSONDecoder().decode(type, from: payload)
     }
 
     /// Send a question answer through the E2E relay to the paired daemon.
@@ -1337,6 +1372,62 @@ public enum RelayRepoError: Error, LocalizedError {
 #endif
 
 import Foundation
+
+/// Serializes same-type relay repo RPC calls so only one in-flight request
+/// occupies the single continuation slot for that RPC family. Different gate
+/// instances (turnDiff vs fileDiff, etc.) remain independent and may overlap.
+@MainActor
+final class E2ERelayRPCSerializationGate {
+    struct Cancelled: Error {}
+
+    private var isHeld = false
+    private var waiters: [CheckedContinuation<Void, Error>] = []
+
+#if DEBUG
+    /// Peak concurrent callers inside `withSerialization` (test seam).
+    private(set) var maxConcurrentEntries = 0
+    private var activeEntries = 0
+#endif
+
+    func withSerialization<T: Sendable>(_ body: () async throws -> T) async throws -> T {
+        try await acquire()
+        defer { release() }
+#if DEBUG
+        activeEntries += 1
+        maxConcurrentEntries = max(maxConcurrentEntries, activeEntries)
+        defer { activeEntries -= 1 }
+#endif
+        return try await body()
+    }
+
+    private func acquire() async throws {
+        if !isHeld {
+            isHeld = true
+            return
+        }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            waiters.append(continuation)
+        }
+    }
+
+    private func release() {
+        if waiters.isEmpty {
+            isHeld = false
+        } else {
+            waiters.removeFirst().resume(returning: ())
+        }
+    }
+
+    /// Clears queued waiters after `stop()`; in-flight bodies still finish via `release()`.
+    func cancelAll() {
+        let pending = waiters
+        waiters.removeAll()
+        isHeld = false
+        for waiter in pending {
+            waiter.resume(throwing: Cancelled())
+        }
+    }
+}
 
 /// Ephemeral live-status ticker from lancerd (`agent.run.liveStatus` → relay
 /// `runStatus`). Drives the chat status pill only — never a ledger row.

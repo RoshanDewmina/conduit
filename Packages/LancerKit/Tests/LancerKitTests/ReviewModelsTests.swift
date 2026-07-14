@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import AppFeature
+@testable import SessionFeature
 
 @Suite struct ReviewModelsTests {
     @Test("decodes turnDiff fixture verbatim")
@@ -326,6 +327,21 @@ import Testing
         let unsupported = try await relay.sessionDiff(conversationID: "c1")
         #expect(unsupported.supported == false)
         #expect(!unsupported.hasChanges)
+    }
+
+    @Test @MainActor
+    func repoRPCSerializationGateSerializesConcurrentCallers() async throws {
+        let gate = E2ERelayRPCSerializationGate()
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<4 {
+                group.addTask {
+                    try? await gate.withSerialization {
+                        try? await Task.sleep(for: .milliseconds(50))
+                    }
+                }
+            }
+        }
+        #expect(gate.maxConcurrentEntries == 1)
     }
 
     @Test("relay review source falls back when bridge is nil")
