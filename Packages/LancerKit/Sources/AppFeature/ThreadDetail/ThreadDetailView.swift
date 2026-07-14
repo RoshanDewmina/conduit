@@ -155,7 +155,10 @@ struct ThreadDetailView: View {
                                 ForEach(renderedVisibleTurns) { turn in
                                     VStack(alignment: .leading, spacing: 12) {
                                         if LiveThreadTranscript.shouldRenderPromptBubble(for: turn) {
-                                            ChatUserBubble(text: turn.prompt)
+                                            ChatUserBubble(
+                                                text: turn.prompt,
+                                                attachments: turn.attachments
+                                            )
                                         }
                                         threadAssistant(turn)
                                         if let diff = turnDiffByTurnID[turn.id], diff.hasChanges {
@@ -429,7 +432,7 @@ struct ThreadDetailView: View {
         .accessibilityIdentifier("review-comment-chips")
     }
 
-    private func handleSend(_ prompt: String, _ cwd: String) {
+    private func handleSend(_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference] = []) {
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
         guard WorkspaceRepoCatalog.isAbsoluteSendTarget(normalized) else { return }
         let composed = ReviewCommentFormatting.composerPrefix(
@@ -437,7 +440,7 @@ struct ThreadDetailView: View {
             prompt: prompt
         )
         queuedReviewComments.removeAll()
-        activeLiveThread = LiveThreadIdentifier(prompt: composed, cwd: normalized)
+        activeLiveThread = LiveThreadIdentifier(prompt: composed, cwd: normalized, attachments: attachments)
     }
 
     private var topBar: some View {

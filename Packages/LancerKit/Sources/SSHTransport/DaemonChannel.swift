@@ -950,14 +950,25 @@ public enum DaemonChannelError: Error, Sendable {
     case rpc(String)
 }
 
-/// Result of one `attachment.put` chunk (final chunk includes `path`).
+/// Result of one `attachment.put` chunk (final chunk includes `path`, opaque
+/// `id`, and lowercase hex `contentDigest`).
 public struct AttachmentPutResult: Codable, Sendable, Equatable {
     public var path: String?
+    public var id: String?
+    public var contentDigest: String?
     public var ok: Bool?
     public var error: String?
 
-    public init(path: String? = nil, ok: Bool? = nil, error: String? = nil) {
+    public init(
+        path: String? = nil,
+        id: String? = nil,
+        contentDigest: String? = nil,
+        ok: Bool? = nil,
+        error: String? = nil
+    ) {
         self.path = path
+        self.id = id
+        self.contentDigest = contentDigest
         self.ok = ok
         self.error = error
     }

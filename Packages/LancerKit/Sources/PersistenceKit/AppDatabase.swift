@@ -396,6 +396,14 @@ public final class AppDatabase: Sendable {
             }
         }
 
+        // Structured chat attachments — metadata only; preview bytes live in
+        // AttachmentPreviewCache. Old rows decode as [] via DEFAULT.
+        m.registerMigration("v14") { db in
+            try db.alter(table: "chat_turns") { t in
+                t.add(column: "attachments_json", .text).notNull().defaults(to: "[]")
+            }
+        }
+
         return m
     }
 }

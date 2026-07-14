@@ -3,6 +3,7 @@ import SwiftUI
 import PersistenceKit
 import SessionFeature
 import SSHTransport
+import LancerCore
 
 /// New Chat composer — repo picker uses the real workspace list; send
 /// requires a selected repo cwd (never a guessed `~/name`). Attachments
@@ -26,9 +27,9 @@ public struct NewChatComposerView: View {
         DispatchVendorSelection.default.rawValue
     private let initiallyShowsRepoPicker: Bool
     private let lockRepo: Bool
-    /// Hands (prompt, cwd) to the presenting view. Cwd is always the selected
-    /// repo's real path — missing selection blocks send.
-    private let onSend: (_ prompt: String, _ cwd: String) -> Void
+    /// Hands (clean prompt, cwd, attachment refs) to the presenting view.
+    /// Cwd is always the selected repo's real path — missing selection blocks send.
+    private let onSend: (_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference]) -> Void
 
     private var selectedModel: DispatchModelSelection {
         DispatchModelSelection.resolve(selectedModelSlug)
@@ -42,7 +43,7 @@ public struct NewChatComposerView: View {
         initiallyShowsRepoPicker: Bool = false,
         initialRepo: WorkspaceRepo? = nil,
         lockRepo: Bool = false,
-        onSend: @escaping (_ prompt: String, _ cwd: String) -> Void
+        onSend: @escaping (_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference]) -> Void
     ) {
         self.initiallyShowsRepoPicker = initiallyShowsRepoPicker
         self.onSend = onSend
@@ -318,7 +319,7 @@ public struct NewChatComposerView: View {
                 )
                 publishDrafts(&drafts)
                 do {
-                    let path = try await AttachmentUploader.upload(
+                    let receipt = try await AttachmentUploader.upload(
                         draft: draft,
                         conversationId: nil,
                         sendChunk: { params in
@@ -340,7 +341,7 @@ public struct NewChatComposerView: View {
                         return
                     }
                     drafts = AttachmentDraftStore.withState(
-                        drafts, id: draft.id, state: .done(hostPath: path)
+                        drafts, id: draft.id, state: .done(receipt)
                     )
                     publishDrafts(&drafts)
                 } catch {
@@ -356,11 +357,22 @@ public struct NewChatComposerView: View {
             guard AttachmentDraftStore.canSend(drafts) else { return }
         }
 
-        let prefixed = AttachmentPromptPrefix.apply(
-            userPrompt: prompt,
-            hostPaths: AttachmentDraftStore.hostPaths(drafts)
-        )
-        onSend(prefixed, cwd)
+        // Cache previews from draft bytes before clearing the composer.
+        let refs = AttachmentDraftStore.references(from: drafts)
+        if !refs.isEmpty {
+            let cache = try? AttachmentPreviewCache()
+            for draft in drafts {
+                guard case .done = draft.state else { continue }
+                if let preview = await AttachmentPreviewCache.makePreviewDataOffMain(
+                    from: draft.data, mimeType: draft.mimeType
+                ) {
+                    try? cache?.storePreview(preview, for: draft.id.uuidString)
+                }
+            }
+        }
+
+        let cleanPrompt = prompt
+        onSend(cleanPrompt, cwd, refs)
         dismiss()
     }
 
@@ -386,7 +398,12 @@ public struct NewChatComposerView: View {
                 dataBase64: params.dataBase64,
                 done: params.done
             )
-            return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
+            return AttachmentUploader.ChunkResult(
+                id: result.id,
+                path: result.path,
+                contentDigest: result.contentDigest,
+                error: result.error
+            )
         }
         guard let sshChannel else { throw AttachmentUploadError.noTransport }
         let result = try await sshChannel.putAttachment(
@@ -397,7 +414,12 @@ public struct NewChatComposerView: View {
             dataBase64: params.dataBase64,
             done: params.done
         )
-        return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
+        return AttachmentUploader.ChunkResult(
+            id: result.id,
+            path: result.path,
+            contentDigest: result.contentDigest,
+            error: result.error
+        )
     }
 
     private var repoBranchLabel: AttributedString {
@@ -433,7 +455,7 @@ public struct NewChatComposerView: View {
     Color(.systemGroupedBackground)
         .ignoresSafeArea()
         .sheet(isPresented: .constant(true)) {
-            NewChatComposerView(onSend: { _, _ in })
+            NewChatComposerView(onSend: { _, _, _ in })
                 .environment(WorkspaceDataStore(chatRepo: ChatConversationRepository(db)))
                 .environment(RelayFleetStore())
         }

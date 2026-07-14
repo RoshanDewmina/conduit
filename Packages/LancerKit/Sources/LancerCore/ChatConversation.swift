@@ -136,6 +136,9 @@ public struct ChatTurn: Codable, Sendable, Identifiable {
     public var hostSeqStart: Int?
     public var hostSeqEnd: Int?
     public var cloudRecordName: String?
+    /// Structured attachment metadata for this turn. Preview bytes live in the
+    /// phone cache keyed by `previewCacheKey` — never in SQLite.
+    public var attachments: [ConversationAttachmentReference]
 
     public enum Status: String, Codable, Sendable {
         case running
@@ -178,7 +181,8 @@ public struct ChatTurn: Codable, Sendable, Identifiable {
         vendorSessionID: String? = nil,
         hostSeqStart: Int? = nil,
         hostSeqEnd: Int? = nil,
-        cloudRecordName: String? = nil
+        cloudRecordName: String? = nil,
+        attachments: [ConversationAttachmentReference] = []
     ) {
         self.id = id
         self.conversationID = conversationID
@@ -196,6 +200,57 @@ public struct ChatTurn: Codable, Sendable, Identifiable {
         self.hostSeqStart = hostSeqStart
         self.hostSeqEnd = hostSeqEnd
         self.cloudRecordName = cloudRecordName
+        self.attachments = attachments
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, conversationID, ordinal, prompt, runID, transportKind, status
+        case assistantText, errorMessage, createdAt, completedAt, clientTurnID
+        case vendorSessionID, hostSeqStart, hostSeqEnd, cloudRecordName, attachments
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        conversationID = try c.decode(String.self, forKey: .conversationID)
+        ordinal = try c.decode(Int.self, forKey: .ordinal)
+        prompt = try c.decode(String.self, forKey: .prompt)
+        runID = try c.decode(String.self, forKey: .runID)
+        transportKind = try c.decodeIfPresent(String.self, forKey: .transportKind) ?? "ssh"
+        status = try c.decode(Status.self, forKey: .status)
+        assistantText = try c.decodeIfPresent(String.self, forKey: .assistantText) ?? ""
+        errorMessage = try c.decodeIfPresent(String.self, forKey: .errorMessage)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
+        clientTurnID = try c.decodeIfPresent(String.self, forKey: .clientTurnID)
+        vendorSessionID = try c.decodeIfPresent(String.self, forKey: .vendorSessionID)
+        hostSeqStart = try c.decodeIfPresent(Int.self, forKey: .hostSeqStart)
+        hostSeqEnd = try c.decodeIfPresent(Int.self, forKey: .hostSeqEnd)
+        cloudRecordName = try c.decodeIfPresent(String.self, forKey: .cloudRecordName)
+        attachments = try c.decodeIfPresent([ConversationAttachmentReference].self, forKey: .attachments) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(conversationID, forKey: .conversationID)
+        try c.encode(ordinal, forKey: .ordinal)
+        try c.encode(prompt, forKey: .prompt)
+        try c.encode(runID, forKey: .runID)
+        try c.encode(transportKind, forKey: .transportKind)
+        try c.encode(status, forKey: .status)
+        try c.encode(assistantText, forKey: .assistantText)
+        try c.encodeIfPresent(errorMessage, forKey: .errorMessage)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(completedAt, forKey: .completedAt)
+        try c.encodeIfPresent(clientTurnID, forKey: .clientTurnID)
+        try c.encodeIfPresent(vendorSessionID, forKey: .vendorSessionID)
+        try c.encodeIfPresent(hostSeqStart, forKey: .hostSeqStart)
+        try c.encodeIfPresent(hostSeqEnd, forKey: .hostSeqEnd)
+        try c.encodeIfPresent(cloudRecordName, forKey: .cloudRecordName)
+        if !attachments.isEmpty {
+            try c.encode(attachments, forKey: .attachments)
+        }
     }
 }
 
