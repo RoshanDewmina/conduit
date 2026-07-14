@@ -11,7 +11,8 @@ type queueFile struct {
 	Pending []ApprovalEvent `json:"pending"`
 }
 
-// diskQueue tracks approval events that still need delivery to an attach client.
+// diskQueue is the durable mirror of unresolved approvals. Delivery does not
+// remove an event; only successful resolution or no-client retirement does.
 type diskQueue struct {
 	mu   sync.Mutex
 	path string
@@ -93,15 +94,4 @@ func (q *diskQueue) remove(id string) error {
 		return err
 	}
 	return os.WriteFile(q.path, data, 0600)
-}
-
-// syncFromStore rewrites queue.json from in-memory pending approval events.
-func (q *diskQueue) syncFromStore(store *approvalStore) error {
-	store.mu.Lock()
-	events := make([]ApprovalEvent, 0, len(store.pending))
-	for _, p := range store.pending {
-		events = append(events, p.event)
-	}
-	store.mu.Unlock()
-	return q.replace(events)
 }

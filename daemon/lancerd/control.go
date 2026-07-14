@@ -96,14 +96,6 @@ func (r *resident) serveControl(conn net.Conn, first []byte) {
 // of the call — safe because handleMessage for any single request writes
 // exactly one response synchronously before returning.
 func (r *resident) handleControlMessage(conn net.Conn, msg *rpcMessage) {
-	if msg.Method == "agent.approval.response" {
-		var decision ApprovalDecision
-		if err := json.Unmarshal(msg.Params, &decision); err == nil {
-			_ = r.queue.remove(decision.ApprovalID)
-			_ = r.queue.syncFromStore(r.core.approvals)
-		}
-	}
-
 	var writeErr error
 	r.core.emitMu.Lock()
 	prevEmit := r.core.emit

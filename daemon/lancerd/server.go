@@ -193,6 +193,11 @@ type server struct {
 	emit       func([]byte) error
 	deviceMu   sync.RWMutex
 	device     *registeredDevice
+	// approvalRetired removes one resolved approval from the resident-owned
+	// delivery queue. It is nil outside the resident daemon (for example, in
+	// stdio-only tests). Removing by ID avoids whole-store snapshot races when
+	// multiple approvals resolve concurrently.
+	approvalRetired func(string) error
 	// relayToken is the per-session capability secret minted at session attach
 	// (lancer.device.register), delivered to the app over the DaemonChannel and
 	// presented as `Authorization: Bearer <relayToken>` on the decision relay.
@@ -248,16 +253,16 @@ func (s *server) setEmitter(emit func([]byte) error) {
 
 func newServer(home string) *server {
 	s := &server{
-		approvals:  newApprovalStore(),
-		questions:  newQuestionStore(),
-		policy:     newPolicyEngine(home),
-		audit:      newAuditLog(home),
-		secrets:    newSecretsStore(home),
-		dispatcher: newDispatcher(),
-		sessions:   newSessionRegistry(),
-		scheduler:  newScheduler(home),
-		loops:      map[string]loopState{},
-		loopsPath:  filepath.Join(home, ".lancer", "loops.json"),
+		approvals:      newApprovalStore(),
+		questions:      newQuestionStore(),
+		policy:         newPolicyEngine(home),
+		audit:          newAuditLog(home),
+		secrets:        newSecretsStore(home),
+		dispatcher:     newDispatcher(),
+		sessions:       newSessionRegistry(),
+		scheduler:      newScheduler(home),
+		loops:          map[string]loopState{},
+		loopsPath:      filepath.Join(home, ".lancer", "loops.json"),
 		runStderr:      map[string]string{},
 		runResultError: map[string]string{},
 	}
@@ -331,6 +336,11 @@ func (s *server) applyDecision(id, decision, editedToolInput, contentHash string
 	if decision == "approveAlways" {
 		if err := s.policy.appendAllowAlways(event); err != nil {
 			fmt.Fprintf(os.Stderr, "appendAllowAlways failed for %s: %v\n", id, err)
+		}
+	}
+	if s.approvalRetired != nil {
+		if err := s.approvalRetired(event.ApprovalID); err != nil {
+			fmt.Fprintf(os.Stderr, "sync approval queue after resolving %s: %v\n", event.ApprovalID, err)
 		}
 	}
 	return event, ok
@@ -1672,6 +1682,11 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 		result, received := waitWithTimeout(decisionCh, noClientGrace)
 		if !received {
 			s.approvals.remove(event.ApprovalID)
+			if s.approvalRetired != nil {
+				if err := s.approvalRetired(event.ApprovalID); err != nil {
+					fmt.Fprintf(os.Stderr, "sync approval queue after auto-allowing %s: %v\n", event.ApprovalID, err)
+				}
+			}
 			_ = s.audit.append(AuditEntry{
 				Action:     "auto-allow-no-client",
 				Agent:      event.Agent,
