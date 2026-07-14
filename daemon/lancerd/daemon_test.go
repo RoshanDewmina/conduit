@@ -275,7 +275,12 @@ func TestHookFastAutoApprovesWithNoClient(t *testing.T) {
 	withStateDir(t)
 	installTestPolicy(t) // fileWrite → ask (escalate)
 
-	s := newServer(serverHome())
+	r, err := newResident()
+	if err != nil {
+		t.Fatalf("newResident: %v", err)
+	}
+	defer r.core.poller.stopForTest()
+	s := r.core
 	srv, cli := net.Pipe()
 
 	event := ApprovalEvent{
@@ -291,7 +296,7 @@ func TestHookFastAutoApprovesWithNoClient(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		// clientReachable=false → no attach client and no registered push device.
-		s.handleHookWithNotify(srv, first, nil, func() bool { return false })
+		s.handleHookWithNotify(srv, first, r.notifyAttachOrQueue, func() bool { return false })
 		close(done)
 	}()
 
@@ -320,6 +325,7 @@ func TestHookFastAutoApprovesWithNoClient(t *testing.T) {
 	if !sawAutoAllow {
 		t.Fatalf("expected auto-allow-no-client audit entry, got %+v", entries)
 	}
+	assertQueueIDs(t, r)
 }
 
 // TestHookWaitsWhenClientReachable confirms the fast-approve does NOT fire when a

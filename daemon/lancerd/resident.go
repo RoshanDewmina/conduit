@@ -62,6 +62,9 @@ func newResident() (*resident, error) {
 		core:  core,
 		queue: newDiskQueue(qPath),
 	}
+	core.approvalRetired = func(id string) error {
+		return r.queue.remove(id)
+	}
 	core.setEmitter(r.writeToAttach)
 	if err := r.restoreQueue(); err != nil {
 		return nil, fmt.Errorf("restore queue: %w", err)
@@ -233,13 +236,6 @@ func (r *resident) serveAttach(conn net.Conn, _ []byte) {
 }
 
 func (r *resident) handleAttachMessage(msg *rpcMessage) {
-	if msg.Method == "agent.approval.response" {
-		var decision ApprovalDecision
-		if err := json.Unmarshal(msg.Params, &decision); err == nil {
-			_ = r.queue.remove(decision.ApprovalID)
-			_ = r.queue.syncFromStore(r.core.approvals)
-		}
-	}
 	r.core.handleMessage(msg)
 }
 
@@ -254,14 +250,11 @@ func (r *resident) drainToAttach() error {
 			return err
 		}
 	}
-	return r.queue.replace(nil)
+	return nil
 }
 
 func (r *resident) notifyAttachOrQueue(event ApprovalEvent) error {
 	if err := r.queue.add(event); err != nil {
-		return err
-	}
-	if err := r.queue.syncFromStore(r.core.approvals); err != nil {
 		return err
 	}
 	notification, err := marshalPendingNotification(event)
