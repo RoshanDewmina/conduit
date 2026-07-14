@@ -87,7 +87,7 @@ branch `feat/rel1-relay-robustness`.
 - `cd Packages/LancerKit && swift build && swift test`
 - New tests exist for: backend expiry frame carries `code`+`expiresAt`; daemon re-mint state
   machine; phone `.codeExpired` stops reconnect; first-send readiness gate.
-- Do NOT touch the live daemon, the owner's pairing (code 818038), or run `lancerd pair`.
+- Do NOT touch the live daemon, the owner's production pairing, or run `lancerd pair`.
 
 ## Out of scope
 

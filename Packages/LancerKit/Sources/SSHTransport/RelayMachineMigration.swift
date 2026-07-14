@@ -49,6 +49,9 @@ public enum RelayMachineMigration {
     public static func migrateLegacyIfNeeded(identity: RelayDeviceIdentity = .shared) async -> RelayMachineID? {
         guard E2ERelayClient.hasStoredPairing else { return nil }
 
+        let legacyWasRetiredHosted = UserDefaults.standard.string(forKey: "lancer.relay.pairedRelayURL")
+            == RelaySettings.retiredHostedURLString
+
         guard
             let code = E2ERelayClient.storedPairingCode(),
             let privKeyBase64 = E2ERelayClient.storedPairingPrivKey(),
@@ -65,6 +68,9 @@ public enum RelayMachineMigration {
         let machineID = RelayMachineID()
         UserDefaults.standard.set(code, forKey: "lancer.relay.machine.\(machineID.uuidString).code")
         UserDefaults.standard.set(relayURLString, forKey: "lancer.relay.machine.\(machineID.uuidString).url")
+        if legacyWasRetiredHosted {
+            UserDefaults.standard.set(true, forKey: "lancer.relay.machine.\(machineID.uuidString).confirmed")
+        }
 
         let record = RelayMachineRecord(id: machineID, displayName: "Relay host")
         await writeIndex([record])

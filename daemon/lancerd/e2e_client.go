@@ -29,7 +29,7 @@ type e2eRelayClient struct {
 	// still-pending approvals: a phone that reconnected — or a relay that
 	// swapped/orphaned a connection — has no other way to learn about an
 	// escalation sent while delivery was broken.
-	pairedHandler func()
+	pairedHandler  func()
 	stopCh         chan struct{}
 	stopOnce       sync.Once
 	wg             sync.WaitGroup
@@ -48,10 +48,11 @@ type e2eRelayClient struct {
 
 	// everConfirmed is set once, the first time this client observes
 	// peer_joined, and never cleared again (unlike paired, which drops on
-	// every disconnect). It is the daemon-side signal that this pairing code
-	// completed at least one key exchange — the strictest available proxy
-	// for the relay's own PairedAt, used to decide whether a code_expired
-	// rejection is safe to auto-remint (see decideExpiryAction).
+	// every disconnect). Loaded from relay-pairing.json ConfirmedAt on
+	// reconnect so a LaunchAgent/binary restart does not forget that this
+	// code already completed an exchange — otherwise REL-1 remint would
+	// orphan the phone after a backend cold-start + confirm-window race.
+	// Used by decideExpiryAction.
 	everConfirmed bool
 
 	// sendSeq/recv track the per-direction replay-resistance sequence for the
@@ -131,7 +132,7 @@ func (c *e2eRelayClient) stop() {
 func (c *e2eRelayClient) giveUp(reason string) {
 	c.stopOnce.Do(func() {
 		c.closeAndHalt()
-		log.Printf("e2e: giving up on pairing code %s — %s", c.pairingCode, reason)
+		log.Printf("e2e: giving up on relay pairing — %s", reason)
 	})
 }
 
@@ -162,8 +163,8 @@ func (c *e2eRelayClient) remintPairingCode() {
 		c.giveUp(fmt.Sprintf("pairing code expired unconfirmed, re-mint failed: %v", err))
 		return
 	}
-	log.Printf("e2e: pairing code expired — re-minted %s", code)
-	c.giveUp(fmt.Sprintf("pairing code expired unconfirmed — re-minted %s", code))
+	log.Printf("e2e: pairing code expired — re-minted a fresh code")
+	c.giveUp("pairing code expired unconfirmed — re-minted a fresh code")
 }
 
 func (c *e2eRelayClient) closeAndHalt() {
@@ -243,7 +244,7 @@ func (c *e2eRelayClient) connect() error {
 	c.connected = true
 	c.mu.Unlock()
 
-	log.Printf("e2e: connected to relay as daemon (code: %s)", c.pairingCode)
+	log.Printf("e2e: connected to relay as daemon")
 	return nil
 }
 
@@ -325,15 +326,11 @@ func (c *e2eRelayClient) messageLoop() {
 				case expiryActionRemint:
 					c.remintPairingCode()
 					return
-				case expiryActionGiveUp:
-					streak, exceeded := c.expiredCode.record()
-					if exceeded {
-						c.giveUp(fmt.Sprintf(
-							"pairing code expired after %d rejected attempts on an already-confirmed pairing — run 'lancerd pair' again",
-							streak,
-						))
-						return
-					}
+				case expiryActionReregister:
+					// Keep code+keys. Connection close follows; connectLoop
+					// redials and the backend allocates a fresh waiting slot.
+					log.Printf("e2e: code_expired on confirmed pairing — re-registering same identity (not reminting)")
+					c.expiredCode.reset()
 				}
 			}
 
@@ -359,7 +356,17 @@ func (c *e2eRelayClient) messageLoop() {
 			c.mu.Unlock()
 			c.recv.reset()
 
-			log.Printf("e2e: paired with phone (code: %s)", c.pairingCode)
+			_, err = markRelayPairingConfirmed(&relayPairConfig{
+				RelayURL:   c.relayURL,
+				Code:       c.pairingCode,
+				PrivateKey: base64URLEncode(c.privateKey[:]),
+				PublicKey:  base64URLEncode(c.publicKey[:]),
+			})
+			if err != nil {
+				log.Printf("e2e: failed to persist pairing confirmation: %v", err)
+			}
+
+			log.Printf("e2e: paired with phone")
 
 			if c.pairedHandler != nil {
 				c.pairedHandler()

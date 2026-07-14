@@ -255,7 +255,14 @@ public final class E2ERelayClient: ObservableObject {
 
 
     public static func storedRelayURL() -> String? {
-        UserDefaults.standard.string(forKey: udPairingRelayURL)
+        guard let stored = UserDefaults.standard.string(forKey: udPairingRelayURL) else {
+            return nil
+        }
+        let migrated = RelaySettings.migrateRetiredHostedURL(stored)
+        if migrated != stored {
+            UserDefaults.standard.set(migrated, forKey: udPairingRelayURL)
+        }
+        return migrated
     }
 
     // MARK: - Namespaced (multi-machine) stored pairing persistence
@@ -278,6 +285,16 @@ public final class E2ERelayClient: ObservableObject {
         "lancer.relay.machine.\(machineID.uuidString).url"
     }
 
+    private static func udMachineConfirmedKey(_ machineID: RelayMachineID) -> String {
+        "lancer.relay.machine.\(machineID.uuidString).confirmed"
+    }
+
+    /// True once this machine's pairing has completed at least one
+    /// `peer_joined` exchange. Survives app upgrade/relaunch via UserDefaults;
+    /// gates REL-1 `code_expired` handling so a confirmed phone re-registers
+    /// the same code instead of wiping onboarding state.
+    private var everConfirmed: Bool = false
+
     /// Writes this instance's pairing code + relay URL under
     /// `self.machineID`-namespaced UserDefaults keys.
     ///
@@ -295,6 +312,9 @@ public final class E2ERelayClient: ObservableObject {
         }
         UserDefaults.standard.set(pairingCode, forKey: Self.udMachineCodeKey(machineID))
         UserDefaults.standard.set(relayURL.absoluteString, forKey: Self.udMachineURLKey(machineID))
+        if everConfirmed {
+            UserDefaults.standard.set(true, forKey: Self.udMachineConfirmedKey(machineID))
+        }
     }
 
     public static func hasStoredPairing(machineID: RelayMachineID) -> Bool {
@@ -307,14 +327,32 @@ public final class E2ERelayClient: ObservableObject {
     }
 
     public static func storedRelayURL(machineID: RelayMachineID) -> String? {
-        UserDefaults.standard.string(forKey: udMachineURLKey(machineID))
+        let key = udMachineURLKey(machineID)
+        guard let stored = UserDefaults.standard.string(forKey: key) else {
+            return nil
+        }
+        let migrated = RelaySettings.migrateRetiredHostedURL(stored)
+        if migrated != stored {
+            UserDefaults.standard.set(migrated, forKey: key)
+            // A stored first-party URL is a legacy production pairing that
+            // predates the per-machine confirmation bit. Preserve it as an
+            // established identity during the hosted-relay cutover so a
+            // backend restart cannot make the phone wipe its pairing.
+            UserDefaults.standard.set(true, forKey: udMachineConfirmedKey(machineID))
+        }
+        return migrated
     }
 
-    /// Deletes both namespaced entries for `machineID`. No Keychain entry to
+    /// Deletes namespaced entries for `machineID`. No Keychain entry to
     /// delete — see `persistPairing()`.
     public static func deleteStoredPairing(machineID: RelayMachineID) {
         UserDefaults.standard.removeObject(forKey: udMachineCodeKey(machineID))
         UserDefaults.standard.removeObject(forKey: udMachineURLKey(machineID))
+        UserDefaults.standard.removeObject(forKey: udMachineConfirmedKey(machineID))
+    }
+
+    public static func storedPairingConfirmed(machineID: RelayMachineID) -> Bool {
+        UserDefaults.standard.bool(forKey: udMachineConfirmedKey(machineID))
     }
 
     /// Restores this instance's pairing code + relay URL from the namespaced
@@ -353,7 +391,8 @@ public final class E2ERelayClient: ObservableObject {
 
         self.pairingCode = code
         self.relayURL = restoredURL
-        Self.logger.info("restoreNamespacedStoredPairing: restored pairing for relayHost=\(self.relayURL.host ?? "", privacy: .public)")
+        self.everConfirmed = Self.storedPairingConfirmed(machineID: machineID)
+        Self.logger.info("restoreNamespacedStoredPairing: restored pairing for relayHost=\(self.relayURL.host ?? "", privacy: .public) confirmed=\(self.everConfirmed, privacy: .public)")
         return true
     }
 
@@ -438,7 +477,6 @@ public final class E2ERelayClient: ObservableObject {
     func acceptIncomingSequenceForTesting(_ seq: UInt64) -> Bool {
         recv.accept(seq)
     }
-
     /// Test-only seam for verifying that failed re-key attempts preserve the
     /// active outbound replay generation as well as the inbound window.
     func setSendSequenceForTesting(_ seq: UInt64) {
@@ -447,6 +485,13 @@ public final class E2ERelayClient: ObservableObject {
 
     var sendSequenceForTesting: UInt64 {
         sendSeq
+    }
+
+    /// Test-only seam: mark this client as having completed peer_joined so
+    /// durable `code_expired` re-register behavior can be exercised without
+    /// a live key exchange.
+    public func setEverConfirmedForTesting(_ value: Bool) {
+        everConfirmed = value
     }
 #endif
 
@@ -600,6 +645,7 @@ public final class E2ERelayClient: ObservableObject {
                 pairingState = .paired
                 pairingExpiresAt = nil
                 reconnectDelay = 1.0
+                everConfirmed = true
 
                 // Namespaced under self.machineID — see persistPairing() below.
                 // The old global/singular keys here made every E2ERelayClient
@@ -654,7 +700,17 @@ public final class E2ERelayClient: ObservableObject {
             let isCodeExpired = msg.code == "code_expired"
                 || (msg.code == nil && (msg.message ?? "").lowercased().contains("expired"))
             if isCodeExpired {
-                stopReconnectingDeadCode()
+                if everConfirmed {
+                    // Confirmed pairing: backend may have dropped PairedAt and
+                    // aged out a waiting re-registration. Same code+identity
+                    // re-creates the slot — do NOT wipe UserDefaults / show
+                    // .codeExpired (that forced owners to re-enter codes).
+                    Self.logger.info("handleMessage: code_expired on confirmed pairing — keeping code and reconnecting")
+                    pairingExpiresAt = nil
+                    // Fall through: connection close → handleDisconnect reconnects.
+                } else {
+                    stopReconnectingDeadCode()
+                }
             } else {
                 pairingState = .pairingFailed(msg.message ?? "Relay error")
                 pairingExpiresAt = nil

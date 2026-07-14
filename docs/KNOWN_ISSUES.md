@@ -37,12 +37,10 @@
 > Found while assessing "can self-hosted testers use this yet?". Re-verified 2026-06-24; status below
 > supersedes the 2026-06-20 "VERIFIED DOWN" snapshot. Neither was ever an app-code bug.
 
-- **`TESTER-1` — Relay reachability: RESOLVED (relay is live).** The canonical instance is
-  `https://conduit-push-y4wpy6zeva-ts.a.run.app` (the URL the app actually ships in
-  `project.yml:26`); `GET /health` returns **200** (verified 2026-06-24), and `install.sh` paired
-  against `wss://conduit-push-y4wpy6zeva-ts.a.run.app`. The old `35.201.3.231.sslip.io` and the
-  `lancer-push` (australia-southeast1) name in `PUBLISH_READINESS_CHECKLIST.md` §A are **stale doc
-  drift** — `conduit-push` is canonical (preserved per the rebrand infra-migration decision). Fix §A.
+- **`TESTER-1` — Relay reachability: RESOLVED (Fly relay is live).** The canonical instance is
+  `https://conduit-push.fly.dev`; `GET /health` returns **200**, unauthenticated protected routes
+  return **401**, and `/ws/relay` is live. The retired Cloud Run endpoint returns 404. Existing
+  confirmed pairings migrate only the exact retired hostname while preserving codes and keys.
 - **`TESTER-2` — installer 404s: FIXED in source (publish is owner-gated).** Root cause was
   rebrand drift in the GCS dist path, not the old GitHub-release naming: `install.sh` fetches flat
   `lancerd_${os}_${arch}` + `SHA256SUMS`, but `scripts/release-lancerd.sh` only emitted versioned

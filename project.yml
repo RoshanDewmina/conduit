@@ -20,10 +20,9 @@ settings:
     ENABLE_APP_INTENTS_METADATA_EXTRACTION: "YES"
     SWIFT_STRICT_CONCURRENCY: "complete"
     OTHER_SWIFT_FLAGS: "-warn-implicit-overrides"
-    # Push backend HTTPS URL — set to the Cloud Run service URL after deploy.
+    # Push backend HTTPS URL — Fly always-on relay.
     # No plain-HTTP fallback; ATS rejects http:// in Release builds.
-    # Example: https://lancer-push-HASH-ts.a.run.app
-    LANCER_PUSH_BACKEND_URL: "https://conduit-push-y4wpy6zeva-ts.a.run.app"
+    LANCER_PUSH_BACKEND_URL: "https://conduit-push.fly.dev"
     # Standard account configuration (Supabase project sfuqarvoxfupvadsvejb).
     # The PUBLISHABLE/anon key is a PUBLIC client key (RLS-protected) and ships in
     # the app binary by design, so it's committed here. NEVER put the service-role
@@ -80,7 +79,7 @@ targets:
             CFBundleURLSchemes:
               - lancer
         # Push backend HTTPS URL — read at runtime by LancerApp.swift.
-        # Set LANCER_PUSH_BACKEND_URL in build settings to the Cloud Run service URL.
+        # Set LANCER_PUSH_BACKEND_URL in build settings to the Fly relay URL.
         LANCER_PUSH_BACKEND_URL: "$(LANCER_PUSH_BACKEND_URL)"
         # Standard-account (Supabase) config — read at runtime by AccountConfiguration.fromBundle.
         # Empty build-setting values leave standard sign-in unavailable (offline pairing still works);

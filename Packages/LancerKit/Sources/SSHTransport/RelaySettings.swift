@@ -8,13 +8,24 @@ import Foundation
 /// be exercised against your own `push-backend` deployment.
 public enum RelaySettings {
 
-    // The live hosted relay (Cloud Run) — the same push-backend service the app
+    /// The retired hosted endpoint. It is kept only as an exact-match migration
+    /// sentinel; lookalike and self-hosted URLs must never be rewritten.
+    public static let retiredHostedURLString = "wss://conduit-push-y4wpy6zeva-ts.a.run.app"
+
+    // The live hosted relay (Fly.io) — the same push-backend service the app
     // targets via LANCER_PUSH_BACKEND_URL (push-backend doubles as the blind
     // /ws/relay). Pairing is zero-config: the daemon's `lancerd pair` defaults to
     // this same host (see relay_install_helper.go), so phone + daemon rendezvous
     // out of the box. Users never set this; the Settings override is for
     // self-hosters running their own relay.
-    public static let defaultURLString = "wss://conduit-push-y4wpy6zeva-ts.a.run.app"
+    public static let defaultURLString = "wss://conduit-push.fly.dev"
+
+    /// Canonicalizes only the retired first-party endpoint. This deliberately
+    /// uses string equality so custom relays and lookalike hostnames are left
+    /// untouched.
+    static func migrateRetiredHostedURL(_ value: String) -> String {
+        value == retiredHostedURLString ? defaultURLString : value
+    }
 
     // Legacy key for a user-set relay override. The override is no longer
     // honored or settable from the UI — the endpoint is fixed to the hosted
@@ -45,10 +56,11 @@ public enum RelaySettings {
            let parsed = URL(string: env),
            let scheme = parsed.scheme?.lowercased(), scheme == "ws" || scheme == "wss",
            parsed.host?.isEmpty == false {
+            let migrated = migrateRetiredHostedURL(env)
 #if DEBUG
-            defaults.set(env, forKey: debugPersistedOverrideKey)
+            defaults.set(migrated, forKey: debugPersistedOverrideKey)
 #endif
-            return env
+            return migrated
         }
 #if DEBUG
         if let stored = defaults.string(forKey: debugPersistedOverrideKey),
@@ -56,7 +68,11 @@ public enum RelaySettings {
            let parsed = URL(string: stored),
            let scheme = parsed.scheme?.lowercased(), scheme == "ws" || scheme == "wss",
            parsed.host?.isEmpty == false {
-            return stored
+            let migrated = migrateRetiredHostedURL(stored)
+            if migrated != stored {
+                defaults.set(migrated, forKey: debugPersistedOverrideKey)
+            }
+            return migrated
         }
 #endif
         // Invalid or non-ws(s) override → fail-safe to the hosted default rather

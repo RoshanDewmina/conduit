@@ -63,7 +63,7 @@ func TestClientNeverRemintsAfterEverConfirmed(t *testing.T) {
 	c := client.everConfirmed
 	client.mu.Unlock()
 
-	if got := decideExpiryAction(c); got != expiryActionGiveUp {
-		t.Fatalf("decideExpiryAction with everConfirmed=true = %v, want expiryActionGiveUp", got)
+	if got := decideExpiryAction(c); got != expiryActionReregister {
+		t.Fatalf("decideExpiryAction with everConfirmed=true = %v, want expiryActionReregister", got)
 	}
 }

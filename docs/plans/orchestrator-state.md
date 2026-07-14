@@ -1,5 +1,23 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ PAIRING DURABILITY 2026-07-12 ~18:55 — one-time onboarding (fix/pairing-durability)
+
+**Owner bar:** pairing is one-time onboarding. Do **not** expect re-pair on laptop reboot,
+LaunchAgent restart, lancerd binary replace, or phone app upgrade. New codes only for first
+onboarding, explicit `lancerd pair` / unpair, or true key/identity loss.
+
+**Today's re-pair was abnormal:** logs show the confirmed production code was stomped
+at ~17:13 by a **localhost** test relay (`ws://127.0.0.1:54xxx`), then a cascade of test
+pairings, then restore/re-pair. Not REL-1 remint of a confirmed phone; not POST-110
+install wiping identity. See `docs/plans/2026-07-12-pairing-durability.md`.
+
+**Fix branch:** `.worktrees/pairing-durability` (`fix/pairing-durability`) — persist
+`confirmedAt` in `~/.lancer/relay-pairing.json`, load into `everConfirmed` across restart,
+refuse silent overwrite of confirmed identity (explicit pair uses `writeRelayPairingReplacing`),
+confirmed `code_expired` re-registers same code (daemon+phone) instead of remint/wipe.
+Live file stamped `confirmedAt` for the restored code (identity unchanged). Do NOT run bare
+`lancerd pair` while phone holds the slot.
+
 ## ⚡ SESSION 4 IN FLIGHT 2026-07-12 ~17:20 — rescue done, REL-1 dispatched
 
 **Merged this session:** #105 (scroll arrow + proof chips + fetch-on-open), #106 (G1 turn-diff
@@ -48,7 +66,7 @@ holds the single relay slot — owner verifying). Merge #105 when CI green.
 - H `.worktrees/h-attachments` — context attachments (owner P0), cursor-agent STILL RUNNING.
 **Uncommitted worktree diffs must be committed before session end** (standing rule).
 
-**Relay ops:** owner phone paired code **818038**; daemon = master post-#100
+**Relay ops:** owner phone paired to the production relay; daemon = master post-#100
 (`lancerd.bak-pre-p100`). NEVER run bare `lancerd pair` while owner holds the slot. Backend
 project roshan-agent-f1c2466d, service conduit-push (australia-southeast1) — REL-1 evidence in
 gap audit (silent code expiry / half-open sockets / slot churn, gcloud logs cited).

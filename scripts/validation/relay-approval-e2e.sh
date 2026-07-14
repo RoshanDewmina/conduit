@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # relay-approval-e2e.sh — prove the FULL V1 relay approval round-trip in the sim:
-# phone (XCUITest) ↔ production Cloud Run relay ↔ resident lancerd, tap APPROVE,
+# phone (XCUITest) ↔ production Fly relay ↔ resident lancerd, tap APPROVE,
 # host hook unblocks (exit 0) + audit shows `approve`, then dispatch → lancer.proof/v0
 # receipt via the same paired daemon (control-channel probe).
 #
@@ -15,8 +15,8 @@ set -uo pipefail
 # this is the relay path, not SSH.
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
-RELAY_BASE="${LANCER_RELAY_URL:-wss://conduit-push-y4wpy6zeva-ts.a.run.app}"
-BACKEND="${LANCER_PUSH_BACKEND_URL:-https://conduit-push-y4wpy6zeva-ts.a.run.app}"
+RELAY_BASE="${LANCER_RELAY_URL:-wss://conduit-push.fly.dev}"
+BACKEND="${LANCER_PUSH_BACKEND_URL:-https://conduit-push.fly.dev}"
 # Fresh random code per run. Reusing a fixed code (314159) against the shared
 # relay let leaked daemons from PREVIOUS runs — each with its own keypair —
 # fight the current run's daemon for the same pair slot, which is how the

@@ -177,8 +177,8 @@ From the **New Chat** surface (the app home), dispatch a run and then continue i
 ## PHASE 5 — Notifications: relay + APNs (the unproven product promise)
 
 ### 5a. Backend secrets (owner-gated, one-time)
-The relay/APNs lives in the deployed `push-backend`. **The shipping app + daemon talk to `https://conduit-push-y4wpy6zeva-ts.a.run.app` (Cloud Run)** — this is the backend the device registers its APNs token against, so it is the one that must hold the APNs secrets. (`RelaySettings.defaultURLString`, `relay_install_helper.go:defaultRelayURL`, and `project.yml:26 LANCER_PUSH_BACKEND_URL` all point here; the older `https://35.201.3.231.sslip.io` Caddy box is a different deployment and is **not** where push fires — verifying secrets there proves nothing.) `/health` does **not** prove APNs is configured (push reads env lazily at first send). Confirm these are set on the *running* conduit-push Cloud Run instance (`docs/push-backend-deploy-env.md`):
-`APPROVAL_RELAY_SECRET`, `APNS_KEY_ID=L8LVU9X82W`, `APNS_TEAM_ID=39HM2X8GS6`, `APNS_BUNDLE_ID=dev.lancer.mobile`, `APNS_KEY_PATH=/secrets/apns.p8`. `.p8` source: `~/Downloads/Personal-Docs/AuthKey_L8LVU9X82W.p8` (never commit).
+The relay/APNs lives in the deployed `push-backend`. **The shipping app + daemon talk to `https://conduit-push.fly.dev` (Fly.io, always-on `iad`)** — this is the backend the device registers its APNs token against, so it must hold the APNs secrets. (`RelaySettings.defaultURLString`, `relay_install_helper.go:defaultRelayURL`, and `project.yml` all point here.) `/health` does **not** prove APNs delivery; push reads its configuration on send. Confirm these secret names are deployed on Fly without printing their values:
+`APPROVAL_RELAY_SECRET`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_KEY_PATH=/tmp/secrets/apns.p8`, and `APNS_KEY_P8_BASE64`. The entrypoint decodes the key into the container's temporary filesystem; never commit the `.p8`.
 
 ### 5b. Relay pairing (works on sim — proves the decision-relay path, not APNs delivery)
 Pair the phone to the relay in **Settings → Connection** (the app generates a pairing code; the host side connects with it). In DEBUG you can headless-pair the sim with `SIMCTL_CHILD_LANCER_RELAY_CODE=<6-digit code>`. With relay paired and **no SSH session**, an escalated approval should still reach the Inbox (delivered via `lancerE2EApprovalReceived` → mapped into the active `InboxViewModel`).
@@ -220,8 +220,8 @@ sequence. Facts pulled from `project.yml`: app bundle `dev.lancer.mobile`, team 
 ### 6b. Pre-archive checks
 - `aps-environment` is **production** → the build talks to the **production** APNs + the deployed
   `push-backend`. That matches the running backend (`APNS_BUNDLE_ID=dev.lancer.mobile`, D1 ✅). Good.
-- Confirm `LANCER_PUSH_BACKEND_URL` is set in the **Release** build settings to the Cloud Run URL
-  (it is **not** committed — inject locally/CI per `project.yml:83`). A blank URL ships a build that
+- Confirm `LANCER_PUSH_BACKEND_URL` is set in the **Release** build settings to
+  `https://conduit-push.fly.dev`. A blank URL ships a build that
   can't reach push.
 - Entitlements/CloudKit consistency: if you archive with `Lancer.entitlements` (iCloud on), set
   `ENABLE_CLOUDKIT=true`; if with `Lancer-DeviceTesting.entitlements`, keep it **false**
