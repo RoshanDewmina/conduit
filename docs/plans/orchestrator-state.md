@@ -1,5 +1,43 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ SESSION 6 2026-07-14 ~02:00 — #114/#118 merged; pairing-durability SUPERSEDED; P1b lane live
+
+**Context at start:** a Codex session (not this orchestrator) had already merged #115
+(preserve replay state on invalid re-key) and **#116 (Fly relay cutover — INCLUDING the full
+pairing-durability feature: ConfirmedAt persistence, writeRelayPairingReplacing,
+confirmed code_expired re-register, everConfirmed restore + withRelayPairingLock file lock)**.
+Owner confirms phone is on the post-#116 build, paired to Fly, working.
+
+- **#114 MERGED** (WP-P1a display filter + a second commit fixing the fetch-on-open bug:
+  list summaries were poisoning `lastHostSeq` — new `hydratedEventCursor` resumes from the
+  highest CONTIGUOUS local event seq; daemon seqs verified contiguous-from-1, never deleted).
+  Stage-4 blocking finding was process-only (no sim evidence); owner authorized merge, device
+  re-dogfood is the verification. Backlog minors: `$0.turnID!` force-unwrap ×2, 10k event cap
+  in ThreadDetail `hasAssistantArtifacts`, lastHostSeq-vs-baseSeq decoupling (speculative).
+- **#118 MERGED** (approval-queue: single retirement point in `applyDecision` after resolve
+  succeeds; delivery no longer clears the durable queue; auto-allow-no-client retires too).
+  Fable full-diff review: retire hook fires only post-resolve, outside store lock (no
+  getQuotaGuard-style nesting); fail direction safe (failed removal → duplicate card, never a
+  lost approval). Gate re-run by Fable on PR+master merge: `go test ./...` ok (45s).
+- **Pairing-durability worktree DELETED as superseded** — content-diff vs master showed only
+  older variants of what #116 landed (branch had no lock file, pre-#115 seq handling); doc
+  `2026-07-12-pairing-durability.md` is on master. No PR needed. Recurring-bug lane
+  "pairing durability" = CLOSED by #116.
+- **Docs committed** (07-13 PASTE brief, owner-asks, post110 blockers, appstore recap, audit
+  HTMLs, dogfood-log 07-13 entry). `simurgh/` intentionally untracked (separate project,
+  owner call 2026-07-14).
+- **WP-P1b IN FLIGHT** — `.worktrees/p1b-live-review` (`feat/p1b-live-review-wire`),
+  gpt-5.3-codex-high, spec `spec-p1b.md`: phone-side only; daemon repo.* relay arms already
+  exist (e2e_router.go:687-760). Bridge helpers must be 15s-bounded (#111 rule).
+- **WP-P1c QUEUED behind P1b** — same write-set files (LiveThreadView/ThreadDetailView);
+  serialize, do not parallel-dispatch.
+- **G3 pill absence** on POST-110 dogfood attributed to the #111 deafness bug — verify on
+  device, no code lane unless it reproduces post-fix.
+- **Owner-gated queue:** re-run `docs/plans/phone-test-session4.md` on the current build
+  (now vs Fly relay) + R1/R2 ×10 + Agents→Mac continuity + APNs lock-screen + emergency stop.
+  Note: hourly Cloud Run websocket ceiling may be GONE on Fly — observe reconnect cadence
+  in `lancerd.stderr.log` during dogfood.
+
 ## ⚡ PAIRING DURABILITY 2026-07-12 ~18:55 — one-time onboarding (fix/pairing-durability)
 
 **Owner bar:** pairing is one-time onboarding. Do **not** expect re-pair on laptop reboot,
