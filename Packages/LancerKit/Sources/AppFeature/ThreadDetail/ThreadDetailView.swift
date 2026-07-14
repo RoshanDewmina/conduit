@@ -21,6 +21,10 @@ struct ThreadDetailView: View {
     @State private var sessionDiff: RepoDiffSummary?
     @State private var reviewPresentation: ReviewPresentation?
     @State private var queuedReviewComments: [QueuedReviewComment] = []
+    @State private var transcriptRefreshFailed = false
+    /// Bumped on open and each Retry so only the latest load may mutate the banner.
+    @State private var transcriptLoadGeneration = 0
+    @State private var transcriptLoadGate = TranscriptRefreshLoadGate()
 
     private static let initialWindowSize = 100
     private static let windowExtendStep = 100
@@ -100,6 +104,30 @@ struct ThreadDetailView: View {
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                 }
+                            }
+
+                            if transcriptRefreshFailed {
+                                HStack(alignment: .top, spacing: 10) {
+                                    Image(systemName: "exclamationmark.triangle")
+                                        .foregroundStyle(.orange)
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("Transcript refresh failed or timed out.")
+                                            .font(.system(size: 14, weight: .medium))
+                                        Text("Cached turns stay available. Tap Retry to try again.")
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(.secondary)
+                                        Button("Retry refresh") {
+                                            transcriptLoadGeneration += 1
+                                        }
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .accessibilityLabel("Retry transcript refresh")
+                                    }
+                                }
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel(Text("Transcript refresh failed or timed out. Retry refresh."))
                             }
 
                             if turns.isEmpty {
@@ -202,7 +230,9 @@ struct ThreadDetailView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .task { await loadTurns() }
+        .task(id: transcriptLoadGeneration) {
+            await loadTurns()
+        }
         .sheet(isPresented: $isFollowUpPresented) {
             NewChatComposerView(
                 initialRepo: thread.cwd.isEmpty
@@ -294,6 +324,7 @@ struct ThreadDetailView: View {
 
     private func loadTurns() async {
         guard thread.id != "preview" else { return }
+        let loadToken = transcriptLoadGate.beginLoad()
         guard let db = try? AppDatabase.openShared() else { return }
         let repo = ChatConversationRepository(db)
         turns = (try? await repo.turns(conversationID: thread.id)) ?? []
@@ -305,9 +336,26 @@ struct ThreadDetailView: View {
         // Local events render before this await so offline opens do not hide
         // already-hydrated tool or assistant content during the timeout.
         if let refresh = workspaceData.refreshThreadFromHost {
-            await refresh(thread.id)
+            do {
+                try await refresh(thread.id)
+                guard !Task.isCancelled else { return }
+                if transcriptLoadGate.clearBanner(onSuccessFor: loadToken) {
+                    transcriptRefreshFailed = false
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                // Ephemeral banner only — coordinator publishes `.cloudStale`
+                // for refresh timeouts without claiming the machine is offline.
+                if transcriptLoadGate.setBanner(failedFor: loadToken) {
+                    transcriptRefreshFailed = true
+                }
+            }
+            guard !Task.isCancelled, transcriptLoadGate.allowsMutation(loadToken) else { return }
             turns = (try? await repo.turns(conversationID: thread.id)) ?? []
         }
+        guard !Task.isCancelled, transcriptLoadGate.allowsMutation(loadToken) else { return }
         let events = (try? await repo.events(conversationID: thread.id, limit: 10_000)) ?? []
         eventsByTurnID = Dictionary(grouping: events.filter { $0.turnID != nil }, by: { $0.turnID! })
         await loadReviewDiffs()
@@ -467,6 +515,40 @@ struct FlightRecorderTurnListView: View {
         }
         .navigationTitle("Flight Recorder")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Transcript refresh load gate
+
+/// Generation gate so only the latest ThreadDetail load attempt may set or
+/// clear the ephemeral refresh-failed banner (stale late failures cannot
+/// overwrite a newer success; success clears a previous error).
+public final class TranscriptRefreshLoadGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var generation: UInt64 = 0
+
+    public init() {}
+
+    @discardableResult
+    public func beginLoad() -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        generation += 1
+        return generation
+    }
+
+    public func allowsMutation(_ token: UInt64) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return token == generation
+    }
+
+    public func clearBanner(onSuccessFor token: UInt64) -> Bool {
+        allowsMutation(token)
+    }
+
+    public func setBanner(failedFor token: UInt64) -> Bool {
+        allowsMutation(token)
     }
 }
 

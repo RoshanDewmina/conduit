@@ -224,13 +224,17 @@ public struct AppRoot: View {
                     try? await Task.sleep(nanoseconds: 300_000_000)
                     connected = fleet.firstConnectedMachine
                 }
-                guard let machine = connected else { return }
+                guard let machine = connected else {
+                    throw E2EError.notPaired
+                }
                 let transport = ConversationTransport(
                     append: { try await machine.bridge.relayAppendConversation($0) },
                     fetch: { try await machine.bridge.relayFetchConversation($0) },
                     archive: { try await machine.bridge.relayArchiveConversation($0) }
                 )
-                _ = try? await coordinator.refreshConversation(
+                // Never `try?` — a timed-out/partial import must surface so
+                // ThreadDetail can keep local text and offer retry.
+                _ = try await coordinator.refreshConversation(
                     conversationID: conversationID, transport: transport
                 )
             }

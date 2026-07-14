@@ -464,6 +464,7 @@ private extension String {
 
 #if os(iOS)
 import PersistenceKit
+import SSHTransport
 
 /// Transport-agnostic view of the `agent.conversations.*` RPCs, constructed
 /// by the caller from whichever channel actually reaches the host right now
@@ -602,17 +603,27 @@ public actor ConversationSyncCoordinator {
     /// used on thread-open, pull-to-refresh, and conflict recovery ("Refresh"
     /// in the conflict banner). Returns the merged conversation's fresh
     /// `lastHostSeq` so the caller can use it as the next `baseSeq`.
+    ///
+    /// End-to-end wall budget defaults to `refreshWallBudget` (60s) across all
+    /// pages and at most one transient retry — not a per-page multiplication of
+    /// the 30s RPC timeout. `now` is injectable for deterministic budget tests.
     @discardableResult
     public func refreshConversation(
-        conversationID: String, transport: ConversationTransport
+        conversationID: String,
+        transport: ConversationTransport,
+        wallBudget: Duration = ConversationSyncCoordinator.refreshWallBudget,
+        now: @escaping @Sendable () -> ContinuousClock.Instant = { ContinuousClock.now }
     ) async throws -> Int {
         publish(.syncing, for: conversationID)
         let hydratedSeq = try await chatRepo.hydratedEventCursor(conversationID: conversationID)
+        let deadline = now().advanced(by: wallBudget)
         do {
             let nextSeq = try await fetchAndMergeAllPages(
                 conversationID: conversationID,
                 sinceSeq: hydratedSeq,
-                transport: transport
+                transport: transport,
+                deadline: deadline,
+                now: now
             )
             publish(.synced, for: conversationID)
             return nextSeq
@@ -621,8 +632,19 @@ public actor ConversationSyncCoordinator {
             // lastHostSeq advanced; honest hint instead of claiming synced.
             publish(.cloudStale, for: conversationID)
             return partial.nextSeq
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
-            publish(.hostOffline, for: conversationID)
+            if let e2e = error as? E2EError, case .notPaired = e2e {
+                // Pairing loss is a real connectivity/auth failure — not a refresh timeout.
+                publish(.hostOffline, for: conversationID)
+                try? await chatRepo.updateSyncState(conversationID: conversationID, state: .hostOffline)
+                throw error
+            }
+            // Fetch timeout / large-payload / budget exhaustion: cached transcript
+            // stays usable. Never persist `.hostOffline` — that banner means the
+            // machine is unreachable, which is not true for a timed-out refresh.
+            publish(.cloudStale, for: conversationID)
             throw error
         }
     }
@@ -634,12 +656,31 @@ public actor ConversationSyncCoordinator {
         public let nextSeq: Int
     }
 
+    /// Thrown when the shared refresh wall budget cannot start another RPC
+    /// (remaining time below `fetchRPCTimeout`). Surfaces as stale + retryable
+    /// in the UI — not as host-offline.
+    public struct ConversationSyncRefreshTimeoutError: Error, LocalizedError, Sendable, Equatable {
+        public let nextSeq: Int
+        public var errorDescription: String? {
+            "Transcript refresh timed out before all host pages arrived (cursor \(nextSeq))."
+        }
+    }
+
     /// Bound on how many `agent.conversations.fetch` pages a single refresh will pull.
     public static let maxFetchPages = 20
     /// Page size for host event fetch during refresh / conflict recovery.
-    public static let fetchPageLimit = 2000
+    /// Kept below a full ~1MB observed-import payload so each relay round-trip
+    /// fits the conversation-fetch budget; paging is already supported.
+    public static let fetchPageLimit = 500
     /// Page size when reading mirrored events back for assistant-text assembly.
     public static let localEventsPageLimit = 5000
+    /// Hard wall for one `refreshConversation` across all pages + one retry.
+    /// Designed maximum: 60s (not 3×45s / 135s).
+    public static let refreshWallBudget: Duration = .seconds(60)
+    /// Max duration of a single fetch RPC (matches `E2ERelayBridge.conversationFetchRPCTimeout`).
+    public static let fetchRPCTimeout: Duration = .seconds(30)
+    /// Initial attempt + at most one transient retry while wall budget remains.
+    public static let fetchRetryAttempts = 2
 
     /// A live stream of sync-state changes for one conversation, for the
     /// banner view to observe. The current state (or `.synced` if never
@@ -737,11 +778,14 @@ public actor ConversationSyncCoordinator {
         conversationID: String, transport: ConversationTransport
     ) async throws -> Int {
         let hydratedSeq = try await chatRepo.hydratedEventCursor(conversationID: conversationID)
+        let deadline = ContinuousClock.now.advanced(by: Self.refreshWallBudget)
         do {
             return try await fetchAndMergeAllPages(
                 conversationID: conversationID,
                 sinceSeq: hydratedSeq,
-                transport: transport
+                transport: transport,
+                deadline: deadline,
+                now: { ContinuousClock.now }
             )
         } catch let partial as ConversationSyncPartialError {
             // Recovery proceeds from what merged; remainder syncs next refresh.
@@ -752,24 +796,41 @@ public actor ConversationSyncCoordinator {
     /// Pulls host fetch pages until `hasMore` is false, merging page-by-page;
     /// throws `ConversationSyncPartialError` when `maxFetchPages` is reached
     /// with more remaining (already-fetched pages stay merged).
+    ///
+    /// Shared `deadline` caps the whole refresh — pagination of 501+ events is
+    /// still allowed when pages return quickly, but a page/retry is not started
+    /// unless remaining wall time covers another `fetchRPCTimeout` slot.
     private func fetchAndMergeAllPages(
-        conversationID: String, sinceSeq: Int, transport: ConversationTransport
+        conversationID: String,
+        sinceSeq: Int,
+        transport: ConversationTransport,
+        deadline: ContinuousClock.Instant,
+        now: @escaping @Sendable () -> ContinuousClock.Instant
     ) async throws -> Int {
         // Each page merges immediately: a transport failure or the page cap
         // keeps everything already fetched (lastHostSeq advances per page), so
         // the next refresh resumes from the last good page instead of
-        // re-pulling — and never discards partial progress.
+        // re-pulling — and never discards partial progress. A mid-pagination
+        // failure leaves UI `.cloudStale` (caller) rather than claiming a
+        // complete authoritative sync.
         var cursor = sinceSeq
         var pages = 0
 
         while pages < Self.maxFetchPages {
+            try Self.throwIfInsufficientRefreshBudget(
+                deadline: deadline, now: now(), nextSeq: cursor
+            )
             pages += 1
-            let response = try await transport.fetch(
+            let response = try await Self.fetchPageWithRetry(
                 ConversationFetchRequest(
                     conversationId: conversationID,
                     sinceSeq: cursor,
                     limit: Self.fetchPageLimit
-                )
+                ),
+                transport: transport,
+                deadline: deadline,
+                now: now,
+                nextSeq: cursor
             )
             try await mergeFetchResponse(response)
             cursor = response.nextSeq
@@ -778,6 +839,62 @@ public actor ConversationSyncCoordinator {
         // Page cap hit with more remaining: surface partial sync instead of
         // claiming .synced — the next refresh continues from cursor.
         throw ConversationSyncPartialError(nextSeq: cursor)
+    }
+
+    /// Retries a single fetch page once on transient relay failures (`timedOut`
+    /// / temporary `notConnected`) while the shared wall budget remains.
+    /// Never retries cancellation, pairing, crypto, or superseded errors.
+    private static func fetchPageWithRetry(
+        _ request: ConversationFetchRequest,
+        transport: ConversationTransport,
+        deadline: ContinuousClock.Instant,
+        now: @escaping @Sendable () -> ContinuousClock.Instant,
+        nextSeq: Int,
+        attempts: Int = ConversationSyncCoordinator.fetchRetryAttempts
+    ) async throws -> ConversationFetchResponse {
+        var lastError: Error?
+        for attempt in 0..<attempts {
+            try throwIfInsufficientRefreshBudget(
+                deadline: deadline, now: now(), nextSeq: nextSeq
+            )
+            do {
+                return try await transport.fetch(request)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                lastError = error
+                let canRetry = attempt < attempts - 1 && isTransientFetchFailure(error)
+                guard canRetry else { throw error }
+                // Re-check budget before sleeping; remaining must cover another RPC.
+                try throwIfInsufficientRefreshBudget(
+                    deadline: deadline, now: now(), nextSeq: nextSeq
+                )
+                try await Task.sleep(nanoseconds: 400_000_000)
+            }
+        }
+        throw lastError ?? CancellationError()
+    }
+
+    private static func throwIfInsufficientRefreshBudget(
+        deadline: ContinuousClock.Instant,
+        now: ContinuousClock.Instant,
+        nextSeq: Int
+    ) throws {
+        let remaining = now.duration(to: deadline)
+        if remaining < fetchRPCTimeout {
+            throw ConversationSyncRefreshTimeoutError(nextSeq: nextSeq)
+        }
+    }
+
+    /// Transient transport failures safe to retry once under the refresh budget.
+    private static func isTransientFetchFailure(_ error: Error) -> Bool {
+        guard let e2e = error as? E2EError else { return false }
+        switch e2e {
+        case .timedOut, .notConnected:
+            return true
+        case .notPaired, .superseded, .encryptFailed, .decryptFailed:
+            return false
+        }
     }
 
     private func blockConflict(conversationID: String, message: String?) async -> TurnOutcome {
@@ -947,11 +1064,34 @@ public actor ConversationSyncCoordinator {
         // ITS OWN mirrored events (this fetch's plus whatever was already
         // stored) before writing the turn row, so a device that never
         // streamed a turn live still renders its content in ChatHistoryView.
-        let allEvents = (try? await loadAllMirroredEvents(conversationID: response.conversation.id)) ?? []
+        let allEvents: [ChatEvent]
+        do {
+            allEvents = try await loadAllMirroredEvents(conversationID: response.conversation.id)
+        } catch {
+            // Fail closed on wipe: prefer this page's events over inventing
+            // empty transcripts that would clobber already-hydrated text.
+            allEvents = events
+        }
+        let existingTurns = Dictionary(
+            uniqueKeysWithValues: ((try? await chatRepo.turns(conversationID: response.conversation.id)) ?? [])
+                .map { ($0.id, $0) }
+        )
         let eventsByTurn = Dictionary(grouping: allEvents, by: { $0.turnID })
         for turnEnvelope in response.turns {
             var turn = Self.mapTurn(turnEnvelope, conversationID: response.conversation.id)
-            turn.assistantText = Self.assistantText(from: eventsByTurn[turn.id] ?? [])
+            let turnEvents = eventsByTurn[turn.id] ?? []
+            let assembled = Self.assistantText(from: turnEvents)
+            if assembled.isEmpty,
+               turnEvents.isEmpty,
+               let prior = existingTurns[turn.id]?.assistantText,
+               !prior.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // Preserve only when the authoritative event list for this turn
+                // is truly empty — eventful-but-empty assembly must win so a
+                // tool/thinking-only host page does not keep a stale body.
+                turn.assistantText = prior
+            } else {
+                turn.assistantText = assembled
+            }
             _ = try await chatRepo.upsertTurnMirror(
                 turn, vendorSessionID: turnEnvelope.vendorSessionId, hostSeqStart: nil, hostSeqEnd: nil
             )

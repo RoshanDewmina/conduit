@@ -10,7 +10,18 @@ import SSHTransport
 public final class E2ERelayBridge: ObservableObject {
 
     private nonisolated static let logger = Logger(subsystem: "dev.lancer.mobile", category: "E2ERelayBridge")
-    private nonisolated static let defaultBoundedRPCWaitTimeout: Duration = .seconds(15)
+    private     nonisolated static let defaultBoundedRPCWaitTimeout: Duration = .seconds(15)
+    /// Observed-import conversation fetches can be ~1MB; the default 15s
+    /// read budget is too tight and left ThreadDetail with empty assistant
+    /// bodies after a silent timeout. Fetch-only — other conversation RPCs
+    /// keep the 15s default. Capped at 30s so a shared refresh wall of 60s
+    /// can cover two RPC slots (page + retry, or two fast pages) without
+    /// restoring the prior 3×45s / 135s behavior.
+    ///
+    /// Conflict note: a parallel relay-resume branch may also touch
+    /// `E2ERelayBridge` continuations/timeouts — keep conversation-fetch
+    /// changes localized to this RPC family when merging.
+    nonisolated static let conversationFetchRPCTimeout: Duration = .seconds(30)
 
     @Published public private(set) var isActive: Bool = false
     public let machineID: RelayMachineID
@@ -72,6 +83,14 @@ public final class E2ERelayBridge: ObservableObject {
 #endif
     }
 
+    private var conversationFetchWaitTimeout: Duration {
+#if DEBUG
+        boundedRPCWaitTimeoutOverride ?? Self.conversationFetchRPCTimeout
+#else
+        Self.conversationFetchRPCTimeout
+#endif
+    }
+
     public init(relayClient: E2ERelayClient, approvalRelay: ApprovalRelay, machineID: RelayMachineID) {
         self.relayClient = relayClient
         self.approvalRelay = approvalRelay
@@ -116,6 +135,20 @@ public final class E2ERelayBridge: ObservableObject {
             continuation.resume(returning: false)
         }
         pendingDecisionAcks.removeAll()
+        // Clear conversation-fetch (and sibling) waiters so a timed-out or
+        // late result after stop cannot resume a dangling continuation.
+        // Likely merge conflict with any relay-resume branch that also drains
+        // these slots in `stop()` — keep the clear list in sync.
+        conversationsListContinuation?.resume(throwing: E2EError.notPaired)
+        conversationsListContinuation = nil
+        conversationsFetchContinuation?.resume(throwing: E2EError.notPaired)
+        conversationsFetchContinuation = nil
+        conversationsAppendContinuation?.resume(throwing: E2EError.notPaired)
+        conversationsAppendContinuation = nil
+        conversationsArchiveContinuation?.resume(throwing: E2EError.notPaired)
+        conversationsArchiveContinuation = nil
+        conversationsAttachObservedSessionContinuation?.resume(throwing: E2EError.notPaired)
+        conversationsAttachObservedSessionContinuation = nil
         repoTurnDiffContinuation?.resume(throwing: E2EError.notPaired)
         repoTurnDiffContinuation = nil
         repoSessionDiffContinuation?.resume(throwing: E2EError.notPaired)
@@ -605,14 +638,16 @@ public final class E2ERelayBridge: ObservableObject {
 
     /// Fetches one conversation's turns/artifacts plus events strictly after
     /// `request.sinceSeq` from the relay-paired host, for incremental paging
-    /// through the append-only event log.
+    /// through the append-only event log. Uses `conversationFetchRPCTimeout`
+    /// (30s) rather than the 15s default — large observed-import payloads
+    /// otherwise time out before the phone can hydrate assistant text.
     public func relayFetchConversation(_ request: ConversationFetchRequest) async throws -> ConversationFetchResponse {
         guard isActive else { throw E2EError.notPaired }
         try await relayClient.send(type: "agentConversationsFetch", payload: request)
         conversationsFetchContinuation?.resume(throwing: E2EError.superseded)
         conversationsFetchContinuation = nil
         let timeout = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(15))
+            try? await Task.sleep(for: self?.conversationFetchWaitTimeout ?? Self.conversationFetchRPCTimeout)
             guard let self, !Task.isCancelled else { return }
             self.conversationsFetchContinuation?.resume(throwing: E2EError.timedOut)
             self.conversationsFetchContinuation = nil

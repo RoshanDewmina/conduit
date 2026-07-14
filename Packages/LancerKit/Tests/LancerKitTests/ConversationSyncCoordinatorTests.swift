@@ -3,6 +3,7 @@ import Foundation
 import Testing
 import LancerCore
 import PersistenceKit
+import SSHTransport
 @testable import AppFeature
 
 @Suite("ConversationSyncCoordinator")
@@ -988,6 +989,481 @@ struct ConversationSyncCoordinatorTests {
         #expect(ConversationSyncCoordinator.parseDate(nil) == nil)
         #expect(ConversationSyncCoordinator.parseDate("") == nil)
         #expect(ConversationSyncCoordinator.parseDate("not-a-date") == nil)
+    }
+
+    // MARK: - P1 imported-transcript hydration
+
+    @Test("event-less refresh preserves non-empty local assistantText")
+    func eventLessRefreshPreservesAssistantText() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-keep", title: "Imported", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 10, syncState: .synced)
+        let hydrated = ChatTurn(
+            id: "turn-1", conversationID: "conv-keep", ordinal: 0,
+            prompt: "hello", runID: "run-1", status: .completed,
+            assistantText: "already hydrated reply"
+        )
+        _ = try await repo.upsertTurnMirror(
+            hydrated, vendorSessionID: nil, hostSeqStart: nil, hostSeqEnd: nil
+        )
+
+        let transport = makeTransport(fetch: { request in
+            #expect(request.sinceSeq == 0 || request.sinceSeq == 10)
+            return ConversationFetchResponse(
+                conversation: ConversationSummary(
+                    id: "conv-keep", title: "Imported", provider: "claudeCode",
+                    agentID: "claudeCode", hostName: "Mac", cwd: "/proj", state: "completed",
+                    source: "observed", createdAt: "2026-07-13T00:00:00Z",
+                    updatedAt: "2026-07-13T00:01:00Z", lastActivityAt: "2026-07-13T00:01:00Z",
+                    lastSeq: 10
+                ),
+                turns: [
+                    ConversationTurnEnvelope(
+                        id: "turn-1", conversationId: "conv-keep", ordinal: 0,
+                        clientTurnId: "observed:1", prompt: "hello", runId: "run-1",
+                        provider: "claudeCode", status: "completed",
+                        startedAt: "2026-07-13T00:00:00Z"
+                    ),
+                ],
+                events: [],
+                nextSeq: 10
+            )
+        })
+
+        _ = try await coordinator.refreshConversation(conversationID: "conv-keep", transport: transport)
+        let turns = try await repo.turns(conversationID: "conv-keep")
+        #expect(turns.first?.assistantText == "already hydrated reply")
+    }
+
+    @Test("eventful refresh that assembles empty replaces prior assistantText")
+    func eventfulEmptyAssemblyReplacesPriorAssistantText() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-replace", title: "Imported", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .synced)
+        let stale = ChatTurn(
+            id: "turn-1", conversationID: "conv-replace", ordinal: 0,
+            prompt: "hello", runID: "run-1", status: .completed,
+            assistantText: "stale body that must not win"
+        )
+        _ = try await repo.upsertTurnMirror(
+            stale, vendorSessionID: nil, hostSeqStart: nil, hostSeqEnd: nil
+        )
+
+        let transport = makeTransport(fetch: { _ in
+            ConversationFetchResponse(
+                conversation: ConversationSummary(
+                    id: "conv-replace", title: "Imported", provider: "claudeCode",
+                    agentID: "claudeCode", hostName: "Mac", cwd: "/proj", state: "completed",
+                    source: "observed", createdAt: "2026-07-13T00:00:00Z",
+                    updatedAt: "2026-07-13T00:01:00Z", lastActivityAt: "2026-07-13T00:01:00Z",
+                    lastSeq: 2
+                ),
+                turns: [
+                    ConversationTurnEnvelope(
+                        id: "turn-1", conversationId: "conv-replace", ordinal: 0,
+                        clientTurnId: "observed:1", prompt: "hello", runId: "run-1",
+                        provider: "claudeCode", status: "completed",
+                        startedAt: "2026-07-13T00:00:00Z"
+                    ),
+                ],
+                events: [
+                    ConversationEvent(
+                        conversationId: "conv-replace", seq: 1, turnId: "turn-1",
+                        runId: "run-1", kind: "tool_use", role: "assistant",
+                        text: nil, payloadJson: #"{"name":"Read","toolUseId":"t1"}"#,
+                        createdAt: "2026-07-13T00:00:01Z"
+                    ),
+                    ConversationEvent(
+                        conversationId: "conv-replace", seq: 2, turnId: "turn-1",
+                        runId: "run-1", kind: "thinking", role: "assistant",
+                        text: "silent thoughts", createdAt: "2026-07-13T00:00:02Z"
+                    ),
+                ],
+                nextSeq: 2
+            )
+        })
+
+        _ = try await coordinator.refreshConversation(conversationID: "conv-replace", transport: transport)
+        let turns = try await repo.turns(conversationID: "conv-replace")
+        #expect(turns.first?.assistantText == "")
+    }
+
+    @Test("refresh retries a timed-out fetch then hydrates assistantText")
+    func refreshRetriesTimedOutFetchThenHydrates() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-retry", title: "Large import", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .synced)
+
+        let attempts = FetchAttemptCounter()
+        let largeBody = String(repeating: "assistant chunk ", count: 2_000)
+        let transport = makeTransport(fetch: { request in
+            let n = await attempts.increment()
+            if n == 1 {
+                throw E2EError.timedOut
+            }
+            #expect(request.sinceSeq == 0)
+            return ConversationFetchResponse(
+                conversation: ConversationSummary(
+                    id: "conv-retry", title: "Large import", provider: "claudeCode",
+                    agentID: "claudeCode", hostName: "Mac", cwd: "/proj", state: "completed",
+                    source: "observed", createdAt: "2026-07-13T00:00:00Z",
+                    updatedAt: "2026-07-13T00:01:00Z", lastActivityAt: "2026-07-13T00:01:00Z",
+                    lastSeq: 1_036
+                ),
+                turns: [
+                    ConversationTurnEnvelope(
+                        id: "turn-1", conversationId: "conv-retry", ordinal: 0,
+                        clientTurnId: "observed:1", prompt: "fix rows", runId: "run-1",
+                        provider: "claudeCode", status: "completed",
+                        startedAt: "2026-07-13T00:00:00Z"
+                    ),
+                ],
+                events: [
+                    ConversationEvent(
+                        conversationId: "conv-retry", seq: 1, turnId: "turn-1",
+                        runId: "run-1", kind: "output", role: "assistant",
+                        text: largeBody, createdAt: "2026-07-13T00:00:01Z"
+                    ),
+                ],
+                nextSeq: 1_036
+            )
+        })
+
+        _ = try await coordinator.refreshConversation(conversationID: "conv-retry", transport: transport)
+        #expect(await attempts.value == 2)
+        #expect(ConversationSyncCoordinator.fetchRetryAttempts == 2)
+        let turns = try await repo.turns(conversationID: "conv-retry")
+        #expect(turns.first?.assistantText == largeBody)
+        #expect(await coordinator.currentSyncState("conv-retry") == .synced)
+    }
+
+    @Test("exhausted timed-out fetch throws cloudStale without persisting hostOffline")
+    func exhaustedTimedOutFetchPublishesCloudStaleNotHostOffline() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-fail", title: "Import", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .synced)
+
+        let attempts = FetchAttemptCounter()
+        let transport = makeTransport(fetch: { _ in
+            _ = await attempts.increment()
+            throw E2EError.timedOut
+        })
+
+        await #expect(throws: E2EError.timedOut) {
+            _ = try await coordinator.refreshConversation(conversationID: "conv-fail", transport: transport)
+        }
+        #expect(await attempts.value == 2, "initial + one transient retry only")
+        #expect(await coordinator.currentSyncState("conv-fail") == .cloudStale)
+        let mirrored = try await repo.conversation(id: "conv-fail")
+        #expect(mirrored?.syncState == .synced, "timeout must not persist hostOffline")
+    }
+
+    @Test("refresh never retries non-transient transport errors")
+    func refreshNeverRetriesNonTransientErrors() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-crypto", title: "Import", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .synced)
+
+        let nonTransient: [E2EError] = [.decryptFailed, .notPaired, .superseded, .encryptFailed]
+        for error in nonTransient {
+            let attempts = FetchAttemptCounter()
+            let transport = makeTransport(fetch: { _ in
+                _ = await attempts.increment()
+                throw error
+            })
+            do {
+                _ = try await coordinator.refreshConversation(
+                    conversationID: "conv-crypto", transport: transport
+                )
+                Issue.record("expected \(error) to throw")
+            } catch let thrown as E2EError {
+                #expect(thrown == error)
+            } catch {
+                Issue.record("expected E2EError \(error), got \(error)")
+            }
+            #expect(await attempts.value == 1, "non-transient \(error) must not retry")
+        }
+    }
+
+    @Test("zero wall budget throws refresh timeout without calling fetch")
+    func zeroWallBudgetThrowsRefreshTimeoutWithoutFetch() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-budget", title: "Import", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 3, syncState: .synced)
+
+        let attempts = FetchAttemptCounter()
+        let transport = makeTransport(fetch: { _ in
+            _ = await attempts.increment()
+            Issue.record("fetch must not start when wall budget is already exhausted")
+            throw E2EError.timedOut
+        })
+        let frozen = ContinuousClock.now
+
+        await #expect(throws: ConversationSyncCoordinator.ConversationSyncRefreshTimeoutError.self) {
+            _ = try await coordinator.refreshConversation(
+                conversationID: "conv-budget",
+                transport: transport,
+                wallBudget: .seconds(0),
+                now: { frozen }
+            )
+        }
+        #expect(await attempts.value == 0)
+        #expect(await coordinator.currentSyncState("conv-budget") == .cloudStale)
+        let mirrored = try await repo.conversation(id: "conv-budget")
+        #expect(mirrored?.syncState == .synced)
+        #expect(ConversationSyncCoordinator.refreshWallBudget == .seconds(60))
+        #expect(ConversationSyncCoordinator.fetchRPCTimeout == .seconds(30))
+    }
+
+    @Test("insufficient remaining budget skips retry and throws refresh timeout")
+    func insufficientRemainingBudgetSkipsRetry() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-short", title: "Import", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .synced)
+
+        let attempts = FetchAttemptCounter()
+        let transport = makeTransport(fetch: { _ in
+            _ = await attempts.increment()
+            throw E2EError.timedOut
+        })
+        // One RPC-sized budget: first attempt may start; after it fails the
+        // injected clock jumps so remaining < fetchRPCTimeout and retry is skipped.
+        let clock = RefreshBudgetTestClock(
+            exhaustAfterReads: 3,
+            advanceBy: ConversationSyncCoordinator.fetchRPCTimeout
+        )
+
+        await #expect(throws: ConversationSyncCoordinator.ConversationSyncRefreshTimeoutError.self) {
+            _ = try await coordinator.refreshConversation(
+                conversationID: "conv-short",
+                transport: transport,
+                wallBudget: ConversationSyncCoordinator.fetchRPCTimeout,
+                now: { clock.now() }
+            )
+        }
+        #expect(await attempts.value == 1)
+        #expect(await coordinator.currentSyncState("conv-short") == .cloudStale)
+    }
+
+    @Test("refresh pages past 500 events with cursor merge")
+    func refreshPagesPastFiveHundredEvents() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-501", title: "Long import", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .synced)
+
+        #expect(ConversationSyncCoordinator.fetchPageLimit == 500)
+        let summary = ConversationSummary(
+            id: "conv-501", title: "Long import", provider: "claudeCode",
+            agentID: "claudeCode", hostName: "Mac", cwd: "/proj", state: "completed",
+            source: "observed", createdAt: "2026-07-13T00:00:00Z",
+            updatedAt: "2026-07-13T00:02:00Z", lastActivityAt: "2026-07-13T00:02:00Z",
+            lastSeq: 501
+        )
+        let turn = ConversationTurnEnvelope(
+            id: "turn-1", conversationId: "conv-501", ordinal: 0,
+            clientTurnId: "observed:1", prompt: "long", runId: "run-1",
+            provider: "claudeCode", status: "completed",
+            startedAt: "2026-07-13T00:00:00Z"
+        )
+        let page1Events: [ConversationEvent] = (1...500).map { seq in
+            ConversationEvent(
+                conversationId: "conv-501", seq: seq, turnId: "turn-1",
+                runId: "run-1", kind: "output", role: "assistant",
+                text: "e\(seq)-", createdAt: "2026-07-13T00:00:01Z"
+            )
+        }
+        let page2Events = [
+            ConversationEvent(
+                conversationId: "conv-501", seq: 501, turnId: "turn-1",
+                runId: "run-1", kind: "output", role: "assistant",
+                text: "tail", createdAt: "2026-07-13T00:00:02Z"
+            )
+        ]
+        let attempts = FetchAttemptCounter()
+        let transport = makeTransport(fetch: { request in
+            #expect(request.limit == 500)
+            let n = await attempts.increment()
+            switch n {
+            case 1:
+                #expect(request.sinceSeq == 0)
+                return ConversationFetchResponse(
+                    conversation: summary, turns: [turn], events: page1Events,
+                    nextSeq: 500, hasMore: true
+                )
+            case 2:
+                #expect(request.sinceSeq == 500)
+                return ConversationFetchResponse(
+                    conversation: summary, turns: [turn], events: page2Events,
+                    nextSeq: 501, hasMore: false
+                )
+            default:
+                Issue.record("unexpected third fetch page")
+                throw E2EError.timedOut
+            }
+        })
+
+        let nextSeq = try await coordinator.refreshConversation(
+            conversationID: "conv-501", transport: transport
+        )
+        #expect(nextSeq == 501)
+        #expect(await attempts.value == 2)
+        let events = try await repo.events(conversationID: "conv-501", limit: 1_000)
+        #expect(events.count == 501)
+        let turns = try await repo.turns(conversationID: "conv-501")
+        #expect(turns.first?.assistantText.hasSuffix("tail") == true)
+        #expect(await coordinator.currentSyncState("conv-501") == .synced)
+    }
+
+    @Test("mid-pagination timeout keeps partial merge stale without hostOffline")
+    func midPaginationTimeoutKeepsCloudStale() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(
+            id: "conv-partial", title: "Partial", agentID: "claudeCode",
+            hostName: "Mac", hostID: nil, cwd: "/proj"
+        )
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .synced)
+        let prior = ChatTurn(
+            id: "turn-1", conversationID: "conv-partial", ordinal: 0,
+            prompt: "hello", runID: "run-1", status: .completed,
+            assistantText: "prior cached prose"
+        )
+        _ = try await repo.upsertTurnMirror(
+            prior, vendorSessionID: nil, hostSeqStart: nil, hostSeqEnd: nil
+        )
+
+        let summary = ConversationSummary(
+            id: "conv-partial", title: "Partial", provider: "claudeCode",
+            agentID: "claudeCode", hostName: "Mac", cwd: "/proj", state: "completed",
+            source: "observed", createdAt: "2026-07-13T00:00:00Z",
+            updatedAt: "2026-07-13T00:01:00Z", lastActivityAt: "2026-07-13T00:01:00Z",
+            lastSeq: 20
+        )
+        let turn = ConversationTurnEnvelope(
+            id: "turn-1", conversationId: "conv-partial", ordinal: 0,
+            clientTurnId: "observed:1", prompt: "hello", runId: "run-1",
+            provider: "claudeCode", status: "completed",
+            startedAt: "2026-07-13T00:00:00Z"
+        )
+        let attempts = FetchAttemptCounter()
+        let transport = makeTransport(fetch: { request in
+            let n = await attempts.increment()
+            if n == 1 {
+                #expect(request.sinceSeq == 0)
+                return ConversationFetchResponse(
+                    conversation: summary,
+                    turns: [turn],
+                    events: [],
+                    nextSeq: 10,
+                    hasMore: true
+                )
+            }
+            throw E2EError.timedOut
+        })
+
+        await #expect(throws: E2EError.timedOut) {
+            _ = try await coordinator.refreshConversation(
+                conversationID: "conv-partial", transport: transport
+            )
+        }
+        #expect(await attempts.value == 3, "page1 + page2 initial + one retry")
+        #expect(await coordinator.currentSyncState("conv-partial") == .cloudStale)
+        let mirrored = try await repo.conversation(id: "conv-partial")
+        #expect(mirrored?.syncState == .synced)
+        #expect(mirrored?.lastHostSeq == 10)
+        let turns = try await repo.turns(conversationID: "conv-partial")
+        #expect(turns.first?.assistantText == "prior cached prose")
+    }
+
+    @Test("transcript refresh load gate only latest attempt mutates banner")
+    func transcriptRefreshLoadGateOnlyLatestMutates() {
+        let gate = TranscriptRefreshLoadGate()
+        let first = gate.beginLoad()
+        let second = gate.beginLoad()
+        #expect(gate.allowsMutation(first) == false)
+        #expect(gate.allowsMutation(second) == true)
+        #expect(gate.clearBanner(onSuccessFor: first) == false)
+        #expect(gate.clearBanner(onSuccessFor: second) == true)
+        #expect(gate.setBanner(failedFor: first) == false)
+        #expect(gate.setBanner(failedFor: second) == true)
+    }
+}
+
+/// Actor counter for concurrent fetch-attempt assertions in refresh retry tests.
+private actor FetchAttemptCounter {
+    private(set) var value = 0
+    @discardableResult
+    func increment() -> Int {
+        value += 1
+        return value
+    }
+}
+
+/// Deterministic clock for refresh-budget tests: returns `start` for the first
+/// `exhaustAfterReads` reads, then jumps forward by `advanceBy` so remaining
+/// budget drops below `fetchRPCTimeout`.
+private final class RefreshBudgetTestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private let start: ContinuousClock.Instant
+    private let exhaustAfterReads: Int
+    private let advanceBy: Duration
+    private var reads = 0
+
+    init(exhaustAfterReads: Int, advanceBy: Duration) {
+        self.start = ContinuousClock.now
+        self.exhaustAfterReads = exhaustAfterReads
+        self.advanceBy = advanceBy
+    }
+
+    func now() -> ContinuousClock.Instant {
+        lock.lock()
+        defer { lock.unlock() }
+        reads += 1
+        if reads <= exhaustAfterReads {
+            return start
+        }
+        return start.advanced(by: advanceBy)
     }
 }
 #endif

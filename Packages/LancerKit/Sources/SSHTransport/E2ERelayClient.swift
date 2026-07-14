@@ -932,7 +932,7 @@ final class ReplaySequencer {
 
 // MARK: - Errors
 
-public enum E2EError: Error, LocalizedError {
+public enum E2EError: Error, LocalizedError, Equatable {
     case notConnected
     case notPaired
     case encryptFailed

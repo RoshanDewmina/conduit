@@ -607,7 +607,9 @@ public final class WorkspaceDataStore {
     /// Pulls one conversation's turns/events from the host into the local
     /// mirror (fetch-on-open). Backfilled threads otherwise open empty —
     /// the list backfill copies summaries only. Set from `AppRoot`.
-    public var refreshThreadFromHost: ((_ conversationID: String) async -> Void)?
+    /// Throws on transport/hydration failure so ThreadDetail can surface
+    /// a retryable state instead of silently keeping empty assistant bodies.
+    public var refreshThreadFromHost: ((_ conversationID: String) async throws -> Void)?
 
     public init(chatRepo: ChatConversationRepository, addedRepos: AddedRepoStore = AddedRepoStore()) {
         self.chatRepo = chatRepo
