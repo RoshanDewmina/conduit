@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sim Control Plane — Project Tracker</title>
+
+<!-- Fonts: General Sans (display/body) + JetBrains Mono (code/labels) -->
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@500,600,700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<!-- GSAP -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+
+<style>
+/* === THEME === */
+:root {
+    --stage-bg: #0b0e14;
+    --slide-bg: #11151f;
+    --panel: #181e2b;
+    --panel-2: #1e2534;
+    --line: #2a3347;
+    --text: #e8ebf2;
+    --text-dim: #8b94a8;
+    --amber: #ffb454;
+    --green: #7fd962;
+    --red: #f07178;
+    --blue: #73b8ff;
+    --font-display: 'General Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-normal: 0.6s;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* === MANDATORY FIXED-STAGE BASE (viewport-base.css) === */
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--stage-bg, #000); }
+.deck-viewport { position: fixed; inset: 0; overflow: hidden; background: var(--stage-bg, #000); }
+.deck-stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: var(--slide-bg, #fff); }
+.slide { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; display: block; visibility: hidden; opacity: 0; pointer-events: none; background: var(--slide-bg, #fff); }
+.slide.active, .slide.visible { visibility: visible; opacity: 1; pointer-events: auto; z-index: 1; }
+img, video, canvas, svg { max-width: 100%; max-height: 100%; }
+.deck-controls { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 1000; }
+@media print {
+    html, body { width: 1920px; height: auto; overflow: visible; background: #fff; }
+    .deck-viewport { position: static; overflow: visible; background: #fff; }
+    .deck-stage { position: static; width: auto; height: auto; transform: none !important; background: none; }
+    .slide { position: relative; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; width: 1920px; height: 1080px; break-after: page; page-break-after: always; }
+    .slide:last-child { break-after: auto; page-break-after: auto; }
+    .deck-controls { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; }
+}
+/* === END BASE === */
+
+/* === CSS FALLBACK ANIMATIONS (html.no-gsap only) === */
+html.no-gsap .reveal { opacity: 0; transform: translateY(24px); transition: opacity var(--duration-normal) var(--ease-out-expo), transform var(--duration-normal) var(--ease-out-expo); }
+html.no-gsap .slide.visible .reveal { opacity: 1; transform: translateY(0); }
+html.no-gsap .reveal:nth-child(1) { transition-delay: .05s; }
+html.no-gsap .reveal:nth-child(2) { transition-delay: .15s; }
+html.no-gsap .reveal:nth-child(3) { transition-delay: .25s; }
+html.no-gsap .reveal:nth-child(4) { transition-delay: .35s; }
+
+/* === SLIDE LAYOUT SYSTEM === */
+.slide { font-family: var(--font-display); color: var(--text); }
+.slide-inner { position: absolute; inset: 0; padding: 80px 100px; display: flex; flex-direction: column; }
+.kicker { font-family: var(--font-mono); font-size: 22px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); margin-bottom: 18px; }
+h1 { font-size: 108px; font-weight: 700; line-height: 1.04; letter-spacing: -0.02em; }
+h2 { font-size: 60px; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 40px; }
+.slide-num { position: absolute; bottom: 42px; right: 60px; font-family: var(--font-mono); font-size: 20px; color: var(--text-dim); }
+.updated-tag { position: absolute; bottom: 42px; left: 100px; font-family: var(--font-mono); font-size: 20px; color: var(--text-dim); }
+
+/* grid patterns */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 30px 34px; }
+.card h3 { font-size: 30px; font-weight: 600; margin-bottom: 14px; }
+.card p, .card li { font-size: 24px; line-height: 1.45; color: var(--text-dim); }
+.card ul { list-style: none; }
+.card li { padding-left: 26px; position: relative; margin-bottom: 8px; }
+.card li::before { content: "›"; position: absolute; left: 0; color: var(--amber); }
+
+/* status pills — verified visible on --panel and --panel-2 surfaces */
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 19px; font-weight: 500; padding: 4px 14px; border-radius: 999px; border: 1px solid; }
+.pill.go { color: var(--green); border-color: var(--green); }
+.pill.nogo { color: var(--red); border-color: var(--red); }
+.pill.open { color: var(--amber); border-color: var(--amber); }
+.pill.decided { color: var(--blue); border-color: var(--blue); }
+
+/* mono code block */
+.code { font-family: var(--font-mono); font-size: 23px; line-height: 1.6; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 24px 30px; color: var(--text); }
+.code .c { color: var(--text-dim); }
+.code .a { color: var(--amber); }
+.code .g { color: var(--green); }
+
+/* decision table rows */
+.row { display: flex; align-items: baseline; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.row .k { font-size: 26px; width: 620px; flex-shrink: 0; }
+.row .v { font-size: 24px; color: var(--text-dim); }
+
+/* title slide background device */
+.title-bg { position: absolute; inset: 0; background:
+    linear-gradient(180deg, rgba(255,180,84,0.06), transparent 40%),
+    repeating-linear-gradient(90deg, transparent 0 119px, rgba(42,51,71,.45) 119px 120px); }
+.title-bg::after { content: ""; position: absolute; left: 100px; right: 100px; top: 0; bottom: 0;
+    background: repeating-linear-gradient(0deg, transparent 0 119px, rgba(42,51,71,.35) 119px 120px); }
+
+/* layer diagram (text-based, slide 5) */
+.layer { background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--amber); border-radius: 10px; padding: 22px 32px; margin-bottom: 18px; display: flex; align-items: baseline; gap: 26px; }
+.layer .n { font-family: var(--font-mono); font-size: 24px; color: var(--amber); flex-shrink: 0; }
+.layer h3 { font-size: 30px; font-weight: 600; width: 430px; flex-shrink: 0; }
+.layer p { font-size: 23px; color: var(--text-dim); line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="deck-viewport">
+<main class="deck-stage" id="deckStage">
+
+<!-- === SLIDE 1: TITLE === -->
+<section class="slide active">
+    <div class="title-bg"></div>
+    <div class="slide-inner" style="justify-content: center;">
+        <div class="kicker reveal">project tracker · living document</div>
+        <h1 class="reveal">Sim Control Plane<br><span style="color: var(--text-dim); font-size: 72px;">for concurrent iOS coding agents</span></h1>
+        <p class="reveal" style="font-size: 30px; color: var(--text-dim); margin-top: 36px; max-width: 1200px;">
+            Working name TBD. Standalone product. Broker → isolation → orchestration, with proof gating deferred to a later optional layer.
+        </p>
+        <p class="reveal" style="font-family: var(--font-mono); font-size: 24px; color: var(--amber); margin-top: 28px;">
+            Status: brainstorming → v0 definition &nbsp;·&nbsp; Last updated: 2026-07-12
+        </p>
+    </div>
+</section>
+
+<!-- === SLIDE 2: WHERE THIS CAME FROM === -->
+<section class="slide">
+    <div class="slide-inner">
+        <div class="kicker reveal">01 · origin</div>
+        <h2 class="reveal">The consolidated report's verdicts</h2>
+        <div class="reveal">
+            <div class="row"><span class="k">Technical pain</span><span class="v">7–8 / 10 — real, worst for parallel-agent iOS teams</span></div>
+            <div class="row"><span class="k">Willingness to pay</span><span class="v">3–4 / 10 — unproven</span></div>
+            <div class="row"><span class="k">Full-stack competitor</span><span class="v">None public — pieces exist (VibeChard, XcodeBuildMCP, agent-device, qckfx, SandVault, Limrun)</span></div>
+            <div class="row"><span class="k">Standalone company</span><span class="v"><span class="pill nogo">No-Go</span>&nbsp; pending real paid demand</span></div>
+            <div class="row"><span class="k">Open-source standalone experiment</span><span class="v"><span class="pill go">Go</span></span></div>
+            <div class="row"><span class="k">Report's recommended v0</span><span class="v">Proof gate + minimal sim lock + build isolation, inside Lancer</span></div>
+        </div>
+        <p class="reveal" style="font-size: 26px; color: var(--text-dim); margin-top: 34px;">
+            Source: <span style="font-family: var(--font-mono); font-size: 23px;">proof-before-done-consolidated-report.md</span> (July 2026)
+        </p>
+    </div>
+    <div class="updated-tag">sim-control-plane · tracker</div><div class="slide-num">2</div>
+</section>
+
+<!-- === SLIDE 3: CRITIQUE === -->
+<section class="slide">
+    <div class="slide-inner">
+        <div class="kicker reveal">02 · review</div>
+        <h2 class="reveal">Critique of the report (agreed in discussion)</h2>
+        <div class="grid-2 reveal" style="flex: 1;">
+            <div class="card"><h3 style="color: var(--red);">Stack rec was backwards</h3><p>Report recommended Swift "to share Lancer's stack" — but Lancer's daemon is already Go. Premise false.</p></div>
+            <div class="card"><h3 style="color: var(--red);">Latency is the real killer</h3><p>Fresh DerivedData per run ⇒ 5–15 min verifies. Kill criterion #3 (users disable the gate) is the likeliest death. Needs tiered policies from day one.</p></div>
+            <div class="card"><h3 style="color: var(--red);">Freshness undefined</h3><p>"Any relevant source change invalidates evidence" — <em>relevant</em> was never designed. Naive hashing self-invalidates on README edits or proof writes.</p></div>
+            <div class="card"><h3 style="color: var(--red);">Leases are advisory</h3><p>A UDID lock only binds cooperating processes. Raw simctl / Xcode ignore it. Matrix overstated "machine-wide" enforcement.</p></div>
+        </div>
+        <p class="reveal" style="font-size: 24px; color: var(--text-dim); margin-top: 24px;">Also: §13.1 blurred hooks vs. hard gates — hooks block an agent's stop, only your own accept command hard-blocks.</p>
+    </div>
+    <div class="updated-tag">sim-control-plane · tracker</div><div class="slide-num">3</div>
+</section>
+
+<!-- === SLIDE 4: DECISIONS LOG === -->
+<section class="slide">
+    <div class="slide-inner">
+        <div class="kicker reveal">03 · decisions log</div>
+        <h2 class="reveal">What's been decided so far</h2>
+        <div class="reveal">
+            <div class="row"><span class="k">Standalone product, not Lancer feature</span><span class="v"><span class="pill decided">Decided</span>&nbsp; Owner's call, 2026-07-12. OSS wedge path — consistent with report's "OSS experiment: Go".</span></div>
+            <div class="row"><span class="k">Language: Go, single binary, Homebrew</span><span class="v"><span class="pill decided">Decided</span>&nbsp; Distribution simplicity; no GUI in v0.</span></div>
+            <div class="row"><span class="k">Core pivot: broker first, proof gate later</span><span class="v"><span class="pill decided">Decided</span>&nbsp; 2026-07-12. Enforced verification deferred — hardest to implement, weakest standalone.</span></div>
+            <div class="row"><span class="k">Resident daemon in v0</span><span class="v"><span class="pill decided">Decided</span>&nbsp; Reverses earlier no-daemon call — a broker needs queueing, heartbeats, reclamation.</span></div>
+            <div class="row"><span class="k">Enforcement boundary (for later proof layer)</span><span class="v"><span class="pill open">Open</span>&nbsp; Deferred with the proof gate itself.</span></div>
+            <div class="row"><span class="k">Product name: <strong style="color:var(--amber);">Simurgh</strong></span><span class="v"><span class="pill decided">Decided</span>&nbsp; 2026-07-12. Persian myth: si murgh = "thirty birds" — many agents, one authority. CLI simurgh, daemon simurghd.</span></div>
+            <div class="row"><span class="k">Closed source for now</span><span class="v"><span class="pill decided">Decided</span>&nbsp; 2026-07-12. License decided at first public release.</span></div>
+            <div class="row"><span class="k">v0 scope: daemon + CLI + MCP + basic isolation</span><span class="v"><span class="pill decided">Decided</span>&nbsp; 2026-07-12. PATH shim → v0.1. Repo: ~/Documents/simurgh.</span></div>
+            <div class="row"><span class="k">Doc package (PRD, architecture, roadmap, competitor notes, Fable handoff)</span><span class="v"><span class="pill go">Done</span>&nbsp; command-center/simurgh/ — the SSOT. Competitor repos cloned &amp; mined; Limrun DX adopted as the bar.</span></div>
+        </div>
+    </div>
+    <div class="updated-tag">sim-control-plane · tracker</div><div class="slide-num">4</div>
+</section>
+
+<!-- === SLIDE 5: WHAT THE PRODUCT IS NOW === -->
+<section class="slide">
+    <div class="slide-inner">
+        <div class="kicker reveal">04 · product definition (current)</div>
+        <h2 class="reveal">A local control plane for sims &amp; devices<br>shared by concurrent coding agents</h2>
+        <div class="reveal">
+            <div class="layer"><span class="n">L1</span><h3>Sim broker / leases <span class="pill go" style="margin-left:12px;">v0 core</span></h3><p>Resident daemon owns exclusive leases: acquire / queue / renew / release, PID + heartbeat, stale reclamation, capacity limits. Queue + lease, not "hope nobody collides". The report's truest whitespace — nobody ships this.</p></div>
+            <div class="layer"><span class="n">L2</span><h3>Host-state isolation <span class="pill go" style="margin-left:12px;">v0 thin</span></h3><p>Lease grant returns an isolated env: per-lease DerivedData, module cache, result bundles, optional cloned sim. ⚠ VibeChard's turf — do minimal redirection, differentiate on the broker, or integrate VibeChard as backend.</p></div>
+            <div class="layer"><span class="n">L3</span><h3>Device Hub orchestration <span class="pill open" style="margin-left:12px;">v1</span></h3><p>Scheduling policy on top of leases: pool sizing, queue fairness, RAM/thermal throttling, devicectl for physical devices. Fleet policy, not manual boot/shutdown.</p></div>
+            <div class="layer" style="border-left-color: var(--line);"><span class="n" style="color: var(--text-dim);">L4</span><h3 style="color: var(--text-dim);">Proof gate <span class="pill open" style="margin-left:12px;">deferred</span></h3><p>Optional layer later, built on leases — cleaner dependency order than the report's v0.</p></div>
+        </div>
+    </div>
+    <div class="updated-tag">sim-control-plane · tracker</div><div class="slide-num">5</div>
+</section>
+
+<!-- === SLIDE 6: HEADLINE USE CASE === -->
+<section class="slide">
+    <div class="slide-inner">
+        <div class="kicker reveal">05 · headline use case</div>
+        <h2 class="reveal">N agents, N clones of the same iPhone, one Mac</h2>
+        <div class="grid-2 reveal" style="flex: 1;">
+            <div class="card">
+                <h3>The scenario</h3>
+                <ul>
+                    <li>Agents A / B / C each build a feature in their own git worktree</li>
+                    <li>Each acquires a lease → broker boots (or reuses from warm pool) a separate <strong style="color:var(--text);">clone of "iPhone 17 Pro"</strong> via simctl clone — own UDID, own data container</li>
+                    <li>Each builds with per-lease DerivedData, installs &amp; UI-tests on <em>its</em> sim — no cross-contamination possible through the broker</li>
+                    <li>Release / crash → clone cleaned or returned to pool</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>Limits &amp; non-goals</h3>
+                <ul>
+                    <li>Bottleneck is hardware, not CoreSimulator: ~1–3 GB RAM per booted sim; parallel xcodebuilds saturate CPU first</li>
+                    <li>Realistic: 2–4 truly parallel build+test agents per Apple Silicon Mac → broker enforces capacity, agent #5 queues</li>
+                    <li>Does <em>not</em> parallelize one feature's test suite (one sim per agent)</li>
+                    <li>Source isolation stays on worktrees; broker isolates the Apple-side state worktrees can't</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="updated-tag">sim-control-plane · tracker</div><div class="slide-num">6</div>
+</section>
+
+<!-- === SLIDE 7: HOW AGENTS USE IT === -->
+<section class="slide">
+    <div class="slide-inner">
+        <div class="kicker reveal">06 · interface sketch</div>
+        <h2 class="reveal">How an agent uses it</h2>
+        <div class="grid-2" style="flex: 1;">
+            <div class="reveal">
+                <div class="code">
+<span class="c"># agent (via MCP tool or CLI)</span><br>
+$ <span class="a">simplane lease acquire</span> \<br>
+&nbsp;&nbsp;&nbsp;--device "iPhone 17 Pro" --runtime 27.0<br><br>
+<span class="g">lease-86dd</span> granted<br>
+&nbsp;&nbsp;udid: 4E2A…9F<br>
+&nbsp;&nbsp;env:&nbsp; DERIVED_DATA=…/leases/86dd/dd<br>
+&nbsp;&nbsp;ttl:&nbsp; 30m (heartbeat to renew)<br><br>
+<span class="c"># build/test inside the lease env…</span><br><br>
+$ <span class="a">simplane lease release</span> lease-86dd
+                </div>
+            </div>
+            <div class="card reveal">
+                <h3>Agent-first adoption (Claude Code, Cursor, Codex)</h3>
+                <ul>
+                    <li><strong style="color: var(--text);">MCP server (primary):</strong> lease_acquire / lease_release / lease_status — result carries UDID + env paths into agent context</li>
+                    <li><strong style="color: var(--text);">CLI + JSON:</strong> for bash-driven agents, hooks, CI</li>
+                    <li><strong style="color: var(--text);">PATH shim (opt-in safety net):</strong> intercepts xcodebuild/simctl so an agent that forgets to lease gets auto-scoped, not collided</li>
+                    <li>Ship a paste-ready CLAUDE.md / rules snippet — agents only use tools they're told about; this is product, not docs garnish</li>
+                    <li>Daemon: Unix socket, versioned JSON; same-UDID acquire queues; dead PID / missed heartbeat → reclaim + clean</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="updated-tag">sim-control-plane · tracker</div><div class="slide-num">7</div>
+</section>
+
+<!-- === SLIDE 8: COMPETITIVE POSITION === -->
+<section class="slide">
+    <div class="slide-inner">
+        <div class="kicker reveal">07 · competitive position</div>
+        <h2 class="reveal">Who's nearby, and the gap we occupy</h2>
+        <div class="grid-3 reveal" style="flex: 1;">
+            <div class="card"><h3>VibeChard</h3><p>Best-in-class per-task isolation (DerivedData, caches, sim clones). No machine-wide broker, no queue, no cross-tool leases. <strong style="color: var(--amber);">Integrate, don't rebuild.</strong></p></div>
+            <div class="card"><h3>XcodeBuildMCP</h3><p>Agent build/test/run execution layer. Per-workspace daemon, no global resource authority. <strong style="color: var(--amber);">Potential execution backend.</strong></p></div>
+            <div class="card"><h3>Apple Device Hub + devicectl</h3><p>Inventory, control, diagnostics, scriptable JSON. No task ownership, leases, fairness, or policy. <strong style="color: var(--amber);">Sit above it, don't clone it.</strong></p></div>
+        </div>
+        <p class="reveal" style="font-size: 27px; margin-top: 30px; color: var(--text);">
+            The gap: <em style="color: var(--amber);">a machine-wide authority that owns which agent may touch which simulator, when.</em> Per the report's matrix, no shipped tool has cross-process leases.
+        </p>
+    </div>
+    <div class="updated-tag">sim-control-plane · tracker</div><div class="slide-num">8</div>
+</section>
+
+<!-- === SLIDE 9: OPEN QUESTIONS === -->
+<section class="slide">
+    <div class="slide-inner">
+        <div class="kicker reveal">08 · open questions</div>
+        <h2 class="reveal">To resolve next</h2>
+        <div class="grid-3 reveal" style="flex: 1;">
+            <div class="card"><h3>1 · Lease adoption</h3><p>PATH shim vs. explicit CLI/MCP vs. both. Lean: both, shim opt-in (shim is fragile across Xcode versions).</p></div>
+            <div class="card"><h3>2 · Isolation depth v0</h3><p>Env-var redirection only, or sim cloning too? Redirection covers the worst collisions (build.db races); clones cost disk + boot time.</p></div>
+            <div class="card"><h3>3 · VibeChard relationship</h3><p>Integrate as isolation backend, coexist politely (detect its env), or reimplement the minimal subset?</p></div>
+            <div class="card"><h3>4 · Pool strategy</h3><p>Warm pool of pre-booted clones (fast acquire, idle RAM) vs. boot-on-demand (~30–60s first acquire). Lean: on-demand first.</p></div>
+            <div class="card"><h3>5 · Remote / hosted sims</h3><p>Make the lease protocol location-transparent (UDID + connection info, host-agnostic). Ladder: local → your own second Mac → hosted fleet only with demand. Hosted competes with Limrun; Apple EULA caps 2 macOS VMs per Mac — thin margins, real capex. Not v0.</p></div>
+            <div class="card"><h3>6 · Validation demo</h3><p>AI-heavy multi-agent iOS devs. The demo that sells a broker: two agents collide live → broker prevents it.</p></div>
+        </div>
+    </div>
+    <div class="updated-tag">sim-control-plane · tracker</div><div class="slide-num">9</div>
+</section>
+
+<!-- === SLIDE 10: NEXT STEPS === -->
+<section class="slide">
+    <div class="slide-inner">
+        <div class="kicker reveal">09 · next steps</div>
+        <h2 class="reveal">Where this is going</h2>
+        <div class="reveal">
+            <div class="row"><span class="k">1. Product brainstorm + name</span><span class="v"><span class="pill go">Done</span>&nbsp; Simurgh; open Qs resolved into the docs</span></div>
+            <div class="row"><span class="k">2. v0 spec + PRD + roadmap + handoff prompt</span><span class="v"><span class="pill go">Done</span>&nbsp; command-center/simurgh/ — paste HANDOFF_PROMPT.md into a fresh Fable session to start the build</span></div>
+            <div class="row"><span class="k">3. Build M0–M4 via swarm</span><span class="v"><span class="pill go">Done</span>&nbsp; v0.0.1 tagged 2026-07-13 (Codex started M0, Claude Code finished M1–M4). 71 commits, 15 packages, all gates green. Dogfood: 2 parallel agents, 2 clones, 0 collisions; found+fixed real watcher reclaim bug. Honest findings: warm templates NOT faster (2.1s cold vs 2.7s warm); dogfood used CLI subagents not real MCP windows (owner spot-check pending)</span></div>
+            <div class="row"><span class="k">4. Benchmark: with vs without Simurgh</span><span class="v"><span class="pill go">Run 1 done</span>&nbsp; 2026-07-13. Launch-grade: B2 (4 agents 100% vs naive 15%, zero incidents), wrong-badge PNG story, B4 cleanup, Bug-1 dogfood find. Blockers: B1 ARM-S 85% (DIY hit 100% — clone-churn suspect), B5 55.6% w/ 14-min tails (lease held during builds), B6 incomplete (n=4, XcodeBuildMCP check unrun), time-to-green metric missing</span></div>
+            <div class="row"><span class="k">5. Pre-launch fixes (P0s)</span><span class="v"><span class="pill open">Next</span>&nbsp; bench/REVIEW_AND_NEXT_STEPS.md — hand to Claude Code; announce only after P0-1…P0-5 close</span></div>
+            <div class="row"><span class="k">4. Dogfood</span><span class="v">Run real parallel agent work (Lancer dev) through the broker</span></div>
+            <div class="row"><span class="k">5. External validation</span><span class="v">5–10 AI-heavy iOS devs; measure kept-enabled rate &amp; collisions prevented</span></div>
+        </div>
+        <p class="reveal" style="font-size: 25px; color: var(--text-dim); margin-top: 36px;">
+            Kill criteria carried over from the report — if users won't keep it running, standalone framing doesn't rescue it.
+        </p>
+    </div>
+    <div class="updated-tag">sim-control-plane · tracker</div><div class="slide-num">10</div>
+</section>
+
+</main>
+</div>
+
+<!-- Edit affordance -->
+<div class="edit-hotzone" style="position:fixed;top:0;left:0;width:80px;height:80px;z-index:10000;cursor:pointer;"></div>
+<button class="edit-toggle" id="editToggle" title="Edit mode (E)" style="position:fixed;top:18px;left:18px;font-size:22px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;color:var(--text);opacity:0;pointer-events:none;transition:opacity .3s ease;z-index:10001;cursor:pointer;">✏️</button>
+
+<script>
+/* === GSAP GUARD === */
+const hasGsap = typeof window.gsap !== 'undefined';
+if (!hasGsap) document.documentElement.classList.add('no-gsap');
+else {
+    try {
+        gsap.matchMedia().add('(prefers-reduced-motion: reduce)', () => {
+            gsap.globalTimeline.timeScale(1000);
+            return () => gsap.globalTimeline.timeScale(1);
+        });
+    } catch (e) {}
+}
+
+/* === REVEAL === */
+function revealSlide(slide) {
+    if (!hasGsap) return;
+    const targets = slide.querySelectorAll('.reveal');
+    gsap.killTweensOf(targets);
+    gsap.timeline({ defaults: { duration: 0.6, ease: 'power3.out' } })
+        .from(targets, { autoAlpha: 0, y: 22, stagger: 0.1 });
+}
+
+/* === CONTROLLER === */
+class SlidePresentation {
+    constructor() {
+        this.slides = document.querySelectorAll('.slide');
+        this.current = 0;
+        this.stage = document.getElementById('deckStage');
+        this.scale();
+        window.addEventListener('resize', () => this.scale());
+        document.addEventListener('keydown', (e) => {
+            if (e.target.getAttribute && e.target.getAttribute('contenteditable')) return;
+            if (['ArrowRight',' ','PageDown'].includes(e.key)) { e.preventDefault(); this.show(this.current + 1); }
+            if (['ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); this.show(this.current - 1); }
+        });
+        // touch
+        let x0 = null;
+        document.addEventListener('touchstart', e => x0 = e.touches[0].clientX);
+        document.addEventListener('touchend', e => {
+            if (x0 === null) return;
+            const dx = e.changedTouches[0].clientX - x0;
+            if (Math.abs(dx) > 50) this.show(this.current + (dx < 0 ? 1 : -1));
+            x0 = null;
+        });
+        this.show(0);
+    }
+    scale() {
+        const f = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        const x = (window.innerWidth - 1920 * f) / 2, y = (window.innerHeight - 1080 * f) / 2;
+        this.stage.style.transform = `translate(${x}px, ${y}px) scale(${f})`;
+    }
+    show(i) {
+        this.current = Math.max(0, Math.min(i, this.slides.length - 1));
+        this.slides.forEach((s, j) => {
+            s.classList.toggle('active', j === this.current);
+            s.classList.toggle('visible', j === this.current);
+        });
+        revealSlide(this.slides[this.current]);
+    }
+}
+new SlidePresentation();
+
+/* === INLINE EDITING (hover top-left or press E) === */
+const editor = {
+    isActive: false,
+    toggleEditMode() {
+        this.isActive = !this.isActive;
+        const btn = document.getElementById('editToggle');
+        btn.classList.toggle('active', this.isActive);
+        btn.style.opacity = this.isActive ? 1 : '';
+        btn.style.pointerEvents = this.isActive ? 'auto' : '';
+        document.querySelectorAll('.slide h1,.slide h2,.slide h3,.slide p,.slide li,.slide span,.slide .code').forEach(el => {
+            el.setAttribute('contenteditable', this.isActive ? 'true' : 'false');
+        });
+        if (!this.isActive) this.save();
+    },
+    save() {
+        try { localStorage.setItem('simplane-tracker-edits', document.querySelector('.deck-stage').innerHTML); } catch (e) {}
+    },
+    restore() {
+        try {
+            const saved = localStorage.getItem('simplane-tracker-edits');
+            if (saved) document.querySelector('.deck-stage').innerHTML = saved;
+        } catch (e) {}
+    }
+};
+const hotzone = document.querySelector('.edit-hotzone');
+const editToggle = document.getElementById('editToggle');
+let hideTimeout = null;
+function showBtn() { clearTimeout(hideTimeout); editToggle.style.opacity = 1; editToggle.style.pointerEvents = 'auto'; }
+function hideBtnDelayed() { hideTimeout = setTimeout(() => { if (!editor.isActive) { editToggle.style.opacity = 0; editToggle.style.pointerEvents = 'none'; } }, 400); }
+hotzone.addEventListener('mouseenter', showBtn);
+hotzone.addEventListener('mouseleave', hideBtnDelayed);
+editToggle.addEventListener('mouseenter', showBtn);
+editToggle.addEventListener('mouseleave', hideBtnDelayed);
+editToggle.addEventListener('click', () => editor.toggleEditMode());
+document.addEventListener('keydown', (e) => {
+    if ((e.key === 'e' || e.key === 'E') && !(e.target.getAttribute && e.target.getAttribute('contenteditable') === 'true')) editor.toggleEditMode();
+    if ((e.ctrlKey || e.metaKey) && e.key === 's' && editor.isActive) { e.preventDefault(); editor.save(); }
+});
+</script>
+</body>
+</html>

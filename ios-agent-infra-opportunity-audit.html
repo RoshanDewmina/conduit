@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local Mac Infra for AI Coding Agents on iOS — Opportunity Audit</title>
+
+<!-- Fonts: Fraunces (display serif) + JetBrains Mono (everything else — audit/terminal register) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- GSAP -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/SplitText.min.js"></script>
+
+<style>
+/* ============================================================
+   THEME — "audit terminal": near-black surface, phosphor amber
+   accent, terminal-green for "covered", warning red for "gap".
+   Fraunces (serif display) contrasts against JetBrains Mono
+   (body/labels/data) — an audit report typed on an old terminal.
+   ============================================================ */
+:root{
+    --bg-primary:#0a0d0f;
+    --bg-secondary:#12171a;
+    --bg-tertiary:#182023;
+    --line:rgba(255,255,255,0.09);
+    --line-soft:rgba(255,255,255,0.05);
+    --text-primary:#eef3f1;
+    --text-secondary:#9aa8ac;
+    --text-dim:#5f6c70;
+    --accent:#ffb454;         /* amber — headline / focus */
+    --accent-glow:rgba(255,180,84,0.28);
+    --good:#4fd6a8;           /* covered / go */
+    --good-glow:rgba(79,214,168,0.22);
+    --bad:#ff6b5b;            /* gap / no-go */
+    --bad-glow:rgba(255,107,91,0.22);
+    --warn:#e8c547;           /* partial */
+
+    --font-display:'Fraunces', serif;
+    --font-mono:'JetBrains Mono', monospace;
+
+    --ease-out-expo: cubic-bezier(0.16,1,0.3,1);
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{font-family:var(--font-mono); background:#000;}
+
+/* === PASTE OF viewport-base.css (mandatory, in full) === */
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--stage-bg, #000); }
+.deck-viewport { position: fixed; inset: 0; overflow: hidden; background: var(--stage-bg, #000); }
+.deck-stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: var(--slide-bg, #fff); }
+.slide { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; display: block; visibility: hidden; opacity: 0; pointer-events: none; background: var(--slide-bg, #fff); }
+.slide.active, .slide.visible { visibility: visible; opacity: 1; pointer-events: auto; z-index: 1; }
+img, video, canvas, svg { max-width: 100%; max-height: 100%; }
+.deck-controls { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 1000; }
+@media print {
+    html, body { width: 1920px; height: auto; overflow: visible; background: #fff; }
+    .deck-viewport { position: static; overflow: visible; background: #fff; }
+    .deck-stage { position: static; width: auto; height: auto; transform: none !important; background: none; }
+    .slide { position: relative; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; width: 1920px; height: 1080px; break-after: page; page-break-after: always; }
+    .slide:last-child { break-after: auto; page-break-after: auto; }
+    .deck-controls { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; } }
+/* === END viewport-base.css === */
+
+:root{ --stage-bg:#000; --slide-bg:var(--bg-primary); }
+
+/* CSS fallback reveal (only active if GSAP CDN fails) */
+html.no-gsap .reveal{ opacity:0; transform:translateY(30px); transition:opacity .6s var(--ease-out-expo), transform .6s var(--ease-out-expo); }
+html.no-gsap .slide.visible .reveal{ opacity:1; transform:translateY(0); }
+html.no-gsap .reveal:nth-child(1){transition-delay:.08s;} html.no-gsap .reveal:nth-child(2){transition-delay:.16s;}
+html.no-gsap .reveal:nth-child(3){transition-delay:.24s;} html.no-gsap .reveal:nth-child(4){transition-delay:.32s;}
+html.no-gsap .reveal:nth-child(5){transition-delay:.40s;} html.no-gsap .reveal:nth-child(6){transition-delay:.48s;}
+
+/* === background texture: faint grid + scanline, shared by all slides === */
+.slide{
+    background-color:var(--bg-primary);
+    background-image:
+        linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px);
+    background-size:64px 64px;
+    color:var(--text-primary);
+}
+.slide::after{ /* vignette to keep grid from feeling flat */
+    content:"";
+    position:absolute; inset:0;
+    background:radial-gradient(ellipse at 30% 0%, rgba(255,180,84,0.05) 0%, transparent 45%),
+               radial-gradient(ellipse at 100% 100%, rgba(79,214,168,0.05) 0%, transparent 50%);
+    pointer-events:none;
+}
+
+/* === shared layout primitives === */
+.slide-content{ position:relative; z-index:2; height:100%; padding:88px 120px 72px; display:flex; flex-direction:column; }
+.kicker{ font-family:var(--font-mono); font-size:20px; letter-spacing:0.18em; text-transform:uppercase; color:var(--accent); font-weight:600; }
+.kicker::before{ content:"// "; color:var(--text-dim); }
+h2.slide-title{ font-family:var(--font-display); font-weight:600; font-size:58px; line-height:1.08; margin-top:14px; color:var(--text-primary); max-width:1500px; }
+.slide-title em{ color:var(--accent); font-style:normal; }
+.slide-sub{ font-size:22px; color:var(--text-secondary); margin-top:16px; max-width:1300px; line-height:1.5; }
+.slide-foot{ position:absolute; left:120px; bottom:40px; font-size:15px; color:var(--text-dim); letter-spacing:0.04em; z-index:2; }
+.slide-num{ position:absolute; right:120px; bottom:40px; font-size:15px; color:var(--text-dim); z-index:2; }
+
+/* === pill / tag === */
+.tag{ display:inline-flex; align-items:center; gap:8px; font-size:15px; font-weight:600; letter-spacing:0.03em; padding:6px 14px; border-radius:100px; border:1px solid var(--line); }
+.tag.good{ color:var(--good); border-color:rgba(79,214,168,0.4); background:rgba(79,214,168,0.08); }
+.tag.bad{ color:var(--bad); border-color:rgba(255,107,91,0.4); background:rgba(255,107,91,0.08); }
+.tag.warn{ color:var(--warn); border-color:rgba(232,197,71,0.4); background:rgba(232,197,71,0.08); }
+.tag.neutral{ color:var(--text-secondary); border-color:var(--line); background:rgba(255,255,255,0.03); }
+
+/* === card grid === */
+.card{ background:var(--bg-secondary); border:1px solid var(--line); border-radius:18px; padding:30px 28px; position:relative; }
+.card .card-num{ font-family:var(--font-display); font-size:44px; color:var(--accent); font-weight:600; line-height:1; }
+.card h3{ font-family:var(--font-display); font-size:26px; font-weight:600; margin:10px 0 8px; color:var(--text-primary); }
+.card p{ font-size:16px; line-height:1.55; color:var(--text-secondary); }
+
+/* === blinking terminal cursor accent === */
+.cursor{ display:inline-block; width:14px; height:38px; background:var(--accent); margin-left:10px; vertical-align:-6px; animation:blink 1.1s steps(1) infinite; }
+@keyframes blink{ 50%{ opacity:0; } }
+
+/* ============================================================
+   SLIDE 1 — TITLE
+   ============================================================ */
+.title-slide .slide-content{ justify-content:center; padding-left:130px; }
+.title-slide .kicker{ font-size:22px; }
+.title-slide h1{
+    font-family:var(--font-display); font-weight:600; font-size:118px; line-height:1.02;
+    margin-top:24px; letter-spacing:-0.01em;
+}
+.title-slide h1 em{ font-style:italic; color:var(--accent); }
+.title-slide .sub{ font-size:26px; color:var(--text-secondary); max-width:1180px; margin-top:30px; line-height:1.5; }
+.title-meta{ display:flex; gap:36px; margin-top:56px; }
+.title-meta div{ font-size:15px; color:var(--text-dim); border-left:2px solid var(--line); padding-left:16px; }
+.title-meta b{ color:var(--text-secondary); display:block; font-size:13px; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:4px; }
+
+/* ============================================================
+   SLIDE 2 — THE FOUR PILLARS
+   ============================================================ */
+.pillars-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:28px; margin-top:56px; }
+.pillars-grid .card{ padding:38px 30px; min-height:340px; display:flex; flex-direction:column; }
+.pillar-glyph{ font-family:var(--font-mono); font-size:16px; color:var(--accent); border:1px solid rgba(255,180,84,0.35); width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:20px; }
+.pillars-grid h3{ font-size:24px; }
+.pillars-grid p{ font-size:16.5px; }
+.pillar-tail{ margin-top:auto; font-size:14px; color:var(--text-dim); padding-top:14px; border-top:1px dashed var(--line); }
+
+/* ============================================================
+   SLIDE 3 — VERDICT
+   ============================================================ */
+.verdict-grid{ display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:36px; margin-top:60px; flex:1; }
+.verdict-card{ background:var(--bg-secondary); border:1px solid var(--line); border-radius:22px; padding:44px 40px; display:flex; flex-direction:column; }
+.verdict-label{ font-size:16px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); font-weight:600; }
+.verdict-num{ font-family:var(--font-display); font-size:170px; font-weight:600; line-height:1; margin:14px 0; color:var(--accent); }
+.verdict-num.small{ font-size:78px; }
+.verdict-note{ font-size:17px; color:var(--text-secondary); line-height:1.5; margin-top:auto; }
+.verdict-card.bad-b .verdict-num{ color:var(--bad); }
+.verdict-card.mixed .verdict-num{ color:var(--warn); font-size:64px; }
+
+/* ============================================================
+   EVIDENCE SLIDES (4/5) — two-column stat + note lists
+   ============================================================ */
+.evidence-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:26px; margin-top:44px; }
+.evidence-grid.cols-1{ grid-template-columns:1fr; max-width:1500px; }
+.ev-card{ background:var(--bg-secondary); border:1px solid var(--line); border-radius:16px; padding:26px 28px; }
+.ev-card .stat{ font-family:var(--font-display); font-size:40px; color:var(--good); font-weight:600; }
+.ev-card.risk .stat{ color:var(--bad); }
+.ev-card h4{ font-size:18.5px; margin:8px 0 6px; color:var(--text-primary); font-weight:700; }
+.ev-card p{ font-size:15.5px; color:var(--text-secondary); line-height:1.5; }
+.ev-card .src{ font-size:12.5px; color:var(--text-dim); margin-top:10px; display:block; }
+
+/* ============================================================
+   SLIDE 6 — MATRIX TABLE
+   ============================================================ */
+.matrix-wrap{ margin-top:40px; border:1px solid var(--line); border-radius:18px; overflow:hidden; }
+table.matrix{ width:100%; border-collapse:collapse; font-family:var(--font-mono); }
+table.matrix th, table.matrix td{ padding:22px 22px; text-align:left; border-bottom:1px solid var(--line-soft); font-size:16px; }
+table.matrix thead th{ background:var(--bg-tertiary); font-size:14.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-secondary); border-bottom:1px solid var(--line); }
+table.matrix th:first-child, table.matrix td:first-child{ width:26%; color:var(--text-primary); font-weight:600; }
+table.matrix tbody tr:last-child td{ border-bottom:none; }
+table.matrix tbody tr:nth-child(odd){ background:rgba(255,255,255,0.015); }
+.mx{ display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:14.5px; }
+.mx.yes{ color:var(--good); } .mx.no{ color:var(--bad); } .mx.partial{ color:var(--warn); }
+.mx .dot{ width:9px; height:9px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
+
+/* ============================================================
+   CONTENDER DETAIL SLIDES (7/8/9)
+   ============================================================ */
+.contender-head{ display:flex; align-items:baseline; gap:22px; margin-top:6px; }
+.contender-head .name{ font-family:var(--font-display); font-size:52px; font-weight:600; color:var(--text-primary); }
+.contender-head .meta{ font-size:15px; color:var(--text-dim); }
+.contender-cols{ display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:38px; flex:1; }
+.contender-cols h4{ font-size:16px; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:16px; font-weight:700; }
+.contender-cols .covers h4{ color:var(--good); }
+.contender-cols .gaps h4{ color:var(--bad); }
+.contender-cols ul{ list-style:none; display:flex; flex-direction:column; gap:14px; }
+.contender-cols li{ font-size:16.5px; line-height:1.5; color:var(--text-secondary); padding-left:22px; position:relative; }
+.contender-cols li::before{ position:absolute; left:0; top:2px; font-weight:800; }
+.covers li::before{ content:"+"; color:var(--good); }
+.gaps li::before{ content:"–"; color:var(--bad); }
+.contender-cols li b{ color:var(--text-primary); }
+
+/* ============================================================
+   SLIDE 10 — GO / NO-GO
+   ============================================================ */
+.gonogo-grid{ display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:44px; flex:1; }
+.gonogo-panel{ border-radius:20px; padding:36px 34px; border:1px solid var(--line); }
+.gonogo-panel.no{ background:linear-gradient(160deg, rgba(255,107,91,0.08), var(--bg-secondary)); border-color:rgba(255,107,91,0.35); }
+.gonogo-panel.go{ background:linear-gradient(160deg, rgba(79,214,168,0.08), var(--bg-secondary)); border-color:rgba(79,214,168,0.35); }
+.gonogo-panel .verdict-word{ font-family:var(--font-display); font-size:52px; font-weight:600; }
+.gonogo-panel.no .verdict-word{ color:var(--bad); }
+.gonogo-panel.go .verdict-word{ color:var(--good); }
+.gonogo-panel p{ font-size:16.5px; color:var(--text-secondary); line-height:1.55; margin-top:14px; }
+.gonogo-panel ul{ margin-top:16px; list-style:none; display:flex; flex-direction:column; gap:10px; }
+.gonogo-panel li{ font-size:15.5px; color:var(--text-secondary); padding-left:20px; position:relative; }
+.gonogo-panel li::before{ content:"›"; position:absolute; left:0; color:var(--text-dim); }
+
+/* ============================================================
+   SLIDE 11 — RISKS
+   ============================================================ */
+.risk-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin-top:40px; }
+.risk-card{ background:var(--bg-secondary); border:1px solid var(--line); border-left:3px solid var(--bad); border-radius:14px; padding:24px 24px; }
+.risk-card .rn{ font-family:var(--font-mono); font-size:13px; color:var(--bad); letter-spacing:0.08em; }
+.risk-card h4{ font-size:18px; margin:8px 0 6px; color:var(--text-primary); }
+.risk-card p{ font-size:14.5px; color:var(--text-secondary); line-height:1.5; }
+
+/* ============================================================
+   SLIDE 12 — INTERNAL SIGNAL
+   ============================================================ */
+.signal-wrap{ display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:40px; flex:1; }
+.signal-list{ display:flex; flex-direction:column; gap:18px; }
+.signal-item{ background:var(--bg-secondary); border:1px solid var(--line); border-radius:14px; padding:20px 22px; font-size:16px; color:var(--text-secondary); line-height:1.5; }
+.signal-item b{ color:var(--text-primary); }
+.caveat-box{ border:1px dashed rgba(232,197,71,0.5); background:rgba(232,197,71,0.06); border-radius:16px; padding:32px; display:flex; flex-direction:column; justify-content:center; }
+.caveat-box .kicker{ color:var(--warn); }
+.caveat-box p{ font-size:18px; color:var(--text-primary); line-height:1.6; margin-top:14px; }
+
+/* ============================================================
+   SLIDE 13 — SOURCES
+   ============================================================ */
+.sources-cols{ display:grid; grid-template-columns:1fr 1fr; gap:0 60px; margin-top:36px; column-count:1; }
+.sources-cols ol{ font-size:14.5px; color:var(--text-secondary); line-height:2.0; padding-left:24px; }
+.sources-cols ol li b{ color:var(--text-primary); font-weight:600; }
+.sources-cols ol li span{ color:var(--text-dim); }
+
+/* ============================================================
+   NAV CONTROLS
+   ============================================================ */
+.deck-controls{ display:flex; align-items:center; gap:18px; background:rgba(18,23,26,0.9); border:1px solid var(--line); border-radius:100px; padding:10px 20px; backdrop-filter:blur(8px); }
+.deck-controls button{ background:none; border:none; color:var(--text-secondary); font-family:var(--font-mono); font-size:14px; cursor:pointer; padding:6px 10px; }
+.deck-controls button:hover{ color:var(--accent); }
+.deck-controls .count{ font-family:var(--font-mono); font-size:13px; color:var(--text-dim); }
+
+/* Edit affordance (per skill defaults) */
+.edit-hotzone{ position:fixed; top:0; left:0; width:80px; height:80px; z-index:10000; cursor:pointer; }
+.edit-toggle{ position:fixed; top:16px; left:16px; width:38px; height:38px; border-radius:50%; border:1px solid var(--line); background:var(--bg-secondary); color:var(--text-secondary); opacity:0; pointer-events:none; transition:opacity .3s ease; z-index:10001; font-size:16px; }
+.edit-toggle.show, .edit-toggle.active{ opacity:1; pointer-events:auto; }
+.edit-toggle.active{ color:var(--accent); border-color:var(--accent); }
+[contenteditable="true"]{ outline:1px dashed var(--accent) !important; }
+
+@media (prefers-reduced-motion: reduce){ .cursor{ animation:none; } }
+</style>
+</head>
+<body>
+<div class="deck-viewport">
+<main class="deck-stage" id="deckStage">
+
+<!-- ============================================================ SLIDE 1 : TITLE ============================================================ -->
+<section class="slide title-slide active">
+    <div class="slide-content">
+        <div class="kicker reveal">product opportunity audit — local mac infra for ai coding agents</div>
+        <h1 class="reveal">Does this <em>need</em><br>to exist?<span class="cursor"></span></h1>
+        <p class="sub reveal">A tool that forces Cursor / Claude / Codex to <em style="color:var(--text-primary);font-style:normal;">prove</em> iOS work before "done," isolates parallel agents from CoreSimulator / DerivedData collisions, and orchestrates Device Hub–era multi-simulator allocation on one Mac.</p>
+        <div class="title-meta reveal">
+            <div><b>Scope</b>Adjacent tool, independent of any existing codebase</div>
+            <div><b>Method</b>Fresh web research + local dogfood evidence — no prior report trusted</div>
+            <div><b>Date</b>12 Jul 2026</div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">01 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 2 : THE FOUR PILLARS ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">the hypothesis</div>
+        <h2 class="slide-title reveal">Four capabilities bundled into <em>one</em> product</h2>
+        <div class="pillars-grid reveal">
+            <div class="card">
+                <div class="pillar-glyph">01</div>
+                <h3>Enforced verification</h3>
+                <p>Refuse an agent's "done" / "tests pass" claim unless a real, independently-run build or test artifact backs it up.</p>
+                <div class="pillar-tail">false-green refusal, not self-reported success</div>
+            </div>
+            <div class="card">
+                <div class="pillar-glyph">02</div>
+                <h3>Sim broker / leases</h3>
+                <p>A cross-process broker hands out exclusive simulator ownership so concurrent agents never grab the same device.</p>
+                <div class="pillar-tail">queue + lease, not "hope nobody collides"</div>
+            </div>
+            <div class="card">
+                <div class="pillar-glyph">03</div>
+                <h3>Host-state isolation</h3>
+                <p>Each agent's CoreSimulator state, DerivedData, and module cache are walled off from every other agent on the box.</p>
+                <div class="pillar-tail">per-agent sandbox, not one shared Mac</div>
+            </div>
+            <div class="card">
+                <div class="pillar-glyph">04</div>
+                <h3>Device Hub orchestration</h3>
+                <p>Allocates and schedules many simulators/devices across many agents through Xcode 27's new Device Hub + <code>devicectl</code>.</p>
+                <div class="pillar-tail">fleet policy, not manual boot/shutdown</div>
+            </div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">02 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 3 : VERDICT ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">headline verdict</div>
+        <h2 class="slide-title reveal">Real pain, narrow product</h2>
+        <div class="verdict-grid reveal">
+            <div class="verdict-card">
+                <div class="verdict-label">Demand score</div>
+                <div class="verdict-num">4<span style="font-size:64px;color:var(--text-dim);">/10</span></div>
+                <div class="verdict-note">The underlying pain is well documented; a <em style="color:var(--text-primary);font-style:normal;">standalone, paid, iOS-only bundle</em> of all four pillars has almost no direct evidence of demand.</div>
+            </div>
+            <div class="verdict-card bad-b">
+                <div class="verdict-label">Full-stack coverage</div>
+                <div class="verdict-num small">NO</div>
+                <div class="verdict-note">No shipped product covers all four legs at once. The closest contenders each cover one, maybe two.</div>
+            </div>
+            <div class="verdict-card mixed">
+                <div class="verdict-label">Go / No-Go</div>
+                <div class="verdict-num">NO-GO<br><span style="font-size:34px;">on the bundle</span></div>
+                <div class="verdict-note">GO on a narrow open-source wedge — see slide 10.</div>
+            </div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">03 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 4 : EVIDENCE — PAIN IS REAL ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">evidence — part 1</div>
+        <h2 class="slide-title reveal">The pain is <em>real</em>, and it's not hypothetical</h2>
+        <div class="evidence-grid reveal">
+            <div class="ev-card">
+                <div class="stat">$4.7B</div>
+                <h4>Agentic-AI funding, Jul 2025–Jun 2026</h4>
+                <p>59 disclosed deals. "Agents lie about being done" is now a funded category, not a niche complaint.</p>
+                <span class="src">newmarketpitch.com — agentic AI funding analysis</span>
+            </div>
+            <div class="ev-card">
+                <div class="stat">$70M</div>
+                <h4>Qodo Series B — code verification</h4>
+                <p>Raised explicitly to verify AI-written code before it ships. Cross-model evidence: GLM-5.2 and Claude Opus both produced false "all tests pass" claims on the same 19 tasks.</p>
+                <span class="src">TechCrunch, Mar 2026 · docs.bswen.com</span>
+            </div>
+            <div class="ev-card">
+                <div class="stat">5+</div>
+                <h4>Independent OSS point-solutions, 2026 alone</h4>
+                <p>SandVault (348★), Baguette, ClodPod, Chamber, sim-use — all built this year to isolate/automate simulators for AI agents. Nobody had to be told this was a problem.</p>
+                <span class="src">GitHub: webcoyote/sandvault, tddworks/baguette</span>
+            </div>
+            <div class="ev-card">
+                <div class="stat">10+ yrs</div>
+                <h4>CoreSimulator contention predates AI agents</h4>
+                <p>Parallel <code>xcodebuild test</code> jobs fighting over one simulator, disk-full crash loops, <code>simdiskimaged</code> pegged at 440% CPU — a known, chronic Apple-tooling weak point.</p>
+                <span class="src">Apple Developer Forums · CircleCI support docs</span>
+            </div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">04 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 5 : EVIDENCE — BUT NARROW ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">evidence — part 2</div>
+        <h2 class="slide-title reveal">But the <em>bundle's</em> addressable slice is thin</h2>
+        <div class="evidence-grid reveal">
+            <div class="ev-card risk">
+                <div class="stat">2 in 2026</div>
+                <h4>Apple shipped Device Hub AND xcrun mcpbridge months apart</h4>
+                <p>Device Hub (WWDC26, replaces Simulator.app) and the native Xcode 26.3 MCP bridge both landed this year. The platform owner is visibly closing this exact gap itself, fast.</p>
+                <span class="src">InfoQ · Bitrise Blog, Jun 2026</span>
+            </div>
+            <div class="ev-card risk">
+                <div class="stat">"single-instance"</div>
+                <h4>Apple's own bridge admits the limit — and is fixing it</h4>
+                <p>xcrun mcpbridge auto-detects "the" running Xcode PID for "the typical single-instance case." Apple already knows the multi-agent gap exists; it's a roadmap item, not an unknown.</p>
+                <span class="src">rudrank.com · dev.to/arshtechpro</span>
+            </div>
+            <div class="ev-card">
+                <div class="stat">small ∩</div>
+                <h4>The exact buyer is a narrow intersection</h4>
+                <p>iOS work × agent-driven coding × multiple agents running in parallel × on one Mac × has actually collided — not four popular things multiplied, a thin sliver of each.</p>
+                <span class="src">HN discussion threads, iOS + Claude Code / Cursor</span>
+            </div>
+            <div class="ev-card">
+                <div class="stat">solved-since</div>
+                <h4>"Fresh disposable sim per job" predates AI agents</h4>
+                <p>CI/CD teams have used create-a-sim-per-job-then-delete-it as standard practice for years. AI-agent tools (SandVault) just re-applied an existing pattern — not a novel unmet need.</p>
+                <span class="src">blog.kulman.sk — parallel iOS UI test runs</span>
+            </div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">05 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 6 : COVERAGE MATRIX ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">competitive landscape</div>
+        <h2 class="slide-title reveal">No product covers all four legs</h2>
+        <div class="matrix-wrap reveal">
+            <table class="matrix">
+                <thead>
+                    <tr><th>Capability</th><th>SandVault</th><th>XcodeBuildMCP</th><th>Apple xcrun mcpbridge</th><th>Baguette</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Enforced verification</td>
+                        <td><span class="mx no"><span class="dot"></span>none</span></td>
+                        <td><span class="mx no"><span class="dot"></span>none</span></td>
+                        <td><span class="mx no"><span class="dot"></span>none</span></td>
+                        <td><span class="mx no"><span class="dot"></span>none</span></td></tr>
+                    <tr><td>Sim broker / leases</td>
+                        <td><span class="mx partial"><span class="dot"></span>partial — per-session, not brokered</span></td>
+                        <td><span class="mx no"><span class="dot"></span>none</span></td>
+                        <td><span class="mx no"><span class="dot"></span>none — single-instance</span></td>
+                        <td><span class="mx no"><span class="dot"></span>none — no lock model</span></td></tr>
+                    <tr><td>Host-state isolation</td>
+                        <td><span class="mx yes"><span class="dot"></span>yes — sandboxed macOS user</span></td>
+                        <td><span class="mx no"><span class="dot"></span>none</span></td>
+                        <td><span class="mx no"><span class="dot"></span>none</span></td>
+                        <td><span class="mx no"><span class="dot"></span>none</span></td></tr>
+                    <tr><td>Device Hub orchestration</td>
+                        <td><span class="mx no"><span class="dot"></span>none</span></td>
+                        <td><span class="mx partial"><span class="dot"></span>partial — wraps devicectl/simctl</span></td>
+                        <td><span class="mx partial"><span class="dot"></span>partial — native, one instance</span></td>
+                        <td><span class="mx partial"><span class="dot"></span>partial — headless multi-sim farm</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">06 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 7 : CONTENDER — SANDVAULT ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">closest contender 1 / 3</div>
+        <div class="contender-head reveal">
+            <div class="name">SandVault</div>
+            <div class="meta">webcoyote — OSS · 348★ · 17 forks · 420 commits, actively maintained</div>
+        </div>
+        <p class="slide-sub reveal">Runs Claude Code / Codex / Cursor Agent / Gemini in a limited macOS user account + <code>sandbox-exec</code>. Boots a fresh scratch simulator per session, deleted on exit.</p>
+        <div class="contender-cols reveal">
+            <div class="covers">
+                <h4>Covers</h4>
+                <ul>
+                    <li><b>Host-state isolation</b> — separate user account, no access to your home dir or other volumes.</li>
+                    <li><b>Per-session sim isolation</b> — a fresh <code>sandvault-&lt;session-id&gt;</code> simulator is created and destroyed for each run.</li>
+                    <li>Works today, zero VM overhead, free.</li>
+                </ul>
+            </div>
+            <div class="gaps">
+                <h4>Gaps</h4>
+                <ul>
+                    <li><b>No verification gate</b> — explicitly built for autonomy (<code>--dangerously-skip-permissions</code>, <code>--yolo</code>), not proof-of-work.</li>
+                    <li><b>No cross-session broker</b> — one sim per session, not a shared pool with queueing/contention policy across many concurrent sessions.</li>
+                    <li><b>No Device Hub fleet view</b> — and GUI apps (incl. Simulator.app) can't run inside the sandbox at all, by its own documentation.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">07 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 8 : CONTENDER — XCODEBUILDMCP ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">closest contender 2 / 3</div>
+        <div class="contender-head reveal">
+            <div class="name">XcodeBuildMCP</div>
+            <div class="meta">Cameron Cooke, acquired by Sentry (2026) — the de facto standard agent↔Xcode bridge</div>
+        </div>
+        <p class="slide-sub reveal">82 MCP tools spanning build, test, simulator control, and LLDB debugging. The tool most agents already reach for to "make Claude ship iOS code."</p>
+        <div class="contender-cols reveal">
+            <div class="covers">
+                <h4>Covers</h4>
+                <ul>
+                    <li><b>Breadth of control</b> — build/test/screenshot/debug/UI-automation in one contract, no raw <code>xcodebuild</code> wrangling.</li>
+                    <li>Backed by a company (Sentry) — real maintenance, not a weekend project.</li>
+                    <li>The widest adoption of any tool surveyed.</li>
+                </ul>
+            </div>
+            <div class="gaps">
+                <h4>Gaps</h4>
+                <ul>
+                    <li><b>No verification gate</b> — reports whatever the agent asked it to run; can't stop an agent from claiming success it never checked.</li>
+                    <li><b>No leasing</b> — <code>session_set_defaults</code> implies one active simulator/session context per client, not multi-tenant concurrency control.</li>
+                    <li><b>No isolation</b> — runs straight against the host's shared CoreSimulator/DerivedData; two agents can collide freely.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">08 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 9 : CONTENDER — APPLE MCPBRIDGE (+ BAGUETTE) ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">closest contender 3 / 3 · plus one to watch</div>
+        <div class="contender-head reveal">
+            <div class="name">Apple xcrun mcpbridge</div>
+            <div class="meta">Xcode 26.3+ — first-party MCP server, ships inside Xcode itself</div>
+        </div>
+        <p class="slide-sub reveal">Zero-config: auto-detects the running Xcode PID and exposes 20 tools (build, test, Swift REPL, SwiftUI preview, simulator control) over XPC.</p>
+        <div class="contender-cols reveal">
+            <div class="covers">
+                <h4>Covers</h4>
+                <ul>
+                    <li><b>Native Device Hub access</b> — the only tool here with first-party, zero-latency access to Apple's own simulator/device model.</li>
+                    <li>No install, no drift from Xcode's own build graph.</li>
+                    <li><b>Honorable mention — Baguette</b> (OSS, 16★): headless multi-sim boot/stream/inject farm — the closest thing to a fleet-orchestration <em style="color:var(--text-primary);font-style:normal;">primitive</em>, but zero isolation or leasing logic.</li>
+                </ul>
+            </div>
+            <div class="gaps">
+                <h4>Gaps</h4>
+                <ul>
+                    <li><b>Explicitly single-instance</b> — built for "the typical single-instance case," by Apple's own framing. No concurrency model.</li>
+                    <li><b>No isolation, no verification</b> — shares the one Xcode/CoreSimulator instance; reports what Xcode reports, nothing independently checked.</li>
+                    <li>Fastest-moving target in this whole audit — Apple ships this monthly.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">09 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 10 : GO / NO-GO ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">recommendation</div>
+        <h2 class="slide-title reveal">No-Go on the bundle. Go on a wedge.</h2>
+        <div class="gonogo-grid reveal">
+            <div class="gonogo-panel no">
+                <div class="verdict-word">NO-GO</div>
+                <p>A funded, standalone company selling all four pillars bundled as one iOS-only product.</p>
+                <ul>
+                    <li>Apple is actively closing the orchestration + native-bridge gap itself.</li>
+                    <li>Verification is better solved horizontally — that's where Qodo/Baz money already went.</li>
+                    <li>Buyer intersection (iOS × agents × parallel × Mac × already in pain) is small today.</li>
+                </ul>
+            </div>
+            <div class="gonogo-panel go">
+                <div class="verdict-word">GO — small</div>
+                <p>A narrow, open-source <b style="color:var(--text-primary);">sim-broker/lease layer</b> that plugs into XcodeBuildMCP / Apple's mcpbridge rather than replacing them.</p>
+                <ul>
+                    <li>Take SandVault's per-session scratch-sim trick and generalize it into a real cross-process broker for N concurrent agents, not just N sandboxes.</li>
+                    <li>Ship free, build a user base the way SandVault/Baguette already have.</li>
+                    <li>Defer verification-gate (solve generically, don't rebuild Qodo for iOS) and Device Hub fleet UI (let Apple/Bitrise own it) until adoption proves out.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">10 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 11 : RISKS ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">top risks</div>
+        <h2 class="slide-title reveal">Six reasons to stay small</h2>
+        <div class="risk-grid reveal">
+            <div class="risk-card"><div class="rn">RISK 01</div><h4>Platform-owner risk</h4><p>Device Hub + xcrun mcpbridge both shipped in 2026 alone. Multi-instance support is a plausible next Apple feature, not a moat.</p></div>
+            <div class="risk-card"><div class="rn">RISK 02</div><h4>TAM ceiling</h4><p>iOS-only, Mac-only, "multiple concurrent agents on one repo" — a small population even inside the agentic-coding boom.</p></div>
+            <div class="risk-card"><div class="rn">RISK 03</div><h4>Free substitutes exist</h4><p>SandVault (348★), Baguette, ClodPod, Chamber are live, OSS, and actively developed — a paid product competes with "good enough and free."</p></div>
+            <div class="risk-card"><div class="rn">RISK 04</div><h4>Verification is a horizontal win</h4><p>Qodo ($70M) and Baz ($17M) prove the money is in general code verification, not an iOS-scoped slice of it.</p></div>
+            <div class="risk-card"><div class="rn">RISK 05</div><h4>Private-API fragility</h4><p>CoreSimulator/SimulatorKit internals break every OS point release — Baguette's README documents this happening between iOS 26 builds.</p></div>
+            <div class="risk-card"><div class="rn">RISK 06</div><h4>Local-only distribution caps upside</h4><p>Cloud CI vendors (Bitrise, Codemagic) can add Device Hub-aware orchestration server-side and out-execute a local Mac tool for team scale.</p></div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">11 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 12 : INTERNAL SIGNAL (N=1) ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">corroborating signal</div>
+        <h2 class="slide-title reveal">One real team already hit every symptom</h2>
+        <div class="signal-wrap reveal">
+            <div class="signal-list">
+                <div class="signal-item"><b>Sim HID went dead mid-session</b> — "iOS 27 Simulator HID/accessibility is fully non-functional," confirmed via a control-test tap that produced zero response.</div>
+                <div class="signal-item"><b>A real race only surfaced under live sim testing</b> — a connection race in production code was found only by dogfooding on Simulator, not by unit tests.</div>
+                <div class="signal-item"><b>Per-run git-worktree isolation, already built</b> — <code>agent.worktree.create/remove</code> gives each dispatched agent its own path under <code>~/.lancer/worktrees/</code>, distinct from vendor scratch dirs.</div>
+                <div class="signal-item"><b>A "false-green" verification gate already exists in the workflow</b> — the project's own agent contract requires evidence (build output, test counts) before any task is marked done.</div>
+            </div>
+            <div class="caveat-box">
+                <div class="kicker">honest caveat</div>
+                <p>This is one power-user team's own tooling, not independent market proof. It confirms the pain is <em style="color:var(--good);font-style:normal;">real</em> — it does not confirm anyone would <em style="color:var(--bad);font-style:normal;">pay</em> for a bundled product to fix it.</p>
+            </div>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">12 / 13</div>
+</section>
+
+<!-- ============================================================ SLIDE 13 : SOURCES ============================================================ -->
+<section class="slide">
+    <div class="slide-content">
+        <div class="kicker reveal">sources</div>
+        <h2 class="slide-title reveal" style="font-size:44px;">Everything cited in this audit</h2>
+        <div class="sources-cols reveal">
+            <ol>
+                <li><b>Device Hub / Xcode 27</b> <span>— InfoQ, "Xcode 27 Extends Agent Integration, Revamps UI, and Introduces DeviceHub," Jun 2026</span></li>
+                <li><b>Device Hub / CI impact</b> <span>— Bitrise Blog, "WWDC 2026: Device Hub and what it means for CI/CD"</span></li>
+                <li><b>Apple Device Hub docs</b> <span>— developer.apple.com/documentation/xcode/device-hub</span></li>
+                <li><b>False-green agents</b> <span>— docs.bswen.com, "Why AI Coding Agents Say All Tests Pass When They Actually Fail," Jun 2026</span></li>
+                <li><b>Agent test hallucination</b> <span>— dev.to/kensave, "Your AI Agent Says All Tests Pass. Your App Is Still Broken"</span></li>
+                <li><b>XcodeBuildMCP</b> <span>— github.com/getsentry/XcodeBuildMCP; xcodebuildmcp.com</span></li>
+                <li><b>Apple xcrun mcpbridge</b> <span>— rudrank.com; blakecrosley.com/blog/xcode-mcp-claude-code</span></li>
+                <li><b>Baguette</b> <span>— github.com/tddworks/baguette</span></li>
+                <li><b>SandVault</b> <span>— github.com/webcoyote/sandvault</span></li>
+                <li><b>ClodPod / Chamber</b> <span>— github.com/webcoyote/clodpod; cirruslabs/chamber</span></li>
+            </ol>
+            <ol start="11">
+                <li><b>Qodo $70M raise</b> <span>— TechCrunch, "Qodo bets on code verification as AI coding scales," Mar 2026</span></li>
+                <li><b>Baz $17M seed</b> <span>— SiliconANGLE, Jun 2026</span></li>
+                <li><b>Agentic AI funding total</b> <span>— newmarketpitch.com, agentic AI funding analysis</span></li>
+                <li><b>Cursor agent sandboxing</b> <span>— cursor.com/blog/agent-sandboxing</span></li>
+                <li><b>Git-worktree isolation pattern</b> <span>— zylos.ai, Feb 2026</span></li>
+                <li><b>Parallel Xcode / sim contention</b> <span>— Apple Developer Forums, thread 51223</span></li>
+                <li><b>Disposable sim-per-job pattern</b> <span>— blog.kulman.sk, "Allowing parallel iOS UI tests runs in CI"</span></li>
+                <li><b>Internal corroboration (n=1)</b> <span>— this codebase's own KNOWN_ISSUES.md and 2026-07-10 sim-dogfood test run</span></li>
+            </ol>
+        </div>
+    </div>
+    <div class="slide-foot">iOS Agent Infra — Opportunity Audit</div>
+    <div class="slide-num">13 / 13</div>
+</section>
+
+</main>
+</div>
+
+<!-- Edit affordance -->
+<div class="edit-hotzone" id="editHotzone"></div>
+<button class="edit-toggle" id="editToggle" title="Edit mode (E)">&#9998;</button>
+
+<!-- Deck controls -->
+<div class="deck-controls">
+    <button id="prevBtn">&larr; prev</button>
+    <span class="count" id="slideCount">01 / 13</span>
+    <button id="nextBtn">next &rarr;</button>
+</div>
+
+<script>
+/* ============================================================
+   GSAP GUARD — deck must survive a failed CDN load.
+   ============================================================ */
+const hasGsap = typeof window.gsap !== 'undefined' && typeof window.SplitText !== 'undefined';
+if (hasGsap) {
+    gsap.registerPlugin(SplitText);
+    try {
+        gsap.matchMedia().add('(prefers-reduced-motion: reduce)', () => {
+            gsap.globalTimeline.timeScale(1000);
+            return () => gsap.globalTimeline.timeScale(1);
+        });
+    } catch (e) { /* never let this take down the deck */ }
+} else {
+    document.documentElement.classList.add('no-gsap');
+}
+
+/* ============================================================
+   SLIDE REVEAL — SplitText on the big headline of each slide,
+   staggered fade/rise on every other .reveal element.
+   ============================================================ */
+const splitCache = new WeakMap();
+function revealSlide(slide) {
+    if (!hasGsap) return;
+    const headline = slide.querySelector('h1, h2.slide-title');
+    const others = Array.from(slide.querySelectorAll('.reveal')).filter(el => el !== headline);
+    gsap.killTweensOf(slide.querySelectorAll('.reveal'));
+
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+
+    if (headline) {
+        let split = splitCache.get(headline);
+        if (!split) {
+            split = SplitText.create(headline, { type: 'lines' });
+            splitCache.set(headline, split);
+        }
+        tl.from(split.lines, { autoAlpha: 0, y: '55%', stagger: 0.07, duration: 0.7 });
+    }
+    tl.from(others, { autoAlpha: 0, y: 22, stagger: 0.09, duration: 0.6 }, headline ? '-=0.35' : 0);
+    return tl;
+}
+
+/* ============================================================
+   SLIDE PRESENTATION CONTROLLER
+   ============================================================ */
+class SlidePresentation {
+    constructor() {
+        this.slides = document.querySelectorAll('.slide');
+        this.currentSlide = 0;
+        this.stage = document.getElementById('deckStage');
+        this.countEl = document.getElementById('slideCount');
+        this.setupStageScale();
+        this.setupKeyboardNav();
+        this.setupTouchNav();
+        this.setupButtons();
+        this.showSlide(0);
+    }
+    setupStageScale() {
+        const scale = () => {
+            const factor = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+            const x = (window.innerWidth - 1920 * factor) / 2;
+            const y = (window.innerHeight - 1080 * factor) / 2;
+            this.stage.style.transform = `translate(${x}px, ${y}px) scale(${factor})`;
+        };
+        scale();
+        window.addEventListener('resize', scale);
+    }
+    setupKeyboardNav() {
+        document.addEventListener('keydown', (e) => {
+            if (e.target.getAttribute && e.target.getAttribute('contenteditable')) return;
+            if (['ArrowRight', 'ArrowDown', ' ', 'PageDown'].includes(e.key)) { e.preventDefault(); this.next(); }
+            if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); this.prev(); }
+        });
+    }
+    setupTouchNav() {
+        let startX = null;
+        this.stage.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, { passive: true });
+        this.stage.addEventListener('touchend', (e) => {
+            if (startX === null) return;
+            const dx = e.changedTouches[0].clientX - startX;
+            if (Math.abs(dx) > 50) { dx < 0 ? this.next() : this.prev(); }
+            startX = null;
+        }, { passive: true });
+    }
+    setupButtons() {
+        document.getElementById('nextBtn').addEventListener('click', () => this.next());
+        document.getElementById('prevBtn').addEventListener('click', () => this.prev());
+    }
+    next() { this.showSlide(this.currentSlide + 1); }
+    prev() { this.showSlide(this.currentSlide - 1); }
+    showSlide(index) {
+        this.currentSlide = Math.max(0, Math.min(index, this.slides.length - 1));
+        this.slides.forEach((slide, i) => {
+            slide.classList.toggle('active', i === this.currentSlide);
+            slide.classList.toggle('visible', i === this.currentSlide);
+        });
+        if (this.countEl) {
+            const n = String(this.currentSlide + 1).padStart(2, '0');
+            const total = String(this.slides.length).padStart(2, '0');
+            this.countEl.textContent = `${n} / ${total}`;
+        }
+        revealSlide(this.slides[this.currentSlide]);
+    }
+}
+const deck = new SlidePresentation();
+
+/* ============================================================
+   INLINE EDIT MODE (JS-hover, 400ms grace — per skill spec)
+   ============================================================ */
+const editor = {
+    isActive: false,
+    toggleEditMode() {
+        this.isActive = !this.isActive;
+        editToggle.classList.toggle('active', this.isActive);
+        document.querySelectorAll('.slide .reveal, .slide h1, .slide h2, .slide p, .slide li, .slide td, .slide th').forEach(el => {
+            el.setAttribute('contenteditable', this.isActive ? 'true' : 'false');
+        });
+    }
+};
+const hotzone = document.getElementById('editHotzone');
+const editToggle = document.getElementById('editToggle');
+let hideTimeout = null;
+hotzone.addEventListener('mouseenter', () => { clearTimeout(hideTimeout); editToggle.classList.add('show'); });
+hotzone.addEventListener('mouseleave', () => { hideTimeout = setTimeout(() => { if (!editor.isActive) editToggle.classList.remove('show'); }, 400); });
+editToggle.addEventListener('mouseenter', () => { clearTimeout(hideTimeout); });
+editToggle.addEventListener('mouseleave', () => { hideTimeout = setTimeout(() => { if (!editor.isActive) editToggle.classList.remove('show'); }, 400); });
+hotzone.addEventListener('click', () => editor.toggleEditMode());
+editToggle.addEventListener('click', () => editor.toggleEditMode());
+document.addEventListener('keydown', (e) => {
+    if ((e.key === 'e' || e.key === 'E') && !(e.target.getAttribute && e.target.getAttribute('contenteditable') === 'true')) {
+        editor.toggleEditMode();
+    }
+});
+</script>
+</body>
+</html>

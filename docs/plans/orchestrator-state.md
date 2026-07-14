@@ -18,30 +18,96 @@ confirmed `code_expired` re-registers same code (daemon+phone) instead of remint
 Live file stamped `confirmedAt` for the restored code (identity unchanged). Do NOT run bare
 `lancerd pair` while phone holds the slot.
 
-## ⚡ SESSION 4 IN FLIGHT 2026-07-12 ~17:20 — rescue done, REL-1 dispatched
+## ⚡ SESSION 5 2026-07-13 ~17:15 — B1/B2/B3 ROOT-CAUSED (one protocol bug); PRs #111 #112 up
 
-**Merged this session:** #105 (scroll arrow + proof chips + fetch-on-open), #106 (G1 turn-diff
-RPCs), #108 (G3 live status pill — review approve after 4 fixes; dispatch.go additive-only
-verified by Fable, no argv surface touched).
+**Root cause of ALL THREE POST-110 P0s (B1 stuck-Working, B2 Agents-unreachable, B3
+attachment-spinner) + missing G3 pill + the ≥4-session "stuck after reconnect" recurring bug:**
+Cloud Run drops the daemon's relay websocket **hourly** (`lancerd.stderr.log`: EOF 00:57,
+01:57 … 15:35:21, re-pair 2s later). Daemon `peer_joined` resets replay counters
+(`e2e_client.go:358-360`); phone's `peer_joined` did NOT (`E2ERelayClient.swift` — resets only
+lived in connect()/disconnect()/handleDisconnect). After any daemon-side-only reconnect the
+phone rejects EVERY inbound frame as "replayed or out-of-order" **forever** — phone→daemon
+still works, so dispatches execute on the Mac while the phone is deaf. Proof: "Hi" turn in
+`~/.lancer/conversations.sqlite` is `exited` 19:33:22Z while phone stayed Working….
+Aggravator (B2 permanence): `relayListSessions` + 4 other bridge RPCs had NO timeout — one
+dropped response wedged `RunningAgentsSection.pollLoop` for the app's lifetime.
 
-**Open PRs:** #107 G2 review sheet (review approve after 9 fixes; CI had to be re-kicked with an
-empty commit — no run ever started on the original push). #109 lane H attachments (owner P0;
-full review trail on the PR: Fable daemon-surface review fixed lifetime→in-flight cap; grok
-review 3 blocking fixed; re-review caught SSH-first routing landing files on the WRONG host vs
-the prompt's relay machine — fixed to relay-first + NewChat parity; app-target build_sim caught
-2 iOS-only compile errors invisible to swift build).
+- **PR #111** `feat/relay-rekey-seq-reset` — phone seq reset on peer_joined/peer_left + 15s
+  bounded waits on the 5 unbounded RPCs + regression tests. Codex 5.3 High implemented; Fable
+  full-diff reviewed (sensitive). Gates re-run by Fable: swift build ✓, swift test 681+62+13 ✓,
+  go test ✓. CI pending at handoff.
+- **PR #112** `feat/w0-device-dogfood-fixes` (WP-0) — vendor picker (Codex/OpenCode) + Attach
+  `+` + fixture-review-pill removal + daemon task-notification skip + session-4 evidence.
+- **PR #113** `feat/p1a-tasknotification-display-filter` (WP-P1a, stacked on #112) — iOS
+  display filter mirrors daemon `isObservedWrapperUserText`; no XML bubbles / orphan
+  "(no reply text)" on legacy threads. Gates re-run by Fable: 687+62+13 tests ✓.
+- **CI green on #111 + #112 (all 4 checks incl. build_sim). MERGES ARE OWNER-GATED**
+  (#111 sensitive relay protocol; #112/#113 ui). Merge order: #111 → #112 → #113
+  (retargets automatically). Then: device rebuild + owner re-run
+  `docs/plans/phone-test-session4.md` + R1/R2 ×10 + Agents→Mac session.
+- **Pairing-durability worktree**: committed as WIP snapshot on `fix/pairing-durability` —
+  **collides with #111 write-set** (E2ERelayClient.swift, e2e_client.go); rebase + Fable review
+  AFTER #111 merges, then PR.
+- **Model slugs (verified `cursor-agent models`)**: NO "GPT-5.6" exists. Hard lane =
+  `gpt-5.3-codex-high` (used for #111). Grok = `cursor-grok-4.5-high`.
+- **Fly.io relay migration in progress in main tree (NOT committed, NOT mine):**
+  RelaySettings.swift → `wss://conduit-push.fly.dev`, push-backend Dockerfile/fly.toml/
+  entrypoint, project.yml, relay_install_helper.go. Owner-gated cutover — left untouched.
+- **ENOSPC gotcha recurred**: disk hit 100% mid-gates (208MB free); cleared go-build cache +
+  DerivedData → 23GB. Re-ran all gates after.
+- **After #111+#112 merge**: device rebuild + owner re-run `phone-test-session4.md` + R1/R2 +
+  Agents→Mac session. Then WP-P1a (iOS task-notification display filter), WP-P1b (live
+  repo.turnDiff wire + G3 pill verify), WP-P1c (scroll/FR polish).
+- Relay ops note for later: even with the fix, hourly re-keys cause ~2s blips; long-term the
+  relay's 1h websocket ceiling is a cost/infra question (Fly migration may change this).
 
-**REL-1 (tester blocker #1):** spec written by Fable —
-`docs/plans/2026-07-12-rel1-relay-robustness-spec.md` in `.worktrees/rel1-relay`
-(feat/rel1-relay-robustness). Sonnet implementing all 4 groups (backend structured error
-frames + expiresAt · daemon auto re-mint on dead unconfirmed code · phone .codeExpired stop-churn
-+ TTL countdown · first-send readiness gate + single retry). Fable full-diff review REQUIRED
-before PR (relay protocol = sensitive).
+## ⚡ SESSION 4 ~18:50 — Codex/OpenCode phone vendor picker slice STARTED
 
-**Still owed this session:** merge #107/#109 → sim feature-drive on integrated master
-(attachments flow + status pill; owner done-bar) → device build → ask owner: did fetch-on-open
-pull the 35-turn "Fix triple…" conversation on his phone? (If not: debug
-refreshThreadFromHost/relayFetchConversation.)
+**Owner ask:** why phone only shows Claude models; get Codex + OpenCode started.
+
+**Root cause (not missing adapters):** daemon already has full Codex/OpenCode argv +
+`installedAgents` RPC. Phone New Chat hardcodes Claude in `ShellLiveBridge` + Claude-only
+`DispatchModelSelection`. Identity badges / hot-swap are queued separately
+(`2026-07-12-account-hotswap-and-identity-design.md`). Plan note:
+`docs/plans/2026-07-12-codex-opencode-vendor-picker.md`.
+
+**Implemented (uncommitted on master — do not stomp relay / pair):**
+- `DispatchVendorSelection` + `VendorPickerView` (composer Agent chip)
+- `ShellLiveBridge.send` uses selected vendor; Claude-only model slug
+- `RelayFleetHydration.refreshInstalledAgents` + AppRoot / composer fetch
+- Tests green: `DispatchVendorSelection` + `DispatchModelSelection` (9 tests)
+
+**Owner unblocks for live Codex:** `LANCER_CODEX_UNSAFE` unset — headless may hang without
+safer argv (`--ask-for-approval never --sandbox workspace-write`) after smoke. Codex/Kimi
+launch still escalates (no per-action hook). OpenCode uses CLI default model (`provider/model`
+picker later).
+
+**Next:** device build of this slice → New Chat → Agent → Codex/OpenCode dogfood; optional
+safer Codex argv PR; identity badges lane still independent.
+
+## ⚡ SESSION 4 CONTINUED 2026-07-12 ~18:20 — #110 merged; POST-110 device build in flight
+
+**Merged this session (Fable session 4 + Cursor continuation):** #105 (scroll arrow + proof chips
++ fetch-on-open), #106 (G1 turn-diff RPCs), #108 (G3 live status pill), #109 (lane H context
+attachments — Photos/Camera/Files → daemon drop dir → prompt paths), #107 (G2 Codex-1:1 review
+sheet — turn/session diffs, file tree, line-comment→composer), **#110** (REL-1 relay robustness —
+structured relay error codes + expiresAt · daemon auto re-mint on dead unconfirmed code · phone
+`.codeExpired` stop-churn + TTL countdown · first-send readiness gate + single retry; merge SHA
+`0e0b9eba`). CI fix: `nonisolated` on `E2ERelayBridge.firstSendRetryWindow` /
+`isFirstSendRace` so iOS-gated unit tests compile under `build_sim`.
+
+**Open PRs:** none blocking session-4 dogfood stack.
+
+**Device builds (parallel agents — do not stomp):**
+- **PRE-110:** `build/device-86b7a767/` — master pre-REL-1 (`86b7a767`), already installed on
+  owner phone ~18:12.
+- **POST-110:** `build/device-POST-110-0e0b9eba/` — master post-#110 (`0e0b9eba`); generic
+  `iphoneos` build **SUCCEEDED** ~102s (log `/tmp/lancer-device-build-POST-110.log`); phone
+  unavailable at install time — install when reconnected (see `OWNER_INSTALL.md` in that dir).
+
+**Still owed:** install POST-110 on owner phone when connected → sim feature-drive on integrated
+master (attachments + G2 review sheet + G3 status pill + REL-1 reconnect) → owner verify:
+fetch-on-open pulled the 35-turn "Fix triple…" conversation? first send without Retry?
 
 **New gotchas:** RelayMachineMigrationTests collide across CONCURRENT swift test runs in
 different worktrees (shared macOS Keychain) — run LancerKit suites serially, one worktree at a
