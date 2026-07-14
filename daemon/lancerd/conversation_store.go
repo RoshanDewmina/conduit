@@ -171,6 +171,7 @@ func (s *conversationStore) migrate() error {
 			error_message TEXT,
 			baseline_start_oid TEXT,
 			baseline_end_oid TEXT,
+			attachments_json TEXT NOT NULL DEFAULT '[]',
 			UNIQUE(conversation_id, ordinal),
 			UNIQUE(conversation_id, client_turn_id),
 			UNIQUE(run_id)
@@ -215,10 +216,11 @@ func (s *conversationStore) migrate() error {
 			return fmt.Errorf("exec %q: %w", firstLine(stmt), err)
 		}
 	}
-	// Additive columns for DBs created before G1 turn-diff baselines.
+	// Additive columns for DBs created before G1 turn-diff baselines / attachment metadata.
 	for _, alter := range []string{
 		`ALTER TABLE conversation_turns ADD COLUMN baseline_start_oid TEXT`,
 		`ALTER TABLE conversation_turns ADD COLUMN baseline_end_oid TEXT`,
+		`ALTER TABLE conversation_turns ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'`,
 	} {
 		if _, err := s.db.Exec(alter); err != nil && !isSQLiteDuplicateColumn(err) {
 			return fmt.Errorf("exec %q: %w", firstLine(alter), err)
@@ -271,6 +273,22 @@ type conversationAppendRequest struct {
 	// way a direct dispatch's do. Validated/cloned by launchConversationTurn
 	// via the SAME contractTooLarge/cloneRunContract helpers dispatch() uses.
 	Contract *runContract `json:"contract,omitempty"`
+	// Attachments is optional structured metadata for files/images sent with
+	// this turn. hostPath is transport-only and must not appear in UI copy.
+	Attachments []conversationAttachmentReference `json:"attachments,omitempty"`
+}
+
+// conversationAttachmentReference is the shared Swift↔Go wire contract for a
+// single attachment on a conversation turn / append request. Validated for
+// bounded structural invariants at persist time; the store never opens hostPath.
+type conversationAttachmentReference struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	MimeType        string `json:"mimeType,omitempty"`
+	ByteCount       int    `json:"byteCount"`
+	Kind            string `json:"kind"` // "image" | "file"
+	HostPath        string `json:"hostPath"`
+	PreviewCacheKey string `json:"previewCacheKey"`
 }
 
 // conversationAppendResult mirrors the subset of the agent.conversations.append
@@ -331,6 +349,9 @@ type conversationTurn struct {
 	// turn start/end (turn_baseline.go). Empty when cwd is not a git repo.
 	BaselineStartOID string `json:"baselineStartOid,omitempty"`
 	BaselineEndOID   string `json:"baselineEndOid,omitempty"`
+	// Attachments is persisted as conversation_turns.attachments_json.
+	// Missing/empty JSON decodes as a non-nil empty slice.
+	Attachments []conversationAttachmentReference `json:"attachments,omitempty"`
 }
 
 type conversationEvent struct {
@@ -578,7 +599,7 @@ func scanConversationRow(row rowScanner) (conversationSummary, error) {
 func (s *conversationStore) loadTurns(conversationID string) ([]conversationTurn, error) {
 	rows, err := s.db.Query(`SELECT id, conversation_id, ordinal, client_turn_id, prompt, run_id,
 		provider, vendor_session_id, status, started_at, completed_at, error_message,
-		baseline_start_oid, baseline_end_oid
+		baseline_start_oid, baseline_end_oid, attachments_json
 		FROM conversation_turns WHERE conversation_id = ? ORDER BY ordinal ASC`, conversationID)
 	if err != nil {
 		return nil, err
@@ -594,10 +615,11 @@ func (s *conversationStore) loadTurns(conversationID string) ([]conversationTurn
 			errorMessage    sql.NullString
 			startOID        sql.NullString
 			endOID          sql.NullString
+			attachmentsJSON string
 		)
 		if err := rows.Scan(&t.ID, &t.ConversationID, &t.Ordinal, &t.ClientTurnID, &t.Prompt, &t.RunID,
 			&t.Provider, &vendorSessionID, &t.Status, &t.StartedAt, &completedAt, &errorMessage,
-			&startOID, &endOID); err != nil {
+			&startOID, &endOID, &attachmentsJSON); err != nil {
 			return nil, err
 		}
 		t.VendorSessionID = vendorSessionID.String
@@ -605,6 +627,11 @@ func (s *conversationStore) loadTurns(conversationID string) ([]conversationTurn
 		t.ErrorMessage = errorMessage.String
 		t.BaselineStartOID = startOID.String
 		t.BaselineEndOID = endOID.String
+		atts, err := decodeAttachmentsJSON(attachmentsJSON)
+		if err != nil {
+			return nil, fmt.Errorf("conversation_store: turn %q attachments_json: %w", t.ID, err)
+		}
+		t.Attachments = atts
 		turns = append(turns, t)
 	}
 	return turns, rows.Err()
@@ -727,10 +754,15 @@ func (s *conversationStore) beginTurn(req conversationAppendRequest, resolvedCWD
 		}, nil
 	}
 
+	attachmentsJSON, err := encodeAttachmentsJSON(req.Attachments)
+	if err != nil {
+		return conversationAppendResult{}, err
+	}
+
 	now := conversationNow()
 
 	if req.ConversationID == "" {
-		res, err := s.createConversationAndFirstTurn(tx, req, resolvedCWD, runID, now)
+		res, err := s.createConversationAndFirstTurn(tx, req, resolvedCWD, runID, now, attachmentsJSON)
 		if err != nil {
 			return conversationAppendResult{}, err
 		}
@@ -758,7 +790,7 @@ func (s *conversationStore) beginTurn(req conversationAppendRequest, resolvedCWD
 		}, nil
 	}
 
-	res, err := s.appendFollowUpTurn(tx, req, conv, runID, now)
+	res, err := s.appendFollowUpTurn(tx, req, conv, runID, now, attachmentsJSON)
 	if err != nil {
 		return conversationAppendResult{}, err
 	}
@@ -787,7 +819,7 @@ func existingTurnByClientTurnID(tx *sql.Tx, clientTurnID string) (existingTurnRe
 	return ref, true, nil
 }
 
-func (s *conversationStore) createConversationAndFirstTurn(tx *sql.Tx, req conversationAppendRequest, resolvedCWD, runID, now string) (conversationAppendResult, error) {
+func (s *conversationStore) createConversationAndFirstTurn(tx *sql.Tx, req conversationAppendRequest, resolvedCWD, runID, now, attachmentsJSON string) (conversationAppendResult, error) {
 	convID := "conv_" + newUUID()
 	provider := req.Agent
 	hostName, _ := os.Hostname()
@@ -810,9 +842,9 @@ func (s *conversationStore) createConversationAndFirstTurn(tx *sql.Tx, req conve
 
 	turnID := "turn_" + newUUID()
 	if _, err := tx.Exec(`INSERT INTO conversation_turns
-		(id, conversation_id, ordinal, client_turn_id, prompt, run_id, provider, status, started_at)
-		VALUES (?, ?, 1, ?, ?, ?, ?, 'running', ?)`,
-		turnID, convID, req.ClientTurnID, req.Prompt, runID, provider, now); err != nil {
+		(id, conversation_id, ordinal, client_turn_id, prompt, run_id, provider, status, started_at, attachments_json)
+		VALUES (?, ?, 1, ?, ?, ?, ?, 'running', ?, ?)`,
+		turnID, convID, req.ClientTurnID, req.Prompt, runID, provider, now, attachmentsJSON); err != nil {
 		return conversationAppendResult{}, err
 	}
 
@@ -834,7 +866,7 @@ func (s *conversationStore) createConversationAndFirstTurn(tx *sql.Tx, req conve
 	}, nil
 }
 
-func (s *conversationStore) appendFollowUpTurn(tx *sql.Tx, req conversationAppendRequest, conv conversationSummary, runID, now string) (conversationAppendResult, error) {
+func (s *conversationStore) appendFollowUpTurn(tx *sql.Tx, req conversationAppendRequest, conv conversationSummary, runID, now, attachmentsJSON string) (conversationAppendResult, error) {
 	var ordinal int
 	if err := tx.QueryRow(`SELECT COALESCE(MAX(ordinal), 0) + 1 FROM conversation_turns
 		WHERE conversation_id = ?`, conv.ID).Scan(&ordinal); err != nil {
@@ -858,9 +890,9 @@ func (s *conversationStore) appendFollowUpTurn(tx *sql.Tx, req conversationAppen
 
 	turnID := "turn_" + newUUID()
 	if _, err := tx.Exec(`INSERT INTO conversation_turns
-		(id, conversation_id, ordinal, client_turn_id, prompt, run_id, provider, status, started_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?)`,
-		turnID, conv.ID, ordinal, req.ClientTurnID, req.Prompt, runID, provider, now); err != nil {
+		(id, conversation_id, ordinal, client_turn_id, prompt, run_id, provider, status, started_at, attachments_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)`,
+		turnID, conv.ID, ordinal, req.ClientTurnID, req.Prompt, runID, provider, now, attachmentsJSON); err != nil {
 		return conversationAppendResult{}, err
 	}
 
@@ -907,6 +939,104 @@ func nullIfZero(f float64) any {
 		return nil
 	}
 	return f
+}
+
+// Storage-layer string bounds for attachment metadata JSON. Count and per-file
+// byte limits reuse attachmentMaxFiles / attachmentMaxBytes from attachment_rpc.go.
+const (
+	attachmentMetaMaxIDLen              = 1024 // stable UUIDs / client ids
+	attachmentMetaMaxNameLen            = 4096 // display filenames
+	attachmentMetaMaxHostPathLen        = 4096 // daemon attachment paths
+	attachmentMetaMaxPreviewCacheKeyLen = 1024 // phone preview cache keys
+	attachmentMetaMaxMimeTypeLen        = 256  // MIME type strings
+)
+
+// encodeAttachmentsJSON validates attachment metadata for safe storage and
+// returns the JSON blob for conversation_turns.attachments_json. nil/empty
+// input becomes "[]". Does not open hostPath or log paths.
+func encodeAttachmentsJSON(atts []conversationAttachmentReference) (string, error) {
+	if len(atts) == 0 {
+		return "[]", nil
+	}
+	if len(atts) > attachmentMaxFiles {
+		return "", fmt.Errorf("conversation_store: at most %d attachments per turn", attachmentMaxFiles)
+	}
+	for i, a := range atts {
+		if err := validateAttachmentReference(a); err != nil {
+			return "", fmt.Errorf("conversation_store: attachments[%d]: %w", i, err)
+		}
+	}
+	b, err := json.Marshal(atts)
+	if err != nil {
+		return "", fmt.Errorf("conversation_store: marshal attachments: %w", err)
+	}
+	return string(b), nil
+}
+
+func validateAttachmentReference(a conversationAttachmentReference) error {
+	if strings.TrimSpace(a.ID) == "" {
+		return fmt.Errorf("id is required")
+	}
+	if len(a.ID) > attachmentMetaMaxIDLen {
+		return fmt.Errorf("id exceeds maximum length")
+	}
+	if strings.TrimSpace(a.Name) == "" {
+		return fmt.Errorf("name is required")
+	}
+	if len(a.Name) > attachmentMetaMaxNameLen {
+		return fmt.Errorf("name exceeds maximum length")
+	}
+	if len(a.MimeType) > attachmentMetaMaxMimeTypeLen {
+		return fmt.Errorf("mimeType exceeds maximum length")
+	}
+	if strings.TrimSpace(a.HostPath) == "" {
+		return fmt.Errorf("hostPath is required")
+	}
+	if len(a.HostPath) > attachmentMetaMaxHostPathLen {
+		return fmt.Errorf("hostPath exceeds maximum length")
+	}
+	if strings.TrimSpace(a.PreviewCacheKey) == "" {
+		return fmt.Errorf("previewCacheKey is required")
+	}
+	if len(a.PreviewCacheKey) > attachmentMetaMaxPreviewCacheKeyLen {
+		return fmt.Errorf("previewCacheKey exceeds maximum length")
+	}
+	if a.ByteCount < 0 {
+		return fmt.Errorf("byteCount must be nonnegative")
+	}
+	if a.ByteCount > attachmentMaxBytes {
+		return fmt.Errorf("byteCount exceeds %d byte limit", attachmentMaxBytes)
+	}
+	switch a.Kind {
+	case "image", "file":
+	default:
+		return fmt.Errorf("kind must be \"image\" or \"file\"")
+	}
+	return nil
+}
+
+// decodeAttachmentsJSON parses a persisted attachments_json column. Missing,
+// empty, or JSON-null payloads yield a non-nil empty slice so fetch callers
+// never see nil Attachments. Semantically invalid elements fail with a generic
+// error that does not echo host paths or other secrets.
+func decodeAttachmentsJSON(raw string) ([]conversationAttachmentReference, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "null" {
+		return []conversationAttachmentReference{}, nil
+	}
+	var atts []conversationAttachmentReference
+	if err := json.Unmarshal([]byte(trimmed), &atts); err != nil {
+		return nil, fmt.Errorf("invalid attachment metadata")
+	}
+	if atts == nil {
+		return []conversationAttachmentReference{}, nil
+	}
+	for i, a := range atts {
+		if err := validateAttachmentReference(a); err != nil {
+			return nil, fmt.Errorf("attachments[%d]: invalid attachment metadata", i)
+		}
+	}
+	return atts, nil
 }
 
 // --- appendRunOutput / appendRunStatus / bindVendorSession / upsertArtifact --
@@ -1394,8 +1524,8 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 		}
 		if _, err := tx.Exec(`INSERT INTO conversation_turns
 			(id, conversation_id, ordinal, client_turn_id, prompt, run_id, provider,
-			 vendor_session_id, status, started_at, completed_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'exited', ?, ?)`,
+			 vendor_session_id, status, started_at, completed_at, attachments_json)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'exited', ?, ?, '[]')`,
 			turnID, convID, seg.Ordinal, ctID, seg.Prompt, runID, provider, sessionID, now, now); err != nil {
 			return conversationImportResult{}, err
 		}

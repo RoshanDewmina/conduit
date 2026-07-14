@@ -1,10 +1,15 @@
 package main
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	_ "modernc.org/sqlite"
 )
 
 func openTestConversationStore(t *testing.T) *conversationStore {
@@ -664,5 +669,817 @@ func TestDaemonHostIDStableAcrossConversationsAndReopen(t *testing.T) {
 	defer s2.close()
 	if s2.hostID != fetch1.Conversation.HostID {
 		t.Fatalf("host_id after reopen = %q, want %q", s2.hostID, fetch1.Conversation.HostID)
+	}
+}
+
+// --- attachment metadata persistence (Task 1) -----------------------------
+
+func sampleImageAttachment() conversationAttachmentReference {
+	return conversationAttachmentReference{
+		ID:              "a1",
+		Name:            "photo.jpg",
+		MimeType:        "image/jpeg",
+		ByteCount:       310992,
+		Kind:            "image",
+		HostPath:        "/Users/me/.lancer/attachments/photo.jpg",
+		PreviewCacheKey: "a1",
+	}
+}
+
+func sampleFileAttachment() conversationAttachmentReference {
+	return conversationAttachmentReference{
+		ID:              "a2",
+		Name:            "notes.txt",
+		ByteCount:       42,
+		Kind:            "file",
+		HostPath:        "/Users/me/.lancer/attachments/notes.txt",
+		PreviewCacheKey: "a2",
+	}
+}
+
+func assertAttachmentEqual(t *testing.T, got, want conversationAttachmentReference) {
+	t.Helper()
+	if got.ID != want.ID {
+		t.Errorf("id = %q, want %q", got.ID, want.ID)
+	}
+	if got.Name != want.Name {
+		t.Errorf("name = %q, want %q", got.Name, want.Name)
+	}
+	if got.MimeType != want.MimeType {
+		t.Errorf("mimeType = %q, want %q", got.MimeType, want.MimeType)
+	}
+	if got.ByteCount != want.ByteCount {
+		t.Errorf("byteCount = %d, want %d", got.ByteCount, want.ByteCount)
+	}
+	if got.Kind != want.Kind {
+		t.Errorf("kind = %q, want %q", got.Kind, want.Kind)
+	}
+	if got.HostPath != want.HostPath {
+		t.Errorf("hostPath = %q, want %q", got.HostPath, want.HostPath)
+	}
+	if got.PreviewCacheKey != want.PreviewCacheKey {
+		t.Errorf("previewCacheKey = %q, want %q", got.PreviewCacheKey, want.PreviewCacheKey)
+	}
+}
+
+// TestConversationAttachmentAppendFetchReopenRoundTrip appends a turn with
+// attachment metadata, reopens the SQLite store, fetches the turn, and
+// compares every attachment field.
+func TestConversationAttachmentAppendFetchReopenRoundTrip(t *testing.T) {
+	home := t.TempDir()
+	s1, err := openConversationStore(home)
+	if err != nil {
+		t.Fatalf("openConversationStore: %v", err)
+	}
+
+	want := []conversationAttachmentReference{sampleImageAttachment(), sampleFileAttachment()}
+	res, err := s1.beginTurn(conversationAppendRequest{
+		ClientTurnID: "device-1:att-1",
+		Agent:        "claudeCode",
+		Prompt:       "look at these",
+		Attachments:  want,
+	}, "/proj", "run_att_1")
+	if err != nil {
+		t.Fatalf("beginTurn: %v", err)
+	}
+	if err := s1.close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	s2, err := openConversationStore(home)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer s2.close()
+
+	fetchRes, err := s2.fetch(res.ConversationID, 0, 500)
+	if err != nil {
+		t.Fatalf("fetch after reopen: %v", err)
+	}
+	if len(fetchRes.Turns) != 1 {
+		t.Fatalf("turns = %d, want 1", len(fetchRes.Turns))
+	}
+	got := fetchRes.Turns[0].Attachments
+	if len(got) != len(want) {
+		t.Fatalf("attachments = %d, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		assertAttachmentEqual(t, got[i], want[i])
+	}
+}
+
+// TestConversationAttachmentNilOrMissingJSONYieldsEmpty proves turns without
+// attachment metadata (nil slice on append, and JSON without an attachments
+// key) decode as an empty slice — not nil-panicking and not fabricating refs.
+func TestConversationAttachmentNilOrMissingJSONYieldsEmpty(t *testing.T) {
+	s := openTestConversationStore(t)
+
+	res, err := s.beginTurn(conversationAppendRequest{
+		ClientTurnID: "device-1:no-att",
+		Agent:        "claudeCode",
+		Prompt:       "plain prompt",
+		// Attachments intentionally omitted (nil).
+	}, "/proj", "run_no_att")
+	if err != nil {
+		t.Fatalf("beginTurn: %v", err)
+	}
+
+	fetchRes, err := s.fetch(res.ConversationID, 0, 500)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(fetchRes.Turns) != 1 {
+		t.Fatalf("turns = %d, want 1", len(fetchRes.Turns))
+	}
+	if fetchRes.Turns[0].Attachments == nil {
+		t.Fatal("Attachments must be non-nil empty slice after load, got nil")
+	}
+	if len(fetchRes.Turns[0].Attachments) != 0 {
+		t.Fatalf("Attachments = %+v, want empty", fetchRes.Turns[0].Attachments)
+	}
+
+	// Wire decode: missing attachments key → empty.
+	raw := []byte(`{"id":"t1","conversationId":"c1","ordinal":1,"clientTurnId":"ct1","prompt":"hello","runId":"r1","provider":"claudeCode","status":"completed","startedAt":"2026-07-14T00:00:00Z"}`)
+	var turn conversationTurn
+	if err := json.Unmarshal(raw, &turn); err != nil {
+		t.Fatalf("unmarshal turn without attachments: %v", err)
+	}
+	if len(turn.Attachments) != 0 {
+		t.Fatalf("decoded Attachments = %+v, want empty", turn.Attachments)
+	}
+}
+
+// TestConversationAttachmentFollowUpPersists proves follow-up turns also
+// persist attachment metadata (not only the first-turn insert path).
+func TestConversationAttachmentFollowUpPersists(t *testing.T) {
+	s := openTestConversationStore(t)
+
+	first, err := s.beginTurn(conversationAppendRequest{
+		ClientTurnID: "device-1:fu-1",
+		Agent:        "claudeCode",
+		Prompt:       "first",
+	}, "/proj", "run_fu_1")
+	if err != nil {
+		t.Fatalf("beginTurn first: %v", err)
+	}
+
+	want := []conversationAttachmentReference{sampleImageAttachment()}
+	second, err := s.beginTurn(conversationAppendRequest{
+		ConversationID: first.ConversationID,
+		BaseSeq:        first.NextSeq,
+		ClientTurnID:   "device-1:fu-2",
+		Prompt:         "follow-up with image",
+		Attachments:    want,
+	}, "/proj", "run_fu_2")
+	if err != nil {
+		t.Fatalf("beginTurn follow-up: %v", err)
+	}
+	if second.Status != "started" {
+		t.Fatalf("status = %q, want started", second.Status)
+	}
+
+	fetchRes, err := s.fetch(first.ConversationID, 0, 500)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(fetchRes.Turns) != 2 {
+		t.Fatalf("turns = %d, want 2", len(fetchRes.Turns))
+	}
+	if len(fetchRes.Turns[0].Attachments) != 0 {
+		t.Errorf("first turn attachments = %+v, want empty", fetchRes.Turns[0].Attachments)
+	}
+	if len(fetchRes.Turns[1].Attachments) != 1 {
+		t.Fatalf("second turn attachments = %d, want 1", len(fetchRes.Turns[1].Attachments))
+	}
+	assertAttachmentEqual(t, fetchRes.Turns[1].Attachments[0], want[0])
+}
+
+// TestConversationAttachmentObservedImportDefaultsEmpty proves observed-import
+// inserts remain compatible and surface empty attachments (never null).
+func TestConversationAttachmentObservedImportDefaultsEmpty(t *testing.T) {
+	s := openTestConversationStore(t)
+
+	res, err := s.attachObservedSession("claudeCode", "vendor-att-obs", "/proj", "", []SessionMessage{
+		{Role: "user", Text: "imported prompt"},
+		{Role: "assistant", Text: "imported reply"},
+	})
+	if err != nil {
+		t.Fatalf("attachObservedSession: %v", err)
+	}
+
+	fetchRes, err := s.fetch(res.ConversationID, 0, 500)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(fetchRes.Turns) == 0 {
+		t.Fatal("expected at least one imported turn")
+	}
+	for i, turn := range fetchRes.Turns {
+		if turn.Attachments == nil {
+			t.Fatalf("turn[%d].Attachments is nil, want empty slice", i)
+		}
+		if len(turn.Attachments) != 0 {
+			t.Fatalf("turn[%d].Attachments = %+v, want empty", i, turn.Attachments)
+		}
+	}
+}
+
+// TestConversationAttachmentMalformedRejectedWithoutPartialTurn rejects
+// bounded structural violations and leaves no conversation/turn row behind.
+func TestConversationAttachmentMalformedRejectedWithoutPartialTurn(t *testing.T) {
+	cases := []struct {
+		name string
+		att  conversationAttachmentReference
+	}{
+		{name: "empty id", att: conversationAttachmentReference{
+			ID: "", Name: "a.jpg", ByteCount: 1, Kind: "image",
+			HostPath: "/tmp/a.jpg", PreviewCacheKey: "k",
+		}},
+		{name: "empty name", att: conversationAttachmentReference{
+			ID: "id", Name: "", ByteCount: 1, Kind: "image",
+			HostPath: "/tmp/a.jpg", PreviewCacheKey: "k",
+		}},
+		{name: "empty hostPath", att: conversationAttachmentReference{
+			ID: "id", Name: "a.jpg", ByteCount: 1, Kind: "image",
+			HostPath: "", PreviewCacheKey: "k",
+		}},
+		{name: "negative byteCount", att: conversationAttachmentReference{
+			ID: "id", Name: "a.jpg", ByteCount: -1, Kind: "image",
+			HostPath: "/tmp/a.jpg", PreviewCacheKey: "k",
+		}},
+		{name: "unknown kind", att: conversationAttachmentReference{
+			ID: "id", Name: "a.jpg", ByteCount: 1, Kind: "video",
+			HostPath: "/tmp/a.jpg", PreviewCacheKey: "k",
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := openTestConversationStore(t)
+			_, err := s.beginTurn(conversationAppendRequest{
+				ClientTurnID: "device-1:bad-" + tc.name,
+				Agent:        "claudeCode",
+				Prompt:       "should not persist",
+				Attachments:  []conversationAttachmentReference{tc.att},
+			}, "/proj", "run_bad_"+tc.name)
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+
+			listRes, err := s.list(50, "", false)
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			if len(listRes.Conversations) != 0 {
+				t.Fatalf("partial conversation persisted after rejection: %+v", listRes.Conversations)
+			}
+		})
+	}
+}
+
+// TestConversationAttachmentMigratesPreColumnDB opens a ledger created before
+// attachments_json existed, runs migrate via openConversationStore, and proves
+// legacy turns load with empty attachments while new turns can persist refs.
+func TestConversationAttachmentMigratesPreColumnDB(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".lancer")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	dbPath := filepath.Join(dir, conversationsDBFileName)
+
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatalf("open raw sqlite: %v", err)
+	}
+	stmts := []string{
+		`CREATE TABLE conversations (
+			id TEXT PRIMARY KEY,
+			title TEXT NOT NULL,
+			provider TEXT NOT NULL,
+			agent_id TEXT NOT NULL,
+			host_id TEXT,
+			host_name TEXT NOT NULL,
+			cwd TEXT NOT NULL,
+			model TEXT,
+			budget_usd REAL,
+			state TEXT NOT NULL,
+			source TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			last_activity_at TEXT NOT NULL,
+			last_seq INTEGER NOT NULL DEFAULT 0,
+			archived_at TEXT,
+			deleted_at TEXT
+		)`,
+		`CREATE TABLE conversation_turns (
+			id TEXT PRIMARY KEY,
+			conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+			ordinal INTEGER NOT NULL,
+			client_turn_id TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			run_id TEXT NOT NULL,
+			provider TEXT NOT NULL,
+			vendor_session_id TEXT,
+			status TEXT NOT NULL,
+			started_at TEXT NOT NULL,
+			completed_at TEXT,
+			error_message TEXT,
+			baseline_start_oid TEXT,
+			baseline_end_oid TEXT,
+			UNIQUE(conversation_id, ordinal),
+			UNIQUE(conversation_id, client_turn_id),
+			UNIQUE(run_id)
+		)`,
+		`CREATE TABLE conversation_events (
+			conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+			seq INTEGER NOT NULL,
+			turn_id TEXT,
+			run_id TEXT,
+			kind TEXT NOT NULL,
+			role TEXT,
+			stream TEXT,
+			text TEXT,
+			payload_json TEXT,
+			created_at TEXT NOT NULL,
+			PRIMARY KEY(conversation_id, seq)
+		)`,
+		`CREATE TABLE conversation_artifacts (
+			id TEXT PRIMARY KEY,
+			conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+			turn_id TEXT,
+			run_id TEXT NOT NULL,
+			kind TEXT NOT NULL,
+			title TEXT NOT NULL,
+			summary TEXT,
+			payload_json TEXT NOT NULL,
+			status TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`INSERT INTO conversations
+			(id, title, provider, agent_id, host_name, cwd, state, source,
+			 created_at, updated_at, last_activity_at, last_seq)
+			VALUES ('conv_legacy', 'legacy', 'claudeCode', 'claudeCode', 'host',
+			 '/proj', 'active', 'phone', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z',
+			 '2026-01-01T00:00:00Z', 1)`,
+		`INSERT INTO conversation_turns
+			(id, conversation_id, ordinal, client_turn_id, prompt, run_id, provider, status, started_at)
+			VALUES ('turn_legacy', 'conv_legacy', 1, 'legacy-ct', 'old prompt', 'run_legacy',
+			 'claudeCode', 'exited', '2026-01-01T00:00:00Z')`,
+	}
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			_ = db.Close()
+			t.Fatalf("seed pre-column schema: %v\nstmt: %s", err, stmt)
+		}
+	}
+	// Confirm the column is absent before migrate.
+	var colCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('conversation_turns') WHERE name = 'attachments_json'`).Scan(&colCount); err != nil {
+		_ = db.Close()
+		t.Fatalf("pragma_table_info: %v", err)
+	}
+	if colCount != 0 {
+		_ = db.Close()
+		t.Fatalf("precondition: attachments_json already present")
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close seed db: %v", err)
+	}
+
+	s, err := openConversationStore(home)
+	if err != nil {
+		t.Fatalf("openConversationStore (migrate): %v", err)
+	}
+	defer s.close()
+
+	var migratedCount int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('conversation_turns') WHERE name = 'attachments_json'`).Scan(&migratedCount); err != nil {
+		t.Fatalf("pragma after migrate: %v", err)
+	}
+	if migratedCount != 1 {
+		t.Fatalf("attachments_json column count = %d, want 1 after migrate", migratedCount)
+	}
+
+	fetchRes, err := s.fetch("conv_legacy", 0, 500)
+	if err != nil {
+		t.Fatalf("fetch legacy: %v", err)
+	}
+	if len(fetchRes.Turns) != 1 {
+		t.Fatalf("legacy turns = %d, want 1", len(fetchRes.Turns))
+	}
+	if len(fetchRes.Turns[0].Attachments) != 0 {
+		t.Fatalf("legacy Attachments = %+v, want empty", fetchRes.Turns[0].Attachments)
+	}
+
+	want := []conversationAttachmentReference{sampleFileAttachment()}
+	res, err := s.beginTurn(conversationAppendRequest{
+		ConversationID: "conv_legacy",
+		BaseSeq:        1,
+		ClientTurnID:   "device-1:post-migrate",
+		Prompt:         "new with file",
+		Attachments:    want,
+	}, "/proj", "run_post_migrate")
+	if err != nil {
+		t.Fatalf("beginTurn after migrate: %v", err)
+	}
+	if res.Status != "started" {
+		t.Fatalf("status = %q, want started", res.Status)
+	}
+
+	fetch2, err := s.fetch("conv_legacy", 0, 500)
+	if err != nil {
+		t.Fatalf("fetch after append: %v", err)
+	}
+	if len(fetch2.Turns) != 2 {
+		t.Fatalf("turns = %d, want 2", len(fetch2.Turns))
+	}
+	if len(fetch2.Turns[1].Attachments) != 1 {
+		t.Fatalf("new turn attachments = %d, want 1", len(fetch2.Turns[1].Attachments))
+	}
+	assertAttachmentEqual(t, fetch2.Turns[1].Attachments[0], want[0])
+}
+
+// TestConversationAttachmentJSONWireShape locks the camelCase wire keys and
+// omitempty behavior for append requests and turn envelopes.
+func TestConversationAttachmentJSONWireShape(t *testing.T) {
+	att := sampleImageAttachment()
+	raw, err := json.Marshal(att)
+	if err != nil {
+		t.Fatalf("marshal attachment: %v", err)
+	}
+	var asMap map[string]any
+	if err := json.Unmarshal(raw, &asMap); err != nil {
+		t.Fatalf("unmarshal map: %v", err)
+	}
+	for _, key := range []string{"id", "name", "mimeType", "byteCount", "kind", "hostPath", "previewCacheKey"} {
+		if _, ok := asMap[key]; !ok {
+			t.Errorf("missing wire key %q in %s", key, raw)
+		}
+	}
+
+	reqRaw, err := json.Marshal(conversationAppendRequest{
+		ClientTurnID: "ct",
+		Prompt:       "p",
+		Attachments:  []conversationAttachmentReference{att},
+	})
+	if err != nil {
+		t.Fatalf("marshal append request: %v", err)
+	}
+	if !strings.Contains(string(reqRaw), `"attachments"`) {
+		t.Fatalf("append request JSON missing attachments: %s", reqRaw)
+	}
+
+	var decodedReq conversationAppendRequest
+	if err := json.Unmarshal(reqRaw, &decodedReq); err != nil {
+		t.Fatalf("unmarshal append request: %v", err)
+	}
+	if len(decodedReq.Attachments) != 1 {
+		t.Fatalf("decoded attachments = %d, want 1", len(decodedReq.Attachments))
+	}
+	assertAttachmentEqual(t, decodedReq.Attachments[0], att)
+
+	turnRaw, err := json.Marshal(conversationTurn{
+		ID: "t1", ConversationID: "c1", Ordinal: 1, ClientTurnID: "ct",
+		Prompt: "p", RunID: "r1", Provider: "claudeCode", Status: "completed",
+		StartedAt: "2026-07-14T00:00:00Z", Attachments: []conversationAttachmentReference{att},
+	})
+	if err != nil {
+		t.Fatalf("marshal turn: %v", err)
+	}
+	var decodedTurn conversationTurn
+	if err := json.Unmarshal(turnRaw, &decodedTurn); err != nil {
+		t.Fatalf("unmarshal turn: %v", err)
+	}
+	if len(decodedTurn.Attachments) != 1 {
+		t.Fatalf("decoded turn attachments = %d, want 1", len(decodedTurn.Attachments))
+	}
+	assertAttachmentEqual(t, decodedTurn.Attachments[0], att)
+}
+
+func bytesOfLen(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return strings.Repeat("a", n)
+}
+
+func validAttachmentForBounds() conversationAttachmentReference {
+	return conversationAttachmentReference{
+		ID:              "id-ok",
+		Name:            "file.bin",
+		MimeType:        "application/octet-stream",
+		ByteCount:       1,
+		Kind:            "file",
+		HostPath:        "/tmp/file.bin",
+		PreviewCacheKey: "cache-key",
+	}
+}
+
+// TestConversationAttachmentIdempotentReplayMalformedMetadata proves clientTurnId
+// first-write-wins: a retry with invalid attachment metadata must return the
+// original turn without error and must not create a duplicate row.
+func TestConversationAttachmentIdempotentReplayMalformedMetadata(t *testing.T) {
+	s := openTestConversationStore(t)
+	want := []conversationAttachmentReference{sampleImageAttachment()}
+	clientTurnID := "device-1:idempotent-malformed"
+
+	first, err := s.beginTurn(conversationAppendRequest{
+		ClientTurnID: clientTurnID,
+		Agent:        "claudeCode",
+		Prompt:       "with image",
+		Attachments:  want,
+	}, "/proj", "run_idem_1")
+	if err != nil {
+		t.Fatalf("beginTurn (first): %v", err)
+	}
+
+	replay, err := s.beginTurn(conversationAppendRequest{
+		ClientTurnID: clientTurnID,
+		Agent:        "claudeCode",
+		Prompt:       "with image",
+		Attachments: []conversationAttachmentReference{{
+			ID: "", Name: "bad.jpg", ByteCount: 1, Kind: "image",
+			HostPath: "/tmp/bad.jpg", PreviewCacheKey: "bad",
+		}},
+	}, "/proj", "run_idem_2_should_be_ignored")
+	if err != nil {
+		t.Fatalf("beginTurn (malformed replay): %v", err)
+	}
+	if replay.TurnID != first.TurnID || replay.RunID != first.RunID {
+		t.Fatalf("replay = %+v, want same turn/run as first %+v", replay, first)
+	}
+
+	fetchRes, err := s.fetch(first.ConversationID, 0, 500)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(fetchRes.Turns) != 1 {
+		t.Fatalf("turns = %d, want 1 (no duplicate from replay)", len(fetchRes.Turns))
+	}
+	got := fetchRes.Turns[0].Attachments
+	if len(got) != 1 {
+		t.Fatalf("attachments = %d, want 1", len(got))
+	}
+	assertAttachmentEqual(t, got[0], want[0])
+}
+
+// TestConversationAttachmentIdempotentReplayDifferentMetadata proves a retry
+// with different but valid attachment metadata still returns the first-write
+// persisted attachments unchanged.
+func TestConversationAttachmentIdempotentReplayDifferentMetadata(t *testing.T) {
+	s := openTestConversationStore(t)
+	want := []conversationAttachmentReference{sampleImageAttachment()}
+	clientTurnID := "device-1:idempotent-diff"
+
+	first, err := s.beginTurn(conversationAppendRequest{
+		ClientTurnID: clientTurnID,
+		Agent:        "claudeCode",
+		Prompt:       "first write",
+		Attachments:  want,
+	}, "/proj", "run_diff_1")
+	if err != nil {
+		t.Fatalf("beginTurn (first): %v", err)
+	}
+
+	alt := []conversationAttachmentReference{sampleFileAttachment()}
+	replay, err := s.beginTurn(conversationAppendRequest{
+		ClientTurnID: clientTurnID,
+		Agent:        "claudeCode",
+		Prompt:       "different metadata retry",
+		Attachments:  alt,
+	}, "/proj", "run_diff_2_should_be_ignored")
+	if err != nil {
+		t.Fatalf("beginTurn (different replay): %v", err)
+	}
+	if replay.TurnID != first.TurnID || replay.RunID != first.RunID {
+		t.Fatalf("replay = %+v, want same turn/run as first %+v", replay, first)
+	}
+
+	fetchRes, err := s.fetch(first.ConversationID, 0, 500)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(fetchRes.Turns) != 1 {
+		t.Fatalf("turns = %d, want 1", len(fetchRes.Turns))
+	}
+	got := fetchRes.Turns[0].Attachments
+	if len(got) != 1 {
+		t.Fatalf("attachments = %d, want 1 (original persisted)", len(got))
+	}
+	assertAttachmentEqual(t, got[0], want[0])
+}
+
+// TestConversationAttachmentBoundsAcceptsAtLimitAndRejectsOver proves storage-layer
+// metadata bounds aligned with upload constants and named string limits.
+func TestConversationAttachmentBoundsAcceptsAtLimitAndRejectsOver(t *testing.T) {
+	atLimit := validAttachmentForBounds()
+	atLimit.ID = bytesOfLen(attachmentMetaMaxIDLen)
+	atLimit.Name = bytesOfLen(attachmentMetaMaxNameLen)
+	atLimit.MimeType = bytesOfLen(attachmentMetaMaxMimeTypeLen)
+	atLimit.HostPath = "/" + bytesOfLen(attachmentMetaMaxHostPathLen-1)
+	atLimit.PreviewCacheKey = bytesOfLen(attachmentMetaMaxPreviewCacheKeyLen)
+	atLimit.ByteCount = attachmentMaxBytes
+
+	t.Run("at limit accepted", func(t *testing.T) {
+		s := openTestConversationStore(t)
+		_, err := s.beginTurn(conversationAppendRequest{
+			ClientTurnID: "device-1:bound-ok",
+			Agent:        "claudeCode",
+			Prompt:       "max bounds",
+			Attachments:  []conversationAttachmentReference{atLimit},
+		}, "/proj", "run_bound_ok")
+		if err != nil {
+			t.Fatalf("beginTurn at limit: %v", err)
+		}
+	})
+
+	overCases := []struct {
+		name string
+		mut  func(*conversationAttachmentReference)
+	}{
+		{name: "too many attachments", mut: func(_ *conversationAttachmentReference) {}},
+		{name: "byteCount over max", mut: func(a *conversationAttachmentReference) {
+			a.ByteCount = attachmentMaxBytes + 1
+		}},
+		{name: "id over max", mut: func(a *conversationAttachmentReference) {
+			a.ID = bytesOfLen(attachmentMetaMaxIDLen + 1)
+		}},
+		{name: "name over max", mut: func(a *conversationAttachmentReference) {
+			a.Name = bytesOfLen(attachmentMetaMaxNameLen + 1)
+		}},
+		{name: "mimeType over max", mut: func(a *conversationAttachmentReference) {
+			a.MimeType = bytesOfLen(attachmentMetaMaxMimeTypeLen + 1)
+		}},
+		{name: "hostPath over max", mut: func(a *conversationAttachmentReference) {
+			a.HostPath = "/" + bytesOfLen(attachmentMetaMaxHostPathLen)
+		}},
+		{name: "previewCacheKey over max", mut: func(a *conversationAttachmentReference) {
+			a.PreviewCacheKey = bytesOfLen(attachmentMetaMaxPreviewCacheKeyLen + 1)
+		}},
+		{name: "empty previewCacheKey", mut: func(a *conversationAttachmentReference) {
+			a.PreviewCacheKey = ""
+		}},
+		{name: "whitespace previewCacheKey", mut: func(a *conversationAttachmentReference) {
+			a.PreviewCacheKey = "   "
+		}},
+	}
+
+	for _, tc := range overCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := openTestConversationStore(t)
+			var atts []conversationAttachmentReference
+			if tc.name == "too many attachments" {
+				for i := 0; i < attachmentMaxFiles+1; i++ {
+					a := validAttachmentForBounds()
+					a.ID = fmt.Sprintf("att-%d", i)
+					a.PreviewCacheKey = fmt.Sprintf("key-%d", i)
+					atts = append(atts, a)
+				}
+			} else {
+				a := validAttachmentForBounds()
+				tc.mut(&a)
+				atts = []conversationAttachmentReference{a}
+			}
+			_, err := s.beginTurn(conversationAppendRequest{
+				ClientTurnID: "device-1:bound-bad-" + tc.name,
+				Agent:        "claudeCode",
+				Prompt:       "should not persist",
+				Attachments:  atts,
+			}, "/proj", "run_bound_bad")
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			listRes, err := s.list(50, "", false)
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			if len(listRes.Conversations) != 0 {
+				t.Fatalf("partial conversation persisted: %+v", listRes.Conversations)
+			}
+		})
+	}
+
+	t.Run("max file count accepted", func(t *testing.T) {
+		s := openTestConversationStore(t)
+		var atts []conversationAttachmentReference
+		for i := 0; i < attachmentMaxFiles; i++ {
+			a := validAttachmentForBounds()
+			a.ID = fmt.Sprintf("att-%d", i)
+			a.PreviewCacheKey = fmt.Sprintf("key-%d", i)
+			atts = append(atts, a)
+		}
+		_, err := s.beginTurn(conversationAppendRequest{
+			ClientTurnID: "device-1:max-files-ok",
+			Agent:        "claudeCode",
+			Prompt:       "max files",
+			Attachments:  atts,
+		}, "/proj", "run_max_files")
+		if err != nil {
+			t.Fatalf("beginTurn max files: %v", err)
+		}
+	})
+}
+
+// seedTurnAttachmentsJSON overwrites attachments_json on an existing turn for read-path tests.
+func seedTurnAttachmentsJSON(t *testing.T, s *conversationStore, turnID, raw string) {
+	t.Helper()
+	if _, err := s.db.Exec(`UPDATE conversation_turns SET attachments_json = ? WHERE id = ?`, raw, turnID); err != nil {
+		t.Fatalf("seed attachments_json: %v", err)
+	}
+}
+
+// TestConversationAttachmentFetchRejectsCorruptJSON fails fetch on syntactically
+// invalid attachments_json without leaking host paths from the payload.
+func TestConversationAttachmentFetchRejectsCorruptJSON(t *testing.T) {
+	s := openTestConversationStore(t)
+	secretPath := "/Users/secret/.lancer/attachments/leaked.jpg"
+	res, err := s.beginTurn(conversationAppendRequest{
+		ClientTurnID: "device-1:corrupt-json",
+		Agent:        "claudeCode",
+		Prompt:       "seed turn",
+	}, "/proj", "run_corrupt")
+	if err != nil {
+		t.Fatalf("beginTurn: %v", err)
+	}
+	seedTurnAttachmentsJSON(t, s, res.TurnID, `{"id":"x","hostPath":"`+secretPath+`" not-json`)
+
+	_, err = s.fetch(res.ConversationID, 0, 500)
+	if err == nil {
+		t.Fatal("expected fetch error for corrupt attachments_json, got nil")
+	}
+	if strings.Contains(err.Error(), secretPath) {
+		t.Fatalf("fetch error leaked host path: %v", err)
+	}
+}
+
+// TestConversationAttachmentFetchRejectsSemanticallyInvalidJSON fails fetch when
+// decoded JSON violates attachment invariants, with generic errors only.
+func TestConversationAttachmentFetchRejectsSemanticallyInvalidJSON(t *testing.T) {
+	s := openTestConversationStore(t)
+	secretPath := "/Users/secret/.lancer/attachments/leaked.bin"
+	res, err := s.beginTurn(conversationAppendRequest{
+		ClientTurnID: "device-1:semantic-bad",
+		Agent:        "claudeCode",
+		Prompt:       "seed turn",
+	}, "/proj", "run_semantic")
+	if err != nil {
+		t.Fatalf("beginTurn: %v", err)
+	}
+	payload, err := json.Marshal([]conversationAttachmentReference{{
+		ID: "x", Name: "y", ByteCount: 1, Kind: "video",
+		HostPath: secretPath, PreviewCacheKey: "k",
+	}})
+	if err != nil {
+		t.Fatalf("marshal seed payload: %v", err)
+	}
+	seedTurnAttachmentsJSON(t, s, res.TurnID, string(payload))
+
+	_, err = s.fetch(res.ConversationID, 0, 500)
+	if err == nil {
+		t.Fatal("expected fetch error for semantically invalid attachments_json, got nil")
+	}
+	if strings.Contains(err.Error(), secretPath) {
+		t.Fatalf("fetch error leaked host path: %v", err)
+	}
+}
+
+// TestConversationAttachmentFetchNullEmptyJSONYieldsEmpty proves missing, null,
+// and empty attachments_json still decode as a non-nil empty slice on fetch.
+func TestConversationAttachmentFetchNullEmptyJSONYieldsEmpty(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{name: "empty string", raw: ""},
+		{name: "whitespace", raw: "  "},
+		{name: "json null", raw: "null"},
+		{name: "empty array", raw: "[]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := openTestConversationStore(t)
+			res, err := s.beginTurn(conversationAppendRequest{
+				ClientTurnID: "device-1:null-" + tc.name,
+				Agent:        "claudeCode",
+				Prompt:       "seed",
+			}, "/proj", "run_"+tc.name)
+			if err != nil {
+				t.Fatalf("beginTurn: %v", err)
+			}
+			seedTurnAttachmentsJSON(t, s, res.TurnID, tc.raw)
+
+			fetchRes, err := s.fetch(res.ConversationID, 0, 500)
+			if err != nil {
+				t.Fatalf("fetch: %v", err)
+			}
+			if fetchRes.Turns[0].Attachments == nil {
+				t.Fatal("Attachments is nil, want non-nil empty slice")
+			}
+			if len(fetchRes.Turns[0].Attachments) != 0 {
+				t.Fatalf("Attachments = %+v, want empty", fetchRes.Turns[0].Attachments)
+			}
+		})
 	}
 }
