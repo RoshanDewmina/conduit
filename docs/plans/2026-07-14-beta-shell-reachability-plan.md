@@ -1,7 +1,6 @@
 # Beta shell reachability repair — 2026-07-14 (correction pass)
 
-**Branch:** `fix/beta-shell-reachability` @ `c90bed67` (+ uncommitted correction pass)  
-**Worktree:** `.worktrees/chat-error-convergence` (sole writer)  
+**Integrated commit:** `4a6677b7`
 **Binding design:** Workspaces-only root; Profile → Settings on **one** `NavigationStack` with real existing content (Trusted Machines); Policy & Governance honest deferred; **no** shipping Emergency Stop until daemon `agent.emergencyStop` is wired safely on the phone path.
 
 ## Corrected write set
