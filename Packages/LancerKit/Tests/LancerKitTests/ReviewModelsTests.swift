@@ -306,6 +306,73 @@ import Testing
         #expect(filtered[0].children?[0].name == "Status.md")
     }
 
+    @Test("All Files tree hides .git metadata but keeps normal dotfiles")
+    func treeExcludesGitMetadataKeepsDotfiles() {
+        let entries = [
+            RepoTreeEntry(name: ".git", isDir: true),
+            RepoTreeEntry(name: ".gitignore", isDir: false),
+            RepoTreeEntry(name: ".github", isDir: true),
+            RepoTreeEntry(name: ".env", isDir: false),
+            RepoTreeEntry(name: "docs", isDir: true),
+            RepoTreeEntry(name: "README.md", isDir: false),
+        ]
+        let roots = ReviewTreeMerge.nodes(parentPath: "", entries: entries)
+        #expect(!roots.contains(where: { $0.name == ".git" }))
+        #expect(roots.map(\.name) == [".github", "docs", ".env", ".gitignore", "README.md"])
+
+        // Nested submodule-style `.git` dir must also be filtered.
+        var nested = ReviewTreeMerge.nodes(parentPath: "", entries: [
+            RepoTreeEntry(name: "vendor", isDir: true),
+        ])
+        ReviewTreeMerge.mergeChildren(
+            path: "vendor",
+            entries: [
+                RepoTreeEntry(name: ".git", isDir: true),
+                RepoTreeEntry(name: "lib.swift", isDir: false),
+            ],
+            into: &nested
+        )
+        #expect(nested[0].children?.map(\.name) == ["lib.swift"])
+
+        // Defensive: never present children when already under `.git`.
+        let underGit = ReviewTreeMerge.nodes(
+            parentPath: ".git/hooks",
+            entries: [
+                RepoTreeEntry(name: "guard-generated-xcodeproj", isDir: false),
+                RepoTreeEntry(name: "pre-commit", isDir: false),
+            ]
+        )
+        #expect(underGit.isEmpty)
+    }
+
+    @Test("full-file presentation keeps monospaced lines without soft wrap")
+    func fullFilePresentationReadableLayout() {
+        let content = """
+        #!/bin/sh
+        # PreToolUse(Edit|Write|NotebookEdit): block direct edits to the generated Xcode project.
+        command -v jq >/dev/null 2>&1 || exit 0
+        """
+        let lines = RepoFilePresentation.lines(from: content)
+        #expect(lines.count == 3)
+        #expect(lines[0].number == 1)
+        #expect(lines[0].text == "#!/bin/sh")
+        #expect(lines[1].text.contains("PreToolUse(Edit|Write|NotebookEdit)"))
+        #expect(lines[2].text == "command -v jq >/dev/null 2>&1 || exit 0")
+
+        // Empty file still yields a single blank row so the viewer isn't blank-crashy.
+        let empty = RepoFilePresentation.lines(from: "")
+        #expect(empty.count == 1)
+        #expect(empty[0].text.isEmpty)
+        #expect(empty[0].number == 1)
+
+        // Layout contract: one visual row per source line; overflow scrolls horizontally.
+        #expect(RepoFilePresentation.lineLayout == .singleLineHorizontalScroll)
+        #expect(RepoFilePresentation.allowsSoftWrap == false)
+        for line in lines {
+            #expect(RepoFilePresentation.shouldSoftWrap(lineText: line.text) == false)
+        }
+    }
+
     @Test("fixture data source drives turn/session/file/tree/file RPCs")
     func fixtureDataSource() async throws {
         let source = FixtureReviewDataSource()

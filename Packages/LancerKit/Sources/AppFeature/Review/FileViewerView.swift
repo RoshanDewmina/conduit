@@ -78,24 +78,26 @@ struct FileViewerView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                     }
-                    let lines = content.content.split(separator: "\n", omittingEmptySubsequences: false)
-                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                    ForEach(RepoFilePresentation.lines(from: content.content)) { line in
                         HStack(alignment: .top, spacing: 0) {
-                            Text("\(index + 1)")
+                            Text("\(line.number)")
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(.tertiary)
                                 .frame(width: 40, alignment: .trailing)
                                 .padding(.trailing, 10)
-                            Text(String(line))
+                            // fixedSize + lineLimit(1): bi-axial ScrollView otherwise
+                            // proposes a tiny width and soft-wraps every few characters.
+                            Text(line.text.isEmpty ? " " : line.text)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(.primary)
                                 .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
                         .padding(.vertical, 1)
                         .padding(.horizontal, 8)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(Text("Line \(index + 1), \(String(line))"))
+                        .accessibilityLabel(Text("Line \(line.number), \(line.text)"))
                     }
                 }
                 .padding(.vertical, 8)

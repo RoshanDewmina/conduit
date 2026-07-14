@@ -284,6 +284,51 @@ public enum ReviewCommentFormatting {
     }
 }
 
+// MARK: - Full-file viewer presentation
+
+/// How a source line is laid out in the Review full-file viewer.
+public enum RepoFileLineLayout: Equatable, Sendable {
+    /// One visual row per source line; overflow scrolls horizontally (no soft wrap).
+    case singleLineHorizontalScroll
+}
+
+public struct RepoFileDisplayLine: Equatable, Sendable, Identifiable {
+    public let number: Int
+    public let text: String
+
+    public var id: Int { number }
+
+    public init(number: Int, text: String) {
+        self.number = number
+        self.text = text
+    }
+}
+
+/// Pure layout/content model for `FileViewerView` — keeps line structure testable
+/// without SwiftUI. Soft-wrap must stay off so bi-axial ScrollView does not
+/// collapse long lines into a narrow character column on device.
+public enum RepoFilePresentation {
+    public static let lineLayout: RepoFileLineLayout = .singleLineHorizontalScroll
+
+    /// Soft wrap forces character-column collapse inside horizontal ScrollView on iPhone.
+    public static let allowsSoftWrap = false
+
+    public static func shouldSoftWrap(lineText: String) -> Bool {
+        _ = lineText
+        return allowsSoftWrap
+    }
+
+    public static func lines(from content: String) -> [RepoFileDisplayLine] {
+        let parts = content.split(separator: "\n", omittingEmptySubsequences: false)
+        if parts.isEmpty {
+            return [RepoFileDisplayLine(number: 1, text: "")]
+        }
+        return parts.enumerated().map { offset, part in
+            RepoFileDisplayLine(number: offset + 1, text: String(part))
+        }
+    }
+}
+
 // MARK: - Lazy tree merge
 
 public struct ReviewTreeNode: Identifiable, Equatable, Sendable {
@@ -314,6 +359,25 @@ public struct ReviewTreeNode: Identifiable, Equatable, Sendable {
 }
 
 public enum ReviewTreeMerge {
+    /// Exact `.git` directory name (not `.github` / `.gitignore`).
+    public static func isGitMetadataEntryName(_ name: String) -> Bool {
+        name == ".git"
+    }
+
+    /// True when `path` is `.git` or nested under a `.git` path segment.
+    public static func isUnderGitMetadata(_ path: String) -> Bool {
+        path.split(separator: "/").contains(where: { $0 == ".git" })
+    }
+
+    /// Client-side presentation filter: drop `.git` internals, keep normal dotfiles.
+    public static func visibleEntries(
+        parentPath: String,
+        entries: [RepoTreeEntry]
+    ) -> [RepoTreeEntry] {
+        if isUnderGitMetadata(parentPath) { return [] }
+        return entries.filter { !isGitMetadataEntryName($0.name) }
+    }
+
     /// Dirs first, then files; case-insensitive name within each group.
     public static func sortedEntries(_ entries: [RepoTreeEntry]) -> [RepoTreeEntry] {
         entries.sorted { lhs, rhs in
@@ -323,7 +387,7 @@ public enum ReviewTreeMerge {
     }
 
     public static func nodes(parentPath: String, entries: [RepoTreeEntry]) -> [ReviewTreeNode] {
-        sortedEntries(entries).map { entry in
+        sortedEntries(visibleEntries(parentPath: parentPath, entries: entries)).map { entry in
             let childPath = parentPath.isEmpty ? entry.name : "\(parentPath)/\(entry.name)"
             return ReviewTreeNode(
                 name: entry.name,
