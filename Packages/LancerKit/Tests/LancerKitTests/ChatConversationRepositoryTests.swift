@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 @testable import LancerCore
 @testable import PersistenceKit
@@ -534,5 +535,175 @@ struct ChatConversationRepositoryTests {
 
         try await repo.clearDraft(conversationID: conv.id)
         #expect(try await repo.localDraft(conversationID: conv.id) == nil)
+    }
+
+    @Test("chat turn attachments survive repository reopen")
+    func chatTurnAttachmentsSurviveRepositoryReopen() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lancer-chat-att-\(UUID().uuidString).sqlite").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+
+        let attachment = ConversationAttachmentReference(
+            id: "a1", name: "photo.jpg", mimeType: "image/jpeg",
+            byteCount: 310_992, kind: .image,
+            hostPath: "/Users/me/.lancer/attachments/photo.jpg",
+            previewCacheKey: "a1"
+        )
+
+        let conversationID: String
+        do {
+            let db = try AppDatabase(try DatabaseQueue(path: path))
+            let repo = ChatConversationRepository(db)
+            let conv = try await repo.createConversation(
+                title: "T", agentID: "claude", hostName: "h", hostID: nil, cwd: "/tmp"
+            )
+            conversationID = conv.id
+            let turn = ChatTurn(
+                conversationID: conv.id, ordinal: 0, prompt: "Describe this",
+                runID: "run-att-1", attachments: [attachment]
+            )
+            _ = try await repo.upsertTurnMirror(
+                turn, vendorSessionID: nil, hostSeqStart: 0, hostSeqEnd: 1
+            )
+        }
+
+        let reopened = try AppDatabase(try DatabaseQueue(path: path))
+        let repo = ChatConversationRepository(reopened)
+        let turns = try await repo.turns(conversationID: conversationID)
+        #expect(turns.count == 1)
+        #expect(turns.first?.attachments == [attachment])
+        #expect(turns.first?.prompt == "Describe this")
+        #expect(!(turns.first?.prompt.contains("/Users/") ?? true))
+    }
+
+    @Test("legacy turns without attachments_json decode as empty")
+    func legacyTurnsDecodeEmptyAttachments() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conv = try await repo.createConversation(
+            title: "T", agentID: "claude", hostName: "h", hostID: nil, cwd: "/tmp"
+        )
+        let turn = try await repo.appendTurn(conversationID: conv.id, prompt: "hello", runID: "r-legacy")
+        #expect(turn.attachments.isEmpty)
+        let fetched = try await repo.turns(conversationID: conv.id)
+        #expect(fetched.first?.attachments.isEmpty == true)
+    }
+
+    @Test("upsertTurnMirror preserves attachments across status-only refresh")
+    func upsertPreservesAttachmentsOnRefresh() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conv = try await repo.createConversation(
+            title: "T", agentID: "claude", hostName: "h", hostID: nil, cwd: "/tmp"
+        )
+        let attachment = ConversationAttachmentReference(
+            id: "a1", name: "doc.pdf", mimeType: "application/pdf",
+            byteCount: 42, kind: .file,
+            hostPath: "/host/doc.pdf", previewCacheKey: "a1"
+        )
+        var turn = ChatTurn(
+            id: "turn-att", conversationID: conv.id, ordinal: 0,
+            prompt: "see pdf", runID: "run-att", attachments: [attachment]
+        )
+        _ = try await repo.upsertTurnMirror(turn, vendorSessionID: nil, hostSeqStart: 1, hostSeqEnd: nil)
+        turn.status = .completed
+        turn.assistantText = "ok"
+        turn.completedAt = .now
+        _ = try await repo.upsertTurnMirror(turn, vendorSessionID: "vs", hostSeqStart: 1, hostSeqEnd: 2)
+        let fetched = try await repo.turnByRunID("run-att")
+        #expect(fetched?.attachments == [attachment])
+        #expect(fetched?.status == .completed)
+    }
+
+    @Test("corrupt attachments_json fails closed instead of wiping to empty")
+    func corruptAttachmentsJSONFailsClosed() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lancer-chat-corrupt-att-\(UUID().uuidString).sqlite").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+
+        let db = try AppDatabase(try DatabaseQueue(path: path))
+        let repo = ChatConversationRepository(db)
+        let conv = try await repo.createConversation(
+            title: "T", agentID: "claude", hostName: "h", hostID: nil, cwd: "/tmp"
+        )
+        let attachment = ConversationAttachmentReference(
+            id: "a1", name: "photo.jpg", mimeType: "image/jpeg",
+            byteCount: 10, kind: .image,
+            hostPath: "/host/a", previewCacheKey: "a1",
+            contentDigest: String(repeating: "ab", count: 32)
+        )
+        let turn = ChatTurn(
+            conversationID: conv.id, ordinal: 0, prompt: "hi",
+            runID: "run-corrupt", attachments: [attachment]
+        )
+        _ = try await repo.upsertTurnMirror(turn, vendorSessionID: nil, hostSeqStart: 0, hostSeqEnd: 1)
+
+        try await db.dbWriter.write { db in
+            try db.execute(
+                sql: "UPDATE chat_turns SET attachments_json = ? WHERE run_id = ?",
+                arguments: ["{not-json", "run-corrupt"]
+            )
+        }
+
+        await #expect(throws: ChatConversationRepositoryError.attachmentsDecodeFailed) {
+            _ = try await repo.turns(conversationID: conv.id)
+        }
+    }
+
+    @Test("pre-v14 attachments_json ALTER defaults legacy rows to empty array")
+    func preV14OnDiskMigrationFixture() throws {
+        // Exercise the v14 migration body against a real on-disk table that lacks
+        // attachments_json. Avoids DEBUG eraseDatabaseOnSchemaChange wiping a
+        // hand-rolled partial schema on AppDatabase reopen.
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lancer-chat-prev14-alter-\(UUID().uuidString).sqlite").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+
+        let queue = try DatabaseQueue(path: path)
+        try queue.write { db in
+            try db.execute(sql: """
+                CREATE TABLE chat_turns (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    conversation_id TEXT NOT NULL,
+                    ordinal INTEGER NOT NULL,
+                    prompt TEXT NOT NULL,
+                    run_id TEXT NOT NULL,
+                    transport_kind TEXT NOT NULL DEFAULT 'ssh',
+                    status TEXT NOT NULL,
+                    assistant_text TEXT NOT NULL DEFAULT '',
+                    error_message TEXT,
+                    created_at DATETIME NOT NULL,
+                    completed_at DATETIME,
+                    client_turn_id TEXT,
+                    vendor_session_id TEXT,
+                    host_seq_start INTEGER,
+                    host_seq_end INTEGER,
+                    cloud_record_name TEXT
+                )
+            """)
+            try db.execute(sql: """
+                INSERT INTO chat_turns
+                    (id, conversation_id, ordinal, prompt, run_id, status, created_at)
+                VALUES ('turn-prev14', 'conv-prev14', 0, 'hello', 'run-prev14', 'completed',
+                        '2026-07-01T00:00:00Z')
+            """)
+            // Same ALTER as AppDatabase v14.
+            try db.alter(table: "chat_turns") { t in
+                t.add(column: "attachments_json", .text).notNull().defaults(to: "[]")
+            }
+            let row = try Row.fetchOne(db, sql: "SELECT prompt, attachments_json FROM chat_turns WHERE id = 'turn-prev14'")
+            #expect(row?["prompt"] as String? == "hello")
+            #expect(row?["attachments_json"] as String? == "[]")
+
+            let columns = try Row.fetchAll(db, sql: "PRAGMA table_info(chat_turns)")
+            #expect(columns.contains { ($0["name"] as String?) == "attachments_json" })
+        }
+
+        // Re-open read-only to prove the column persists on disk.
+        let reopened = try DatabaseQueue(path: path)
+        try reopened.read { db in
+            let row = try Row.fetchOne(db, sql: "SELECT attachments_json FROM chat_turns WHERE id = 'turn-prev14'")
+            #expect(row?["attachments_json"] as String? == "[]")
+        }
     }
 }

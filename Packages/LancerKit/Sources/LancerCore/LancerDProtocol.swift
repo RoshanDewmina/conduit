@@ -817,9 +817,9 @@ public struct ConversationSummary: Codable, Sendable, Hashable, Identifiable {
 /// `hostPath` must never surface in UI (see attachment message design).
 ///
 /// `contentDigest` is the lowercase hex SHA-256 of the exact bytes finalized by
- /// `attachment.put` (camelCase wire field, locked). New outgoing attachments
- /// must include a valid 64-hex digest; historical rows may omit it (decode
- /// tolerates absence) but daemon dispatch fails closed until re-upload.
+/// `attachment.put` (camelCase wire field, locked). New outgoing attachments
+/// must include a valid 64-hex digest; historical rows may omit it (decode
+/// tolerates absence) but daemon dispatch fails closed until re-upload.
 public struct ConversationAttachmentReference: Codable, Sendable, Hashable, Identifiable {
     public enum Kind: String, Codable, Sendable { case image, file }
 
@@ -831,7 +831,7 @@ public struct ConversationAttachmentReference: Codable, Sendable, Hashable, Iden
     public let hostPath: String
     public let previewCacheKey: String
     /// Lowercase hex SHA-256 from `attachment.put`. Optional for backward
-     /// decode of historical turns; required for new outgoing appends.
+    /// decode of historical turns; required nonempty for new outgoing appends.
     public let contentDigest: String?
 
     public init(
@@ -846,6 +846,44 @@ public struct ConversationAttachmentReference: Codable, Sendable, Hashable, Iden
         self.hostPath = hostPath
         self.previewCacheKey = previewCacheKey
         self.contentDigest = contentDigest
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, mimeType, byteCount, kind, hostPath, previewCacheKey, contentDigest
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        mimeType = try c.decodeIfPresent(String.self, forKey: .mimeType)
+        byteCount = try c.decode(Int.self, forKey: .byteCount)
+        kind = try c.decode(Kind.self, forKey: .kind)
+        hostPath = try c.decode(String.self, forKey: .hostPath)
+        previewCacheKey = try c.decode(String.self, forKey: .previewCacheKey)
+        contentDigest = try c.decodeIfPresent(String.self, forKey: .contentDigest)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encodeIfPresent(mimeType, forKey: .mimeType)
+        try c.encode(byteCount, forKey: .byteCount)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(hostPath, forKey: .hostPath)
+        try c.encode(previewCacheKey, forKey: .previewCacheKey)
+        try c.encodeIfPresent(contentDigest, forKey: .contentDigest)
+    }
+}
+
+/// Validates the locked `contentDigest` wire shape (64 lowercase hex chars).
+public enum AttachmentContentDigest {
+    public static func isValid(_ value: String) -> Bool {
+        guard value.count == 64 else { return false }
+        return value.unicodeScalars.allSatisfy { scalar in
+            (scalar >= "0" && scalar <= "9") || (scalar >= "a" && scalar <= "f")
+        }
     }
 }
 

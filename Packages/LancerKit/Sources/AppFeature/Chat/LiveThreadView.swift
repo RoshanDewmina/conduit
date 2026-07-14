@@ -27,6 +27,7 @@ public struct LiveThreadView: View {
 
     let prompt: String
     let cwd: String
+    let initialAttachments: [ConversationAttachmentReference]
 
     @State private var hasSentInitialPrompt = false
     @State private var followUpText: String = ""
@@ -84,9 +85,14 @@ public struct LiveThreadView: View {
         }
     }
 
-    public init(prompt: String, cwd: String) {
+    public init(
+        prompt: String,
+        cwd: String,
+        attachments: [ConversationAttachmentReference] = []
+    ) {
         self.prompt = prompt
         self.cwd = cwd
+        self.initialAttachments = attachments
     }
 
     public var body: some View {
@@ -97,13 +103,19 @@ public struct LiveThreadView: View {
                         VStack(alignment: .leading, spacing: 18) {
                             ForEach(priorTurns) { turn in
                                 if LiveThreadTranscript.shouldRenderPromptBubble(for: turn) {
-                                    ChatUserBubble(text: turn.prompt)
+                                    ChatUserBubble(
+                                        text: turn.prompt,
+                                        attachments: turn.attachments
+                                    )
                                 }
                                 staticAssistant(turn)
                             }
 
                             if let liveUserPrompt {
-                                ChatUserBubble(text: liveUserPrompt)
+                                ChatUserBubble(
+                                    text: liveUserPrompt,
+                                    attachments: liveUserAttachments
+                                )
                             }
 
                             replyState
@@ -216,7 +228,7 @@ public struct LiveThreadView: View {
             guard !hasSentInitialPrompt else { return }
             hasSentInitialPrompt = true
             if LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
-                await bridge.send(prompt: prompt, cwd: cwd)
+                await bridge.send(prompt: prompt, cwd: cwd, attachments: initialAttachments)
             } else {
                 await bridge.adoptArmedObservedContinue(fallbackCwd: cwd)
                 if case .idle = bridge.sendState {
@@ -399,6 +411,13 @@ public struct LiveThreadView: View {
             return prompt
         }
         return nil
+    }
+
+    private var liveUserAttachments: [ConversationAttachmentReference] {
+        if let live = LiveThreadTranscript.liveTurn(turns: bridge.transcriptTurns, liveTurnID: liveTurnID) {
+            return live.attachments
+        }
+        return bridge.inFlightAttachments
     }
 
     private var streamingAssistantText: String {
@@ -841,11 +860,16 @@ public struct LiveThreadView: View {
                 .foregroundStyle(.secondary)
             Button("Retry") {
                 Task {
-                    if bridge.lastAttempt != nil {
+                    switch LiveThreadErrorRetryPolicy.resolve(
+                        hasLastAttempt: bridge.lastAttempt != nil,
+                        shouldSendInitialPrompt: LiveThreadTranscript.shouldSendInitialPrompt(prompt),
+                        initialAttachments: initialAttachments
+                    ) {
+                    case .retryLastAttempt:
                         await bridge.retryLastAttempt()
-                    } else if LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
-                        await bridge.send(prompt: prompt, cwd: cwd)
-                    } else {
+                    case .sendInitial(let attachments):
+                        await bridge.send(prompt: prompt, cwd: cwd, attachments: attachments)
+                    case .adoptObserved:
                         await bridge.adoptArmedObservedContinue(fallbackCwd: cwd)
                     }
                 }
@@ -1086,7 +1110,7 @@ public struct LiveThreadView: View {
                 )
                 publishFollowUpDrafts(&drafts)
                 do {
-                    let path = try await AttachmentUploader.upload(
+                    let receipt = try await AttachmentUploader.upload(
                         draft: draft,
                         conversationId: conversationID,
                         sendChunk: { params in
@@ -1109,7 +1133,7 @@ public struct LiveThreadView: View {
                         return
                     }
                     drafts = AttachmentDraftStore.withState(
-                        drafts, id: draft.id, state: .done(hostPath: path)
+                        drafts, id: draft.id, state: .done(receipt)
                     )
                     publishFollowUpDrafts(&drafts)
                 } catch is CancellationError {
@@ -1128,19 +1152,31 @@ public struct LiveThreadView: View {
             guard AttachmentDraftStore.canSend(drafts) else { return }
         }
 
-        let prefixed = AttachmentPromptPrefix.apply(
-            userPrompt: composed,
-            hostPaths: AttachmentDraftStore.hostPaths(drafts)
-        )
+        let refs = AttachmentDraftStore.references(from: drafts)
+        if !refs.isEmpty {
+            let cache = try? AttachmentPreviewCache()
+            for draft in drafts {
+                guard case .done = draft.state else { continue }
+                if Task.isCancelled { return }
+                if let preview = await AttachmentPreviewCache.makePreviewDataOffMain(
+                    from: draft.data, mimeType: draft.mimeType
+                ) {
+                    try? cache?.storePreview(preview, for: draft.id.uuidString)
+                }
+            }
+        }
+
         followUpText = ""
         followUpAttachments = []
         queuedReviewComments.removeAll()
         isFollowUpFocused = false
         if let conversationID = bridge.activeConversationID {
-            await bridge.sendFollowUp(prompt: prefixed, conversationID: conversationID, cwd: cwd)
+            await bridge.sendFollowUp(
+                prompt: composed, conversationID: conversationID, cwd: cwd, attachments: refs
+            )
             return
         }
-        await bridge.send(prompt: prefixed, cwd: cwd)
+        await bridge.send(prompt: composed, cwd: cwd, attachments: refs)
     }
 
     private func putAttachmentChunk(
@@ -1159,7 +1195,12 @@ public struct LiveThreadView: View {
                 dataBase64: params.dataBase64,
                 done: params.done
             )
-            return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
+            return AttachmentUploader.ChunkResult(
+                id: result.id,
+                path: result.path,
+                contentDigest: result.contentDigest,
+                error: result.error
+            )
         }
         guard let sshChannel else { throw AttachmentUploadError.noTransport }
         let result = try await sshChannel.putAttachment(
@@ -1170,7 +1211,12 @@ public struct LiveThreadView: View {
             dataBase64: params.dataBase64,
             done: params.done
         )
-        return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
+        return AttachmentUploader.ChunkResult(
+            id: result.id,
+            path: result.path,
+            contentDigest: result.contentDigest,
+            error: result.error
+        )
     }
 }
 #endif

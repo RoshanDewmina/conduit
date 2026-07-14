@@ -61,6 +61,9 @@ public final class ShellLiveBridge {
     /// Prompt for the in-flight send/follow-up before its turn row lands in
     /// the mirror — lets the live user bubble appear immediately.
     public private(set) var inFlightPrompt: String?
+    /// Structured attachments for the in-flight send — rendered with the live
+    /// user bubble until the mirrored turn arrives.
+    public private(set) var inFlightAttachments: [ConversationAttachmentReference] = []
     /// M4: the machine the most recent send/follow-up resolved via
     /// `RelayFleetStore.firstConnectedMachine`. `LiveThreadView` reads this to
     /// look up `RelayApprovalIngest.latestPendingApproval[activeMachineID]` —
@@ -172,9 +175,22 @@ public final class ShellLiveBridge {
     }
 
     /// What Retry should re-dispatch — never the sheet's original prompt alone.
+    /// `clientTurnId` is minted once per attempt and reused across automatic /
+    /// user Retry so append stays idempotent with the same attachment refs.
     public enum LastSendAttempt: Equatable, Sendable {
-        case newConversation(prompt: String, cwd: String)
-        case followUp(prompt: String, conversationID: String, cwd: String)
+        case newConversation(
+            prompt: String,
+            cwd: String,
+            attachments: [ConversationAttachmentReference] = [],
+            clientTurnId: String
+        )
+        case followUp(
+            prompt: String,
+            conversationID: String,
+            cwd: String,
+            attachments: [ConversationAttachmentReference] = [],
+            clientTurnId: String
+        )
         case observedContinue(prompt: String, cwd: String, target: ObservedContinueTarget)
     }
 
@@ -198,6 +214,7 @@ public final class ShellLiveBridge {
         activeConversationID = nil
         transcriptTurns = []
         inFlightPrompt = nil
+        inFlightAttachments = []
         activeMachineID = nil
         lastAttempt = nil
         pendingObservedContinue = nil
@@ -218,10 +235,18 @@ public final class ShellLiveBridge {
         // Re-read after the hold — resetForNewThread may have cleared it.
         guard let attempt = lastAttempt else { return }
         switch attempt {
-        case .newConversation(let prompt, let cwd):
-            await send(prompt: prompt, cwd: cwd)
-        case .followUp(let prompt, let conversationID, let cwd):
-            await sendFollowUp(prompt: prompt, conversationID: conversationID, cwd: cwd)
+        case .newConversation(let prompt, let cwd, let attachments, let clientTurnId):
+            await send(
+                prompt: prompt, cwd: cwd, attachments: attachments, clientTurnId: clientTurnId
+            )
+        case .followUp(let prompt, let conversationID, let cwd, let attachments, let clientTurnId):
+            await sendFollowUp(
+                prompt: prompt,
+                conversationID: conversationID,
+                cwd: cwd,
+                attachments: attachments,
+                clientTurnId: clientTurnId
+            )
         case .observedContinue(let prompt, let cwd, let target):
             guard !isSendInFlight else { return }
             let epoch = sessionEpoch
@@ -281,6 +306,7 @@ public final class ShellLiveBridge {
                 vendorSessionID: resolved.sessionId
             )
             inFlightPrompt = nil
+            inFlightAttachments = []
             sendState = .idle
         } catch {
             guard epoch == sessionEpoch else { return }
@@ -295,7 +321,12 @@ public final class ShellLiveBridge {
     /// (Agents row tap → empty-prompt adopt, or a prior observed continue),
     /// routes through `relayContinueObservedSession` instead of
     /// `startConversation`, then polls the observed transcript for the reply.
-    public func send(prompt: String, cwd: String) async {
+    public func send(
+        prompt: String,
+        cwd: String,
+        attachments: [ConversationAttachmentReference] = [],
+        clientTurnId: String? = nil
+    ) async {
         guard !isSendInFlight else { return }
         let epoch = sessionEpoch
         guard let machine = await waitForConnectedMachine() else {
@@ -318,11 +349,15 @@ public final class ShellLiveBridge {
 
         // Brand-new conversation — drop any stale observed bind from a prior sheet.
         boundObservedContinue = nil
-        lastAttempt = .newConversation(prompt: prompt, cwd: cwd)
+        let turnId = clientTurnId ?? UUID().uuidString
+        lastAttempt = .newConversation(
+            prompt: prompt, cwd: cwd, attachments: attachments, clientTurnId: turnId
+        )
         sendState = .working
         activeConversationID = nil
         transcriptTurns = []
         inFlightPrompt = prompt
+        inFlightAttachments = attachments
 
         let transport = Self.transport(for: machine.bridge)
         let vendor = DispatchVendorSelection.load()
@@ -335,8 +370,9 @@ public final class ShellLiveBridge {
             budgetUSD: nil,
             hostName: machine.record.displayName,
             hostID: machine.id.uuidString,
-            clientTurnID: UUID().uuidString,
-            transport: transport
+            clientTurnID: turnId,
+            transport: transport,
+            attachments: attachments
         )
 
         guard epoch == sessionEpoch else { return }
@@ -349,6 +385,7 @@ public final class ShellLiveBridge {
             // Blocked reasons from startConversation (policy / approval /
             // budget / transport) are surfaced via `.failed` — not silent.
             inFlightPrompt = nil
+            inFlightAttachments = []
             sendState = .failed(message)
         }
     }
@@ -381,6 +418,7 @@ public final class ShellLiveBridge {
         } catch {
             guard epoch == sessionEpoch else { return }
             inFlightPrompt = nil
+            inFlightAttachments = []
             sendState = .failed(error.localizedDescription)
             return
         }
@@ -398,16 +436,20 @@ public final class ShellLiveBridge {
             )
         case "needsApproval":
             inFlightPrompt = nil
+            inFlightAttachments = []
             sendState = .failed("Waiting for approval on \(machine.record.displayName).")
         case "denied":
             inFlightPrompt = nil
+            inFlightAttachments = []
             let rule = result.rule.map { " (\($0))" } ?? ""
             sendState = .failed("Denied by policy on \(machine.record.displayName)\(rule).")
         case "budgetExceeded":
             inFlightPrompt = nil
+            inFlightAttachments = []
             sendState = .failed("Daily budget reached on \(machine.record.displayName).")
         default:
             inFlightPrompt = nil
+            inFlightAttachments = []
             sendState = .failed(result.message ?? "Couldn't continue session on \(machine.record.displayName).")
         }
     }
@@ -507,6 +549,7 @@ public final class ShellLiveBridge {
                     let transcriptSettled = assistantText.isEmpty || stagnantPolls >= 1
                     if transcriptSettled {
                         inFlightPrompt = nil
+                        inFlightAttachments = []
                         switch terminal {
                         case .completed:
                             turn.status = .completed
@@ -592,7 +635,13 @@ public final class ShellLiveBridge {
     ///   blip) or Retry started a brand-new conversation instead of continuing.
     /// - Composer now keys off `isSendInFlight` (working/streaming/degraded)
     ///   so follow-up can't fire mid-run / mid-degrade.
-    public func sendFollowUp(prompt: String, conversationID: String, cwd: String) async {
+    public func sendFollowUp(
+        prompt: String,
+        conversationID: String,
+        cwd: String,
+        attachments: [ConversationAttachmentReference] = [],
+        clientTurnId: String? = nil
+    ) async {
         guard !isSendInFlight else { return }
         let epoch = sessionEpoch
 
@@ -631,20 +680,29 @@ public final class ShellLiveBridge {
             selected: DispatchModelSelection.load()
         )
 
-        lastAttempt = .followUp(prompt: prompt, conversationID: conversationID, cwd: cwd)
+        let turnId = clientTurnId ?? UUID().uuidString
+        lastAttempt = .followUp(
+            prompt: prompt,
+            conversationID: conversationID,
+            cwd: cwd,
+            attachments: attachments,
+            clientTurnId: turnId
+        )
         sendState = .working
         inFlightPrompt = prompt
+        inFlightAttachments = attachments
 
         let transport = Self.transport(for: machine.bridge)
         let outcome = await conversationSyncCoordinator.continueConversation(
             conversationID: conversationID,
             baseSeq: baseSeq,
             prompt: prompt,
-            clientTurnID: UUID().uuidString,
+            clientTurnID: turnId,
             model: model,
             hostName: machine.record.displayName,
             hostID: machine.id.uuidString,
-            transport: transport
+            transport: transport,
+            attachments: attachments
         )
 
         guard epoch == sessionEpoch else { return }
@@ -656,6 +714,7 @@ public final class ShellLiveBridge {
         case .blocked(let message):
             // Surface blocked reason in the UI (same `.failed` path as send).
             inFlightPrompt = nil
+            inFlightAttachments = []
             sendState = .failed(message)
         }
     }
@@ -708,11 +767,13 @@ public final class ShellLiveBridge {
                 switch turn.status {
                 case .completed:
                     inFlightPrompt = nil
+                    inFlightAttachments = []
                     guard epoch == sessionEpoch else { return }
                     sendState = .completed(turn)
                     return
                 case .failed:
                     inFlightPrompt = nil
+                    inFlightAttachments = []
                     guard epoch == sessionEpoch else { return }
                     sendState = .failed(turn.errorMessage ?? "Run failed")
                     return

@@ -951,7 +951,7 @@ public enum DaemonChannelError: Error, Sendable {
 }
 
 /// Result of one `attachment.put` chunk (final chunk includes `path`, opaque
- /// `id`, and lowercase hex `contentDigest`).
+/// `id`, and lowercase hex `contentDigest`).
 public struct AttachmentPutResult: Codable, Sendable, Equatable {
     public var path: String?
     public var id: String?

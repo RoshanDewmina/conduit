@@ -53,7 +53,8 @@ public enum LiveThreadTranscript: Sendable {
     }
 
     static func shouldRenderPromptBubble(for turn: ChatTurn) -> Bool {
-        !isObservedWrapperUserText(turn.prompt)
+        if !turn.attachments.isEmpty { return true }
+        return !isObservedWrapperUserText(turn.prompt)
     }
 
     static func assistantFallback(for turn: ChatTurn) -> String? {

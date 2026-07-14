@@ -1,4 +1,5 @@
 import Foundation
+import LancerCore
 
 /// Identifies one live-send `LiveThreadView` presentation. A fresh id per
 /// send ensures `.sheet(item:)` always treats a new send as a new sheet
@@ -7,11 +8,18 @@ struct LiveThreadIdentifier: Identifiable, Sendable, Hashable {
     let id: UUID
     let prompt: String
     let cwd: String
+    let attachments: [ConversationAttachmentReference]
 
-    init(prompt: String, cwd: String, id: UUID = UUID()) {
+    init(
+        prompt: String,
+        cwd: String,
+        attachments: [ConversationAttachmentReference] = [],
+        id: UUID = UUID()
+    ) {
         self.id = id
         self.prompt = prompt
         self.cwd = cwd
+        self.attachments = attachments
     }
 }
 
@@ -32,7 +40,7 @@ private struct LiveThreadPresentationModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .sheet(item: $activeLiveThread) { thread in
-                LiveThreadView(prompt: thread.prompt, cwd: thread.cwd)
+                LiveThreadView(prompt: thread.prompt, cwd: thread.cwd, attachments: thread.attachments)
                     .environment(shellLiveBridge)
                     .environment(relayApprovalIngest)
                     .environment(relayQuestionIngest)
