@@ -84,7 +84,7 @@ const (
 	expiryActionRemint expiryAction = iota
 	// expiryActionReregister keeps the same code+keys and lets connectLoop
 	// redial. Used when everConfirmed is true: the backend may have dropped
-	// its in-memory PairedAt (Cloud Run cold start) and then aged out a
+	// its in-memory PairedAt (backend restart/state loss) and then aged out a
 	// waiting re-registration — reminting would orphan the phone; giving up
 	// would leave the laptop offline forever. Same identity re-creates the
 	// relay slot on the next dial.

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -36,6 +37,10 @@ func readRelayPairing() (*relayPairConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	return readRelayPairingAt(path)
+}
+
+func readRelayPairingAt(path string) (*relayPairConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -48,6 +53,60 @@ func readRelayPairing() (*relayPairConfig, error) {
 		return nil, fmt.Errorf("incomplete relay pairing config")
 	}
 	return &cfg, nil
+}
+
+func withRelayPairingLock(fn func(path string) error) error {
+	path, err := relayPairingPath()
+	if err != nil {
+		return err
+	}
+	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	return fn(path)
+}
+
+func writeRelayPairingAtomic(path string, cfg *relayPairConfig) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".relay-pairing-write-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 func pairingIdentityChanged(old, cfg *relayPairConfig) bool {
@@ -77,61 +136,97 @@ func writeRelayPairingReplacing(cfg *relayPairConfig) error {
 }
 
 func writeRelayPairingWithReplace(cfg *relayPairConfig, replaceConfirmed bool) error {
-	path, err := relayPairingPath()
-	if err != nil {
-		return err
-	}
-	// The daemon has exactly ONE pairing slot: every phone paired to the old
-	// code is silently orphaned the moment this file's identity changes (the
-	// resident's watcher hot-swaps the live relay client within ~5s, and the
-	// old phones keep dialing a code no daemon listens on). Confirmed
-	// pairings are durable one-time onboarding — refuse silent overwrite
-	// unless the caller opted into replaceConfirmed (explicit pair/unpair).
-	if old, err := readRelayPairing(); err == nil {
-		if old.isConfirmed() && pairingIdentityChanged(old, cfg) && !replaceConfirmed {
-			return fmt.Errorf(
-				"refusing to replace confirmed pairing (code %s); run 'lancerd pair' (explicit re-pair) or unpair first",
-				old.Code,
-			)
+	return withRelayPairingLock(func(path string) error {
+		candidate := *cfg
+		old, readErr := readRelayPairingAt(path)
+		if readErr != nil && !os.IsNotExist(readErr) && !replaceConfirmed {
+			return fmt.Errorf("refusing to overwrite unreadable relay pairing: %w", readErr)
 		}
-		if old.Code != cfg.Code {
-			fmt.Fprintf(os.Stderr,
-				"lancerd: REPLACING existing relay pairing (code %s -> %s) — phones paired to the old code are orphaned and must re-pair\n",
-				old.Code, cfg.Code)
+		if readErr == nil {
+			// The daemon has one pairing slot. Confirmed identities are durable
+			// unless this is an explicit onboarding/re-pair path.
+			if old.isConfirmed() && pairingIdentityChanged(old, &candidate) && !replaceConfirmed {
+				return fmt.Errorf("refusing to replace confirmed pairing; run 'lancerd pair' (explicit re-pair) or unpair first")
+			}
+			if old.Code != candidate.Code {
+				fmt.Fprintln(os.Stderr, "lancerd: REPLACING existing relay pairing identity — phones on the previous identity are orphaned and must re-pair")
+			}
+			if pairingIdentityChanged(old, &candidate) {
+				candidate.ConfirmedAt = ""
+			} else if old.isConfirmed() && candidate.ConfirmedAt == "" {
+				// Confirmation is monotonic for an unchanged identity. A stale
+				// caller must not silently downgrade an established pairing.
+				candidate.ConfirmedAt = old.ConfirmedAt
+			}
 		}
+		if err := writeRelayPairingAtomic(path, &candidate); err != nil {
+			return err
+		}
+		*cfg = candidate
+		return nil
+	})
+}
+
+// migrateRetiredHostedRelay performs the one allowed endpoint-only identity
+// migration. It preserves the pairing code, both keys, and ConfirmedAt while
+// atomically replacing only the exact retired first-party URL. Custom and
+// lookalike endpoints are never rewritten.
+func migrateRetiredHostedRelay(cfg *relayPairConfig) (bool, error) {
+	if cfg == nil {
+		return false, nil
 	}
-	// A new identity always starts unconfirmed, even if the caller copied a
-	// stamped struct.
-	if old, err := readRelayPairing(); err == nil && pairingIdentityChanged(old, cfg) {
-		cfg.ConfirmedAt = ""
-	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0600)
+	migrated := false
+	err := withRelayPairingLock(func(path string) error {
+		current, err := readRelayPairingAt(path)
+		if err != nil {
+			return err
+		}
+		if current.RelayURL != retiredHostedRelayURL {
+			*cfg = *current
+			return nil
+		}
+		current.RelayURL = defaultRelayURL
+		// A persisted first-party legacy identity may predate ConfirmedAt. Treat
+		// it conservatively as established so backend state loss can never
+		// trigger an automatic code/key rotation that orphans its phone.
+		if current.ConfirmedAt == "" {
+			current.ConfirmedAt = time.Now().UTC().Format(time.RFC3339)
+		}
+		if err := writeRelayPairingAtomic(path, current); err != nil {
+			return err
+		}
+		*cfg = *current
+		migrated = true
+		return nil
+	})
+	return migrated, err
 }
 
 // markRelayPairingConfirmed stamps ConfirmedAt on the current pairing file
 // when the live client observes peer_joined. Identity (code/keys/URL) is
 // unchanged so the relayPairWatcher must NOT bounce the client on this write
 // (see identityHash below).
-func markRelayPairingConfirmed(code string) {
-	cfg, err := readRelayPairing()
-	if err != nil {
-		return
+func markRelayPairingConfirmed(expected *relayPairConfig) (bool, error) {
+	if expected == nil {
+		return false, nil
 	}
-	if cfg.Code != code {
-		// File changed under us (explicit re-pair) — do not stamp the new code.
-		return
-	}
-	if cfg.isConfirmed() {
-		return
-	}
-	cfg.ConfirmedAt = time.Now().UTC().Format(time.RFC3339)
-	if err := writeRelayPairing(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "lancerd: warning: failed to persist pairing confirmation: %v\n", err)
-	}
+	marked := false
+	err := withRelayPairingLock(func(path string) error {
+		current, err := readRelayPairingAt(path)
+		if err != nil {
+			return err
+		}
+		if pairingIdentityHash(current) != pairingIdentityHash(expected) || current.isConfirmed() {
+			return nil
+		}
+		current.ConfirmedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := writeRelayPairingAtomic(path, current); err != nil {
+			return err
+		}
+		marked = true
+		return nil
+	})
+	return marked, err
 }
 
 type relayPairWatcher struct {

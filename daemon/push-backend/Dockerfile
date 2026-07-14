@@ -10,7 +10,8 @@ RUN apk add --no-cache ca-certificates && \
     addgroup -S lancer && adduser -S -G lancer lancer
 WORKDIR /app
 COPY --from=builder /app/push-backend .
-RUN chown lancer:lancer /app/push-backend
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh && chown lancer:lancer /app/push-backend /app/docker-entrypoint.sh
 USER lancer
 EXPOSE 8080
-ENTRYPOINT ["./push-backend"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

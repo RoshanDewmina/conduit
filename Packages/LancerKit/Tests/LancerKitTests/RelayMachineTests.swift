@@ -164,6 +164,29 @@ import CryptoKit
         E2ERelayClient.deleteStoredPairing(machineID: machineID)
     }
 
+    @Test("retired singular pairing migrates to Fly and backfills confirmation")
+    func retiredLegacyStateBackfillsConfirmation() async {
+        clearLegacyState()
+        defer { clearLegacyState() }
+        RelayMachineMigration.indexKeychain = Keychain(service: Self.kcService, inMemory: true)
+
+        let privateKey = Curve25519.KeyAgreement.PrivateKey()
+        UserDefaults.standard.set("232323", forKey: Self.legacyCodeKey)
+        UserDefaults.standard.set(RelaySettings.retiredHostedURLString, forKey: Self.legacyURLKey)
+        await writeLegacyPrivKeyRaw(privateKey.rawRepresentation)
+
+        let result = await RelayMachineMigration.migrateLegacyIfNeeded()
+        guard let machineID = result else {
+            Issue.record("retired legacy pairing did not migrate")
+            return
+        }
+        defer { E2ERelayClient.deleteStoredPairing(machineID: machineID) }
+
+        #expect(E2ERelayClient.storedPairingCode(machineID: machineID) == "232323")
+        #expect(E2ERelayClient.storedRelayURL(machineID: machineID) == RelaySettings.defaultURLString)
+        #expect(E2ERelayClient.storedPairingConfirmed(machineID: machineID))
+    }
+
     @Test("partial legacy state (code present, privkey missing) returns nil, fragments cleared")
     func partialLegacyState() async {
         clearLegacyState()
@@ -394,5 +417,61 @@ import CryptoKit
         client.connect()
         #expect(client.connectionState == .disconnected)
         #expect(client.pairingState == .unpaired)
+    }
+
+    @Test("retired hosted endpoint migrates without changing pairing identity")
+    func retiredEndpointMigrates() {
+        let id = RelayMachineID()
+        UserDefaults.standard.set("909090", forKey: udCodeKey(id))
+        UserDefaults.standard.set(RelaySettings.retiredHostedURLString, forKey: udURLKey(id))
+        defer { E2ERelayClient.deleteStoredPairing(machineID: id) }
+
+        let client = E2ERelayClient(
+            relayURL: URL(string: "https://original.example.com")!,
+            pairingCode: "",
+            machineID: id
+        )
+        #expect(client.restoreNamespacedStoredPairing())
+        #expect(client.relayURL.absoluteString == RelaySettings.defaultURLString)
+        #expect(client.pairingCode == "909090")
+        #expect(E2ERelayClient.storedPairingConfirmed(machineID: id))
+        #expect(E2ERelayClient.storedRelayURL(machineID: id) == RelaySettings.defaultURLString)
+    }
+
+    @Test("self-host and lookalike endpoints are never migrated")
+    func customEndpointsRemainUnchanged() {
+        for relayURL in [
+            "wss://self-host.example.com",
+            RelaySettings.retiredHostedURLString + ".attacker.example",
+        ] {
+            let id = RelayMachineID()
+            UserDefaults.standard.set("909091", forKey: udCodeKey(id))
+            UserDefaults.standard.set(relayURL, forKey: udURLKey(id))
+            defer { E2ERelayClient.deleteStoredPairing(machineID: id) }
+
+            let client = E2ERelayClient(
+                relayURL: URL(string: "https://original.example.com")!,
+                pairingCode: "",
+                machineID: id
+            )
+            #expect(client.restoreNamespacedStoredPairing())
+            #expect(client.relayURL.absoluteString == relayURL)
+        }
+    }
+}
+
+@Suite struct RelaySettingsCutoverTests {
+    @Test("DEBUG persisted retired override migrates but self-host override remains")
+    func debugOverrideMigration() {
+        let suite = "RelaySettingsCutoverTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        defaults.set(RelaySettings.retiredHostedURLString, forKey: "lancer.debug.relayURL")
+        #expect(RelaySettings.urlString(defaults: defaults) == RelaySettings.defaultURLString)
+        #expect(defaults.string(forKey: "lancer.debug.relayURL") == RelaySettings.defaultURLString)
+
+        defaults.set("wss://self-host.example.com", forKey: "lancer.debug.relayURL")
+        #expect(RelaySettings.urlString(defaults: defaults) == "wss://self-host.example.com")
     }
 }

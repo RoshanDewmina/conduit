@@ -255,7 +255,14 @@ public final class E2ERelayClient: ObservableObject {
 
 
     public static func storedRelayURL() -> String? {
-        UserDefaults.standard.string(forKey: udPairingRelayURL)
+        guard let stored = UserDefaults.standard.string(forKey: udPairingRelayURL) else {
+            return nil
+        }
+        let migrated = RelaySettings.migrateRetiredHostedURL(stored)
+        if migrated != stored {
+            UserDefaults.standard.set(migrated, forKey: udPairingRelayURL)
+        }
+        return migrated
     }
 
     // MARK: - Namespaced (multi-machine) stored pairing persistence
@@ -320,7 +327,20 @@ public final class E2ERelayClient: ObservableObject {
     }
 
     public static func storedRelayURL(machineID: RelayMachineID) -> String? {
-        UserDefaults.standard.string(forKey: udMachineURLKey(machineID))
+        let key = udMachineURLKey(machineID)
+        guard let stored = UserDefaults.standard.string(forKey: key) else {
+            return nil
+        }
+        let migrated = RelaySettings.migrateRetiredHostedURL(stored)
+        if migrated != stored {
+            UserDefaults.standard.set(migrated, forKey: key)
+            // A stored first-party URL is a legacy production pairing that
+            // predates the per-machine confirmation bit. Preserve it as an
+            // established identity during the hosted-relay cutover so a
+            // backend restart cannot make the phone wipe its pairing.
+            UserDefaults.standard.set(true, forKey: udMachineConfirmedKey(machineID))
+        }
+        return migrated
     }
 
     /// Deletes namespaced entries for `machineID`. No Keychain entry to

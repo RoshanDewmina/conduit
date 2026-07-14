@@ -13,11 +13,14 @@ import (
 )
 
 // defaultRelayURL is the fallback blind-relay endpoint used when LANCER_RELAY_URL
-// is unset. This is the live hosted relay (Cloud Run) the iOS app ships pointed at
+// is unset. This is the live hosted relay (Fly.io) the iOS app ships pointed at
 // (project.yml LANCER_PUSH_BACKEND_URL), so testers pair out of the box with no
 // extra config. Self-hosters override it via LANCER_RELAY_URL to point at their
 // own relay (e.g. a Tailscale Funnel hostname or a GCP VM). See daemon/push-backend/DEPLOY.md.
-const defaultRelayURL = "wss://conduit-push-y4wpy6zeva-ts.a.run.app"
+const (
+	retiredHostedRelayURL = "wss://conduit-push-y4wpy6zeva-ts.a.run.app"
+	defaultRelayURL       = "wss://conduit-push.fly.dev"
+)
 
 // resolveRelayURL returns the relay base URL: LANCER_RELAY_URL when set
 // (trimmed), otherwise defaultRelayURL. The single source of truth for the relay

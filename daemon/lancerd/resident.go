@@ -16,8 +16,8 @@ import (
 
 // resident owns the Unix socket, policy-aware approval state, persistent queue, and optional attach client.
 type resident struct {
-	core *server
-	queue  *diskQueue
+	core  *server
+	queue *diskQueue
 
 	attachMu sync.Mutex
 	attach   io.ReadWriteCloser
@@ -38,7 +38,7 @@ func runDaemon() error {
 	if _, err := ensureIPCToken(); err != nil {
 		return fmt.Errorf("ensure ipc token: %w", err)
 	}
-	ensureClaudeHookWiredOnBoot() // so plain dispatches launch immediately (hook still gates tools)
+	ensureClaudeHookWiredOnBoot()              // so plain dispatches launch immediately (hook still gates tools)
 	r.core.startScheduler(make(chan struct{})) // fires due schedules for the process lifetime
 
 	// Wire E2E relay if a pairing config exists.
@@ -293,6 +293,14 @@ func (r *resident) wireRelayFromPairing() {
 	if err != nil {
 		return // no pairing file yet — daemon runs without relay
 	}
+	migrated, err := migrateRetiredHostedRelay(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "lancerd daemon: refused retired hosted relay migration: %v\n", err)
+		return
+	}
+	if migrated {
+		fmt.Fprintf(os.Stderr, "lancerd daemon: migrated hosted relay endpoint to %s; pairing identity preserved\n", cfg.RelayURL)
+	}
 	r.connectRelay(cfg)
 }
 
@@ -332,7 +340,7 @@ func (r *resident) connectRelay(cfg *relayPairConfig) {
 	r.relayMu.Lock()
 	r.relayCode = cfg.Code
 	r.relayMu.Unlock()
-	fmt.Fprintf(os.Stderr, "lancerd daemon: E2E relay started for code %s\n", cfg.Code)
+	fmt.Fprintln(os.Stderr, "lancerd daemon: E2E relay started")
 }
 
 // startRelayWatch monitors relay-pairing.json for changes and (re)connects the
@@ -348,9 +356,7 @@ func (r *resident) startRelayWatch() {
 			oldCode := r.relayCode
 			r.relayMu.Unlock()
 			if oldCode != "" && oldCode != cfg.Code {
-				fmt.Fprintf(os.Stderr,
-					"lancerd daemon: relay pairing file changed (code %s -> %s) — dropping the old code's relay session; phones paired to %s are orphaned until re-paired\n",
-					oldCode, cfg.Code, oldCode)
+				fmt.Fprintln(os.Stderr, "lancerd daemon: relay pairing identity changed — dropping the previous relay session; phones on it are orphaned until re-paired")
 			}
 			r.core.e2e.client.stop()
 		}
