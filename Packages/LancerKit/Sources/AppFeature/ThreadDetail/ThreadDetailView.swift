@@ -8,6 +8,7 @@ import PersistenceKit
 /// send into the thread's real cwd.
 struct ThreadDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(RelayFleetStore.self) private var relayFleetStore
     @Environment(WorkspaceDataStore.self) private var workspaceData
     @State private var isFollowUpPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
@@ -25,7 +26,9 @@ struct ThreadDetailView: View {
     private static let windowExtendStep = 100
     private static let scrollTailID = "thread-detail-tail"
     /// Same as LiveThreadView — never paint G2 fixture diffs on real threads.
-    private var reviewDataSource: any ReviewDataSource { RelayReviewDataSource() }
+    private var reviewDataSource: any ReviewDataSource {
+        RelayReviewDataSource(bridge: relayFleetStore.firstConnectedMachine?.bridge)
+    }
 
     let thread: ThreadListItem
 

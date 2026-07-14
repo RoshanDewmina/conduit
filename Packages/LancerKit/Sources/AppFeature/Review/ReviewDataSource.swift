@@ -1,5 +1,9 @@
 import Foundation
 
+#if os(iOS)
+import SessionFeature
+#endif
+
 /// Read-only review RPCs — G1 daemon lands the same shapes; G2 UI binds this protocol.
 public protocol ReviewDataSource: Sendable {
     func turnDiff(conversationID: String, turnID: String) async throws -> RepoDiffSummary
@@ -9,30 +13,101 @@ public protocol ReviewDataSource: Sendable {
     func file(conversationID: String, path: String, maxBytes: Int) async throws -> RepoFileContent
 }
 
-/// Stub for the live relay path — returns `supported: false` until G1 wires through.
+/// Narrow bridge contract for review-only relay RPCs.
+public protocol RelayReviewBridge: Sendable {
+    func repoTurnDiff(conversationID: String, turnID: String) async throws -> RepoDiffSummary
+    func repoSessionDiff(conversationID: String) async throws -> RepoDiffSummary
+    func repoFileDiff(conversationID: String, path: String, turnID: String?) async throws -> RepoFileDiff
+    func repoTree(conversationID: String, path: String) async throws -> [RepoTreeEntry]
+    func repoFile(conversationID: String, path: String, maxBytes: Int) async throws -> RepoFileContent
+}
+
+/// Live relay-backed review data source with a no-bridge fallback.
 public struct RelayReviewDataSource: ReviewDataSource {
-    public init() {}
+    private let bridge: (any RelayReviewBridge)?
+
+    public init(bridge: (any RelayReviewBridge)? = nil) {
+        self.bridge = bridge
+    }
 
     public func turnDiff(conversationID: String, turnID: String) async throws -> RepoDiffSummary {
-        RepoDiffSummary(supported: false, files: [], totalAdded: 0, totalRemoved: 0)
+        guard let bridge else {
+            return RepoDiffSummary(supported: false, files: [], totalAdded: 0, totalRemoved: 0)
+        }
+        return try await bridge.repoTurnDiff(conversationID: conversationID, turnID: turnID)
     }
 
     public func sessionDiff(conversationID: String) async throws -> RepoDiffSummary {
-        RepoDiffSummary(supported: false, files: [], totalAdded: 0, totalRemoved: 0)
+        guard let bridge else {
+            return RepoDiffSummary(supported: false, files: [], totalAdded: 0, totalRemoved: 0)
+        }
+        return try await bridge.repoSessionDiff(conversationID: conversationID)
     }
 
     public func fileDiff(conversationID: String, path: String, turnID: String?) async throws -> RepoFileDiff {
-        RepoFileDiff(hunks: [], truncated: false)
+        guard let bridge else {
+            return RepoFileDiff(hunks: [], truncated: false)
+        }
+        return try await bridge.repoFileDiff(conversationID: conversationID, path: path, turnID: turnID)
     }
 
     public func tree(conversationID: String, path: String) async throws -> [RepoTreeEntry] {
-        []
+        guard let bridge else { return [] }
+        return try await bridge.repoTree(conversationID: conversationID, path: path)
     }
 
     public func file(conversationID: String, path: String, maxBytes: Int) async throws -> RepoFileContent {
-        RepoFileContent(content: "", truncated: false, size: 0, binary: false)
+        guard let bridge else {
+            return RepoFileContent(content: "", truncated: false, size: 0, binary: false)
+        }
+        return try await bridge.repoFile(conversationID: conversationID, path: path, maxBytes: maxBytes)
     }
 }
+
+#if os(iOS)
+extension E2ERelayBridge: RelayReviewBridge {
+    public func repoTurnDiff(conversationID: String, turnID: String) async throws -> RepoDiffSummary {
+        try await relayRepoTurnDiff(
+            conversationID: conversationID,
+            turnID: turnID,
+            as: RepoDiffSummary.self
+        )
+    }
+
+    public func repoSessionDiff(conversationID: String) async throws -> RepoDiffSummary {
+        try await relayRepoSessionDiff(
+            conversationID: conversationID,
+            as: RepoDiffSummary.self
+        )
+    }
+
+    public func repoFileDiff(conversationID: String, path: String, turnID: String?) async throws -> RepoFileDiff {
+        try await relayRepoFileDiff(
+            conversationID: conversationID,
+            path: path,
+            turnID: turnID,
+            as: RepoFileDiff.self
+        )
+    }
+
+    public func repoTree(conversationID: String, path: String) async throws -> [RepoTreeEntry] {
+        try await relayRepoTree(
+            conversationID: conversationID,
+            path: path,
+            as: [RepoTreeEntry].self
+        )
+    }
+
+    public func repoFile(conversationID: String, path: String, maxBytes: Int) async throws -> RepoFileContent {
+        try await relayRepoFile(
+            conversationID: conversationID,
+            path: path,
+            maxBytes: maxBytes,
+            as: RepoFileContent.self
+        )
+    }
+}
+#endif
 
 /// In-memory fixtures matching the frozen G1 wire shapes (verbatim JSON decode in tests).
 public struct FixtureReviewDataSource: ReviewDataSource {

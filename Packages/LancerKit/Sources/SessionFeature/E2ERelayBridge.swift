@@ -47,6 +47,18 @@ public final class E2ERelayBridge: ObservableObject {
     private var conversationsAppendContinuation: CheckedContinuation<ConversationAppendResponse, Error>?
     private var conversationsArchiveContinuation: CheckedContinuation<ConversationArchiveResponse, Error>?
     private var conversationsAttachObservedSessionContinuation: CheckedContinuation<ConversationAttachObservedSessionResponse, Error>?
+    private var repoTurnDiffContinuation: CheckedContinuation<Data, Error>?
+    private var repoSessionDiffContinuation: CheckedContinuation<Data, Error>?
+    private var repoFileDiffContinuation: CheckedContinuation<Data, Error>?
+    private var repoTreeContinuation: CheckedContinuation<Data, Error>?
+    private var repoFileContinuation: CheckedContinuation<Data, Error>?
+    /// One gate per repo RPC family — serializes same-type calls so concurrent
+    /// UI fetches (e.g. four turnDiffs) cannot collide on the single continuation slot.
+    private let repoTurnDiffGate = E2ERelayRPCSerializationGate()
+    private let repoSessionDiffGate = E2ERelayRPCSerializationGate()
+    private let repoFileDiffGate = E2ERelayRPCSerializationGate()
+    private let repoTreeGate = E2ERelayRPCSerializationGate()
+    private let repoFileGate = E2ERelayRPCSerializationGate()
     private var attachmentPutContinuation: CheckedContinuation<AttachmentPutResult, Error>?
 #if DEBUG
     var boundedRPCWaitTimeoutOverride: Duration?
@@ -104,6 +116,21 @@ public final class E2ERelayBridge: ObservableObject {
             continuation.resume(returning: false)
         }
         pendingDecisionAcks.removeAll()
+        repoTurnDiffContinuation?.resume(throwing: E2EError.notPaired)
+        repoTurnDiffContinuation = nil
+        repoSessionDiffContinuation?.resume(throwing: E2EError.notPaired)
+        repoSessionDiffContinuation = nil
+        repoFileDiffContinuation?.resume(throwing: E2EError.notPaired)
+        repoFileDiffContinuation = nil
+        repoTreeContinuation?.resume(throwing: E2EError.notPaired)
+        repoTreeContinuation = nil
+        repoFileContinuation?.resume(throwing: E2EError.notPaired)
+        repoFileContinuation = nil
+        repoTurnDiffGate.cancelAll()
+        repoSessionDiffGate.cancelAll()
+        repoFileDiffGate.cancelAll()
+        repoTreeGate.cancelAll()
+        repoFileGate.cancelAll()
     }
 
     /// Send an approval decision through the E2E relay and wait for the
@@ -657,6 +684,155 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
+    // Request payloads for the read-only repo review RPCs — file-scope-visible
+    // because Swift forbids types nested in generic functions.
+    private struct RepoTurnDiffParams: Codable, Sendable { let conversationId: String; let turnId: String }
+    private struct RepoSessionDiffParams: Codable, Sendable { let conversationId: String }
+    private struct RepoFileDiffParams: Codable, Sendable { let conversationId: String; let path: String; let turnId: String? }
+    private struct RepoTreeParams: Codable, Sendable { let conversationId: String; let path: String }
+    private struct RepoFileParams: Codable, Sendable { let conversationId: String; let path: String; let maxBytes: Int }
+
+    /// Read-only review RPC: per-turn repo diff summary for one conversation.
+    public func relayRepoTurnDiff<Result: Decodable & Sendable>(
+        conversationID: String,
+        turnID: String,
+        as type: Result.Type
+    ) async throws -> Result {
+        try await repoTurnDiffGate.withSerialization {
+            guard isActive else { throw E2EError.notPaired }
+            try await relayClient.send(
+                type: "repoTurnDiff",
+                payload: RepoTurnDiffParams(conversationId: conversationID, turnId: turnID)
+            )
+            repoTurnDiffContinuation?.resume(throwing: E2EError.superseded)
+            repoTurnDiffContinuation = nil
+            let timeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+                guard let self, !Task.isCancelled else { return }
+                self.repoTurnDiffContinuation?.resume(throwing: E2EError.timedOut)
+                self.repoTurnDiffContinuation = nil
+            }
+            defer { timeout.cancel() }
+            let payload = try await withCheckedThrowingContinuation { c in
+                self.repoTurnDiffContinuation = c
+            }
+            return try JSONDecoder().decode(type, from: payload)
+        }
+    }
+
+    /// Read-only review RPC: whole-session repo diff summary for one conversation.
+    public func relayRepoSessionDiff<Result: Decodable & Sendable>(
+        conversationID: String,
+        as type: Result.Type
+    ) async throws -> Result {
+        try await repoSessionDiffGate.withSerialization {
+            guard isActive else { throw E2EError.notPaired }
+            try await relayClient.send(
+                type: "repoSessionDiff",
+                payload: RepoSessionDiffParams(conversationId: conversationID)
+            )
+            repoSessionDiffContinuation?.resume(throwing: E2EError.superseded)
+            repoSessionDiffContinuation = nil
+            let timeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+                guard let self, !Task.isCancelled else { return }
+                self.repoSessionDiffContinuation?.resume(throwing: E2EError.timedOut)
+                self.repoSessionDiffContinuation = nil
+            }
+            defer { timeout.cancel() }
+            let payload = try await withCheckedThrowingContinuation { c in
+                self.repoSessionDiffContinuation = c
+            }
+            return try JSONDecoder().decode(type, from: payload)
+        }
+    }
+
+    /// Read-only review RPC: unified diff hunks for a file, scoped to an optional turn.
+    public func relayRepoFileDiff<Result: Decodable & Sendable>(
+        conversationID: String,
+        path: String,
+        turnID: String?,
+        as type: Result.Type
+    ) async throws -> Result {
+        try await repoFileDiffGate.withSerialization {
+            guard isActive else { throw E2EError.notPaired }
+            try await relayClient.send(
+                type: "repoFileDiff",
+                payload: RepoFileDiffParams(conversationId: conversationID, path: path, turnId: turnID)
+            )
+            repoFileDiffContinuation?.resume(throwing: E2EError.superseded)
+            repoFileDiffContinuation = nil
+            let timeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+                guard let self, !Task.isCancelled else { return }
+                self.repoFileDiffContinuation?.resume(throwing: E2EError.timedOut)
+                self.repoFileDiffContinuation = nil
+            }
+            defer { timeout.cancel() }
+            let payload = try await withCheckedThrowingContinuation { c in
+                self.repoFileDiffContinuation = c
+            }
+            return try JSONDecoder().decode(type, from: payload)
+        }
+    }
+
+    /// Read-only review RPC: one directory listing under the conversation's cwd.
+    public func relayRepoTree<Result: Decodable & Sendable>(
+        conversationID: String,
+        path: String,
+        as type: Result.Type
+    ) async throws -> Result {
+        try await repoTreeGate.withSerialization {
+            guard isActive else { throw E2EError.notPaired }
+            try await relayClient.send(
+                type: "repoTree",
+                payload: RepoTreeParams(conversationId: conversationID, path: path)
+            )
+            repoTreeContinuation?.resume(throwing: E2EError.superseded)
+            repoTreeContinuation = nil
+            let timeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+                guard let self, !Task.isCancelled else { return }
+                self.repoTreeContinuation?.resume(throwing: E2EError.timedOut)
+                self.repoTreeContinuation = nil
+            }
+            defer { timeout.cancel() }
+            let payload = try await withCheckedThrowingContinuation { c in
+                self.repoTreeContinuation = c
+            }
+            return try JSONDecoder().decode(type, from: payload)
+        }
+    }
+
+    /// Read-only review RPC: file-content preview under the conversation's cwd.
+    public func relayRepoFile<Result: Decodable & Sendable>(
+        conversationID: String,
+        path: String,
+        maxBytes: Int,
+        as type: Result.Type
+    ) async throws -> Result {
+        try await repoFileGate.withSerialization {
+            guard isActive else { throw E2EError.notPaired }
+            try await relayClient.send(
+                type: "repoFile",
+                payload: RepoFileParams(conversationId: conversationID, path: path, maxBytes: maxBytes)
+            )
+            repoFileContinuation?.resume(throwing: E2EError.superseded)
+            repoFileContinuation = nil
+            let timeout = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: self?.boundedRPCWaitTimeout ?? Self.defaultBoundedRPCWaitTimeout)
+                guard let self, !Task.isCancelled else { return }
+                self.repoFileContinuation?.resume(throwing: E2EError.timedOut)
+                self.repoFileContinuation = nil
+            }
+            defer { timeout.cancel() }
+            let payload = try await withCheckedThrowingContinuation { c in
+                self.repoFileContinuation = c
+            }
+            return try JSONDecoder().decode(type, from: payload)
+        }
+    }
+
     /// Send a question answer through the E2E relay to the paired daemon.
     /// Fire-and-forget — the daemon resolves the pending question via
     /// `questionStore.resolve` on receipt of a `"questionAnswer"` relay message.
@@ -675,6 +851,32 @@ public final class E2ERelayBridge: ObservableObject {
     }
 
     // MARK: - Private
+
+    private func relayEnvelopePayloadObject(from data: Data) -> Any? {
+        guard let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return envelope["payload"]
+    }
+
+    private func relayEnvelopePayloadData(from data: Data) -> Data? {
+        guard let payloadObject = relayEnvelopePayloadObject(from: data),
+              JSONSerialization.isValidJSONObject(payloadObject),
+              let payloadData = try? JSONSerialization.data(withJSONObject: payloadObject)
+        else {
+            return nil
+        }
+        return payloadData
+    }
+
+    private func relayEnvelopePayloadError(from data: Data) -> String? {
+        guard let payload = relayEnvelopePayloadObject(from: data) as? [String: Any],
+              let error = payload["error"] as? String,
+              !error.isEmpty else {
+            return nil
+        }
+        return error
+    }
 
     private func handleRelayMessage(_ message: E2ERelayClient.ReceivedMessage) async {
         switch message.type {
@@ -997,6 +1199,56 @@ public final class E2ERelayBridge: ObservableObject {
             }
             conversationsArchiveContinuation = nil
 
+        case "repoTurnDiffResult":
+            if let error = relayEnvelopePayloadError(from: message.payload) {
+                repoTurnDiffContinuation?.resume(throwing: RelayRepoError.host(error))
+            } else if let payload = relayEnvelopePayloadData(from: message.payload) {
+                repoTurnDiffContinuation?.resume(returning: payload)
+            } else {
+                repoTurnDiffContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            repoTurnDiffContinuation = nil
+
+        case "repoSessionDiffResult":
+            if let error = relayEnvelopePayloadError(from: message.payload) {
+                repoSessionDiffContinuation?.resume(throwing: RelayRepoError.host(error))
+            } else if let payload = relayEnvelopePayloadData(from: message.payload) {
+                repoSessionDiffContinuation?.resume(returning: payload)
+            } else {
+                repoSessionDiffContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            repoSessionDiffContinuation = nil
+
+        case "repoFileDiffResult":
+            if let error = relayEnvelopePayloadError(from: message.payload) {
+                repoFileDiffContinuation?.resume(throwing: RelayRepoError.host(error))
+            } else if let payload = relayEnvelopePayloadData(from: message.payload) {
+                repoFileDiffContinuation?.resume(returning: payload)
+            } else {
+                repoFileDiffContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            repoFileDiffContinuation = nil
+
+        case "repoTreeResult":
+            if let error = relayEnvelopePayloadError(from: message.payload) {
+                repoTreeContinuation?.resume(throwing: RelayRepoError.host(error))
+            } else if let payload = relayEnvelopePayloadData(from: message.payload) {
+                repoTreeContinuation?.resume(returning: payload)
+            } else {
+                repoTreeContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            repoTreeContinuation = nil
+
+        case "repoFileResult":
+            if let error = relayEnvelopePayloadError(from: message.payload) {
+                repoFileContinuation?.resume(throwing: RelayRepoError.host(error))
+            } else if let payload = relayEnvelopePayloadData(from: message.payload) {
+                repoFileContinuation?.resume(returning: payload)
+            } else {
+                repoFileContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            repoFileContinuation = nil
+
         case "agentQuestion":
             // Wire type is "agentQuestion" (matching `e2e_router.go`'s
             // `sendQuestion`, NOT a "questionPending" guess) with a
@@ -1106,9 +1358,76 @@ public enum RelayConversationError: Error, LocalizedError {
     }
 }
 
+/// A host-side repository-review error reported by the daemon over the relay.
+public enum RelayRepoError: Error, LocalizedError {
+    case host(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .host(let message): return message
+        }
+    }
+}
+
 #endif
 
 import Foundation
+
+/// Serializes same-type relay repo RPC calls so only one in-flight request
+/// occupies the single continuation slot for that RPC family. Different gate
+/// instances (turnDiff vs fileDiff, etc.) remain independent and may overlap.
+@MainActor
+final class E2ERelayRPCSerializationGate {
+    struct Cancelled: Error {}
+
+    private var isHeld = false
+    private var waiters: [CheckedContinuation<Void, Error>] = []
+
+#if DEBUG
+    /// Peak concurrent callers inside `withSerialization` (test seam).
+    private(set) var maxConcurrentEntries = 0
+    private var activeEntries = 0
+#endif
+
+    func withSerialization<T: Sendable>(_ body: () async throws -> T) async throws -> T {
+        try await acquire()
+        defer { release() }
+#if DEBUG
+        activeEntries += 1
+        maxConcurrentEntries = max(maxConcurrentEntries, activeEntries)
+        defer { activeEntries -= 1 }
+#endif
+        return try await body()
+    }
+
+    private func acquire() async throws {
+        if !isHeld {
+            isHeld = true
+            return
+        }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            waiters.append(continuation)
+        }
+    }
+
+    private func release() {
+        if waiters.isEmpty {
+            isHeld = false
+        } else {
+            waiters.removeFirst().resume(returning: ())
+        }
+    }
+
+    /// Clears queued waiters after `stop()`; in-flight bodies still finish via `release()`.
+    func cancelAll() {
+        let pending = waiters
+        waiters.removeAll()
+        isHeld = false
+        for waiter in pending {
+            waiter.resume(throwing: Cancelled())
+        }
+    }
+}
 
 /// Ephemeral live-status ticker from lancerd (`agent.run.liveStatus` → relay
 /// `runStatus`). Drives the chat status pill only — never a ledger row.

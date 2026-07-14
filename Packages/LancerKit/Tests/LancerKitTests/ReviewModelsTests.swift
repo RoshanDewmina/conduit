@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import AppFeature
+@testable import SessionFeature
 
 @Suite struct ReviewModelsTests {
     @Test("decodes turnDiff fixture verbatim")
@@ -131,6 +132,104 @@ import Testing
         #expect(file.content.contains("reviewSurface"))
     }
 
+    @Test("decodes verbatim relay repo.* result payloads from Go router")
+    func decodeRelayRepoResultPayloads() throws {
+        let turnEnvelope: RelayEnvelope<RepoDiffSummary> = try FixtureReviewDataSource.decode(
+            #"""
+            {
+              "type": "repoTurnDiffResult",
+              "payload": {
+                "supported": true,
+                "files": [
+                  {"path": "docs/Status.md", "added": 12, "removed": 3, "status": "modified"}
+                ],
+                "totalAdded": 12,
+                "totalRemoved": 3
+              }
+            }
+            """#
+        )
+        #expect(turnEnvelope.type == "repoTurnDiffResult")
+        #expect(turnEnvelope.payload.supported == true)
+        #expect(turnEnvelope.payload.files.count == 1)
+        #expect(turnEnvelope.payload.totalAdded == 12)
+        #expect(turnEnvelope.payload.totalRemoved == 3)
+
+        let sessionEnvelope: RelayEnvelope<RepoDiffSummary> = try FixtureReviewDataSource.decode(
+            #"""
+            {
+              "type": "repoSessionDiffResult",
+              "payload": {
+                "supported": false,
+                "files": [],
+                "totalAdded": 0,
+                "totalRemoved": 0,
+                "error": "conversation store unavailable"
+              }
+            }
+            """#
+        )
+        #expect(sessionEnvelope.type == "repoSessionDiffResult")
+        #expect(sessionEnvelope.payload.supported == false)
+        #expect(sessionEnvelope.payload.files.isEmpty)
+
+        let fileDiffEnvelope: RelayEnvelope<RepoFileDiff> = try FixtureReviewDataSource.decode(
+            #"""
+            {
+              "type": "repoFileDiffResult",
+              "payload": {
+                "hunks": [
+                  {
+                    "header": "@@ -1,1 +1,2 @@",
+                    "oldStart": 1,
+                    "newStart": 1,
+                    "lines": [
+                      {"kind": "context", "oldNo": 1, "newNo": 1, "text": "line0"},
+                      {"kind": "add", "newNo": 2, "text": "line1"}
+                    ]
+                  }
+                ]
+              }
+            }
+            """#
+        )
+        #expect(fileDiffEnvelope.type == "repoFileDiffResult")
+        #expect(fileDiffEnvelope.payload.hunks.count == 1)
+        #expect(fileDiffEnvelope.payload.truncated == false) // omitempty when false
+
+        let treeEnvelope: RelayEnvelope<[RepoTreeEntry]> = try FixtureReviewDataSource.decode(
+            #"""
+            {
+              "type": "repoTreeResult",
+              "payload": [
+                {"name": "docs", "isDir": true},
+                {"name": "README.md", "isDir": false}
+              ]
+            }
+            """#
+        )
+        #expect(treeEnvelope.type == "repoTreeResult")
+        #expect(treeEnvelope.payload.count == 2)
+        #expect(treeEnvelope.payload[0].isDir == true)
+
+        let fileEnvelope: RelayEnvelope<RepoFileContent> = try FixtureReviewDataSource.decode(
+            #"""
+            {
+              "type": "repoFileResult",
+              "payload": {
+                "content": "hello\n",
+                "size": 6
+              }
+            }
+            """#
+        )
+        #expect(fileEnvelope.type == "repoFileResult")
+        #expect(fileEnvelope.payload.content == "hello\n")
+        #expect(fileEnvelope.payload.size == 6)
+        #expect(fileEnvelope.payload.truncated == false) // omitempty when false
+        #expect(fileEnvelope.payload.binary == false) // omitempty when false
+    }
+
     @Test("hunk maps to display rows preserving kind and numbers")
     func hunkToRows() throws {
         let diff: RepoFileDiff = try FixtureReviewDataSource.decode(
@@ -229,4 +328,52 @@ import Testing
         #expect(unsupported.supported == false)
         #expect(!unsupported.hasChanges)
     }
+
+    @Test @MainActor
+    func repoRPCSerializationGateSerializesConcurrentCallers() async throws {
+        let gate = E2ERelayRPCSerializationGate()
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<4 {
+                group.addTask {
+                    try? await gate.withSerialization {
+                        try? await Task.sleep(for: .milliseconds(50))
+                    }
+                }
+            }
+        }
+        #expect(gate.maxConcurrentEntries == 1)
+    }
+
+    @Test("relay review source falls back when bridge is nil")
+    func relayFallbackWithoutBridge() async throws {
+        let source = RelayReviewDataSource(bridge: nil)
+
+        let turn = try await source.turnDiff(conversationID: "c1", turnID: "t1")
+        #expect(turn.supported == false)
+        #expect(turn.files.isEmpty)
+        #expect(turn.totalAdded == 0)
+        #expect(turn.totalRemoved == 0)
+
+        let session = try await source.sessionDiff(conversationID: "c1")
+        #expect(session.supported == false)
+        #expect(session.files.isEmpty)
+
+        let fileDiff = try await source.fileDiff(conversationID: "c1", path: "docs/Status.md", turnID: nil)
+        #expect(fileDiff.hunks.isEmpty)
+        #expect(fileDiff.truncated == false)
+
+        let tree = try await source.tree(conversationID: "c1", path: "")
+        #expect(tree.isEmpty)
+
+        let file = try await source.file(conversationID: "c1", path: "docs/Status.md", maxBytes: 256_000)
+        #expect(file.content.isEmpty)
+        #expect(file.size == 0)
+        #expect(file.truncated == false)
+        #expect(file.binary == false)
+    }
+}
+
+private struct RelayEnvelope<Payload: Decodable>: Decodable {
+    let type: String
+    let payload: Payload
 }
