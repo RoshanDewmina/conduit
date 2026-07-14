@@ -2,6 +2,7 @@
 import SwiftUI
 
 /// Profile sheet — real pairing/device info only; no invented usage/streak.
+/// Settings is pushed on this sheet's single `NavigationStack` (not a nested sheet).
 public struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(RelayFleetStore.self) private var relayFleetStore
@@ -10,39 +11,42 @@ public struct ProfileView: View {
     public init() {}
 
     public var body: some View {
-        VStack(spacing: 0) {
-            header
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 12)
+        NavigationStack {
+            VStack(spacing: 0) {
+                header
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 12)
 
-            Divider()
+                Divider()
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    identitySection
-                        .padding(.top, 28)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        identitySection
+                            .padding(.top, 28)
 
-                    Divider()
-                        .padding(.horizontal, 20)
-                        .padding(.top, 28)
+                        Divider()
+                            .padding(.horizontal, 20)
+                            .padding(.top, 28)
 
-                    usagePlaceholderSection
-                        .padding(.top, 24)
+                        usagePlaceholderSection
+                            .padding(.top, 24)
 
-                    connectionsSection
-                        .padding(.top, 28)
+                        connectionsSection
+                            .padding(.top, 28)
 
-                    moreSection
-                        .padding(.top, 28)
+                        moreSection
+                            .padding(.top, 28)
 
-                    footer
-                        .padding(.top, 28)
-                        .padding(.bottom, 32)
+                        footer
+                            .padding(.top, 28)
+                            .padding(.bottom, 32)
+                    }
                 }
             }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationBarHidden(true)
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $isTrustedMachinesPresented) {
@@ -160,6 +164,15 @@ public struct ProfileView: View {
             ProfileSectionHeader(title: "More")
 
             VStack(spacing: 0) {
+                NavigationLink {
+                    AppSettingsView(embedsInParentNavigation: true)
+                        .environment(relayFleetStore)
+                } label: {
+                    ProfileRow(systemImage: "gearshape", title: "Settings", accessory: .chevron)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("profile.row.settings")
+
                 ProfileRow(systemImage: "questionmark.circle", title: "Help", accessory: .externalLink)
             }
         }

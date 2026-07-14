@@ -115,5 +115,20 @@ public final class RelayApprovalIngest {
             latestPendingApproval[machineID] = nil
         }
     }
+
+    #if DEBUG
+    /// UITest-only: surface the first DB-seeded pending approval on a stable
+    /// machine id so `LiveThreadView`'s in-thread card renders without a relay.
+    public func hydratePendingForUITestIfRequested() async {
+        guard ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" else { return }
+        let repo = ApprovalRepository(database)
+        guard let approval = try? await repo.pending().first else { return }
+        let machineID = RelayMachineID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e2")!)
+        ApprovalRelay.shared.registerRelayOrigin(approvalID: approval.id.uuidString, machineID: machineID)
+        latestPendingApproval[machineID] = approval
+    }
+
+    public static let uitestMachineID = RelayMachineID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e2")!)
+    #endif
 }
 #endif

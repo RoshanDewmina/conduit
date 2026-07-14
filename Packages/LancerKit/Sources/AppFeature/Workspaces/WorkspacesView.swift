@@ -15,6 +15,8 @@ public struct WorkspacesView: View {
     @State private var isSearchPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
     #if DEBUG
+    @Environment(RelayApprovalIngest.self) private var relayApprovalIngest
+    @State private var isSettingsPresented = false
     @State private var isComposerRepoPickerPresented = false
     @State private var isRepoPickerDirectPresented = false
     @State private var isThreadListDirectPresented = false
@@ -126,6 +128,7 @@ public struct WorkspacesView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text("New Chat"))
+            .accessibilityIdentifier("cursor-composer-tap")
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
         }
@@ -164,6 +167,10 @@ public struct WorkspacesView: View {
         }
         .liveThreadPresentation($activeLiveThread)
         #if DEBUG
+        .sheet(isPresented: $isSettingsPresented) {
+            AppSettingsView()
+                .environment(relayFleetStore)
+        }
         .sheet(isPresented: $isRepoPickerDirectPresented) {
             RepoPickerView(repos: repos, selectedCwd: repos.first?.cwd, onSelect: { _ in })
         }
@@ -205,6 +212,21 @@ public struct WorkspacesView: View {
             switch ProcessInfo.processInfo.environment["LANCER_DESTINATION"] {
             case "profile":
                 isProfilePresented = true
+            case "settings", "governance":
+                // governance → Settings with honest deferred Policy & Governance
+                // (no fake Apply / PolicyHome). Same sheet as settings.
+                isSettingsPresented = true
+            case "approval":
+                Task {
+                    await relayApprovalIngest.hydratePendingForUITestIfRequested()
+                    shellLiveBridge.configureUITestMachineContextIfNeeded()
+                    let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
+                        ?? "Review the pending approval"
+                    let cwd = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_CWD"]
+                        ?? repos.first?.cwd
+                        ?? "/home/ubuntu/myapp"
+                    activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: cwd)
+                }
             case "composer":
                 isComposerPresented = true
             case "repoPicker":

@@ -154,6 +154,10 @@ public struct AppRoot: View {
     @State private var relayQuestionIngest: RelayQuestionIngest?
     /// Derived + user-added workspace repos for the Workspaces shell.
     @State private var workspaceDataStore: WorkspaceDataStore?
+    #if DEBUG
+    /// Prevents child destination hooks from racing the deterministic UITest reset.
+    @State private var isUITestSeedReady: Bool
+    #endif
 
     enum AppEnvironmentResult {
         case ready(AppEnvironment)
@@ -163,6 +167,11 @@ public struct AppRoot: View {
     public init() {
         let fleetStore = RelayFleetStore()
         _relayFleetStore = State(initialValue: fleetStore)
+        #if DEBUG
+        _isUITestSeedReady = State(
+            initialValue: ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] != "1"
+        )
+        #endif
         do {
             let env = try AppEnvironment()
             _environment = State(initialValue: .ready(env))
@@ -244,35 +253,52 @@ public struct AppRoot: View {
                 description: Text(message)
             )
         case .ready(let env):
-            if let shellLiveBridge, let relayApprovalIngest, let relayQuestionIngest, let workspaceDataStore {
-                NavigationStack {
-                    WorkspacesView()
-                }
-                .environment(relayFleetStore)
-                .environment(shellLiveBridge)
-                .environment(relayApprovalIngest)
-                .environment(relayQuestionIngest)
-                .environment(workspaceDataStore)
-                .task {
-                    relayApprovalIngest.start()
-                    relayQuestionIngest.start()
-                    await RelayFleetHydration.hydrate(into: relayFleetStore)
-                    shellLiveBridge.markHydrated()
-                    await workspaceDataStore.refresh()
-                    // Wait briefly for the relay to become connected, then
-                    // cache installed vendor CLIs for the New Chat agent picker.
-                    var connected = relayFleetStore.firstConnectedMachine
-                    let deadline = Date().addingTimeInterval(8)
-                    while connected == nil, Date() < deadline {
-                        try? await Task.sleep(nanoseconds: 300_000_000)
-                        connected = relayFleetStore.firstConnectedMachine
+            #if DEBUG
+            if isUITestSeedReady {
+                readyRoot
+            } else {
+                ProgressView()
+                    .task {
+                        await DebugSeeder.resetForUITestIfRequested(env: env)
+                        await DebugSeeder.seedIfNeeded(env: env)
+                        isUITestSeedReady = true
                     }
-                    await RelayFleetHydration.refreshInstalledAgents(into: relayFleetStore)
-                    #if DEBUG
-                    await DebugSeeder.seedIfNeeded(env: env)
-                    await DebugSeeder.autoPairRelayIfRequested(into: relayFleetStore)
-                    #endif
+            }
+            #else
+            readyRoot
+            #endif
+        }
+    }
+
+    @ViewBuilder
+    private var readyRoot: some View {
+        if let shellLiveBridge, let relayApprovalIngest, let relayQuestionIngest, let workspaceDataStore {
+            NavigationStack {
+                WorkspacesView()
+            }
+            .environment(relayFleetStore)
+            .environment(shellLiveBridge)
+            .environment(relayApprovalIngest)
+            .environment(relayQuestionIngest)
+            .environment(workspaceDataStore)
+            .task {
+                relayApprovalIngest.start()
+                relayQuestionIngest.start()
+                await RelayFleetHydration.hydrate(into: relayFleetStore)
+                shellLiveBridge.markHydrated()
+                await workspaceDataStore.refresh()
+                // Wait briefly for the relay to become connected, then
+                // cache installed vendor CLIs for the New Chat agent picker.
+                var connected = relayFleetStore.firstConnectedMachine
+                let deadline = Date().addingTimeInterval(8)
+                while connected == nil, Date() < deadline {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    connected = relayFleetStore.firstConnectedMachine
                 }
+                await RelayFleetHydration.refreshInstalledAgents(into: relayFleetStore)
+                #if DEBUG
+                await DebugSeeder.autoPairRelayIfRequested(into: relayFleetStore)
+                #endif
             }
         }
     }

@@ -18,56 +18,29 @@ public struct TrustedMachinesView: View {
     @State private var machinePendingRemoval: RelayFleetStore.Machine?
     @State private var isClearDeadPairingsConfirming = false
 
-    public init() {}
+    /// When true, this view is pushed inside a parent `NavigationStack` and must
+    /// not wrap another stack or add a sheet Close button.
+    private let embedsInParentNavigation: Bool
+
+    public init(embedsInParentNavigation: Bool = false) {
+        self.embedsInParentNavigation = embedsInParentNavigation
+    }
 
     public var body: some View {
-        NavigationStack {
-            List {
-                if store.machines.isEmpty {
-                    Section {
-                        Text("No machines paired")
-                        Text("Pair a machine to approve agent actions from this phone.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    Section("Paired") {
-                        ForEach(store.machines) { machine in
-                            machineRow(machine)
+        Group {
+            if embedsInParentNavigation {
+                machinesList
+                    .navigationTitle("Trusted Machines")
+                    .navigationBarTitleDisplayMode(.inline)
+            } else {
+                NavigationStack {
+                    machinesList
+                        .navigationTitle("Trusted Machines")
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Close") { dismiss() }
+                            }
                         }
-                    }
-                }
-
-                if !store.invalidMachines.isEmpty {
-                    Section("Dead pairings") {
-                        ForEach(store.invalidMachines) { machine in
-                            machineRow(machine)
-                        }
-                        Button("Clear all dead pairings", role: .destructive) {
-                            isClearDeadPairingsConfirming = true
-                        }
-                    }
-                }
-
-                Section {
-                    Button {
-                        isPairingPresented = true
-                    } label: {
-                        Text("Pair a machine")
-                    }
-                    .disabled(store.isFull)
-
-                    if store.isFull {
-                        Text("You've reached the maximum of \(relayFleetMaxMachines) paired machines. Remove one to pair another.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .navigationTitle("Trusted Machines")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
                 }
             }
         }
@@ -141,6 +114,52 @@ public struct TrustedMachinesView: View {
             }
         }
         #endif
+    }
+
+    private var machinesList: some View {
+        List {
+            if store.machines.isEmpty {
+                Section {
+                    Text("No machines paired")
+                    Text("Pair a machine to approve agent actions from this phone.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Section("Paired") {
+                    ForEach(store.machines) { machine in
+                        machineRow(machine)
+                    }
+                }
+            }
+
+            if !store.invalidMachines.isEmpty {
+                Section("Dead pairings") {
+                    ForEach(store.invalidMachines) { machine in
+                        machineRow(machine)
+                    }
+                    Button("Clear all dead pairings", role: .destructive) {
+                        isClearDeadPairingsConfirming = true
+                    }
+                }
+            }
+
+            Section {
+                Button {
+                    isPairingPresented = true
+                } label: {
+                    Text("Pair a machine")
+                }
+                .disabled(store.isFull)
+                .accessibilityIdentifier("trusted-machines.pair")
+
+                if store.isFull {
+                    Text("You've reached the maximum of \(relayFleetMaxMachines) paired machines. Remove one to pair another.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     @ViewBuilder

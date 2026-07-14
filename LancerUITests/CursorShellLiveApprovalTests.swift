@@ -1,12 +1,9 @@
 @preconcurrency import XCTest
 
-/// Tier-0 integration: live `AppRoot` + seeded pending approval → Review → Approve.
-/// Uses `LANCER_UITEST_RESEED` and the `LANCER_DESTINATION=review` DEBUG seam
-/// (same live `CursorReviewDiffView` + bridge `onDecide` path as production).
-/// Work-thread banner visibility is covered by `CursorAppShellExhaustiveTests` (mock shell)
-/// and `scripts/relay-approval-e2e.sh` (live shell, synthetic tap).
+/// Seeded UI coverage for pending-approval card chrome and local clearing.
+/// Host forwarding and persistence are proved by the live relay harness.
 @MainActor
-final class CursorShellLiveApprovalTests: XCTestCase {
+final class SeededApprovalCardTests: XCTestCase {
 
     override func setUp() {
         continueAfterFailure = false
@@ -24,19 +21,24 @@ final class CursorShellLiveApprovalTests: XCTestCase {
         return app
     }
 
-    func testLiveShell_PendingApprovalBannerApprove() throws {
-        let app = launchLiveShellReseeded(destination: "review")
+    func testSeededPendingApprovalCardClearsAfterApprove() throws {
+        let app = launchLiveShellReseeded(destination: "approval")
         defer { app.terminate() }
 
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 45),
-                      "Live Cursor shell should land on Workspaces")
+                      "Live shell should land on Workspaces before opening thread")
 
-        let reviewApprove = app.buttons["cursor.review.approve"].firstMatch
-        XCTAssertTrue(reviewApprove.waitForExistence(timeout: 30),
-                      "Review screen should expose Approve via live bridge")
-        reviewApprove.tap()
+        let approve = app.buttons["cursor.approval.approve"].firstMatch
+        let deny = app.buttons["Deny"].firstMatch
+        XCTAssertTrue(approve.waitForExistence(timeout: 30),
+                      "In-thread approval card should expose Approve")
+        XCTAssertTrue(deny.waitForExistence(timeout: 5),
+                      "In-thread approval card should expose Deny")
+        approve.tap()
 
-        XCTAssertTrue(app.staticTexts["Approved"].waitForExistence(timeout: 10),
-                      "Approve should commit and show Approved status")
+        XCTAssertTrue(approve.waitForNonExistence(timeout: 8),
+                      "Seeded approval card should clear locally after Approve")
+        XCTAssertTrue(deny.waitForNonExistence(timeout: 3),
+                      "Both controls should leave with the locally cleared card")
     }
 }

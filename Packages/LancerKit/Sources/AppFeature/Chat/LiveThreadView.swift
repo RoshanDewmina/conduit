@@ -891,6 +891,7 @@ public struct LiveThreadView: View {
                     Task { await approvalIngest.decide(approval, decision: .approved, machineID: machineID) }
                 }
                 .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("cursor.approval.approve")
             }
         }
         .padding(14)

@@ -1,7 +1,7 @@
 @preconcurrency import XCTest
 
 /// Regression guard: legacy sidebar-era surfaces must not appear on default
-/// navigation paths after the Cursor shell cutover.
+/// navigation paths after the Workspaces-only shell cutover.
 @MainActor
 final class LegacyUIRemovalTests: XCTestCase {
 
@@ -34,7 +34,8 @@ final class LegacyUIRemovalTests: XCTestCase {
         defer { app.terminate() }
 
         XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30),
-                      "Cursor shell should render Workspaces")
+                      "Shell should render Workspaces")
+        XCTAssertEqual(app.tabBars.count, 0, "Tab bar / 3-root shell must not return")
 
         for marker in legacyMarkers() {
             XCTAssertFalse(app.staticTexts[marker].exists,
@@ -47,10 +48,14 @@ final class LegacyUIRemovalTests: XCTestCase {
         defer { app.terminate() }
 
         XCTAssertTrue(app.staticTexts["Settings"].waitForExistence(timeout: 20),
-                      "LANCER_DESTINATION=settings should open Cursor Settings")
+                      "LANCER_DESTINATION=settings should open Settings")
         XCTAssertTrue(app.otherElements["cursor.settings"].waitForExistence(timeout: 5)
-                      || app.staticTexts["Trusted machines"].exists,
-                      "Cursor Settings chrome should be visible")
+                      || app.buttons["cursor.settings.row.trusted-machines"].exists,
+                      "Settings chrome should be visible")
+        XCTAssertTrue(app.otherElements["cursor.settings.policy-deferred"].waitForExistence(timeout: 5)
+                      || app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Not available")).firstMatch.exists,
+                      "Policy must be deferred, not a fake Apply surface")
+        XCTAssertFalse(app.buttons["cursor.settings.emergency-stop"].exists)
 
         for marker in ["POLICY BRIDGE", "GENERAL", "Security & Trust"] {
             XCTAssertFalse(app.staticTexts[marker].exists,
@@ -59,55 +64,68 @@ final class LegacyUIRemovalTests: XCTestCase {
     }
 
     func testApprovalDestination_NoLegacyInbox() throws {
-        let app = launchDefaultShell(destination: "inbox")
+        let app = launchDefaultShell(destination: "approval")
         defer { app.terminate() }
 
-        XCTAssertTrue(app.staticTexts["Review"].waitForExistence(timeout: 20),
-                      "LANCER_DESTINATION=inbox should open Cursor Review, not legacy Inbox")
+        let approve = app.buttons["cursor.approval.approve"].firstMatch
+        XCTAssertTrue(approve.waitForExistence(timeout: 30),
+                      "LANCER_DESTINATION=approval should open in-thread approval card")
         XCTAssertFalse(app.staticTexts["one agent is waiting"].exists,
                        "Legacy Inbox headline must not appear")
         XCTAssertFalse(app.buttons["board.primary"].exists,
                        "Legacy Inbox board cards must not appear")
+        XCTAssertFalse(app.buttons["cursor.review.approve"].exists,
+                       "Removed review shell Approve ID must not appear")
     }
 
     func testProfileSettings_NoLegacyBridge() throws {
-        let app = launchDefaultShell()
+        let app = launchDefaultShell(destination: "profile")
         defer { app.terminate() }
 
-        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
-
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.09, dy: 0.11)).tap()
-
-        let appSettings = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "App Settings")).firstMatch
-        XCTAssertTrue(appSettings.waitForExistence(timeout: 15))
-        appSettings.tap()
+        let settings = app.buttons["profile.row.settings"].exists
+            ? app.buttons["profile.row.settings"]
+            : app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Settings")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 15))
+        settings.tap()
 
         XCTAssertTrue(app.staticTexts["Settings"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.otherElements["cursor.settings.policy-deferred"].waitForExistence(timeout: 5)
+                      || app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Not available")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["POLICY BRIDGE"].exists)
         XCTAssertFalse(app.staticTexts["GENERAL"].exists)
+        XCTAssertFalse(app.buttons["cursor.settings.emergency-stop"].exists)
     }
 
-    func testComposerOpensFloatingSheet() throws {
-        let app = launchDefaultShell()
+    func testComposerOpensWithRealControls() throws {
+        let app = launchDefaultShell(destination: "addRepo")
         defer { app.terminate() }
 
-        XCTAssertTrue(app.staticTexts["Workspaces"].waitForExistence(timeout: 30))
+        let path = app.textFields.firstMatch
+        XCTAssertTrue(path.waitForExistence(timeout: 20), "Add Repo should expose a path field")
+        path.tap()
+        path.typeText("/tmp/lancer-ui-test-repo")
+        let addRepo = app.buttons["Add Repo"].firstMatch
+        XCTAssertTrue(addRepo.isEnabled)
+        addRepo.tap()
 
-        let composerTap = app.buttons["cursor-composer-tap"].firstMatch
-        XCTAssertTrue(composerTap.waitForExistence(timeout: 10), "Composer tap target should exist")
-        if composerTap.isHittable {
-            composerTap.tap()
-        } else {
-            composerTap.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        }
+        let openComposer = app.buttons["cursor-composer-tap"].firstMatch
+        XCTAssertTrue(openComposer.waitForExistence(timeout: 10))
+        openComposer.tap()
 
-        // Live shell defaults to ManagedModel.claudeHaiku; mock shell uses "Composer 2.5".
-        let modelChip = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] 'Haiku' OR label CONTAINS[c] 'Composer'")
-        ).firstMatch
-        XCTAssertTrue(modelChip.waitForExistence(timeout: 10),
-                      "Expanded composer should show model picker")
-        XCTAssertTrue(app.buttons["cloud"].waitForExistence(timeout: 5),
-                      "Expanded composer should show run-target cloud picker")
+        let agent = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Agent")).firstMatch
+        XCTAssertTrue(agent.waitForExistence(timeout: 15), "Composer Agent picker should exist")
+        let model = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Model")).firstMatch
+        XCTAssertTrue(model.waitForExistence(timeout: 5), "Composer Model picker should exist")
+        let send = app.buttons["composer.send"].firstMatch
+        XCTAssertTrue(send.waitForExistence(timeout: 5),
+                      "Composer Send affordance must stay covered")
+        XCTAssertFalse(send.isEnabled, "Send must be disabled before the draft is valid")
+        let draft = app.textViews.firstMatch
+        XCTAssertTrue(draft.waitForExistence(timeout: 5),
+                      "Composer draft TextEditor should be present")
+        draft.tap()
+        draft.typeText("Inspect the workspace")
+        XCTAssertTrue(send.isEnabled,
+                      "Seeded absolute repo + non-empty draft should enable the real Send button")
     }
 }

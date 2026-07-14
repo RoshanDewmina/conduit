@@ -274,15 +274,22 @@ public struct NewChatComposerView: View {
                 .buttonStyle(.plain)
                 .disabled(isUploadingAttachments)
                 .accessibilityLabel(Text("Send"))
+                .accessibilityIdentifier("composer.send")
             } else {
-                Circle()
-                    .fill(Color(.tertiarySystemFill))
-                    .frame(width: 34, height: 34)
-                    .overlay(
+                Button(action: {}) {
+                    Circle()
+                        .fill(Color(.tertiarySystemFill))
+                        .frame(width: 34, height: 34)
+                        .overlay(
                         Image(systemName: trimmedDraft.isEmpty ? "mic.fill" : "arrow.up")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.secondary)
                     )
+                }
+                .buttonStyle(.plain)
+                .disabled(true)
+                .accessibilityLabel(Text("Send"))
+                .accessibilityIdentifier("composer.send")
             }
         }
     }

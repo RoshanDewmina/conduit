@@ -778,5 +778,13 @@ public final class ShellLiveBridge {
             archive: { try await bridge.relayArchiveConversation($0) }
         )
     }
+
+    #if DEBUG
+    /// Aligns the live thread with the UITest-hydrated approval machine id.
+    public func configureUITestMachineContextIfNeeded() {
+        guard ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" else { return }
+        activeMachineID = RelayApprovalIngest.uitestMachineID
+    }
+    #endif
 }
 #endif
