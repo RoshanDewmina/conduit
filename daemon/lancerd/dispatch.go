@@ -572,6 +572,12 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
+	proc := cmd.Process
+	pid := 0
+	if proc != nil {
+		pid = proc.Pid
+	}
+
 	emitRunStatus(emit, runID, "running", nil)
 	emitLiveStatusStarting(emit, runID)
 
@@ -604,10 +610,65 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	}
 
 	var seq int64
+	var terminalOnce sync.Once
+	var firstOutputOnce sync.Once
+	var ttfoTimer *time.Timer
+
+	cancelTTFO := func() {
+		firstOutputOnce.Do(func() {
+			if ttfoTimer != nil {
+				ttfoTimer.Stop()
+			}
+		})
+	}
+
+	emitTerminal := func(status string, code *int) {
+		terminalOnce.Do(func() {
+			cancelTTFO()
+			emitRunStatus(emit, runID, status, code)
+		})
+	}
+
+	watchEmit := emit
+	armTTFO := claudeFirstOutputTimeout > 0 && ttfoAppliesTo(argv) && pid > 0
+	if armTTFO {
+		watchEmit = func(method string, params any) {
+			// Cancel only on real progress (stdout text / tool / control / result).
+			// Raw stderr, init vendorSession, thinking liveStatus do NOT cancel.
+			if ttfoEventIsProgress(method, params) {
+				cancelTTFO()
+			}
+			if emit != nil {
+				emit(method, params)
+			}
+		}
+		capturedPID := pid
+		capturedRunID := runID
+		ttfoTimer = time.AfterFunc(claudeFirstOutputTimeout, func() {
+			firstOutputOnce.Do(func() {
+				// Kill only this process group — never a later reused pid.
+				_ = syscall.Kill(-capturedPID, syscall.SIGKILL)
+				if proc != nil {
+					_ = proc.Kill()
+				}
+				n := atomic.AddInt64(&seq, 1)
+				if emit != nil {
+					emit("agent.run.output", map[string]any{
+						"runId": capturedRunID, "stream": "stdout",
+						"chunk": claudeColdStartTimeoutMsg + "\n", "seq": int(n),
+					})
+					emit("agent.run.resultError", map[string]any{
+						"runId": capturedRunID, "error": claudeColdStartTimeoutMsg,
+					})
+				}
+			})
+		})
+	}
+
 	var streams sync.WaitGroup
 	streams.Add(2)
-	go streamOutput(emit, runID, "stdout", stdout, &seq, &streams, streamJSON)
-	go streamOutput(emit, runID, "stderr", stderr, &seq, &streams, false)
+	go streamOutput(watchEmit, runID, "stdout", stdout, &seq, &streams, streamJSON)
+	go streamOutput(watchEmit, runID, "stderr", stderr, &seq, &streams, false)
 
 	go func() {
 		// Report completion the instant the AGENT process exits — never gate it on
@@ -617,15 +678,16 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 		// agent exits. Waiting on those pipes (streams.Wait) would hang the run in
 		// "running" forever — the exact bug that broke every fresh dispatch.
 		code := exitCode(cmd.Wait())
+		cancelTTFO()
 		if code == 0 {
-			emitRunStatus(emit, runID, "exited", &code)
+			emitTerminal("exited", &code)
 		} else {
-			emitRunStatus(emit, runID, "failed", &code)
+			emitTerminal("failed", &code)
 		}
 		// Best-effort cleanup AFTER status is sent: kill the agent's group (reaps
 		// any MCP children that didn't detach) and close our pipe ends so the
 		// reader goroutines unblock instead of leaking.
-		if proc := cmd.Process; proc != nil {
+		if proc != nil {
 			_ = syscall.Kill(-proc.Pid, syscall.SIGKILL)
 		}
 		_ = stdout.Close()
@@ -636,9 +698,9 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 		streams.Wait()
 	}()
 
-	proc := cmd.Process
 	return &procHandle{
 		kill: func() {
+			cancelTTFO()
 			if proc != nil {
 				// Kill the whole group so MCP grandchildren don't orphan.
 				_ = syscall.Kill(-proc.Pid, syscall.SIGKILL)
@@ -921,6 +983,7 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 	// conversation_store.bindVendorSession), and re-emitting on every
 	// subsequent line would be redundant churn.
 	var sessionCaptured bool
+	var authErrorEmitted bool // once per run — avoid duplicate assistant+result auth errors
 
 	for sc.Scan() {
 		line := sc.Text()
@@ -1042,10 +1105,30 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 				}
 			}
 		case "assistant":
-			// Whole-message fallback (superseded by deltas) — suppress.
+			// Whole-message fallback is normally suppressed (deltas supersede).
+			// Exception: structured auth-failure assistants
+			// (error=authentication_failed, live 2026-07-14) — classify promptly
+			// so the phone never waits out TTFO after vendor output arrived.
+			if msg, ok := extractClaudeAssistantAuthError(obj); ok && !authErrorEmitted {
+				authErrorEmitted = true
+				invalidateClaudeAuthCache()
+				emitStreamJSONResultError(emit, runID, msg, seq)
+			}
 		case "result":
 			if errText, ok := extractStreamJSONResultError(obj); ok {
-				emitStreamJSONResultError(emit, runID, errText, seq)
+				if classifyClaudeResultAuthError(obj, errText) {
+					invalidateClaudeAuthCache()
+					errText = normalizeClaudeAuthErrorMessage(errText)
+					if authErrorEmitted {
+						// Already reported via assistant auth path — skip duplicate.
+						errText = ""
+					} else {
+						authErrorEmitted = true
+					}
+				}
+				if errText != "" {
+					emitStreamJSONResultError(emit, runID, errText, seq)
+				}
 			}
 			// A "result" line means this turn is done — but with
 			// --input-format stream-json (claudeStdinPromptArgv) the CLI does
@@ -1326,6 +1409,11 @@ type dispatcher struct {
 	// but never become a first-class QuestionEvent — no server wired yet, same
 	// fail-safe-no-op convention as bindVendorSession/onRunTerminal being nil.
 	onQuestion func(event QuestionEvent)
+	// claudeAuthPreflight gates Claude Code launches. Nil ⇒ package default
+	// (claudeAuthPreflight) unless tests disable it via
+	// claudeAuthPreflightDisabledForTest. loggedIn:false and probe failures
+	// both fail closed (see claude_auth.go).
+	claudeAuthPreflight func() error
 	// receiptAccum/receipts track per-run evidence for lancer.proof/v0 (A1).
 	receiptMu    sync.Mutex
 	receiptAccum map[string]*receiptAccumulator
@@ -1685,6 +1773,21 @@ func emergencyStoppedResult() dispatchResult {
 	return dispatchResult{Status: "emergencyStopped", Message: "emergency stop is active"}
 }
 
+// ensureClaudeAuth runs the Claude Code auth preflight when agent is claudeCode.
+// Other vendors are untouched. See claude_auth.go for fail-closed contract.
+func (d *dispatcher) ensureClaudeAuth(agent string) error {
+	if normalizeAgentSource(agent) != "claudeCode" {
+		return nil
+	}
+	if d.claudeAuthPreflight != nil {
+		return d.claudeAuthPreflight()
+	}
+	if claudeAuthPreflightDisabledForTest {
+		return nil
+	}
+	return claudeAuthPreflight()
+}
+
 func (d *dispatcher) emergencyStopActive() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -2014,6 +2117,14 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
+	// Auth preflight BEFORE inserting a "running" run — a 20s claude auth
+	// probe must not leave a ghost run visible to status/list. Fast-exit race
+	// protection (record before launch) is preserved below.
+	if err := d.ensureClaudeAuth(p.Agent); err != nil {
+		audit(AuditEntry{Action: "dispatch-auth-preflight", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+
 	// Allocate the runId before launch so streamed output/status events can be
 	// tagged with it from the first byte. The run record (including worktree
 	// metadata) is created BEFORE launch runs — d.launch's emit callback can
@@ -2178,6 +2289,11 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
+	if err := d.ensureClaudeAuth(agent); err != nil {
+		audit(AuditEntry{Action: "continue-auth-preflight", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "deny", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+
 	id := newUUID()
 	d.mu.Lock()
 	if d.emergencyStopped {
@@ -2275,6 +2391,11 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
+	if err := d.ensureClaudeAuth(p.Vendor); err != nil {
+		audit(AuditEntry{Action: "observed-continue-auth-preflight", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+
 	id := newUUID()
 	d.mu.Lock()
 	if d.emergencyStopped {
@@ -2358,6 +2479,11 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 	case "ask":
 		audit(AuditEntry{Action: "conversation-append-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
+	}
+
+	if err := d.ensureClaudeAuth(p.Agent); err != nil {
+		audit(AuditEntry{Action: "conversation-append-auth-preflight", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
 	}
 
 	// See dispatch()'s identical comment: the run record must exist before

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -12,7 +13,14 @@ func testdataHome(t *testing.T, name string) string {
 }
 
 func TestAgentStatusClaudeFixture(t *testing.T) {
-	t.Parallel()
+	prev := claudeAuthRunnerForPkg
+	t.Cleanup(func() { claudeAuthRunnerForPkg = prev; invalidateClaudeAuthCache() })
+	claudeAuthRunnerForPkg = func(ctx context.Context, bin string, args []string, env []string) ([]byte, error) {
+		return []byte(`{"loggedIn":true}`), nil
+	}
+	invalidateClaudeAuthCache()
+	// Status path is non-blocking — seed last-known so the fixture asserts LoggedIn.
+	globalClaudeAuthCache.put(true)
 	home := testdataHome(t, "claude-home")
 	result := collectAgentStatus(home)
 	var claude *AgentVendorStatus
@@ -54,7 +62,13 @@ func TestAgentStatusOpencodeFixture(t *testing.T) {
 }
 
 func TestAgentStatusOmitsUsageWhenAbsent(t *testing.T) {
-	t.Parallel()
+	prev := claudeAuthRunnerForPkg
+	t.Cleanup(func() { claudeAuthRunnerForPkg = prev; invalidateClaudeAuthCache() })
+	claudeAuthRunnerForPkg = func(ctx context.Context, bin string, args []string, env []string) ([]byte, error) {
+		return []byte(`{"loggedIn":false}`), nil
+	}
+	invalidateClaudeAuthCache()
+	// Status must not wait on probe; omit LoggedIn on cold miss is fine for this fixture.
 	result := collectAgentStatus(testdataHome(t, "empty-home"))
 	for _, a := range result.Agents {
 		if a.UsageUSD != nil { t.Errorf("%s usage set", a.Agent) }
