@@ -815,6 +815,11 @@ public struct ConversationSummary: Codable, Sendable, Hashable, Identifiable {
 
 /// Structured attachment metadata for a conversation turn — transport-only
 /// `hostPath` must never surface in UI (see attachment message design).
+///
+/// `contentDigest` is the lowercase hex SHA-256 of the exact bytes finalized by
+ /// `attachment.put` (camelCase wire field, locked). New outgoing attachments
+ /// must include a valid 64-hex digest; historical rows may omit it (decode
+ /// tolerates absence) but daemon dispatch fails closed until re-upload.
 public struct ConversationAttachmentReference: Codable, Sendable, Hashable, Identifiable {
     public enum Kind: String, Codable, Sendable { case image, file }
 
@@ -825,10 +830,13 @@ public struct ConversationAttachmentReference: Codable, Sendable, Hashable, Iden
     public let kind: Kind
     public let hostPath: String
     public let previewCacheKey: String
+    /// Lowercase hex SHA-256 from `attachment.put`. Optional for backward
+     /// decode of historical turns; required for new outgoing appends.
+    public let contentDigest: String?
 
     public init(
         id: String, name: String, mimeType: String?, byteCount: Int, kind: Kind,
-        hostPath: String, previewCacheKey: String
+        hostPath: String, previewCacheKey: String, contentDigest: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -837,6 +845,7 @@ public struct ConversationAttachmentReference: Codable, Sendable, Hashable, Iden
         self.kind = kind
         self.hostPath = hostPath
         self.previewCacheKey = previewCacheKey
+        self.contentDigest = contentDigest
     }
 }
 
