@@ -128,7 +128,10 @@ public enum LiveThreadTranscript: Sendable {
                 } else {
                     assistantText += "\n\n" + chunk
                 }
-            case .system, .unknown:
+            case .system, .unknown, .thinking:
+                // Extended-thinking blocks are internal reasoning, not part of
+                // the vendor-visible conversation — omit them from the
+                // resumed transcript same as system/unknown lines.
                 break
             }
         }

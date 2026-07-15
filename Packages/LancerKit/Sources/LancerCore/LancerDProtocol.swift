@@ -444,12 +444,26 @@ public struct AgentsInstalledResult: Codable, Sendable {
 
 /// One transcript turn returned by `agent.sessions.transcript`.
 public struct SessionMessage: Codable, Sendable, Hashable {
-    public enum Role: String, Codable, Sendable {
+    /// Mirrors the Go `SessionMessage.Role` values a vendor adapter can emit
+    /// (`daemon/lancerd/claude_transcript_adapter.go`: user, assistant, system,
+    /// toolCall, toolResult, thinking/redacted_thinking → "thinking", unknown).
+    /// Decodes any *unrecognized* raw string to `.unknown` rather than failing
+    /// the whole struct's decode — a real Claude Code transcript's `thinking`
+    /// role (extended-thinking blocks) previously wasn't a case here at all,
+    /// so `JSONDecoder` threw `dataCorrupted` on every real session containing
+    /// one, which `E2ERelayBridge.handle(_:)`'s `sessionsTranscriptResult` arm
+    /// (`try? decoder.decode(...)`) silently turned into the misleading
+    /// "Decryption failed" error surfaced to the user. Widening this enum to
+    /// tolerate any future vendor-side role string (rather than re-breaking on
+    /// the next new one) is deliberate — see the `sessionsTranscriptResult`
+    /// case comment in E2ERelayBridge.swift.
+    public enum Role: String, Sendable {
         case user
         case assistant
         case toolCall
         case toolResult
         case system
+        case thinking
         case unknown
     }
 
@@ -463,6 +477,13 @@ public struct SessionMessage: Codable, Sendable, Hashable {
         self.text = text
         self.toolName = toolName
         self.timestamp = timestamp
+    }
+}
+
+extension SessionMessage.Role: Codable {
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = SessionMessage.Role(rawValue: raw) ?? .unknown
     }
 }
 

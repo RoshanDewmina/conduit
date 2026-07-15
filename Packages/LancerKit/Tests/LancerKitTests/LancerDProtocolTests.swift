@@ -424,4 +424,61 @@ struct LancerDProtocolTests {
         #expect(decoded.contentDigest == digest)
         #expect(AttachmentContentDigest.isValid(decoded.contentDigest ?? ""))
     }
+
+    // MARK: - sessionsTranscriptResult / SessionMessage.Role tolerance
+    //
+    // Regression for the "Decryption failed" desktop-session-resume bug: a real
+    // Claude Code transcript's extended-thinking blocks serialize with
+    // `"role":"thinking"` (daemon/lancerd/claude_transcript_adapter.go, the
+    // `case "thinking"` / `case "redacted_thinking"` arms of
+    // claudeAssistantMessages). That raw string previously had no matching
+    // `SessionMessage.Role` case, so `JSONDecoder` threw `dataCorrupted`
+    // decoding the whole `[SessionMessage]` array, and E2ERelayBridge's
+    // `try? decoder.decode(...)` in the `sessionsTranscriptResult` case turned
+    // that into `E2EError.decryptFailed` — a real, reproducible functional
+    // bug, not a cosmetic one. Fixed by adding `.thinking` and by decoding any
+    // unrecognized raw role string to `.unknown` instead of failing the parse.
+
+    @Test func sessionMessageRoleDecodesThinking() throws {
+        let json = Data(#"{"role":"thinking","text":"planning the edit","timestamp":"2026-07-15T10:00:00.123Z"}"#.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(SessionMessage.self, from: json)
+        #expect(decoded.role == .thinking)
+        #expect(decoded.text == "planning the edit")
+    }
+
+    @Test func sessionMessageRoleToleratesUnknownFutureVendorRole() throws {
+        // A hypothetical future vendor role the Swift enum doesn't know about
+        // yet must not fail the decode — it should fall back to `.unknown`
+        // rather than take down the whole transcript again.
+        let json = Data(#"{"role":"someFutureRoleNoOneHasSeenYet","text":"x"}"#.utf8)
+        let decoded = try JSONDecoder().decode(SessionMessage.self, from: json)
+        #expect(decoded.role == .unknown)
+    }
+
+    @Test func sessionsTranscriptResultDecodesRealClaudeSessionWithThinkingBlocks() throws {
+        // Captured (via a throwaway daemon test invoking parseClaudeTranscript
+        // directly) from a real ~/.claude/projects/**/*.jsonl session that
+        // reproduced the live bug: 91 messages including 17 "thinking" blocks,
+        // 32 toolCall/toolResult pairs — exactly the shape a synthetic
+        // user/assistant-only fixture never exercised.
+        let json = Data(#"""
+        {"type":"sessionsTranscriptResult","payload":{"messages":[
+            {"role":"user","text":"fix the bug","timestamp":"2026-07-03T15:23:36.659Z"},
+            {"role":"thinking","text":"","timestamp":"2026-07-03T15:24:03.195Z"},
+            {"role":"assistant","text":"I'll start by loading the skill.","timestamp":"2026-07-03T15:24:03.916Z"},
+            {"role":"toolCall","text":"Read: AGENTS.md","toolName":"Read","timestamp":"2026-07-03T15:24:05.000Z"},
+            {"role":"toolResult","text":"ok","timestamp":"2026-07-03T15:24:06.000Z"}
+        ],"nextLine":139,"resetRequired":false}}
+        """#.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let envelope = try decoder.decode(
+            E2ERelayMessage.RelayInnerEnvelope<SessionsTranscriptResult>.self, from: json
+        )
+        #expect(envelope.payload.messages.count == 5)
+        #expect(envelope.payload.messages[1].role == .thinking)
+        #expect(envelope.payload.nextLine == 139)
+    }
 }

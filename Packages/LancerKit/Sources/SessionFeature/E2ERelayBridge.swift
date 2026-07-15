@@ -1188,6 +1188,15 @@ public final class E2ERelayBridge: ObservableObject {
             installedAgentsContinuation = nil
 
         case "sessionsTranscriptResult":
+            // `try? decode` turns ANY decode failure — a real crypto/frame
+            // issue OR a plain JSON-shape mismatch — into `.decryptFailed`,
+            // whose UI string ("Decryption failed") is misleading for the
+            // latter. A real Claude Code transcript's `"role":"thinking"`
+            // messages (extended-thinking blocks) used to have no matching
+            // `SessionMessage.Role` case at all, so this decode failed on
+            // every desktop-session resume whose transcript contained one —
+            // see the fix + rationale on `SessionMessage.Role` in
+            // LancerDProtocol.swift.
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             let envelope = try? decoder.decode(
