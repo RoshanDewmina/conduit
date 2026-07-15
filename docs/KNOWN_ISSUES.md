@@ -21,9 +21,13 @@
 > This is the canonical "what's broken / what's verified / what's residual" doc. It supersedes the
 > scattered point-in-time audit docs for **issue tracking**. For launch *checklist* state use
 > `docs/PUBLISH_READINESS_CHECKLIST.md`; for product/architecture narrative use `ARCHITECTURE.md`
-> (§0.1 current-state snapshot + §4.1 IA). The current IA is the **Cursor-style 3-root shell**
-> (Home / Workspaces / Settings) under `AppFeature/CursorStyle/` — not a tab bar and not the
-> legacy sidebar / Command Home (deprecated). The old `LANCER_PROJECT_DOSSIER.md` and `docs/_archive/`
+> (§0.1 current-state snapshot + §4.1 IA). **Correction (2026-07-15):** `AppFeature/CursorStyle/`
+> was removed by commit `6b97da65` (2026-07-11 "revert(ios): restore Codex Workspaces shell as
+> the frontend") — confirmed zero matches in the current tree. The current production root is
+> `AppFeature/Workspaces/WorkspacesView.swift`, DEBUG-gated by `LANCER_DESTINATION` (not the old
+> `LANCER_CURSOR_SHELL*` flags). The "not a tab bar" / not-the-legacy-sidebar framing still holds
+> — see `ARCHITECTURE.md` §0.1/§4.1 correction notes and `docs/STATUS_LEDGER.md`'s 2026-07-11
+> "frontend reversal" note. The old `LANCER_PROJECT_DOSSIER.md` and `docs/_archive/`
 > were **purged 2026-07-06** — use `ARCHITECTURE.md` §0.1 + `docs/STATUS_LEDGER.md`.
 >
 > **Method note:** the multi-agent fan-out repeatedly tripped the account session limit (parallel agents
