@@ -586,7 +586,7 @@ func TestAttachmentPolicyHashBindsIdentityNotPath(t *testing.T) {
 		t.Fatal("contentDigest change must alter identity digest")
 	}
 
-	cleanArgv, _ := agentArgv("claudeCode", "Describe this image", "")
+	cleanArgv, _ := agentArgv("claudeCode", "Describe this image", "", false)
 	command := "[conversation-append] " + strings.Join(cleanArgv, " ")
 	h1 := computeContentHash(command, "", "/proj", d1)
 	h2 := computeContentHash(command, "", "/proj", d2)
@@ -997,7 +997,7 @@ func TestAttachmentAppendNoAttachmentsMatchesPlainPromptLaunch(t *testing.T) {
 	if msg.Error != nil {
 		t.Fatalf("append: %+v", msg.Error)
 	}
-	want, _ := agentArgv("claudeCode", "just text", "")
+	want, _ := agentArgv("claudeCode", "just text", "", false)
 	if strings.Join(launched, " ") != strings.Join(want, " ") {
 		t.Fatalf("no-attachment argv diverged:\n got %v\nwant %v", launched, want)
 	}
