@@ -219,8 +219,11 @@ public struct LiveThreadView: View {
                 await bridge.send(prompt: prompt, cwd: cwd)
             } else {
                 await bridge.adoptArmedObservedContinue(fallbackCwd: cwd)
-                if case .idle = bridge.sendState {
+                switch bridge.sendState {
+                case .idle, .adoptedNoHistory:
                     isFollowUpFocused = true
+                default:
+                    break
                 }
             }
         }
@@ -230,7 +233,7 @@ public struct LiveThreadView: View {
         .onChange(of: bridge.sendState) { _, newValue in
             let phase: LiveStatusSendPhase
             switch newValue {
-            case .idle: phase = .idle
+            case .idle, .adoptedNoHistory: phase = .idle
             case .working: phase = .working
             case .streaming: phase = .streaming
             case .completed: phase = .completed
@@ -367,7 +370,7 @@ public struct LiveThreadView: View {
             return bridge.transcriptTurns.last(where: { $0.status == .running })?.id
         case .failed:
             return bridge.transcriptTurns.last(where: { $0.status == .failed })?.id
-        case .idle:
+        case .idle, .adoptedNoHistory:
             return nil
         }
     }
@@ -407,7 +410,7 @@ public struct LiveThreadView: View {
             return turn.assistantText
         case .degraded(_, let turn):
             return turn?.assistantText ?? ""
-        case .idle, .working, .failed:
+        case .idle, .adoptedNoHistory, .working, .failed:
             return ""
         }
     }
@@ -621,6 +624,12 @@ public struct LiveThreadView: View {
         switch bridge.sendState {
         case .idle:
             EmptyView()
+        case .adoptedNoHistory:
+            Text("Connected to this session — no history synced yet. Send a message to continue.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("adopted-no-history-placeholder")
         case .working:
             Group {
                 if let text = liveStatusPillText(hasVisibleReplyText: false, isTerminalOrIdle: false) {

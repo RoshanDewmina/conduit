@@ -112,6 +112,30 @@ struct RunningAgentsFreshnessTests {
         #expect(RunningAgentsFreshness.statusMessage(rowCount: 1, tracker: tracker, now: now) == nil)
     }
 
+    @Test("one pre-first-success failure stays neutral (nil statusMessage)")
+    func onePreFirstSuccessFailureIsNeutral() {
+        var tracker = RunningAgentsFreshness.Tracker()
+        let result = RunningAgentsFreshness.recordFailure(&tracker)
+        #expect(result == .failing(count: 1))
+        #expect(!tracker.isDegraded)
+        #expect(!tracker.hasEverSucceeded)
+        #expect(
+            RunningAgentsFreshness.statusMessage(rowCount: 0, tracker: tracker, now: .now) == nil
+        )
+    }
+
+    @Test("two consecutive failures yield degraded unreachable copy")
+    func twoConsecutiveFailuresDegrade() {
+        var tracker = RunningAgentsFreshness.Tracker()
+        _ = RunningAgentsFreshness.recordFailure(&tracker)
+        let entered = RunningAgentsFreshness.recordFailure(&tracker)
+        #expect(entered == .enteredDegraded)
+        #expect(tracker.isDegraded)
+        let msg = RunningAgentsFreshness.statusMessage(rowCount: 0, tracker: tracker, now: .now)
+        #expect(msg == "Machine unreachable — no successful update yet")
+        #expect(msg != "No agents running")
+    }
+
     @Test("stale/unreachable surfaces data age — never all-clear")
     func degradedSurfacesDataAge() {
         var tracker = RunningAgentsFreshness.Tracker()
@@ -129,15 +153,6 @@ struct RunningAgentsFreshnessTests {
             now: t0.addingTimeInterval(12)
         )
         #expect(msg == "Machine unreachable — last update 12s ago")
-    }
-
-    @Test("unreachable before any success never claims no agents")
-    func neverSucceeded() {
-        var tracker = RunningAgentsFreshness.Tracker()
-        _ = RunningAgentsFreshness.recordFailure(&tracker)
-        let msg = RunningAgentsFreshness.statusMessage(rowCount: 0, tracker: tracker, now: .now)
-        #expect(msg == "Machine unreachable — no successful update yet")
-        #expect(msg != "No agents running")
     }
 
     @Test("recovery clears degraded and allows all-clear again")
