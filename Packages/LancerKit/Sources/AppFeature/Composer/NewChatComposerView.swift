@@ -25,6 +25,8 @@ public struct NewChatComposerView: View {
         DispatchModelSelection.default.rawValue
     @AppStorage(DispatchVendorSelection.storageKey) private var selectedVendorSlug: String =
         DispatchVendorSelection.default.rawValue
+    @AppStorage(FullToolsSelection.storageKey) private var fullToolsEnabled: Bool =
+        FullToolsSelection.default
     private let initiallyShowsRepoPicker: Bool
     private let lockRepo: Bool
     /// Hands (clean prompt, cwd, attachment refs) to the presenting view.
@@ -37,6 +39,19 @@ public struct NewChatComposerView: View {
 
     private var selectedVendor: DispatchVendorSelection {
         DispatchVendorSelection.resolve(selectedVendorSlug)
+    }
+
+    /// "Full tools" only means anything for claudeCode (`--strict-mcp-config`
+    /// is claudeCode-only, dispatch.go's agentArgv) — hidden for every other
+    /// vendor rather than shown-but-inert.
+    private var showFullToolsToggle: Bool { selectedVendor.usesClaudeModelPicker }
+
+    private var showFullToolsCaption: Bool { showFullToolsToggle && fullToolsEnabled }
+
+    private var composerHeight: CGFloat {
+        var height: CGFloat = attachments.isEmpty ? 280 : 340
+        if showFullToolsCaption { height += 22 }
+        return height
     }
 
     public init(
@@ -75,13 +90,23 @@ public struct NewChatComposerView: View {
             bottomRow
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                .padding(.bottom, 14)
+
+            if showFullToolsCaption {
+                Text("Slower first reply; enables MCP tools")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+            }
+
+            Spacer(minLength: 0)
+                .frame(height: 14)
         }
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .padding(.horizontal, 8)
         .padding(.top, 6)
-        .presentationDetents([.height(attachments.isEmpty ? 280 : 340)])
+        .presentationDetents([.height(composerHeight)])
         .presentationDragIndicator(.hidden)
         .presentationBackground(.clear)
         .onAppear {
@@ -164,6 +189,33 @@ public struct NewChatComposerView: View {
         }
     }
 
+    /// Per-dispatch opt-out of `--strict-mcp-config` (default OFF = fast
+    /// strict mode) — see `FullToolsSelection`'s doc comment for the tradeoff.
+    /// Only rendered when `showFullToolsToggle` (claudeCode selected).
+    private var fullToolsToggleChip: some View {
+        Button {
+            fullToolsEnabled.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "wrench.and.screwdriver.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Full tools")
+                    .font(.system(size: 15, weight: .medium))
+            }
+            .foregroundStyle(fullToolsEnabled ? Color.accentColor : Color(.secondaryLabel))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(fullToolsEnabled ? Color.accentColor.opacity(0.15) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("composer-full-tools-toggle")
+        .accessibilityLabel(Text("Full tools"))
+        .accessibilityValue(Text(fullToolsEnabled ? "On" : "Off"))
+        .accessibilityHint(Text("Slower first reply; enables MCP tools"))
+    }
+
     private var attachmentChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -244,6 +296,10 @@ public struct NewChatComposerView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Model, \(selectedModel.displayName)"))
+            }
+
+            if showFullToolsToggle {
+                fullToolsToggleChip
             }
 
             Spacer()

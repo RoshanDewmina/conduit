@@ -323,7 +323,8 @@ public enum AttachmentSendPipeline {
             budgetUSD: request.budgetUSD,
             useWorktree: request.useWorktree,
             contract: request.contract,
-            attachments: request.attachments
+            attachments: request.attachments,
+            fullTools: request.fullTools
         )
     }
 }

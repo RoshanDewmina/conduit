@@ -276,6 +276,13 @@ type conversationAppendRequest struct {
 	// Attachments is optional structured metadata for files/images sent with
 	// this turn. hostPath is transport-only and must not appear in UI copy.
 	Attachments []conversationAttachmentReference `json:"attachments,omitempty"`
+	// FullTools mirrors dispatchParams.FullTools (dispatch.go) — the composer's
+	// per-dispatch "Full tools" opt-in. Absent (older iOS clients / older
+	// requests) decodes to false, i.e. the strict/fast default — backward
+	// compatible with no co-deploy requirement. Threaded verbatim into
+	// conversationLaunchParams.FullTools by conversationsAppend
+	// (conversation_rpc.go); never persisted or re-derived from a prior turn.
+	FullTools bool `json:"fullTools,omitempty"`
 }
 
 // conversationAttachmentReference is the shared Swift↔Go wire contract for a

@@ -255,6 +255,7 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 		IsNew:           isNew,
 		Attachments:     req.Attachments,
 		Contract:        req.Contract,
+		FullTools:       req.FullTools,
 	}
 	if wt.Path != "" {
 		// Set on the run record inside launchConversationTurn() itself,

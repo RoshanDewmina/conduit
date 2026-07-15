@@ -340,6 +340,43 @@ struct LancerDProtocolTests {
         #expect(emptyJSON["attachments"] == nil)
     }
 
+    // MARK: - fullTools (per-dispatch "Full tools" toggle)
+
+    @Test func conversationAppendRequestOmitsFullToolsWhenNilOrFalse() throws {
+        let nilRequest = ConversationAppendRequest(clientTurnId: "ct1", prompt: "hello")
+        let nilJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(nilRequest)) as! [String: Any]
+        #expect(nilJSON["fullTools"] == nil)
+
+        let falseRequest = ConversationAppendRequest(clientTurnId: "ct1", prompt: "hello", fullTools: false)
+        let falseJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(falseRequest)) as! [String: Any]
+        #expect(falseJSON["fullTools"] == nil)
+    }
+
+    @Test func conversationAppendRequestEncodesFullToolsWhenTrue() throws {
+        let request = ConversationAppendRequest(clientTurnId: "ct1", prompt: "hello", fullTools: true)
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as! [String: Any]
+        #expect(json["fullTools"] as? Bool == true)
+    }
+
+    @Test func conversationAppendRequestDecodesFullToolsTrueRoundTrip() throws {
+        let golden = #"{"clientTurnId":"ct1","baseSeq":0,"prompt":"hello","fullTools":true}"#
+        let decoded = try JSONDecoder().decode(ConversationAppendRequest.self, from: Data(golden.utf8))
+        #expect(decoded.fullTools == true)
+
+        let goldenObj = try goldenJSONObject(golden)
+        let encoded = try encodedJSONObject(decoded)
+        #expect(jsonObjectsEqual(encoded, goldenObj))
+    }
+
+    @Test func conversationAppendRequestDecodesMissingFullToolsAsNil() throws {
+        // Older iOS clients / requests never sent this key — must decode
+        // cleanly (nil, not a thrown error), matching Go's zero-value default
+        // (strict/fast) on the daemon side.
+        let golden = #"{"clientTurnId":"ct1","baseSeq":0,"prompt":"hello"}"#
+        let decoded = try JSONDecoder().decode(ConversationAppendRequest.self, from: Data(golden.utf8))
+        #expect(decoded.fullTools == nil)
+    }
+
     @Test func conversationAttachmentRejectsMalformedKind() throws {
         let data = Data(#"{"id":"a1","name":"x","byteCount":1,"kind":"video","hostPath":"/p","previewCacheKey":"a1"}"#.utf8)
         #expect(throws: (any Error).self) {

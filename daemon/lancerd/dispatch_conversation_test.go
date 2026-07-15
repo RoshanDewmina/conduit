@@ -20,7 +20,7 @@ func TestBuildConversationArgvNewUsesAgentArgv(t *testing.T) {
 	if resumeMode != "new" {
 		t.Fatalf("resumeMode = %q, want new", resumeMode)
 	}
-	want, _ := agentArgv("claudeCode", "hi", "")
+	want, _ := agentArgv("claudeCode", "hi", "", false)
 	if strings.Join(argv, " ") != strings.Join(want, " ") {
 		t.Fatalf("argv = %v, want %v (agentArgv)", argv, want)
 	}
@@ -36,7 +36,7 @@ func TestBuildConversationArgvFollowUpWithVendorSessionUsesResumeArgvExact(t *te
 	if resumeMode != "exact" {
 		t.Fatalf("resumeMode = %q, want exact", resumeMode)
 	}
-	want, _ := resumeArgv("claudeCode", "sess-abc-123", "next", "")
+	want, _ := resumeArgv("claudeCode", "sess-abc-123", "next", "", false)
 	if strings.Join(argv, " ") != strings.Join(want, " ") {
 		t.Fatalf("argv = %v, want %v (resumeArgv with exact session)", argv, want)
 	}
@@ -61,7 +61,7 @@ func TestBuildConversationArgvFollowUpWithNoVendorSessionFallsBackToContinueArgv
 	if resumeMode != "latestInCwdFallback" {
 		t.Fatalf("resumeMode = %q, want latestInCwdFallback", resumeMode)
 	}
-	want, _ := continueArgv("claudeCode", "next", "")
+	want, _ := continueArgv("claudeCode", "next", "", false)
 	if strings.Join(argv, " ") != strings.Join(want, " ") {
 		t.Fatalf("argv = %v, want %v (continueArgv fallback)", argv, want)
 	}
@@ -233,7 +233,7 @@ func TestLaunchConversationTurnBindsVendorSessionForExactResume(t *testing.T) {
 		t.Fatalf("beginTurn (second) status = %q, want started", second.Status)
 	}
 
-	want, _ := resumeArgv("claudeCode", "live-sess-1", "second", "")
+	want, _ := resumeArgv("claudeCode", "live-sess-1", "second", "", false)
 	if strings.Join(lastArgv, " ") != strings.Join(want, " ") {
 		t.Fatalf("turn 2 argv = %v, want %v (exact resume with the bound session id)", lastArgv, want)
 	}

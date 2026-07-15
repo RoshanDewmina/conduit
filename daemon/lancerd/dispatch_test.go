@@ -44,39 +44,39 @@ func TestDispatchStoresCWDAndModel(t *testing.T) {
 }
 
 func TestAgentArgv(t *testing.T) {
-	claude, ok := agentArgv("claudeCode", "start", "")
+	claude, ok := agentArgv("claudeCode", "start", "", false)
 	if !ok {
 		t.Fatal("claude should be supported")
 	}
-	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "-p", "start"}
+	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "-p", "start"}
 	if !reflect.DeepEqual(claude, want) {
 		t.Fatalf("claude argv mismatch:\n got %v\nwant %v", claude, want)
 	}
-	if _, ok := agentArgv("bogus", "x", ""); ok {
+	if _, ok := agentArgv("bogus", "x", "", false); ok {
 		t.Fatal("unknown agent must be unsupported")
 	}
 }
 
 func TestContinueArgv(t *testing.T) {
-	claude, ok := continueArgv("claudeCode", "next step", "")
+	claude, ok := continueArgv("claudeCode", "next step", "", false)
 	if !ok {
 		t.Fatal("claude continue should be supported")
 	}
-	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue", "-p", "next step"}
+	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "-p", "next step"}
 	if !reflect.DeepEqual(claude, want) {
 		t.Fatalf("claude argv mismatch:\n got %v\nwant %v", claude, want)
 	}
-	oc, ok := continueArgv("opencode", "next step", "gpt-5")
+	oc, ok := continueArgv("opencode", "next step", "gpt-5", false)
 	if !ok || !reflect.DeepEqual(oc, []string{"opencode", "run", "--continue", "--format", "json", "--model", "gpt-5", "next step"}) {
 		t.Fatalf("opencode argv mismatch: %v ok=%v", oc, ok)
 	}
-	if _, ok := continueArgv("codex", "x", ""); !ok {
+	if _, ok := continueArgv("codex", "x", "", false); !ok {
 		t.Fatal("codex continue should be supported (gated by LANCER_CODEX_UNSAFE at runtime)")
 	}
-	if _, ok := continueArgv("kimi", "x", ""); !ok {
+	if _, ok := continueArgv("kimi", "x", "", false); !ok {
 		t.Fatal("kimi continue should be supported")
 	}
-	if _, ok := continueArgv("bogus", "x", ""); ok {
+	if _, ok := continueArgv("bogus", "x", "", false); ok {
 		t.Fatal("unknown agent must be unsupported")
 	}
 }
@@ -122,27 +122,27 @@ func TestContinueRunDeniedDoesNotLaunch(t *testing.T) {
 }
 
 func TestResumeArgv(t *testing.T) {
-	claude, ok := resumeArgv("claudeCode", "sess-123", "next step", "")
-	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", "sess-123", "-p", "next step"}
+	claude, ok := resumeArgv("claudeCode", "sess-123", "next step", "", false)
+	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", "sess-123", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "-p", "next step"}
 	if !ok || !reflect.DeepEqual(claude, want) {
 		t.Fatalf("claude resume argv mismatch:\n got %v (ok=%v)\nwant %v", claude, ok, want)
 	}
-	codex, ok := resumeArgv("codex", "sess-123", "next step", "")
+	codex, ok := resumeArgv("codex", "sess-123", "next step", "", false)
 	wantCodex := []string{"codex", "exec", "resume", "sess-123", "--json", "next step"}
 	if !ok || !reflect.DeepEqual(codex, wantCodex) {
 		t.Fatalf("codex resume argv mismatch:\n got %v (ok=%v)\nwant %v", codex, ok, wantCodex)
 	}
-	oc, ok := resumeArgv("opencode", "sess-123", "next step", "gpt-5")
+	oc, ok := resumeArgv("opencode", "sess-123", "next step", "gpt-5", false)
 	wantOC := []string{"opencode", "run", "--session", "sess-123", "--format", "json", "--model", "gpt-5", "next step"}
 	if !ok || !reflect.DeepEqual(oc, wantOC) {
 		t.Fatalf("opencode resume argv mismatch:\n got %v (ok=%v)\nwant %v", oc, ok, wantOC)
 	}
-	kimi, ok := resumeArgv("kimi", "sess-123", "next step", "")
+	kimi, ok := resumeArgv("kimi", "sess-123", "next step", "", false)
 	wantKimi := []string{"kimi", "--session", "sess-123", "--prompt", "next step", "--output-format", "stream-json"}
 	if !ok || !reflect.DeepEqual(kimi, wantKimi) {
 		t.Fatalf("kimi resume argv mismatch:\n got %v (ok=%v)\nwant %v", kimi, ok, wantKimi)
 	}
-	if _, ok := resumeArgv("bogus", "sess-123", "x", ""); ok {
+	if _, ok := resumeArgv("bogus", "sess-123", "x", "", false); ok {
 		t.Fatal("unknown agent must be unsupported")
 	}
 }
