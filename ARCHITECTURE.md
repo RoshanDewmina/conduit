@@ -65,7 +65,24 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 - **Deferred to V2 — full interactive terminal (owner decision 2026-06-30):** V1 does not need a full interactive terminal. `LiveTerminalView`, the unified-PTY block terminal pipeline (`SessionFeature`/`TerminalEngine`/`SSHTransport`), SFTP file browsing, port forwarding, and the SOCKS preview proxy are **not part of V1 scope** — do not wire them into the new Home/Work/Machines/Settings IA, do not spend further V1 implementation effort polishing them. Code is retained (it already works — see "Implemented" below), but as of 2026-07-01 it is fully unwired from V1 nav — the "Open workspace"/"Open terminal" entry points in Work Thread and Machines that previously reached it (contradicting this correction) were removed, closing the gap the 06-30 correction identified but hadn't yet been enforced against. V1's Work Thread shows agent activity (tool calls, file changes, run status) as a read-only log sourced from daemon/relay events — **not** a live interactive shell. This matches the pre-existing strategic direction above ("demote chat/terminal depth," 2026-06-24) and the non-goal "Generic 'mobile terminal' positioning" (§1.1) — it had drifted back into the V1 implementation plan via file dispositions that implied active terminal work; that drift is corrected here. Scope for V1 is defined in `docs/product/2026-07-05-lancer-feature-master-plan.md` and `docs/product/FEATURE_BACKLOG.md`: the governed attention/approval loop, not terminal depth.
 
 ### Implemented (✅ verified in code / tests)
-- **Cursor shell (production UI target):** in-tree under `AppFeature/CursorStyle`. `LANCER_CURSOR_SHELL=1` — seeded shell for UITests/design review. `LANCER_CURSOR_SHELL_LIVE=1` — live bridge via `CursorShellLiveBridge` (pairing, workspaces, dispatch, approval, continue, Settings). Wireframes: `docs/design-audit/lancer-workflows-2026-07-05/`. Tier 0 must prove against `lancerd` before this is the only root.
+- **Production UI shell:** <!-- NEEDS VERIFICATION: exact current root count/composition — see note below --> the
+  `AppFeature/CursorStyle` target and its `LANCER_CURSOR_SHELL`/`LANCER_CURSOR_SHELL_LIVE` env
+  seams described in the paragraph below (and in the old §4.1) **no longer exist in the tree**
+  as of commit `6b97da65` ("revert(ios): restore Codex Workspaces shell as the frontend (owner
+  decision 2026-07-11)") — confirmed 2026-07-15: `find Packages/LancerKit/Sources/AppFeature`
+  has no `CursorStyle` directory, and `grep -r LANCER_CURSOR_SHELL Packages/LancerKit/Sources`
+  has zero matches. The current production root is `AppFeature/Workspaces/WorkspacesView.swift`
+  (`AppRoot.readyRoot` → `NavigationStack { WorkspacesView() }`), gated in DEBUG by the
+  `LANCER_DESTINATION` env var (values incl. `profile`, `settings`, `composer`, `threadList`,
+  `threadDetail`, `trustedMachines`, `addRepo`, `search` — see `WorkspacesView.swift:218+`), not
+  the old `LANCER_CURSOR_SHELL*` flags. This whole "Implemented" bullet and §4.1 below describe
+  the *retired* CursorStyle shell from before the 07-11 reversal — treat both as historical, not
+  current design, until rewritten. (Original stale text retained below for the wireframe/root
+  references it still points at correctly; do not trust its module paths or launch flags.)
+  ~~**Cursor shell (production UI target):** in-tree under `AppFeature/CursorStyle`.
+  `LANCER_CURSOR_SHELL=1` — seeded shell for UITests/design review. `LANCER_CURSOR_SHELL_LIVE=1`
+  — live bridge via `CursorShellLiveBridge` (pairing, workspaces, dispatch, approval, continue,
+  Settings). Wireframes: `docs/design-audit/lancer-workflows-2026-07-05/`.~~
 - **Cross-device conversation continuation** (landed 2026-07-03, `feat/cross-device-conversation-sync`): host-owned SQLite conversation ledger (`daemon/lancerd/conversation_store.go`) is execution truth; iOS mirrors it locally via GRDB `v13` and `ConversationSyncCoordinator`, and across Apple devices via a CloudKit private-DB custom-zone mirror (`ConversationSyncEngine`); observed (non-Lancer-dispatched) terminal sessions can be imported into the ledger via `attachObservedSession`. Full model in §11.2. `go test ./...` (daemon) and `swift test`/app-target `build_sim` (iOS) all green; **two-device CloudKit behavior and `CKDatabaseSubscription` silent-push delivery remain unverified on physical hardware** — see §11.2's "Known gaps" and the Device Hub matrix in `docs/LIVE_LOOP_RUNBOOK.md`.
 - **Governed chat + approvals (shell-agnostic):** durable chat (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn) — works through legacy sidebar and Cursor live bridge.
 - **Governance in Settings:** policy presets/matrix, audit trail, team & roles under Settings' "Policy & Governance" — matches wireframe `10-settings.html`; not a separate root.
@@ -267,6 +284,22 @@ Legend: ✅ first-class · 🟡 supported · ⚪ not supported · 🔒 paid tier
 ## 4. UX architecture
 
 ### 4.1 Top-level navigation — **Cursor shell** (approved 2026-07-05)
+
+<!-- STALE as of 2026-07-11: commit `6b97da65` ("revert(ios): restore Codex Workspaces
+shell as the frontend (owner decision 2026-07-11)") deleted `AppFeature/CursorStyle/` and
+the `LANCER_CURSOR_SHELL`/`LANCER_CURSOR_SHELL_LIVE` flags described below entirely —
+confirmed 2026-07-15 via `find`/`grep` (zero matches for both). The current production
+root is `AppFeature/Workspaces/WorkspacesView.swift` behind `AppRoot.readyRoot`, using the
+`LANCER_DESTINATION` env var for DEBUG deep-links (not the flags below). The "no tab bar"
+framing and the Home/Workspaces/Settings 3-root *intent* likely still hold at a product
+level (see `docs/STATUS_LEDGER.md` 2026-07-11 "frontend reversal" note and root `AGENTS.md`),
+but the specific Swift types (`CursorHomeView`, `CursorWorkspacesView`), module path, and
+launch flags in the table/list below are stale.
+NEEDS VERIFICATION: whether the current shell still exposes Home/Settings as full sibling
+roots, or whether Workspaces is now the sole root with Settings reached via a nested
+Profile/nav-link surface — `AppRoot.swift`'s `readyRoot` shows only `WorkspacesView()` at
+top level, which reads more like the latter, but confirming that needs a dedicated pass
+through `WorkspacesView.swift`'s internal navigation, not asserted here. -->
 
 The home is **not** a tab bar. Production UI target is the **Cursor-style shell**
 (`AppFeature/CursorStyle/`), wireframed in

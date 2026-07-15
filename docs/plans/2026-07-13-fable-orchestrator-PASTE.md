@@ -32,7 +32,7 @@ reliability on device.**
 
 | Phase | 07-10 intent | Status as of 2026-07-13 | What you do now |
 |---|---|---|---|
-| **0 — git hygiene** | Land W0.A; remove wipe worktree; `build_sim` green | **DONE** 2026-07-11 | Do not reopen wipe / scorched frontend. Frontend is KEPT. |
+| **0 — git hygiene** | Land W0.A; remove wipe worktree; `build_sim` green | **DONE** 2026-07-11 | ~~Do not reopen wipe / scorched frontend. Frontend is KEPT.~~ **STALE (verified 2026-07-15):** this row describes the *morning* 2026-07-11 decision (W0.A kept). The owner reversed this the same PM (`docs/STATUS_LEDGER.md` "frontend reversal") and commit `6b97da65` deleted `AppFeature/CursorStyle/` entirely, restoring the Codex Workspaces shell as the frontend — confirmed still the case on master `65bed890`. Do not follow this row's "Frontend is KEPT (W0.A)" instruction; see `ARCHITECTURE.md` §0.1/§4.1 correction notes for current shell. |
 | **1 — dogfood MVP** | Six pieces; exit = owner full loop 5/7 days | **~90% code merged** (#95–#110); **device dogfood FAILING** on tip | **TODAY'S FOCUS.** Fix P0 phone blockers below before new features. Owner `docs/dogfood-log.md` outranks shiny work. |
 | **2 — hands-free + trust** | Siri P1 polish, LA-1…LA-4, receipt card, budget ring | Not started as Phase 2 package set; some LA/Siri code exists historically | **Do not start** until Phase 1 exit bar is honest (loop works on phone). |
 | **3 — Aug→Sept 14** | S27-0…S27-5 + LAUNCH-1…LAUNCH-4 → App Store @ iOS 27 GA | Prep only; owner phone already on iOS 27.0 | Owner-gated target call still open for Live Activities / S27 deep work. |

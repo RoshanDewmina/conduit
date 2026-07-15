@@ -1,17 +1,43 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-12 (P0 cwd/bucketing swarm — PRs #95–#98 merged; see `plans/orchestrator-state.md` top handoff)
-**Active branch:** `master` (all P0 lanes merged; owner phone runs `b4b5b638`-content build) — re-check
-`git rev-parse HEAD` / `gh pr list` before citing anything here.
+**Last updated:** 2026-07-15 (integration/2026-07-15-daily-drive merged to master @ `65bed890`;
+the 2026-07-12 block below is superseded history, kept for context — see `plans/orchestrator-state.md`).
+**Active branch:** `master` (`65bed890`) — re-check `git rev-parse HEAD` / `gh pr list` before citing
+anything here.
 
-> **2026-07-12 in one line:** owner P0 "multiple command-center rows" fixed end-to-end
-> (#95 app bucketing · #96 daemon cwd hygiene + prunable approvals · #97 chat-loop
-> close-mid-run/retry/reopen · #98 tilde sandbox-expansion — the on-device recurrence);
-> proven by a live dogfood run (agent fixed real compiler warnings via Lancer itself,
-> approval on the owner's phone, `226f2307`). New owner asks queued: full terminal
-> (`product/2026-07-12-orca-terminal-port-map.md`), context uploads + readiness gaps
-> (`product/2026-07-12-full-time-readiness-audit.md`). ⚠️ Relay ops: owner pairing is now
-> code 116955 (the 208937 backend registration was wiped by a sim-gate `lancerd pair`).
+> **2026-07-15 in one line:** five fixes landed and merged to master via
+> `integration/2026-07-15-daily-drive`: relay generation-guard for the cross-reconnect
+> replay-poisoning bug (`fix/relay-generation-guard`, `eeb562fa`/`aef83354`/`cc3bce2b`),
+> structured-attachment upload integration (`feat/attachment-integration` +
+> `feat/attachment-daemon-dispatch` + `feat/attachment-ios-ux`, `6b5329fe`/`75445047`/`72fd250e`),
+> an Agents-continuity fix for false unreachable alarms + blank observed-session adopts
+> (`fix/s2-agents-continuity`, `00485128`), a per-dispatch "Full tools" opt-out of the strict
+> MCP config (`feat/s4-fulltools-toggle`, `77da7612`), and a stacked-sheet/duplicate-turn +
+> concurrent-send dispatch-race fix (`4bbb86eb`, `95c6b06d`). **Evidence and a caveat:** the
+> relay generation-guard fix is proven **10/10 on the iOS Simulator** (six re-proof attempts,
+> full log in [`test-runs/2026-07-15-reconnect-10x-sim/README.md`](test-runs/2026-07-15-reconnect-10x-sim/README.md);
+> the first five attempts each failed on a *different* bug — cascading relay rejection,
+> external Claude-account quota exhaustion, an XCUITest AX-query flake — before the sixth
+> ("v6") ran clean 10/10) — it is **not yet re-proven on a physical device**. ⚠️ **A safety
+> incident during that testing orphaned the owner's real phone pairing**: an isolated-daemon
+> test invoked `lancerd pair --help`, which the binary doesn't recognize and silently ran
+> `pair` for real against the default (unset `LANCER_STATE_DIR`) state dir — i.e. the owner's
+> real `~/.lancer` — dropping the resident daemon's live relay session. The owner's phone
+> needs to **re-pair** before any further device work; the only on-disk backup
+> (`relay-pairing.json.owner-backup-KEEP`) is stale (2026-07-12) and is not a safe restore
+> point. Separately, a **desktop-Claude-Code-sessions merge into the All Repos list** was
+> discussed for tonight but **has not landed on master**: branch `fix/desktop-session-decrypt`
+> exists but is still at the master tip with zero commits ahead (`git log` confirmed
+> 2026-07-15) — treat it as not-yet-started, not in-flight-with-progress.
+>
+> **2026-07-12 in one line (historical, superseded by the above):** owner P0 "multiple
+> command-center rows" fixed end-to-end (#95 app bucketing · #96 daemon cwd hygiene +
+> prunable approvals · #97 chat-loop close-mid-run/retry/reopen · #98 tilde
+> sandbox-expansion — the on-device recurrence); proven by a live dogfood run (agent fixed
+> real compiler warnings via Lancer itself, approval on the owner's phone, `226f2307`). New
+> owner asks queued: full terminal (`product/2026-07-12-orca-terminal-port-map.md`), context
+> uploads + readiness gaps (`product/2026-07-12-full-time-readiness-audit.md`). Relay
+> pairing code/state from this era is stale — see the 07-15 phone re-pair note above.
 **Direction SSOT:** [`docs/product/2026-07-10-lancer-daily-driver-definition.md`](product/2026-07-10-lancer-daily-driver-definition.md)
 **Build how:** [`docs/product/2026-07-10-lancer-agent-build-roadmap.md`](product/2026-07-10-lancer-agent-build-roadmap.md)
 
@@ -70,6 +96,7 @@ Fable orchestrates via [`plans/2026-07-10-fable-orchestrator-PASTE.md`](plans/20
 | APNs lock-screen approve (5c) | Historical PASS on `732071a7`; re-proof PENDING | same + [`test-runs/2026-07-08-5c-root-cause.md`](test-runs/2026-07-08-5c-root-cause.md) |
 | Owner checklist | [`test-runs/2026-07-07-tier0-owner-checklist.md`](test-runs/2026-07-07-tier0-owner-checklist.md) | — |
 | Phone dogfood notes | [`test-runs/2026-07-09-phone-dogfood-results.md`](test-runs/2026-07-09-phone-dogfood-results.md) | — |
+| Reconnect 10x (relay generation-guard) | **PASS 10/10 on Simulator** (`integration/2026-07-15-daily-drive` @ `4bbb86eb`, 6th attempt "v6"); **physical-device re-proof still PENDING**, and blocked until the owner re-pairs their phone (safety incident above) | [`test-runs/2026-07-15-reconnect-10x-sim/README.md`](test-runs/2026-07-15-reconnect-10x-sim/README.md) |
 
 ## Open P0 / P1 (correctness)
 
