@@ -683,6 +683,7 @@ func sampleImageAttachment() conversationAttachmentReference {
 		Kind:            "image",
 		HostPath:        "/Users/me/.lancer/attachments/photo.jpg",
 		PreviewCacheKey: "a1",
+		ContentDigest:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
 }
 
@@ -694,6 +695,7 @@ func sampleFileAttachment() conversationAttachmentReference {
 		Kind:            "file",
 		HostPath:        "/Users/me/.lancer/attachments/notes.txt",
 		PreviewCacheKey: "a2",
+		ContentDigest:   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 	}
 }
 
@@ -719,6 +721,9 @@ func assertAttachmentEqual(t *testing.T, got, want conversationAttachmentReferen
 	}
 	if got.PreviewCacheKey != want.PreviewCacheKey {
 		t.Errorf("previewCacheKey = %q, want %q", got.PreviewCacheKey, want.PreviewCacheKey)
+	}
+	if got.ContentDigest != want.ContentDigest {
+		t.Errorf("contentDigest = %q, want %q", got.ContentDigest, want.ContentDigest)
 	}
 }
 
@@ -894,22 +899,36 @@ func TestConversationAttachmentMalformedRejectedWithoutPartialTurn(t *testing.T)
 		{name: "empty id", att: conversationAttachmentReference{
 			ID: "", Name: "a.jpg", ByteCount: 1, Kind: "image",
 			HostPath: "/tmp/a.jpg", PreviewCacheKey: "k",
+			ContentDigest: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		}},
 		{name: "empty name", att: conversationAttachmentReference{
 			ID: "id", Name: "", ByteCount: 1, Kind: "image",
 			HostPath: "/tmp/a.jpg", PreviewCacheKey: "k",
+			ContentDigest: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		}},
 		{name: "empty hostPath", att: conversationAttachmentReference{
 			ID: "id", Name: "a.jpg", ByteCount: 1, Kind: "image",
 			HostPath: "", PreviewCacheKey: "k",
+			ContentDigest: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		}},
 		{name: "negative byteCount", att: conversationAttachmentReference{
 			ID: "id", Name: "a.jpg", ByteCount: -1, Kind: "image",
 			HostPath: "/tmp/a.jpg", PreviewCacheKey: "k",
+			ContentDigest: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		}},
 		{name: "unknown kind", att: conversationAttachmentReference{
 			ID: "id", Name: "a.jpg", ByteCount: 1, Kind: "video",
 			HostPath: "/tmp/a.jpg", PreviewCacheKey: "k",
+			ContentDigest: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		}},
+		{name: "missing contentDigest", att: conversationAttachmentReference{
+			ID: "id", Name: "a.jpg", ByteCount: 1, Kind: "image",
+			HostPath: "/tmp/a.jpg", PreviewCacheKey: "k",
+		}},
+		{name: "invalid contentDigest", att: conversationAttachmentReference{
+			ID: "id", Name: "a.jpg", ByteCount: 1, Kind: "image",
+			HostPath: "/tmp/a.jpg", PreviewCacheKey: "k",
+			ContentDigest: "not-a-digest",
 		}},
 	}
 
@@ -1113,7 +1132,7 @@ func TestConversationAttachmentJSONWireShape(t *testing.T) {
 	if err := json.Unmarshal(raw, &asMap); err != nil {
 		t.Fatalf("unmarshal map: %v", err)
 	}
-	for _, key := range []string{"id", "name", "mimeType", "byteCount", "kind", "hostPath", "previewCacheKey"} {
+	for _, key := range []string{"id", "name", "mimeType", "byteCount", "kind", "hostPath", "previewCacheKey", "contentDigest"} {
 		if _, ok := asMap[key]; !ok {
 			t.Errorf("missing wire key %q in %s", key, raw)
 		}
@@ -1174,6 +1193,7 @@ func validAttachmentForBounds() conversationAttachmentReference {
 		Kind:            "file",
 		HostPath:        "/tmp/file.bin",
 		PreviewCacheKey: "cache-key",
+		ContentDigest:   "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 	}
 }
 
@@ -1481,5 +1501,41 @@ func TestConversationAttachmentFetchNullEmptyJSONYieldsEmpty(t *testing.T) {
 				t.Fatalf("Attachments = %+v, want empty", fetchRes.Turns[0].Attachments)
 			}
 		})
+	}
+}
+
+// TestConversationAttachmentDecodeAllowsLegacyMissingDigest proves historical
+// attachments_json rows without contentDigest still fetch (backward read),
+// while encode/persist of new outgoing refs without digest fails closed.
+func TestConversationAttachmentDecodeAllowsLegacyMissingDigest(t *testing.T) {
+	s := openTestConversationStore(t)
+	res, err := s.beginTurn(conversationAppendRequest{
+		ClientTurnID: "device-1:legacy-digest",
+		Agent:        "claudeCode",
+		Prompt:       "seed",
+	}, "/proj", "run_legacy_digest")
+	if err != nil {
+		t.Fatalf("beginTurn: %v", err)
+	}
+	legacy := `[{"id":"a1","name":"photo.jpg","mimeType":"image/jpeg","byteCount":10,"kind":"image","hostPath":"/Users/me/.lancer/attachments/photo.jpg","previewCacheKey":"a1"}]`
+	seedTurnAttachmentsJSON(t, s, res.TurnID, legacy)
+
+	fetchRes, err := s.fetch(res.ConversationID, 0, 500)
+	if err != nil {
+		t.Fatalf("fetch legacy without digest: %v", err)
+	}
+	if len(fetchRes.Turns[0].Attachments) != 1 {
+		t.Fatalf("attachments = %d, want 1", len(fetchRes.Turns[0].Attachments))
+	}
+	if fetchRes.Turns[0].Attachments[0].ContentDigest != "" {
+		t.Fatalf("legacy digest = %q, want empty", fetchRes.Turns[0].Attachments[0].ContentDigest)
+	}
+
+	_, err = encodeAttachmentsJSON([]conversationAttachmentReference{{
+		ID: "a1", Name: "photo.jpg", ByteCount: 10, Kind: "image",
+		HostPath: "/Users/me/.lancer/attachments/photo.jpg", PreviewCacheKey: "a1",
+	}})
+	if err == nil {
+		t.Fatal("encode without contentDigest must fail for new outgoing attachments")
 	}
 }

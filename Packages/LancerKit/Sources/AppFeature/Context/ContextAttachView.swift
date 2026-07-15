@@ -159,7 +159,7 @@ public struct ContextAttachView: View {
         let name = "camera-\(Int(Date().timeIntervalSince1970)).jpg"
         attachments = AttachmentDraftStore.appending(
             attachments,
-            newItems: [AttachmentDraft(name: name, data: data)]
+            newItems: [AttachmentDraft(name: name, data: data, mimeType: "image/jpeg")]
         )
         loadError = nil
     }
@@ -186,7 +186,8 @@ public struct ContextAttachView: View {
             }
             let ext = suggestedExtension(for: item) ?? "jpg"
             let name = "\(defaultName)-\(index + 1).\(ext)"
-            added.append(AttachmentDraft(name: name, data: data))
+            let mime = mimeType(forExtension: ext) ?? "image/jpeg"
+            added.append(AttachmentDraft(name: name, data: data, mimeType: mime))
         }
         await MainActor.run {
             attachments = AttachmentDraftStore.appending(attachments, newItems: added)
@@ -224,7 +225,11 @@ public struct ContextAttachView: View {
                     await MainActor.run { loadError = "Each file must be ≤ 20 MB" }
                     continue
                 }
-                added.append(AttachmentDraft(name: url.lastPathComponent, data: data))
+                added.append(AttachmentDraft(
+                    name: url.lastPathComponent,
+                    data: data,
+                    mimeType: mimeType(forExtension: url.pathExtension)
+                ))
             }
             await MainActor.run {
                 attachments = AttachmentDraftStore.appending(attachments, newItems: added)
@@ -245,6 +250,23 @@ public struct ContextAttachView: View {
         if type.conforms(to: .gif) { return "gif" }
         if type.conforms(to: .webP) { return "webp" }
         return type.preferredFilenameExtension
+    }
+
+    private func mimeType(forExtension ext: String) -> String? {
+        let normalized = ext.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        switch normalized {
+        case "jpg", "jpeg": return "image/jpeg"
+        case "png": return "image/png"
+        case "gif": return "image/gif"
+        case "heic": return "image/heic"
+        case "webp": return "image/webp"
+        case "pdf": return "application/pdf"
+        case "txt": return "text/plain"
+        case "md": return "text/markdown"
+        case "json": return "application/json"
+        default:
+            return UTType(filenameExtension: normalized)?.preferredMIMEType
+        }
     }
 }
 

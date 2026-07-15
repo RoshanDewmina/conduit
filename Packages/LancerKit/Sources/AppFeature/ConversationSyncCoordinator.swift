@@ -561,7 +561,8 @@ public actor ConversationSyncCoordinator {
         agent: String, cwd: String, prompt: String, model: String?, budgetUSD: Double?,
         contract: ProofReceipt.Contract? = nil,
         hostName: String, hostID: String?, clientTurnID: String,
-        transport: ConversationTransport
+        transport: ConversationTransport,
+        attachments: [ConversationAttachmentReference] = []
     ) async -> TurnOutcome {
         // `agent` may be a full routing id (`relay|<machineID>|<vendor>` or
         // `<slotUUID>|<vendor>`) from the composer — the daemon wire only wants
@@ -572,7 +573,8 @@ public actor ConversationSyncCoordinator {
             ConversationAppendRequest(
                 conversationId: nil, baseSeq: 0, clientTurnId: clientTurnID,
                 agent: vendor, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
-                contract: contract
+                contract: contract,
+                attachments: attachments.isEmpty ? nil : attachments
             ),
             hostName: hostName, hostID: hostID, transport: transport,
             routingAgentID: agent.contains("|") ? agent : nil
@@ -587,13 +589,15 @@ public actor ConversationSyncCoordinator {
         agent: String? = nil, model: String? = nil, budgetUSD: Double? = nil,
         contract: ProofReceipt.Contract? = nil,
         hostName: String, hostID: String?,
-        transport: ConversationTransport
+        transport: ConversationTransport,
+        attachments: [ConversationAttachmentReference] = []
     ) async -> TurnOutcome {
         await append(
             ConversationAppendRequest(
                 conversationId: conversationID, baseSeq: baseSeq, clientTurnId: clientTurnID,
                 agent: agent, cwd: nil, prompt: prompt, model: model, budgetUSD: budgetUSD,
-                contract: contract
+                contract: contract,
+                attachments: attachments.isEmpty ? nil : attachments
             ),
             hostName: hostName, hostID: hostID, transport: transport
         )
@@ -746,12 +750,7 @@ public actor ConversationSyncCoordinator {
             return await blockConflict(conversationID: conversationID, message: response.message)
         }
 
-        let retryRequest = ConversationAppendRequest(
-            conversationId: request.conversationId, baseSeq: refreshedSeq,
-            clientTurnId: request.clientTurnId, agent: request.agent, cwd: request.cwd,
-            prompt: request.prompt, model: request.model, budgetUSD: request.budgetUSD,
-            useWorktree: request.useWorktree, contract: request.contract
-        )
+        let retryRequest = AttachmentSendPipeline.retryPreserving(request, baseSeq: refreshedSeq)
 
         let retryResponse: ConversationAppendResponse
         do {
@@ -986,7 +985,8 @@ public actor ConversationSyncCoordinator {
         let turn = LancerCore.ChatTurn(
             id: turnID, conversationID: response.conversationId, ordinal: ordinal,
             prompt: request.prompt, runID: runID, transportKind: "sync",
-            clientTurnID: request.clientTurnId
+            clientTurnID: request.clientTurnId,
+            attachments: request.attachments ?? []
         )
         _ = try? await chatRepo.upsertTurnMirror(
             turn, vendorSessionID: response.vendorSessionId, hostSeqStart: response.baseSeq, hostSeqEnd: nil
@@ -1091,6 +1091,11 @@ public actor ConversationSyncCoordinator {
                 turn.assistantText = prior
             } else {
                 turn.assistantText = assembled
+            }
+            if turn.attachments.isEmpty,
+               let priorAttachments = existingTurns[turn.id]?.attachments,
+               !priorAttachments.isEmpty {
+                turn.attachments = priorAttachments
             }
             _ = try await chatRepo.upsertTurnMirror(
                 turn, vendorSessionID: turnEnvelope.vendorSessionId, hostSeqStart: nil, hostSeqEnd: nil
@@ -1204,7 +1209,7 @@ public actor ConversationSyncCoordinator {
     }
 
     private static func titleFromPrompt(_ prompt: String) -> String {
-        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = AttachmentDisplayText.cleanPrompt(prompt)
         let firstLine = trimmed.split(separator: "\n").first.map(String.init) ?? trimmed
         return firstLine.count > 60 ? String(firstLine.prefix(60)) + "…" : (firstLine.isEmpty ? "New Chat" : firstLine)
     }
@@ -1290,7 +1295,8 @@ public actor ConversationSyncCoordinator {
             createdAt: parseDate(turn.startedAt) ?? .now,
             completedAt: parseDate(turn.completedAt),
             clientTurnID: turn.clientTurnId,
-            vendorSessionID: turn.vendorSessionId
+            vendorSessionID: turn.vendorSessionId,
+            attachments: turn.attachments
         )
     }
 

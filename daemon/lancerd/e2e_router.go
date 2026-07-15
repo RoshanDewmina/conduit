@@ -373,8 +373,16 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		}
 		res, err := r.server.handleAttachmentPut(params)
 		payloadOut := map[string]interface{}{
-			"ok":   res.OK,
-			"path": res.Path,
+			"ok": res.OK,
+		}
+		if res.Path != "" {
+			payloadOut["path"] = res.Path
+		}
+		if res.ID != "" {
+			payloadOut["id"] = res.ID
+		}
+		if res.ContentDigest != "" {
+			payloadOut["contentDigest"] = res.ContentDigest
 		}
 		if err != nil {
 			payloadOut["error"] = err.Error()

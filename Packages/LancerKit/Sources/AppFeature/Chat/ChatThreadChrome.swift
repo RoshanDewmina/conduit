@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import UIKit
+import LancerCore
 
 /// Renders assistant markdown as plain body text (not a bubble): prose via native
 /// `AttributedString(markdown:)` with inline-code chips, plus fenced blocks with copy.
@@ -121,23 +122,40 @@ struct ChatCodeFenceBlock: View {
 }
 
 /// Right-aligned quiet user bubble (Cursor reference: muted fill, no accent color).
+/// Attachments render as thumbnails / file cards — never host paths.
 struct ChatUserBubble: View {
     let text: String
+    var attachments: [ConversationAttachmentReference] = []
+    var previewCache: AttachmentPreviewCaching?
+
+    private var displayText: String {
+        AttachmentDisplayText.cleanPrompt(text)
+    }
 
     var body: some View {
         HStack {
             Spacer(minLength: 48)
-            Text(text)
-                .font(.system(size: 16))
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(.secondarySystemFill))
-                )
+            VStack(alignment: .trailing, spacing: 8) {
+                if !attachments.isEmpty {
+                    ChatAttachmentStrip(attachments: attachments, previewCache: previewCache)
+                        .frame(maxWidth: 280, alignment: .trailing)
+                }
+                if !displayText.isEmpty {
+                    Text(displayText)
+                        .font(.system(size: 16))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color(.secondarySystemFill))
+                        )
+                        .textSelection(.enabled)
+                }
+            }
         }
+        .accessibilityElement(children: .contain)
     }
 }
 

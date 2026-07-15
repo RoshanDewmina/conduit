@@ -2,9 +2,17 @@ import Foundation
 import GRDB
 import LancerCore
 import AgentKit
+import OSLog
+
+public enum ChatConversationRepositoryError: Error, Equatable, Sendable {
+    case attachmentsEncodeFailed
+    case attachmentsDecodeFailed
+}
 
 public actor ChatConversationRepository {
     private let db: AppDatabase
+    private static let logger = Logger(subsystem: "dev.lancer.mobile", category: "ChatConversationRepository")
+
     public init(_ db: AppDatabase) { self.db = db }
 
     // MARK: - Conversation CRUD
@@ -83,7 +91,8 @@ public actor ChatConversationRepository {
         conversationID: String,
         prompt: String,
         runID: String,
-        transportKind: String = "ssh"
+        transportKind: String = "ssh",
+        attachments: [ConversationAttachmentReference] = []
     ) async throws -> ChatTurn {
         let nextOrdinal: Int = try await db.dbWriter.read { db in
             let row = try Row.fetchOne(db, sql: """
@@ -93,18 +102,21 @@ public actor ChatConversationRepository {
         }
         let turn = ChatTurn(
             conversationID: conversationID, ordinal: nextOrdinal,
-            prompt: prompt, runID: runID, transportKind: transportKind
+            prompt: prompt, runID: runID, transportKind: transportKind,
+            attachments: attachments
         )
         try await db.dbWriter.write { db in
             try db.execute(sql: """
                 INSERT INTO chat_turns
                     (id, conversation_id, ordinal, prompt, run_id, transport_kind,
-                     status, assistant_text, error_message, created_at, completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     status, assistant_text, error_message, created_at, completed_at,
+                     attachments_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, arguments: [
                 turn.id, turn.conversationID, turn.ordinal, turn.prompt,
                 turn.runID, turn.transportKind, turn.status.rawValue,
                 turn.assistantText, turn.errorMessage, turn.createdAt, turn.completedAt,
+                try Self.encodeAttachments(turn.attachments),
             ])
             try db.execute(sql: """
                 UPDATE chat_conversations SET last_activity_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?
@@ -160,7 +172,7 @@ public actor ChatConversationRepository {
             guard let row = try Row.fetchOne(db, sql: "SELECT * FROM chat_turns WHERE run_id = ?", arguments: [runID]) else {
                 return nil
             }
-            return Self.decodeTurn(row)
+            return try Self.decodeTurn(row)
         }
     }
 
@@ -170,7 +182,7 @@ public actor ChatConversationRepository {
                 SELECT * FROM chat_turns WHERE conversation_id = ?
                 ORDER BY ordinal ASC
             """, arguments: [conversationID])
-            return rows.compactMap(Self.decodeTurn)
+            return try rows.map { try Self.decodeTurn($0) }
         }
     }
 
@@ -440,8 +452,9 @@ public actor ChatConversationRepository {
                 INSERT INTO chat_turns
                     (id, conversation_id, ordinal, prompt, run_id, transport_kind,
                      status, assistant_text, error_message, created_at, completed_at,
-                     client_turn_id, vendor_session_id, host_seq_start, host_seq_end, cloud_record_name)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     client_turn_id, vendor_session_id, host_seq_start, host_seq_end, cloud_record_name,
+                     attachments_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     status = excluded.status,
                     assistant_text = excluded.assistant_text,
@@ -449,13 +462,19 @@ public actor ChatConversationRepository {
                     completed_at = excluded.completed_at,
                     vendor_session_id = excluded.vendor_session_id,
                     host_seq_start = excluded.host_seq_start,
-                    host_seq_end = excluded.host_seq_end
+                    host_seq_end = excluded.host_seq_end,
+                    attachments_json = CASE
+                        WHEN excluded.attachments_json IS NULL OR excluded.attachments_json = '[]'
+                        THEN chat_turns.attachments_json
+                        ELSE excluded.attachments_json
+                    END
             """, arguments: [
                 merged.id, merged.conversationID, merged.ordinal, merged.prompt,
                 merged.runID, merged.transportKind, merged.status.rawValue,
                 merged.assistantText, merged.errorMessage, merged.createdAt, merged.completedAt,
                 merged.clientTurnID, merged.vendorSessionID, merged.hostSeqStart, merged.hostSeqEnd,
                 merged.cloudRecordName,
+                try Self.encodeAttachments(merged.attachments),
             ])
             try db.execute(sql: """
                 UPDATE chat_conversations SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?
@@ -565,7 +584,7 @@ public actor ChatConversationRepository {
                 WHERE conversation_id = ? AND cloud_record_name IS NULL AND status != 'running'
                 ORDER BY ordinal ASC
             """, arguments: [conversationID])
-            return rows.compactMap(Self.decodeTurn)
+            return try rows.map { try Self.decodeTurn($0) }
         }
     }
 
@@ -707,7 +726,7 @@ public actor ChatConversationRepository {
         )
     }
 
-    private static func decodeTurn(_ row: Row) -> ChatTurn? {
+    private static func decodeTurn(_ row: Row) throws -> ChatTurn {
         ChatTurn(
             id: row["id"] ?? "", conversationID: row["conversation_id"] ?? "",
             ordinal: row["ordinal"] ?? 0, prompt: row["prompt"] ?? "",
@@ -717,8 +736,44 @@ public actor ChatConversationRepository {
             createdAt: row["created_at"] ?? .now, completedAt: row["completed_at"],
             clientTurnID: row["client_turn_id"], vendorSessionID: row["vendor_session_id"],
             hostSeqStart: row["host_seq_start"], hostSeqEnd: row["host_seq_end"],
-            cloudRecordName: row["cloud_record_name"]
+            cloudRecordName: row["cloud_record_name"],
+            attachments: try decodeAttachments(row["attachments_json"])
         )
+    }
+
+    private static func encodeAttachments(_ attachments: [ConversationAttachmentReference]) throws -> String {
+        if attachments.isEmpty { return "[]" }
+        do {
+            let data = try JSONEncoder().encode(attachments)
+            guard let json = String(data: data, encoding: .utf8) else {
+                logger.error("attachments encode produced non-UTF8 payload; refusing empty wipe")
+                throw ChatConversationRepositoryError.attachmentsEncodeFailed
+            }
+            return json
+        } catch let error as ChatConversationRepositoryError {
+            throw error
+        } catch {
+            // Never replace nonempty metadata with [] on encode failure.
+            logger.error("attachments encode failed; preserving caller transaction by failing closed")
+            throw ChatConversationRepositoryError.attachmentsEncodeFailed
+        }
+    }
+
+    private static func decodeAttachments(_ raw: String?) throws -> [ConversationAttachmentReference] {
+        guard let raw else { return [] }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "[]" || trimmed == "null" { return [] }
+        guard let data = trimmed.data(using: .utf8) else {
+            logger.error("attachments_json was nonempty but not UTF-8; failing closed")
+            throw ChatConversationRepositoryError.attachmentsDecodeFailed
+        }
+        do {
+            return try JSONDecoder().decode([ConversationAttachmentReference].self, from: data)
+        } catch {
+            // Corrupt / semantically invalid JSON must not silently become [].
+            logger.error("attachments_json decode failed; failing closed without wiping metadata")
+            throw ChatConversationRepositoryError.attachmentsDecodeFailed
+        }
     }
 
     private static func decodeEvent(_ row: Row) -> ChatEvent? {

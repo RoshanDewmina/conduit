@@ -1,12 +1,12 @@
 package main
 
 import (
-	"log"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -256,15 +256,15 @@ func conversationNow() string {
 // must match the conversation's current last_seq or the append is rejected as a
 // conflict.
 type conversationAppendRequest struct {
-	ConversationID string       `json:"conversationId,omitempty"`
-	BaseSeq        int64        `json:"baseSeq"`
-	ClientTurnID   string       `json:"clientTurnId"`
-	Agent          string       `json:"agent,omitempty"`
-	CWD            string       `json:"cwd,omitempty"`
-	Prompt         string       `json:"prompt"`
-	Model          string       `json:"model,omitempty"`
-	BudgetUSD      float64      `json:"budgetUSD,omitempty"`
-	UseWorktree    bool         `json:"useWorktree,omitempty"`
+	ConversationID string  `json:"conversationId,omitempty"`
+	BaseSeq        int64   `json:"baseSeq"`
+	ClientTurnID   string  `json:"clientTurnId"`
+	Agent          string  `json:"agent,omitempty"`
+	CWD            string  `json:"cwd,omitempty"`
+	Prompt         string  `json:"prompt"`
+	Model          string  `json:"model,omitempty"`
+	BudgetUSD      float64 `json:"budgetUSD,omitempty"`
+	UseWorktree    bool    `json:"useWorktree,omitempty"`
 	// Contract mirrors dispatchParams.Contract (dispatch.go) — the iOS
 	// composer sends the same `contract` key on agent.conversations.append
 	// as it does on a plain agent.dispatch (see ConversationAppendRequest.contract,
@@ -281,6 +281,13 @@ type conversationAppendRequest struct {
 // conversationAttachmentReference is the shared Swift↔Go wire contract for a
 // single attachment on a conversation turn / append request. Validated for
 // bounded structural invariants at persist time; the store never opens hostPath.
+//
+// contentDigest (camelCase, locked) is the lowercase hex SHA-256 of the exact
+// uploaded bytes, issued by attachment.put. New outgoing attachments MUST
+// carry a valid 64-hex digest (encodeAttachmentsJSON). Historical
+// attachments_json rows may omit it — decodeAttachmentsJSON allows empty
+// digest for backward read compatibility, but launchConversationTurn fails
+// closed on missing digest (actionable re-upload error).
 type conversationAttachmentReference struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
@@ -289,6 +296,7 @@ type conversationAttachmentReference struct {
 	Kind            string `json:"kind"` // "image" | "file"
 	HostPath        string `json:"hostPath"`
 	PreviewCacheKey string `json:"previewCacheKey"`
+	ContentDigest   string `json:"contentDigest,omitempty"`
 }
 
 // conversationAppendResult mirrors the subset of the agent.conversations.append
@@ -953,7 +961,8 @@ const (
 
 // encodeAttachmentsJSON validates attachment metadata for safe storage and
 // returns the JSON blob for conversation_turns.attachments_json. nil/empty
-// input becomes "[]". Does not open hostPath or log paths.
+// input becomes "[]". Does not open hostPath or log paths. New outgoing
+// attachments require a valid contentDigest (server-issued at attachment.put).
 func encodeAttachmentsJSON(atts []conversationAttachmentReference) (string, error) {
 	if len(atts) == 0 {
 		return "[]", nil
@@ -962,7 +971,7 @@ func encodeAttachmentsJSON(atts []conversationAttachmentReference) (string, erro
 		return "", fmt.Errorf("conversation_store: at most %d attachments per turn", attachmentMaxFiles)
 	}
 	for i, a := range atts {
-		if err := validateAttachmentReference(a); err != nil {
+		if err := validateAttachmentReference(a, true); err != nil {
 			return "", fmt.Errorf("conversation_store: attachments[%d]: %w", i, err)
 		}
 	}
@@ -973,7 +982,10 @@ func encodeAttachmentsJSON(atts []conversationAttachmentReference) (string, erro
 	return string(b), nil
 }
 
-func validateAttachmentReference(a conversationAttachmentReference) error {
+// validateAttachmentReference checks structural bounds. When requireDigest is
+// true (new outgoing / encode path), contentDigest must be a lowercase 64-hex
+// SHA-256. When false (decode of historical rows), empty digest is allowed.
+func validateAttachmentReference(a conversationAttachmentReference, requireDigest bool) error {
 	if strings.TrimSpace(a.ID) == "" {
 		return fmt.Errorf("id is required")
 	}
@@ -1012,13 +1024,23 @@ func validateAttachmentReference(a conversationAttachmentReference) error {
 	default:
 		return fmt.Errorf("kind must be \"image\" or \"file\"")
 	}
+	digest := strings.TrimSpace(a.ContentDigest)
+	if requireDigest {
+		if !isValidContentDigest(digest) {
+			return fmt.Errorf("contentDigest is required (64-char lowercase hex SHA-256 from attachment.put)")
+		}
+	} else if digest != "" && !isValidContentDigest(digest) {
+		return fmt.Errorf("contentDigest is invalid")
+	}
 	return nil
 }
 
 // decodeAttachmentsJSON parses a persisted attachments_json column. Missing,
 // empty, or JSON-null payloads yield a non-nil empty slice so fetch callers
-// never see nil Attachments. Semantically invalid elements fail with a generic
-// error that does not echo host paths or other secrets.
+// never see nil Attachments. Historical rows without contentDigest decode
+// successfully (backward read compatibility); dispatch fails closed later.
+// Semantically invalid elements fail with a generic error that does not echo
+// host paths or other secrets.
 func decodeAttachmentsJSON(raw string) ([]conversationAttachmentReference, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" || trimmed == "null" {
@@ -1032,7 +1054,7 @@ func decodeAttachmentsJSON(raw string) ([]conversationAttachmentReference, error
 		return []conversationAttachmentReference{}, nil
 	}
 	for i, a := range atts {
-		if err := validateAttachmentReference(a); err != nil {
+		if err := validateAttachmentReference(a, false); err != nil {
 			return nil, fmt.Errorf("attachments[%d]: invalid attachment metadata", i)
 		}
 	}

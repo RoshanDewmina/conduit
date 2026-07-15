@@ -140,7 +140,9 @@ struct ShellLiveBridgeTests {
         let repo = ChatConversationRepository(db)
         let bridge = makeBridge(repo: repo)
         bridge.markHydrated()
-        bridge.testArmLastAttempt(.newConversation(prompt: "retry me", cwd: "/proj"))
+        bridge.testArmLastAttempt(
+            .newConversation(prompt: "retry me", cwd: "/proj", clientTurnId: "stable-turn-1")
+        )
 
         let gateClaimed = AsyncGate()
         let allowDispatch = AsyncGate()
@@ -217,6 +219,53 @@ struct ShellLiveBridgeTests {
         #expect(bridge.sendState == .idle)
         #expect(bridge.transcriptTurns.count == 1)
         #expect(bridge.activeConversationID == "observed:sess-hist")
+    }
+
+    @Test("retry reuses the same clientTurnId and attachment refs")
+    func retryPreservesClientTurnIdAndAttachments() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let bridge = makeBridge(repo: repo)
+        let digest = String(repeating: "ab", count: 32)
+        let refs = [
+            ConversationAttachmentReference(
+                id: "srv-1", name: "photo.jpg", mimeType: "image/jpeg",
+                byteCount: 12, kind: .image,
+                hostPath: "/host/objects/\(digest)",
+                previewCacheKey: "draft-uuid",
+                contentDigest: digest
+            )
+        ]
+        let turnId = "stable-client-turn"
+        bridge.testArmLastAttempt(
+            .newConversation(
+                prompt: "see image",
+                cwd: "/proj",
+                attachments: refs,
+                clientTurnId: turnId
+            )
+        )
+        if case .newConversation(_, _, let storedRefs, let storedId) = bridge.lastAttempt {
+            #expect(storedId == turnId)
+            #expect(storedRefs == refs)
+        } else {
+            Issue.record("expected armed newConversation attempt")
+        }
+
+        // Two automatic retries without a machine still leave the same attempt identity.
+        await bridge.retryLastAttempt()
+        await bridge.retryLastAttempt()
+        if case .newConversation(let prompt, let cwd, let retryRefs, let retryId) = bridge.lastAttempt {
+            #expect(prompt == "see image")
+            #expect(cwd == "/proj")
+            #expect(retryId == turnId)
+            #expect(retryRefs == refs)
+            #expect(retryRefs.first?.id == "srv-1")
+            #expect(retryRefs.first?.contentDigest == digest)
+            #expect(retryRefs.first?.previewCacheKey == "draft-uuid")
+        } else {
+            Issue.record("expected lastAttempt to retain clientTurnId after retries")
+        }
     }
 }
 

@@ -240,6 +240,11 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 	}
 
 	launchCWD := res.CWD
+	// Prompt stays the clean user-typed text for ledger/audit; Attachments are
+	// threaded so launchConversationTurn can verify put receipts and build an
+	// ephemeral JSON vendor manifest (never persisted into Prompt).
+	// Idempotent clientTurnId replay returns above before this launch path —
+	// first persisted refs/digest win; conflicting retry payloads are ignored.
 	launchParams := conversationLaunchParams{
 		Agent:           agent,
 		CWD:             launchCWD,
@@ -248,6 +253,7 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 		BudgetUSD:       req.BudgetUSD,
 		VendorSessionID: vendorSessionID,
 		IsNew:           isNew,
+		Attachments:     req.Attachments,
 		Contract:        req.Contract,
 	}
 	if wt.Path != "" {
