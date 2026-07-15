@@ -105,10 +105,15 @@ public final class E2ERelayClient: ObservableObject {
     /// Per-direction replay-resistance sequence for the current pairing
     /// generation — see `SeqFrame`/`ReplaySequencer` below. `sendSeq` is this
     /// client's own outgoing counter; `recv` tracks the highest sequence
-    /// accepted from the daemon. Both reset on every new pairing (a fresh
-    /// session key = a fresh generation), mirroring the Go daemon's
-    /// `e2eRelayClient.sendSeq`/`recv` reset on `peer_joined`.
+    /// accepted from the daemon. `sendSeq`/`sendGen`/`recv` all reset on every
+    /// new pairing (a fresh session key = a fresh generation), mirroring the
+    /// Go daemon's `e2eRelayClient.sendSeq`/`sendGen`/`recv` reset on
+    /// `peer_joined`.
     private var sendSeq: UInt64 = 0
+    /// A fresh random tag minted every time `sendSeq` resets to 0 — see
+    /// `mintGeneration()`'s doc comment for why a bare reset counter alone
+    /// re-poisons the daemon's replay window after any reconnect.
+    private var sendGen: String = ""
     private var recv = ReplaySequencer()
 #if DEBUG
     /// Test-only seam: bypasses websocket send so bridge timeout paths can be
@@ -427,6 +432,7 @@ public final class E2ERelayClient: ObservableObject {
         webSocketTask = nil
         sessionKey = nil
         sendSeq = 0
+        sendGen = Self.mintGeneration()
         recv.reset()
         pairingState = .unpaired
         pairingExpiresAt = nil
@@ -452,6 +458,7 @@ public final class E2ERelayClient: ObservableObject {
         pairingExpiresAt = nil
         sessionKey = nil
         sendSeq = 0
+        sendGen = Self.mintGeneration()
         recv.reset()
     }
 
@@ -480,9 +487,19 @@ public final class E2ERelayClient: ObservableObject {
 
     /// Test-only seam: exercises the real replay sequencer state transitions
     /// without needing a live websocket/crypto round trip in unit tests.
+    /// Uses the legacy (no generation tag) call shape — see the `gen:`
+    /// overload below to exercise generation-tagged scenarios.
     func acceptIncomingSequenceForTesting(_ seq: UInt64) -> Bool {
         recv.accept(seq)
     }
+
+    /// Test-only seam: exercises the generation-tagged replay sequencer path
+    /// directly against the client's real `recv`, without a live
+    /// websocket/crypto round trip.
+    func acceptIncomingSequenceForTesting(_ seq: UInt64, gen: String) -> Bool {
+        recv.accept(gen: gen, seq: seq) == .accepted
+    }
+
     /// Test-only seam for verifying that failed re-key attempts preserve the
     /// active outbound replay generation as well as the inbound window.
     func setSendSequenceForTesting(_ seq: UInt64) {
@@ -491,6 +508,12 @@ public final class E2ERelayClient: ObservableObject {
 
     var sendSequenceForTesting: UInt64 {
         sendSeq
+    }
+
+    /// Test-only seam: the current outbound generation tag, so tests can
+    /// prove it actually changes across a `peer_joined` re-pair.
+    var sendGenerationForTesting: String {
+        sendGen
     }
 
     /// Test-only seam: mark this client as having completed peer_joined so
@@ -531,7 +554,7 @@ public final class E2ERelayClient: ObservableObject {
 
         let seq = sendSeq
         sendSeq += 1
-        let wrapped = try SeqFrame.wrap(seq: seq, body: innerData)
+        let wrapped = try SeqFrame.wrap(seq: seq, gen: sendGen, body: innerData)
 
         let encrypted = try PairingCrypto.encrypt(wrapped, using: key)
         let encryptedData = try JSONEncoder().encode(encrypted)
@@ -657,6 +680,7 @@ public final class E2ERelayClient: ObservableObject {
                 try deriveSessionKey(withPeerPublicKey: peerKey)
                 // A successfully derived session key defines a fresh replay generation.
                 sendSeq = 0
+                sendGen = Self.mintGeneration()
                 recv.reset()
                 Self.logger.info("handleMessage: session key derived, pairing complete")
                 pairingState = .paired
@@ -679,6 +703,7 @@ public final class E2ERelayClient: ObservableObject {
             Self.logger.info("handleMessage: peer_left")
             sessionKey = nil
             sendSeq = 0
+            sendGen = Self.mintGeneration()
             recv.reset()
             pairingState = .unpaired
 
@@ -695,8 +720,14 @@ public final class E2ERelayClient: ObservableObject {
                 let frameData = Data(payload.utf8)
                 let frame = try JSONDecoder().decode(PairingCrypto.EncryptedFrame.self, from: frameData)
                 let plaintext = try PairingCrypto.decrypt(frame, using: key)
-                let (seq, body) = try SeqFrame.unwrap(plaintext)
-                guard recv.accept(seq) else {
+                let (seq, gen, body) = try SeqFrame.unwrap(plaintext)
+                switch recv.accept(gen: gen, seq: seq) {
+                case .accepted:
+                    break
+                case .staleGeneration:
+                    Self.logger.error("relay message rejected: stale-generation frame gen=\(gen, privacy: .public) seq=\(seq, privacy: .public)")
+                    return
+                case .replayed:
                     Self.logger.error("relay message rejected: replayed or out-of-order sequence \(seq, privacy: .public)")
                     return
                 }
@@ -759,6 +790,7 @@ public final class E2ERelayClient: ObservableObject {
         pairingState = .unpaired
         sessionKey = nil
         sendSeq = 0
+        sendGen = Self.mintGeneration()
         recv.reset()
         webSocketTask = nil
 
@@ -808,12 +840,29 @@ public final class E2ERelayClient: ObservableObject {
         pairingExpiresAt = nil
         sessionKey = nil
         sendSeq = 0
+        sendGen = Self.mintGeneration()
         recv.reset()
         Self.deleteStoredPairing(machineID: machineID)
         pairingCode = ""
     }
 
     private static let iso8601Formatter = ISO8601DateFormatter()
+
+    /// Mints a fresh random per-generation tag for the outbound replay
+    /// sequence: 16 random bytes, base64url-encoded — MUST match the Go
+    /// daemon's `newGeneration` in `e2e_crypto.go`, though the two sides never
+    /// need to agree on a VALUE, only on tagging every frame with one. Called
+    /// at every point `sendSeq` resets to 0 (`connect()`, `disconnect()`,
+    /// `peer_joined`, `peer_left`, `handleDisconnect()`,
+    /// `stopReconnectingDeadCode()`), so a stale in-flight frame from a
+    /// PREVIOUS generation can never be mistaken by the daemon's
+    /// `replaySequencer` for the first frame of a new one. See
+    /// `ReplaySequencer`'s doc comment for the full failure mode this closes.
+    private static func mintGeneration() -> String {
+        var bytes = [UInt8](repeating: 0, count: 16)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return Base64URL.encode(Data(bytes))
+    }
 
     /// Derive the session key from the daemon's public key.
     ///
@@ -895,55 +944,151 @@ struct E2EInnerMessageDecoded: Codable {
 /// sequence number BEFORE encryption, so the daemon's AEAD tag covers the
 /// counter but the relay (which only ever sees ciphertext) never observes
 /// it — a relay-side attacker who can't decrypt still can't selectively
-/// drop-and-replay based on a visible sequence. MUST match the Go daemon's
-/// `seqFrame`/`wrapSeq`/`unwrapSeq` in `daemon/lancerd/e2e_crypto.go` exactly:
-/// a JSON object with `seq` (number) and `body` (the embedded raw JSON
-/// message), constructed via `JSONSerialization` rather than `Codable` so
-/// `body` round-trips as an embedded JSON value, not a base64 string.
+/// drop-and-replay based on a visible sequence. `gen` (optional, base64url)
+/// tags which reconnect generation of the sender minted this counter — see
+/// `ReplaySequencer` for why this closes the stuck-Working/Retry-after-
+/// reconnect bug. MUST match the Go daemon's `seqFrame`/`wrapSeq`/`wrapSeqGen`/
+/// `unwrapSeq` in `daemon/lancerd/e2e_crypto.go` exactly: a JSON object with
+/// `seq` (number), optional `gen` (string, omitted when empty), and `body`
+/// (the embedded raw JSON message), constructed via `JSONSerialization`
+/// rather than `Codable` so `body` round-trips as an embedded JSON value, not
+/// a base64 string.
 enum SeqFrame {
     enum Error: Swift.Error { case malformedEnvelope }
 
-    static func wrap(seq: UInt64, body: Data) throws -> Data {
+    static func wrap(seq: UInt64, gen: String = "", body: Data) throws -> Data {
         let bodyObject = try JSONSerialization.jsonObject(with: body)
-        let envelope: [String: Any] = ["seq": seq, "body": bodyObject]
+        var envelope: [String: Any] = ["seq": seq, "body": bodyObject]
+        if !gen.isEmpty {
+            envelope["gen"] = gen
+        }
         return try JSONSerialization.data(withJSONObject: envelope)
     }
 
-    static func unwrap(_ data: Data) throws -> (seq: UInt64, body: Data) {
+    static func unwrap(_ data: Data) throws -> (seq: UInt64, gen: String, body: Data) {
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let seqNumber = obj["seq"] as? NSNumber,
               let bodyObject = obj["body"]
         else {
             throw Error.malformedEnvelope
         }
+        let gen = obj["gen"] as? String ?? ""
         let bodyData = try JSONSerialization.data(withJSONObject: bodyObject)
-        return (seqNumber.uint64Value, bodyData)
+        return (seqNumber.uint64Value, gen, bodyData)
     }
 }
 
-/// Rejects a decrypted frame whose sequence number is not strictly greater
-/// than the last one accepted for the current pairing generation — the
-/// minimum-viable fix for AEAD-with-AAD replay resistance (a WireGuard-style
-/// sliding-window bitmap is the fuller version; a bounded reconnect window
-/// doesn't need one on top of this). `reset()` is called on every new pairing
-/// (a fresh session key = a fresh generation). MUST mirror the Go daemon's
-/// `replaySequencer` in `daemon/lancerd/e2e_crypto.go`.
+/// `ReplaySequencer` is the fix for the stuck-Working/Retry-after-reconnect
+/// bug (5 prior sessions, 5 failed fixes): a bare monotonic counter (the
+/// original design — reject any seq not strictly greater than the last one
+/// accepted, `reset()` on every new pairing) has no notion of WHICH reconnect
+/// generation a seq belongs to. `reset()` used to clear `last`/`initialized`
+/// outright, but a stale in-flight frame from the PREVIOUS generation (still
+/// decryptable — the session key is re-derived from the same static pairing
+/// keys every reconnect) could arrive AFTER reset() and get accepted,
+/// poisoning `last` to its high seq — after which every legitimate
+/// new-generation frame (seq starting at 0) was rejected as "out of order"
+/// until the next re-pair reset it again. That is exactly the P0 bug: one
+/// direction of the channel goes deaf for minutes after any reconnect.
+///
+/// The fix tags every frame with the sender's generation id (see `SeqFrame`'s
+/// `gen` / `E2ERelayClient.mintGeneration()`) and tracks three things instead
+/// of one bare counter:
+///   - `currentGen`: the generation the bare seq counter (`last`) belongs to.
+///   - `seenGens`: a bounded set of RETIRED generations — frames tagged with
+///     one of these are stale residue from before the last reconnect and
+///     must be rejected without touching `currentGen`/`last`, no matter
+///     their seq.
+///   - `last`/`initialized`: the monotonic counter for `currentGen`, exactly
+///     as before.
+///
+/// `accept(gen:seq:)`'s rules, in order (`gen == ""` means the sender hasn't
+/// upgraded yet — this collapses to the original bare-counter behavior with
+/// no regression):
+///  1. `gen == currentGen`: require `seq > last` (the original check).
+///  2. `gen` non-empty and a retired generation (in `seenGens`): reject
+///     WITHOUT touching `currentGen`/`last` — this is the line that kills
+///     the poisoning.
+///  3. otherwise (a genuinely new generation, or the very first frame ever
+///     seen): retire the old `currentGen` into `seenGens` and adopt the new
+///     one unconditionally — the first frame of a new generation is always
+///     accepted regardless of its seq value.
+///
+/// `reset()` (called on every new pairing) migrates the current generation
+/// into `seenGens` and clears `last`/`initialized`/`currentGen` — mirroring
+/// the original reset semantics for a not-yet-upgraded peer (rule 1 with
+/// `gen == "" == currentGen`) while ensuring any frame still in flight from
+/// the JUST-retired generation hits rule 2, not rule 3, once `accept` next
+/// sees it. MUST mirror the Go daemon's `replaySequencer` in
+/// `daemon/lancerd/e2e_crypto.go`.
 final class ReplaySequencer {
+    enum AcceptResult: Equatable {
+        case accepted
+        case replayed
+        case staleGeneration
+    }
+
+    /// Bounds `seenGens` — a reconnect storm shouldn't grow this without
+    /// limit. Generous headroom for any realistic reconnect burst; oldest
+    /// entries are evicted FIFO. MUST match the Go daemon's
+    /// `maxTrackedGenerations`.
+    private static let maxTrackedGenerations = 32
+
+    private var currentGen: String = ""
     private var last: UInt64 = 0
     private var initialized = false
+    private var seenGens: [String] = []
+    private var seenGensSet: Set<String> = []
 
     func reset() {
+        if !currentGen.isEmpty {
+            remember(currentGen)
+        }
+        currentGen = ""
         last = 0
         initialized = false
     }
 
-    func accept(_ seq: UInt64) -> Bool {
-        if initialized, seq <= last {
-            return false
+    private func remember(_ gen: String) {
+        guard !seenGensSet.contains(gen) else { return }
+        seenGens.append(gen)
+        seenGensSet.insert(gen)
+        if seenGens.count > Self.maxTrackedGenerations {
+            let oldest = seenGens.removeFirst()
+            seenGensSet.remove(oldest)
         }
+    }
+
+    /// Convenience overload preserving the pre-generation-guard call shape
+    /// for legacy callers/tests that don't care about generation tagging —
+    /// equivalent to `accept(gen: "", seq: seq) == .accepted`.
+    @discardableResult
+    func accept(_ seq: UInt64) -> Bool {
+        accept(gen: "", seq: seq) == .accepted
+    }
+
+    @discardableResult
+    func accept(gen: String, seq: UInt64) -> AcceptResult {
+        if gen == currentGen {
+            if initialized, seq <= last {
+                return .replayed
+            }
+            last = seq
+            initialized = true
+            return .accepted
+        }
+
+        if !gen.isEmpty, seenGensSet.contains(gen) {
+            return .staleGeneration
+        }
+
+        if !currentGen.isEmpty {
+            remember(currentGen)
+        }
+        currentGen = gen
         last = seq
         initialized = true
-        return true
+        return .accepted
     }
 }
 
