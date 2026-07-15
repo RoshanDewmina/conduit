@@ -64,6 +64,25 @@ struct LiveThreadTranscriptTests {
         #expect(LiveThreadTranscript.shouldSendInitialPrompt("continue this") == true)
     }
 
+    @Test("adopt with empty transcript exposes no-history state, not bare idle")
+    func adoptEmptyTranscriptExposesNoHistoryNotBareIdle() {
+        #expect(LiveThreadTranscript.shouldShowAdoptedNoHistoryPlaceholder(transcriptMessageCount: 0))
+        #expect(!LiveThreadTranscript.shouldShowAdoptedNoHistoryPlaceholder(transcriptMessageCount: 1))
+        #expect(!LiveThreadTranscript.shouldShowAdoptedNoHistoryPlaceholder(transcriptMessageCount: 3))
+        // Empty messages → zero turns; placeholder path is the non-idle adopt state.
+        let turns = LiveThreadTranscript.turns(
+            fromObservedMessages: [],
+            conversationID: "observed:sess",
+            vendorSessionID: "sess"
+        )
+        #expect(turns.isEmpty)
+        #expect(
+            LiveThreadTranscript.shouldShowAdoptedNoHistoryPlaceholder(
+                transcriptMessageCount: turns.count
+            )
+        )
+    }
+
     @Test("observed wrapper prefixes use trimmed-prefix matching")
     func observedWrapperPrefixDetection() {
         let wrappers = [

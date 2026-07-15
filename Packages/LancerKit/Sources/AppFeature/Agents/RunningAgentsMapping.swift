@@ -201,12 +201,13 @@ public enum RunningAgentsFreshness: Sendable {
 
     /// Honest empty / degraded copy.
     /// "No agents running" only when we have a fresh successful fetch and zero rows.
+    /// Pre-first-success stays neutral (`nil`) until `consecutiveFailureLimit` degrades.
     public static func statusMessage(
         rowCount: Int,
         tracker: Tracker,
         now: Date
     ) -> String? {
-        if tracker.isDegraded || (!tracker.hasEverSucceeded && tracker.consecutiveFailures > 0) {
+        if tracker.isDegraded {
             return degradedMessage(lastSuccessfulFetchAt: tracker.lastSuccessfulFetchAt, now: now)
         }
         guard tracker.hasEverSucceeded else { return nil }

@@ -55,10 +55,12 @@ type e2eRelayClient struct {
 	// Used by decideExpiryAction.
 	everConfirmed bool
 
-	// sendSeq/recv track the per-direction replay-resistance sequence for the
-	// current pairing generation (see seqFrame/replaySequencer in
-	// e2e_crypto.go). Both reset on every new peer_joined session key.
+	// sendSeq/sendGen/recv track the per-direction replay-resistance sequence
+	// for the current pairing generation (see seqFrame/replaySequencer in
+	// e2e_crypto.go). All reset on every new peer_joined session key:
+	// sendSeq back to 0, sendGen to a freshly minted id, recv via reset().
 	sendSeq uint64
+	sendGen string
 	recv    replaySequencer
 }
 
@@ -353,6 +355,12 @@ func (c *e2eRelayClient) messageLoop() {
 			c.paired = true
 			c.everConfirmed = true
 			c.sendSeq = 0
+			if gen, genErr := newGeneration(); genErr != nil {
+				log.Printf("e2e: failed to mint send generation id: %v", genErr)
+				c.sendGen = ""
+			} else {
+				c.sendGen = gen
+			}
 			c.mu.Unlock()
 			c.recv.reset()
 
@@ -393,13 +401,19 @@ func (c *e2eRelayClient) messageLoop() {
 				continue
 			}
 
-			seq, body, err := unwrapSeq(plaintext)
+			seq, gen, body, err := unwrapSeq(plaintext)
 			if err != nil {
 				log.Printf("e2e: seq envelope unmarshal failed: %v", err)
 				continue
 			}
-			if !c.recv.accept(seq) {
-				log.Printf("e2e: rejecting replayed or out-of-order frame (seq=%d)", seq)
+			switch c.recv.accept(gen, seq) {
+			case replayAccepted:
+				// fall through to dispatch below
+			case replayRejectedStaleGeneration:
+				log.Printf("e2e: rejecting stale-generation frame (gen=%q, seq=%d)", gen, seq)
+				continue
+			default:
+				log.Printf("e2e: rejecting replayed or out-of-order frame (gen=%q, seq=%d)", gen, seq)
 				continue
 			}
 
@@ -484,8 +498,9 @@ func (c *e2eRelayClient) sendMessage(msgType string, payload []byte) error {
 
 	seq := c.sendSeq
 	c.sendSeq++
+	gen := c.sendGen
 
-	wrapped, err := wrapSeq(seq, payload)
+	wrapped, err := wrapSeqGen(seq, gen, payload)
 	if err != nil {
 		return fmt.Errorf("e2e: seq envelope failed: %w", err)
 	}

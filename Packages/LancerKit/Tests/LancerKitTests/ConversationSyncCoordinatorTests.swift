@@ -154,6 +154,72 @@ struct ConversationSyncCoordinatorTests {
         #expect(turns.last?.vendorSessionID == "sess-1")
     }
 
+    @Test("startConversation threads fullTools into the append request")
+    func startConversationThreadsFullTools() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let transport = makeTransport(append: { request in
+            #expect(request.fullTools == true)
+            return ConversationAppendResponse(
+                status: "started", conversationId: "conv-1", turnId: "turn-1", runId: "run-1",
+                cwd: "/proj", baseSeq: 0, nextSeq: 2, resumeMode: "new"
+            )
+        })
+
+        _ = await coordinator.startConversation(
+            agent: "claudeCode", cwd: "/proj", prompt: "hello", model: nil, budgetUSD: nil,
+            fullTools: true,
+            hostName: "MacBook Pro", hostID: "host-1", clientTurnID: "device-1:1", transport: transport
+        )
+    }
+
+    @Test("startConversation omits fullTools from the request by default")
+    func startConversationDefaultsFullToolsFalse() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let transport = makeTransport(append: { request in
+            #expect(request.fullTools == false)
+            return ConversationAppendResponse(
+                status: "started", conversationId: "conv-1", turnId: "turn-1", runId: "run-1",
+                cwd: "/proj", baseSeq: 0, nextSeq: 2, resumeMode: "new"
+            )
+        })
+
+        _ = await coordinator.startConversation(
+            agent: "claudeCode", cwd: "/proj", prompt: "hello", model: nil, budgetUSD: nil,
+            hostName: "MacBook Pro", hostID: "host-1", clientTurnID: "device-1:1", transport: transport
+        )
+    }
+
+    @Test("continueConversation threads fullTools into the append request")
+    func continueConversationThreadsFullTools() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 2, syncState: .synced)
+        _ = try await repo.upsertTurnMirror(
+            ChatTurn(id: "turn-0", conversationID: "conv-1", ordinal: 0, prompt: "hi", runID: "run-0", clientTurnID: "d:1"),
+            vendorSessionID: nil, hostSeqStart: nil, hostSeqEnd: nil
+        )
+
+        let transport = makeTransport(append: { request in
+            #expect(request.fullTools == true)
+            return ConversationAppendResponse(
+                status: "started", conversationId: "conv-1", turnId: "turn-1", runId: "run-1",
+                vendorSessionId: "sess-1", cwd: "/proj", baseSeq: 2, nextSeq: 4, resumeMode: "exact"
+            )
+        })
+
+        _ = await coordinator.continueConversation(
+            conversationID: "conv-1", baseSeq: 2, prompt: "follow up", clientTurnID: "d:2",
+            fullTools: true,
+            hostName: "h", hostID: nil, transport: transport
+        )
+    }
+
     @Test("conflict auto-recovers: stale baseSeq refetches then retries with fresh nextSeq")
     func conflictAutoRecoversOnce() async throws {
         let db = try AppDatabase.inMemory()
@@ -1468,6 +1534,163 @@ struct ConversationSyncCoordinatorTests {
         #expect(gate.setBanner(failedFor: first) == false)
         #expect(gate.setBanner(failedFor: second) == true)
     }
+
+    @Test("host attachment envelopes map into local ChatTurn.attachments")
+    func hostAttachmentsMapIntoLocalTurns() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let attachment = ConversationAttachmentReference(
+            id: "a1", name: "photo.jpg", mimeType: "image/jpeg",
+            byteCount: 310_992, kind: .image,
+            hostPath: "/Users/me/.lancer/attachments/photo.jpg",
+            previewCacheKey: "a1"
+        )
+        let transport = makeTransport(fetch: { req in
+            ConversationFetchResponse(
+                conversation: ConversationSummary(
+                    id: req.conversationId, title: "Describe", provider: "claudeCode",
+                    agentID: "claudeCode", hostName: "h", cwd: "/proj", state: "active",
+                    source: "app", createdAt: "2026-07-14T00:00:00Z", updatedAt: "2026-07-14T00:00:00Z",
+                    lastActivityAt: "2026-07-14T00:00:00Z", lastSeq: 2
+                ),
+                turns: [
+                    ConversationTurnEnvelope(
+                        id: "turn-att", conversationId: req.conversationId, ordinal: 0,
+                        clientTurnId: "ios:1", prompt: "Describe this image",
+                        runId: "run-att", provider: "claudeCode", status: "completed",
+                        startedAt: "2026-07-14T00:00:00Z", attachments: [attachment]
+                    ),
+                ],
+                events: [
+                    ConversationEvent(
+                        conversationId: req.conversationId, seq: 1, turnId: "turn-att",
+                        kind: "prompt", role: "user", text: "Describe this image",
+                        createdAt: "2026-07-14T00:00:00Z"
+                    ),
+                    ConversationEvent(
+                        conversationId: req.conversationId, seq: 2, turnId: "turn-att",
+                        kind: "output", role: "assistant", text: "A sunset.",
+                        createdAt: "2026-07-14T00:00:01Z"
+                    ),
+                ],
+                nextSeq: 2
+            )
+        })
+
+        _ = try await coordinator.refreshConversation(conversationID: "conv-att", transport: transport)
+        let turns = try await repo.turns(conversationID: "conv-att")
+        #expect(turns.count == 1)
+        #expect(turns.first?.attachments == [attachment])
+        #expect(turns.first?.prompt == "Describe this image")
+        #expect(turns.first?.assistantText == "A sunset.")
+        #expect(!(turns.first?.prompt.contains("/Users/") ?? true))
+    }
+
+    @Test("startConversation forwards attachments and persists clean prompt")
+    func startConversationForwardsAttachments() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let attachment = ConversationAttachmentReference(
+            id: "a1", name: "photo.jpg", mimeType: "image/jpeg",
+            byteCount: 100, kind: .image,
+            hostPath: "/Users/me/.lancer/attachments/photo.jpg",
+            previewCacheKey: "a1"
+        )
+        nonisolated(unsafe) var seenRequest: ConversationAppendRequest?
+        let transport = makeTransport(append: { request in
+            seenRequest = request
+            return ConversationAppendResponse(
+                status: "started", conversationId: "conv-att-2", turnId: "turn-2",
+                runId: "run-2", cwd: "/proj", nextSeq: 1
+            )
+        })
+
+        let outcome = await coordinator.startConversation(
+            agent: "claudeCode", cwd: "/proj", prompt: "Describe this image",
+            model: nil, budgetUSD: nil, hostName: "h", hostID: "h1",
+            clientTurnID: "ios:att-1", transport: transport,
+            attachments: [attachment]
+        )
+        guard case .started = outcome else {
+            Issue.record("expected started")
+            return
+        }
+        #expect(seenRequest?.prompt == "Describe this image")
+        #expect(seenRequest?.attachments == [attachment])
+        #expect(!(seenRequest?.prompt.contains("Attached files") ?? true))
+        let turns = try await repo.turns(conversationID: "conv-att-2")
+        #expect(turns.first?.attachments == [attachment])
+        #expect(turns.first?.prompt == "Describe this image")
+    }
+
+    @Test("conflict retry preserves attachment metadata and clientTurnId")
+    func conflictRetryPreservesAttachments() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let attachment = ConversationAttachmentReference(
+            id: "a1", name: "photo.jpg", mimeType: "image/jpeg",
+            byteCount: 100, kind: .image,
+            hostPath: "/Users/me/.lancer/attachments/photo.jpg",
+            previewCacheKey: "a1"
+        )
+        let appendCount = FetchAttemptCounter()
+        nonisolated(unsafe) var lastRequest: ConversationAppendRequest?
+        let transport = makeTransport(
+            append: { request in
+                let count = await appendCount.increment()
+                lastRequest = request
+                if count == 1 {
+                    return ConversationAppendResponse(
+                        status: "conflict", conversationId: "conv-retry",
+                        nextSeq: 3, message: "stale baseSeq"
+                    )
+                }
+                return ConversationAppendResponse(
+                    status: "started", conversationId: "conv-retry", turnId: "turn-r",
+                    runId: "run-r", cwd: "/proj", nextSeq: 4
+                )
+            },
+            fetch: { req in
+                ConversationFetchResponse(
+                    conversation: ConversationSummary(
+                        id: req.conversationId, title: "T", provider: "claudeCode",
+                        agentID: "claudeCode", hostName: "h", cwd: "/proj", state: "active",
+                        source: "app", createdAt: "2026-07-14T00:00:00Z",
+                        updatedAt: "2026-07-14T00:00:00Z",
+                        lastActivityAt: "2026-07-14T00:00:00Z", lastSeq: 3
+                    ),
+                    turns: [], events: [], nextSeq: 3
+                )
+            }
+        )
+
+        _ = try await repo.upsertConversationMirror(
+            ChatConversation(
+                id: "conv-retry", title: "T", agentID: "claudeCode",
+                hostName: "h", hostID: "h1", cwd: "/proj"
+            ),
+            lastHostSeq: 1,
+            syncState: .synced
+        )
+
+        let outcome = await coordinator.continueConversation(
+            conversationID: "conv-retry", baseSeq: 1, prompt: "Describe this image",
+            clientTurnID: "ios:retry-1", hostName: "h", hostID: "h1",
+            transport: transport, attachments: [attachment]
+        )
+        guard case .started = outcome else {
+            Issue.record("expected started after retry")
+            return
+        }
+        #expect(await appendCount.value == 2)
+        #expect(lastRequest?.clientTurnId == "ios:retry-1")
+        #expect(lastRequest?.attachments == [attachment])
+        #expect(lastRequest?.prompt == "Describe this image")
+        #expect(lastRequest?.baseSeq == 3)
+    }
 }
 
 /// Actor counter for concurrent fetch-attempt assertions in refresh retry tests.
@@ -1506,4 +1729,5 @@ private final class RefreshBudgetTestClock: @unchecked Sendable {
         return start.advanced(by: advanceBy)
     }
 }
+
 #endif

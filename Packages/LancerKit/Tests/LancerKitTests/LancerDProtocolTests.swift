@@ -5,7 +5,9 @@ import Foundation
 // MARK: - Golden JSON helpers (Go 7df8b831 wire contract)
 
 private enum ConversationAttachmentGoldenFixtures {
-    /// Go `json.Marshal(sampleImageAttachment())` — all fields including mimeType.
+    static let sampleDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+    /// Go `json.Marshal(sampleImageAttachment())` — legacy without contentDigest.
     static let attachmentImageWithMimeType = """
     {"id":"a1","name":"photo.jpg","mimeType":"image/jpeg","byteCount":310992,"kind":"image","hostPath":"/Users/me/.lancer/attachments/photo.jpg","previewCacheKey":"a1"}
     """
@@ -15,14 +17,19 @@ private enum ConversationAttachmentGoldenFixtures {
     {"id":"a2","name":"notes.txt","byteCount":42,"kind":"file","hostPath":"/Users/me/.lancer/attachments/notes.txt","previewCacheKey":"a2"}
     """
 
-    /// New-chat append with one image attachment.
-    static let appendNewChatWithAttachments = """
-    {"baseSeq":0,"clientTurnId":"ios-device-uuid:1","agent":"claudeCode","cwd":"~","prompt":"Describe this image","model":"sonnet","budgetUSD":5,"attachments":[{"id":"a1","name":"photo.jpg","mimeType":"image/jpeg","byteCount":310992,"kind":"image","hostPath":"/Users/me/.lancer/attachments/photo.jpg","previewCacheKey":"a1"}]}
+    /// Outgoing image attachment with locked contentDigest wire field.
+    static let attachmentImageWithContentDigest = """
+    {"id":"a1","name":"photo.jpg","mimeType":"image/jpeg","byteCount":310992,"kind":"image","hostPath":"/Users/me/.lancer/attachments/objects/\(sampleDigest)","previewCacheKey":"a1","contentDigest":"\(sampleDigest)"}
     """
 
-    /// Follow-up append with one image attachment.
+    /// New-chat append with one image attachment (digest required on outgoing).
+    static let appendNewChatWithAttachments = """
+    {"baseSeq":0,"clientTurnId":"ios-device-uuid:1","agent":"claudeCode","cwd":"~","prompt":"Describe this image","model":"sonnet","budgetUSD":5,"attachments":[{"id":"a1","name":"photo.jpg","mimeType":"image/jpeg","byteCount":310992,"kind":"image","hostPath":"/Users/me/.lancer/attachments/objects/\(sampleDigest)","previewCacheKey":"a1","contentDigest":"\(sampleDigest)"}]}
+    """
+
+    /// Follow-up append with one image attachment (digest required on outgoing).
     static let appendFollowUpWithAttachments = """
-    {"conversationId":"conv_1","baseSeq":42,"clientTurnId":"ios-device-uuid:2","prompt":"Now add a regression test","attachments":[{"id":"a1","name":"photo.jpg","mimeType":"image/jpeg","byteCount":310992,"kind":"image","hostPath":"/Users/me/.lancer/attachments/photo.jpg","previewCacheKey":"a1"}]}
+    {"conversationId":"conv_1","baseSeq":42,"clientTurnId":"ios-device-uuid:2","prompt":"Now add a regression test","attachments":[{"id":"a1","name":"photo.jpg","mimeType":"image/jpeg","byteCount":310992,"kind":"image","hostPath":"/Users/me/.lancer/attachments/objects/\(sampleDigest)","previewCacheKey":"a1","contentDigest":"\(sampleDigest)"}]}
     """
 
     /// Pre-attachment new-chat append — proves custom Codable preserves legacy wire shape.
@@ -30,7 +37,7 @@ private enum ConversationAttachmentGoldenFixtures {
     {"baseSeq":0,"clientTurnId":"ios-device-uuid:1","agent":"claudeCode","cwd":"~","prompt":"Fix the failing auth test","model":"sonnet","budgetUSD":5}
     """
 
-    /// Turn envelope with one attachment.
+    /// Turn envelope with one attachment (legacy without digest still decodes).
     static let turnWithAttachments = """
     {"id":"t1","conversationId":"c1","ordinal":1,"clientTurnId":"ct1","prompt":"Summarize","runId":"r1","provider":"claudeCode","status":"completed","startedAt":"2026-07-14T00:00:00Z","attachments":[{"id":"a1","name":"photo.jpg","mimeType":"image/jpeg","byteCount":310992,"kind":"image","hostPath":"/Users/me/.lancer/attachments/photo.jpg","previewCacheKey":"a1"}]}
     """
@@ -85,6 +92,14 @@ private let sampleImageAttachment = ConversationAttachmentReference(
     byteCount: 310_992, kind: .image,
     hostPath: "/Users/me/.lancer/attachments/photo.jpg",
     previewCacheKey: "a1"
+)
+
+private let sampleImageAttachmentWithDigest = ConversationAttachmentReference(
+    id: "a1", name: "photo.jpg", mimeType: "image/jpeg",
+    byteCount: 310_992, kind: .image,
+    hostPath: "/Users/me/.lancer/attachments/objects/\(ConversationAttachmentGoldenFixtures.sampleDigest)",
+    previewCacheKey: "a1",
+    contentDigest: ConversationAttachmentGoldenFixtures.sampleDigest
 )
 
 private let sampleFileAttachmentNoMime = ConversationAttachmentReference(
@@ -226,7 +241,7 @@ struct LancerDProtocolTests {
         #expect(decoded.prompt == "Describe this image")
         #expect(decoded.model == "sonnet")
         #expect(decoded.budgetUSD == 5.0)
-        #expect(decoded.attachments == [sampleImageAttachment])
+        #expect(decoded.attachments == [sampleImageAttachmentWithDigest])
 
         let golden = try goldenJSONObject(goldenJSON)
         let encoded = try encodedJSONObject(decoded)
@@ -242,7 +257,7 @@ struct LancerDProtocolTests {
         #expect(decoded.baseSeq == 42)
         #expect(decoded.clientTurnId == "ios-device-uuid:2")
         #expect(decoded.prompt == "Now add a regression test")
-        #expect(decoded.attachments == [sampleImageAttachment])
+        #expect(decoded.attachments == [sampleImageAttachmentWithDigest])
 
         let golden = try goldenJSONObject(goldenJSON)
         let encoded = try encodedJSONObject(decoded)
@@ -325,10 +340,88 @@ struct LancerDProtocolTests {
         #expect(emptyJSON["attachments"] == nil)
     }
 
+    // MARK: - fullTools (per-dispatch "Full tools" toggle)
+
+    @Test func conversationAppendRequestOmitsFullToolsWhenNilOrFalse() throws {
+        let nilRequest = ConversationAppendRequest(clientTurnId: "ct1", prompt: "hello")
+        let nilJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(nilRequest)) as! [String: Any]
+        #expect(nilJSON["fullTools"] == nil)
+
+        let falseRequest = ConversationAppendRequest(clientTurnId: "ct1", prompt: "hello", fullTools: false)
+        let falseJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(falseRequest)) as! [String: Any]
+        #expect(falseJSON["fullTools"] == nil)
+    }
+
+    @Test func conversationAppendRequestEncodesFullToolsWhenTrue() throws {
+        let request = ConversationAppendRequest(clientTurnId: "ct1", prompt: "hello", fullTools: true)
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as! [String: Any]
+        #expect(json["fullTools"] as? Bool == true)
+    }
+
+    @Test func conversationAppendRequestDecodesFullToolsTrueRoundTrip() throws {
+        let golden = #"{"clientTurnId":"ct1","baseSeq":0,"prompt":"hello","fullTools":true}"#
+        let decoded = try JSONDecoder().decode(ConversationAppendRequest.self, from: Data(golden.utf8))
+        #expect(decoded.fullTools == true)
+
+        let goldenObj = try goldenJSONObject(golden)
+        let encoded = try encodedJSONObject(decoded)
+        #expect(jsonObjectsEqual(encoded, goldenObj))
+    }
+
+    @Test func conversationAppendRequestDecodesMissingFullToolsAsNil() throws {
+        // Older iOS clients / requests never sent this key — must decode
+        // cleanly (nil, not a thrown error), matching Go's zero-value default
+        // (strict/fast) on the daemon side.
+        let golden = #"{"clientTurnId":"ct1","baseSeq":0,"prompt":"hello"}"#
+        let decoded = try JSONDecoder().decode(ConversationAppendRequest.self, from: Data(golden.utf8))
+        #expect(decoded.fullTools == nil)
+    }
+
     @Test func conversationAttachmentRejectsMalformedKind() throws {
         let data = Data(#"{"id":"a1","name":"x","byteCount":1,"kind":"video","hostPath":"/p","previewCacheKey":"a1"}"#.utf8)
         #expect(throws: (any Error).self) {
             _ = try JSONDecoder().decode(ConversationAttachmentReference.self, from: data)
         }
+    }
+
+    @Test func conversationAttachmentDecodesLegacyWithoutContentDigest() throws {
+        let data = Data(ConversationAttachmentGoldenFixtures.attachmentImageWithMimeType.utf8)
+        let decoded = try JSONDecoder().decode(ConversationAttachmentReference.self, from: data)
+        #expect(decoded.contentDigest == nil)
+        #expect(decoded.id == "a1")
+    }
+
+    @Test func conversationAttachmentRoundTripsContentDigest() throws {
+        let digest = ConversationAttachmentGoldenFixtures.sampleDigest
+        #expect(AttachmentContentDigest.isValid(digest))
+        let golden = try goldenJSONObject(ConversationAttachmentGoldenFixtures.attachmentImageWithContentDigest)
+        let encoded = try encodedJSONObject(sampleImageAttachmentWithDigest)
+        #expect(jsonObjectsEqual(encoded, golden))
+        let decoded = try JSONDecoder().decode(
+            ConversationAttachmentReference.self,
+            from: Data(ConversationAttachmentGoldenFixtures.attachmentImageWithContentDigest.utf8)
+        )
+        #expect(decoded == sampleImageAttachmentWithDigest)
+        #expect(decoded.contentDigest == digest)
+        #expect(AttachmentContentDigest.isValid(decoded.contentDigest ?? ""))
+    }
+
+    @Test func attachmentPutResultDecodesIdPathAndContentDigest() throws {
+        let digest = ConversationAttachmentGoldenFixtures.sampleDigest
+        let json = Data("""
+        {"id":"srv-1","path":"/Users/me/.lancer/attachments/objects/\(digest)","contentDigest":"\(digest)","ok":true}
+        """.utf8)
+        // AttachmentPutResult lives in SSHTransport — decode via JSON mirror fields.
+        struct PutMirror: Codable {
+            var id: String?
+            var path: String?
+            var contentDigest: String?
+            var ok: Bool?
+        }
+        let decoded = try JSONDecoder().decode(PutMirror.self, from: json)
+        #expect(decoded.id == "srv-1")
+        #expect(decoded.path?.contains(digest) == true)
+        #expect(decoded.contentDigest == digest)
+        #expect(AttachmentContentDigest.isValid(decoded.contentDigest ?? ""))
     }
 }

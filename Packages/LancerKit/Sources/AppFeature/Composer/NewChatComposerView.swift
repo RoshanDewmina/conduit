@@ -3,6 +3,7 @@ import SwiftUI
 import PersistenceKit
 import SessionFeature
 import SSHTransport
+import LancerCore
 
 /// New Chat composer — repo picker uses the real workspace list; send
 /// requires a selected repo cwd (never a guessed `~/name`). Attachments
@@ -24,11 +25,13 @@ public struct NewChatComposerView: View {
         DispatchModelSelection.default.rawValue
     @AppStorage(DispatchVendorSelection.storageKey) private var selectedVendorSlug: String =
         DispatchVendorSelection.default.rawValue
+    @AppStorage(FullToolsSelection.storageKey) private var fullToolsEnabled: Bool =
+        FullToolsSelection.default
     private let initiallyShowsRepoPicker: Bool
     private let lockRepo: Bool
-    /// Hands (prompt, cwd) to the presenting view. Cwd is always the selected
-    /// repo's real path — missing selection blocks send.
-    private let onSend: (_ prompt: String, _ cwd: String) -> Void
+    /// Hands (clean prompt, cwd, attachment refs) to the presenting view.
+    /// Cwd is always the selected repo's real path — missing selection blocks send.
+    private let onSend: (_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference]) -> Void
 
     private var selectedModel: DispatchModelSelection {
         DispatchModelSelection.resolve(selectedModelSlug)
@@ -38,11 +41,24 @@ public struct NewChatComposerView: View {
         DispatchVendorSelection.resolve(selectedVendorSlug)
     }
 
+    /// "Full tools" only means anything for claudeCode (`--strict-mcp-config`
+    /// is claudeCode-only, dispatch.go's agentArgv) — hidden for every other
+    /// vendor rather than shown-but-inert.
+    private var showFullToolsToggle: Bool { selectedVendor.usesClaudeModelPicker }
+
+    private var showFullToolsCaption: Bool { showFullToolsToggle && fullToolsEnabled }
+
+    private var composerHeight: CGFloat {
+        var height: CGFloat = attachments.isEmpty ? 280 : 340
+        if showFullToolsCaption { height += 22 }
+        return height
+    }
+
     public init(
         initiallyShowsRepoPicker: Bool = false,
         initialRepo: WorkspaceRepo? = nil,
         lockRepo: Bool = false,
-        onSend: @escaping (_ prompt: String, _ cwd: String) -> Void
+        onSend: @escaping (_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference]) -> Void
     ) {
         self.initiallyShowsRepoPicker = initiallyShowsRepoPicker
         self.onSend = onSend
@@ -74,13 +90,23 @@ public struct NewChatComposerView: View {
             bottomRow
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                .padding(.bottom, 14)
+
+            if showFullToolsCaption {
+                Text("Slower first reply; enables MCP tools")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+            }
+
+            Spacer(minLength: 0)
+                .frame(height: 14)
         }
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .padding(.horizontal, 8)
         .padding(.top, 6)
-        .presentationDetents([.height(attachments.isEmpty ? 280 : 340)])
+        .presentationDetents([.height(composerHeight)])
         .presentationDragIndicator(.hidden)
         .presentationBackground(.clear)
         .onAppear {
@@ -161,6 +187,33 @@ public struct NewChatComposerView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    /// Per-dispatch opt-out of `--strict-mcp-config` (default OFF = fast
+    /// strict mode) — see `FullToolsSelection`'s doc comment for the tradeoff.
+    /// Only rendered when `showFullToolsToggle` (claudeCode selected).
+    private var fullToolsToggleChip: some View {
+        Button {
+            fullToolsEnabled.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "wrench.and.screwdriver.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Full tools")
+                    .font(.system(size: 15, weight: .medium))
+            }
+            .foregroundStyle(fullToolsEnabled ? Color.accentColor : Color(.secondaryLabel))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(fullToolsEnabled ? Color.accentColor.opacity(0.15) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("composer-full-tools-toggle")
+        .accessibilityLabel(Text("Full tools"))
+        .accessibilityValue(Text(fullToolsEnabled ? "On" : "Off"))
+        .accessibilityHint(Text("Slower first reply; enables MCP tools"))
     }
 
     private var attachmentChips: some View {
@@ -245,6 +298,10 @@ public struct NewChatComposerView: View {
                 .accessibilityLabel(Text("Model, \(selectedModel.displayName)"))
             }
 
+            if showFullToolsToggle {
+                fullToolsToggleChip
+            }
+
             Spacer()
 
             let trimmedDraft = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -318,7 +375,7 @@ public struct NewChatComposerView: View {
                 )
                 publishDrafts(&drafts)
                 do {
-                    let path = try await AttachmentUploader.upload(
+                    let receipt = try await AttachmentUploader.upload(
                         draft: draft,
                         conversationId: nil,
                         sendChunk: { params in
@@ -340,7 +397,7 @@ public struct NewChatComposerView: View {
                         return
                     }
                     drafts = AttachmentDraftStore.withState(
-                        drafts, id: draft.id, state: .done(hostPath: path)
+                        drafts, id: draft.id, state: .done(receipt)
                     )
                     publishDrafts(&drafts)
                 } catch {
@@ -356,11 +413,31 @@ public struct NewChatComposerView: View {
             guard AttachmentDraftStore.canSend(drafts) else { return }
         }
 
-        let prefixed = AttachmentPromptPrefix.apply(
-            userPrompt: prompt,
-            hostPaths: AttachmentDraftStore.hostPaths(drafts)
-        )
-        onSend(prefixed, cwd)
+        // Cache previews from draft bytes before clearing the composer.
+        let refs = AttachmentDraftStore.references(from: drafts)
+        if !refs.isEmpty {
+            let cache = try? AttachmentPreviewCache()
+            for draft in drafts {
+                guard case .done = draft.state else { continue }
+                if let preview = await AttachmentPreviewCache.makePreviewDataOffMain(
+                    from: draft.data, mimeType: draft.mimeType
+                ) {
+                    try? cache?.storePreview(preview, for: draft.id.uuidString)
+                }
+            }
+        }
+
+        let cleanPrompt = prompt
+        // Clear the bound TextEditor state before requesting dismiss —
+        // `dismiss()` on a `.sheet(isPresented:)` only requests an async
+        // teardown, so without this the composer's TextEditor can still show
+        // the just-sent prompt (and be enumerable by the accessibility tree)
+        // during the dismiss transition, racing the live-thread sheet's own
+        // presentation of the same prompt as a bubble (found in the
+        // 2026-07-15 reconnect re-proof — reads as a duplicate turn to
+        // AX-tree-based tests with no visual double-paint).
+        draftText = ""
+        onSend(cleanPrompt, cwd, refs)
         dismiss()
     }
 
@@ -386,7 +463,12 @@ public struct NewChatComposerView: View {
                 dataBase64: params.dataBase64,
                 done: params.done
             )
-            return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
+            return AttachmentUploader.ChunkResult(
+                id: result.id,
+                path: result.path,
+                contentDigest: result.contentDigest,
+                error: result.error
+            )
         }
         guard let sshChannel else { throw AttachmentUploadError.noTransport }
         let result = try await sshChannel.putAttachment(
@@ -397,7 +479,12 @@ public struct NewChatComposerView: View {
             dataBase64: params.dataBase64,
             done: params.done
         )
-        return AttachmentUploader.ChunkResult(path: result.path, error: result.error)
+        return AttachmentUploader.ChunkResult(
+            id: result.id,
+            path: result.path,
+            contentDigest: result.contentDigest,
+            error: result.error
+        )
     }
 
     private var repoBranchLabel: AttributedString {
@@ -433,7 +520,7 @@ public struct NewChatComposerView: View {
     Color(.systemGroupedBackground)
         .ignoresSafeArea()
         .sheet(isPresented: .constant(true)) {
-            NewChatComposerView(onSend: { _, _ in })
+            NewChatComposerView(onSend: { _, _, _ in })
                 .environment(WorkspaceDataStore(chatRepo: ChatConversationRepository(db)))
                 .environment(RelayFleetStore())
         }

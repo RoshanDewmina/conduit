@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import PersistenceKit
+import LancerCore
 
 /// Scope for a thread list — either every conversation or one real repo cwd.
 public enum ThreadListWorkspace: Hashable {
@@ -156,10 +157,14 @@ public struct ThreadListView: View {
         }
     }
 
-    private func handleSend(_ prompt: String, _ cwd: String) {
+    private func handleSend(_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference] = []) {
         guard WorkspaceRepoCatalog.isAbsoluteSendTarget(cwd) else { return }
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
-        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized)
+        // Same stacked-sheet hazard as WorkspacesView.handleSend — dismiss
+        // the composer explicitly instead of letting it race the live-thread
+        // sheet's presentation.
+        isComposerPresented = false
+        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized, attachments: attachments)
     }
 
     private var topBar: some View {

@@ -1,6 +1,8 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import PersistenceKit
+import LancerCore
 
 /// Workspaces launch screen — real repos derived from conversations +
 /// user-added paths; honest empty state when none exist.
@@ -24,6 +26,7 @@ public struct WorkspacesView: View {
     @State private var isThreadDetailDirectPresented = false
     @State private var isPRDetailDirectPresented = false
     @State private var isTrustedMachinesDirectPresented = false
+    @State private var isAttachmentPreviewDirectPresented = false
     #endif
 
     public init() {}
@@ -181,6 +184,9 @@ public struct WorkspacesView: View {
             TrustedMachinesView()
                 .environment(relayFleetStore)
         }
+        .sheet(isPresented: $isAttachmentPreviewDirectPresented) {
+            AttachmentPreviewDemoView()
+        }
         .navigationDestination(isPresented: $isThreadListDirectPresented) {
             if let first = repos.first {
                 ThreadListView(workspace: .repo(first))
@@ -246,6 +252,8 @@ public struct WorkspacesView: View {
                 isPRDetailDirectPresented = true
             case "trustedMachines":
                 isTrustedMachinesDirectPresented = true
+            case "attachmentPreview":
+                isAttachmentPreviewDirectPresented = true
             case "liveThread":
                 let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
                     ?? "Can you take a look at the onboarding flow?"
@@ -263,10 +271,19 @@ public struct WorkspacesView: View {
         #endif
     }
 
-    private func handleSend(_ prompt: String, _ cwd: String) {
+    private func handleSend(_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference] = []) {
         guard WorkspaceRepoCatalog.isAbsoluteSendTarget(cwd) else { return }
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
-        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized)
+        // Explicitly dismiss the composer sheet rather than leaving it to
+        // stack with the live-thread sheet — both are separate `.sheet`
+        // modifiers on this same view, so without this the composer's
+        // `TextEditor` (still showing the just-sent prompt) can remain
+        // enumerable by the accessibility tree during its dismiss animation
+        // at the same time the live thread's prompt bubble renders, reading
+        // as a duplicate turn to AX-tree-based tests even with no visual
+        // double-paint (found in the 2026-07-15 reconnect re-proof).
+        isComposerPresented = false
+        activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized, attachments: attachments)
     }
 
     private var topBar: some View {
@@ -388,6 +405,87 @@ private struct WorkspaceRowView: View {
         .contentShape(Rectangle())
     }
 }
+
+/// DEBUG/UITest destination: seeded attachment bubble (thumbnail + file card)
+/// without requiring a live paired daemon.
+#if DEBUG
+struct AttachmentPreviewDemoView: View {
+    @Environment(\.dismiss) private var dismiss
+    private let cache: AttachmentPreviewCaching
+    private let attachments: [ConversationAttachmentReference]
+
+    init() {
+        let resolved: AttachmentPreviewCaching
+        if let cache = try? AttachmentPreviewCache() {
+            resolved = cache
+        } else {
+            resolved = NullAttachmentPreviewCache()
+        }
+        let imageKey = "demo-image"
+        let fileKey = "demo-file"
+        if let jpeg = Self.tinyJPEG(),
+           let preview = AttachmentPreviewCache.makePreviewData(from: jpeg, mimeType: "image/jpeg") {
+            try? resolved.storePreview(preview, for: imageKey)
+        }
+        self.cache = resolved
+        let digest = String(repeating: "ab", count: 32)
+        self.attachments = [
+            ConversationAttachmentReference(
+                id: "srv-demo-image", name: "sunset.jpg", mimeType: "image/jpeg",
+                byteCount: 24_576, kind: .image,
+                hostPath: "/Users/demo/.lancer/attachments/objects/\(digest)",
+                previewCacheKey: imageKey,
+                contentDigest: digest
+            ),
+            ConversationAttachmentReference(
+                id: "srv-demo-file", name: "notes.pdf", mimeType: "application/pdf",
+                byteCount: 8_192, kind: .file,
+                hostPath: "/Users/demo/.lancer/attachments/objects/\(String(repeating: "cd", count: 32))",
+                previewCacheKey: fileKey,
+                contentDigest: String(repeating: "cd", count: 32)
+            ),
+        ]
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Seeded attachment render")
+                        .font(.headline)
+                        .accessibilityIdentifier("attachment-preview-demo.title")
+                    ChatUserBubble(
+                        text: "Describe this image and the PDF",
+                        attachments: attachments,
+                        previewCache: cache
+                    )
+                    .accessibilityIdentifier("attachment-preview-demo.bubble")
+                }
+                .padding(20)
+            }
+            .navigationTitle("Attachments")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+    }
+
+    /// Minimal valid JPEG so thumbnail generation works offline.
+    private static func tinyJPEG() -> Data? {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 48))
+        let image = renderer.image { ctx in
+            UIColor.systemOrange.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 64, height: 48))
+            UIColor.white.setFill()
+            ctx.fill(CGRect(x: 12, y: 12, width: 40, height: 24))
+        }
+        return image.jpegData(compressionQuality: 0.85)
+    }
+}
+#endif
 
 #Preview {
     let relayFleetStore = RelayFleetStore()

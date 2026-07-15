@@ -71,9 +71,54 @@ func normalizeClaudeModel(model string) string {
 	}
 }
 
+// claudeStrictMCPArgs disables loading of every configured MCP server for a
+// claudeCode dispatch: this project's 5 dev-tooling servers (XcodeBuildMCP,
+// xcode, apple-docs, context7, ios-simulator) AND, because MCP server config
+// is user-scoped, whatever personal/global remote connectors the operator has
+// connected (Figma, Gmail, Calendar, Vercel, etc.) — 23 servers total were
+// observed loaded in a local measurement, none relevant to a phone-dispatched
+// chat turn.
+//
+// Measured root cause (2026-07-14, local headless timing against installed
+// claude 2.1.209 — the owner's reported "11.0s for a plain Hi" reproduced
+// almost exactly, 11.278s wall clock, via the same argv shape fed the same
+// way realLauncher feeds it: prompt delivered as a stream-json stdin message,
+// not positionally, since --input-format stream-json requires that). The
+// CLI's own stream-json "result" event carries `time_to_request_ms` (local
+// process-spawn + hook-execution time before the API request is even sent)
+// and `ttft_ms` (server-side time-to-first-token). Across every trial run,
+// cold or warm, `time_to_request_ms` was 39-166ms — local overhead is NOT the
+// bottleneck. The entire multi-second gap was `ttft_ms`: a cold prompt-cache
+// write of the system prompt measured ttft_ms ~9,966ms with
+// cache_creation_input_tokens ~20,214 (full MCP config); a repeat call within
+// the cache TTL read the same prompt from cache in ttft_ms ~2-4s. The MCP
+// server list (a tool-schema block for every connected server, most
+// irrelevant to a plain chat reply) is the largest, most controllable
+// component of that system prompt.
+//
+// --strict-mcp-config with an empty --mcp-config cut cache_creation_input_tokens
+// from ~20,214 to ~15,345 in a direct back-to-back cold comparison, and cut
+// ttft_ms from 9,966ms to 4,110ms (58%) in that same comparison; on a fully
+// warm cache it still averaged ~15% faster with lower variance across 3
+// back-to-back trials each (ttft_ms 3,407ms vs 3,929ms). It only removes
+// which MCP servers load — it does not touch --permission-prompt-tool or
+// --input-format (the live control channel for AskUserQuestion, itself a
+// built-in tool unaffected by MCP config — confirmed present in the CLI's
+// own "tools" list in both configurations) or CLAUDE.md/AGENTS.md/skill
+// loading, so project-context awareness for the reply is unchanged.
+var claudeStrictMCPArgs = []string{"--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`}
+
 // agentArgv builds an explicit, shell-free argv for launching an agent with a
 // prompt. Explicit argv (never `sh -c "<interpolated>"`) avoids command injection.
-func agentArgv(agent, prompt, model string) ([]string, bool) {
+//
+// fullTools is claudeCode-only (every other vendor ignores it): false (the
+// default — flag absent on the wire decodes to the zero value) appends
+// claudeStrictMCPArgs, same as this dispatch path's original unconditional
+// behavior; true omits them so the phone's opt-in "Full tools" toggle gets a
+// normal MCP-loaded turn (XcodeBuildMCP/apple-docs/context7 etc.) at the cost
+// of the ~58% first-token-latency win strict mode buys. See claudeStrictMCPArgs'
+// doc comment for the underlying measurement this trades off.
+func agentArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
 		// --permission-prompt-tool stdio + --input-format stream-json together
@@ -103,6 +148,9 @@ func agentArgv(agent, prompt, model string) ([]string, bool) {
 		// it from the actual exec argv and delivers prompt as the initial
 		// stdin message instead — see claudeStdinPromptArgv's doc comment.
 		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"}
+		if !fullTools {
+			argv = append(argv, claudeStrictMCPArgs...)
+		}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -145,7 +193,7 @@ func agentArgv(agent, prompt, model string) ([]string, bool) {
 // vendor session in the run's cwd with a new prompt. It mirrors agentArgv (same
 // streaming flags + per-vendor gating) so a continued run streams identically to
 // the original. ok=false means the agent is unknown.
-func continueArgv(agent, prompt, model string) ([]string, bool) {
+func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
 		// --permission-prompt-tool stdio + --input-format stream-json: see
@@ -153,6 +201,9 @@ func continueArgv(agent, prompt, model string) ([]string, bool) {
 		// protocol applies to a continued turn; realLauncher strips the
 		// trailing "-p", prompt pair and delivers it over stdin the same way.
 		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue"}
+		if !fullTools {
+			argv = append(argv, claudeStrictMCPArgs...)
+		}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -206,7 +257,7 @@ func continueArgv(agent, prompt, model string) ([]string, bool) {
 //   - kimi:     -S/--session <id>  (from --help only; kimi CLI errored on an
 //     unrelated account/billing check during this session, so resume-by-id was
 //     not live-smoke-tested — re-verify before relying on it in production)
-func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
+func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
 		// --permission-prompt-tool stdio + --input-format stream-json: see
@@ -214,6 +265,9 @@ func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
 		// protocol applies to a resumed turn; realLauncher strips the trailing
 		// "-p", prompt pair and delivers it over stdin the same way.
 		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", sessionID}
+		if !fullTools {
+			argv = append(argv, claudeStrictMCPArgs...)
+		}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -266,6 +320,20 @@ type conversationLaunchParams struct {
 	VendorSessionID string // "" ⇒ no turn on this conversation has bound one yet
 	IsNew           bool   // true ⇒ first turn of a brand-new conversation
 
+	// Attachments are structured refs for this turn. Prompt stays the clean
+	// user-typed text for audit/run/ledger; hostPath is injected only into the
+	// ephemeral vendor prompt at the launch boundary (see vendorAttachmentPrompt).
+	Attachments []conversationAttachmentReference
+
+	// FullTools opts THIS turn out of claudeStrictMCPArgs (claudeCode only;
+	// every other agent ignores it) — the phone composer's per-dispatch "Full
+	// tools" toggle (default off ⇒ strict/fast). Threaded straight from this
+	// turn's own request into whichever of agentArgv/continueArgv/resumeArgv
+	// buildConversationArgv picks, never re-derived from an earlier turn on
+	// the same conversation.
+	FullTools bool
+
+
 	// Contract mirrors dispatchParams.Contract — see conversationAppendRequest's
 	// identical field (conversation_store.go) for why this exists: without it,
 	// every receipt created through agent.conversations.append (the live
@@ -300,13 +368,13 @@ type conversationLaunchParams struct {
 func buildConversationArgv(p conversationLaunchParams) (argv []string, resumeMode string, ok bool) {
 	switch {
 	case p.IsNew:
-		argv, ok = agentArgv(p.Agent, p.Prompt, p.Model)
+		argv, ok = agentArgv(p.Agent, p.Prompt, p.Model, p.FullTools)
 		return argv, "new", ok
 	case p.VendorSessionID != "":
-		argv, ok = resumeArgv(p.Agent, p.VendorSessionID, p.Prompt, p.Model)
+		argv, ok = resumeArgv(p.Agent, p.VendorSessionID, p.Prompt, p.Model, p.FullTools)
 		return argv, "exact", ok
 	default:
-		argv, ok = continueArgv(p.Agent, p.Prompt, p.Model)
+		argv, ok = continueArgv(p.Agent, p.Prompt, p.Model, p.FullTools)
 		return argv, "latestInCwdFallback", ok
 	}
 }
@@ -361,13 +429,17 @@ func runContractToReceipt(c *runContract) *receiptContract {
 }
 
 type dispatchParams struct {
-	Agent       string  `json:"agent"`
-	CWD         string  `json:"cwd"`
-	Prompt      string  `json:"prompt"`
-	BudgetUSD   float64 `json:"budgetUSD"`
-	Model       string  `json:"model"`
-	UseWorktree bool    `json:"useWorktree,omitempty"`
+	Agent       string       `json:"agent"`
+	CWD         string       `json:"cwd"`
+	Prompt      string       `json:"prompt"`
+	BudgetUSD   float64      `json:"budgetUSD"`
+	Model       string       `json:"model"`
+	UseWorktree bool         `json:"useWorktree,omitempty"`
 	Contract    *runContract `json:"contract,omitempty"`
+	// FullTools — see conversationLaunchParams.FullTools's doc comment. Absent
+	// on the wire (older clients) decodes to false ⇒ strict/fast, so this is
+	// backward compatible with no co-deploy requirement.
+	FullTools bool `json:"fullTools,omitempty"`
 
 	// worktreePath/worktreeRepoRoot are set by runDispatch (never over the wire —
 	// unexported) so dispatch() can record them on the run BEFORE launching the
@@ -1315,6 +1387,11 @@ type dispatchRun struct {
 	// (and deleted) by dispatcher.handleControlRequest. Guarded by
 	// dispatcher.mu like every other dispatchRun field.
 	pendingControlAnswer map[string]controlAnswer
+	// Attachment privacy for phone-facing tool/artifact events: absolute
+	// paths under the attachment root (and known object paths) are redacted
+	// in wrapEmitForRun before relay/ledger. Vendor stdin is not altered.
+	attachmentRoot         string
+	attachmentPlaceholders map[string]string
 }
 
 // runTerminalCallback fires once when a launched run reaches a terminal process
@@ -1475,6 +1552,24 @@ func (d *dispatcher) emitAudit(e AuditEntry) {
 // the process launches.
 func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 	return func(method string, params any) {
+		// Phone-event privacy first: redact verified attachment absolute paths
+		// in tool/artifact/live-status/output/question JSON before receipt
+		// accumulation, relay, and ledger. Vendor stdin is not altered
+		// (redaction is emit-side only; replacement is bounded to this run's
+		// resolved attachments — not a global filesystem scrub).
+		if method == "agent.tool.start" || method == "agent.artifact" || method == liveStatusMethod ||
+			method == "agent.run.output" || method == "agent.question.raw" {
+			d.mu.Lock()
+			run := d.runs[runID]
+			var root string
+			var placeholders map[string]string
+			if run != nil {
+				root = run.attachmentRoot
+				placeholders = run.attachmentPlaceholders
+			}
+			d.mu.Unlock()
+			params = redactAttachmentPathsInParams(method, params, root, placeholders)
+		}
 		d.observeReceiptEmit(runID, method, params)
 		if method == "agent.run.vendorSession" {
 			m, _ := params.(map[string]any)
@@ -2075,7 +2170,7 @@ func (d *dispatcher) getQuotaGuard() QuotaGuardResult {
 // dispatch applies the budget + policy gate, then launches. It NEVER launches a
 // run that policy denies/escalates, and refuses once the budget cap is reached.
 func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
-	argv, ok := agentArgv(p.Agent, p.Prompt, p.Model)
+	argv, ok := agentArgv(p.Agent, p.Prompt, p.Model, p.FullTools)
 	if !ok {
 		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
 	}
@@ -2250,7 +2345,11 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 		return dispatchResult{Status: "error", Message: "unknown run: " + runID}
 	}
 
-	argv, ok := continueArgv(agent, prompt, model)
+	// agent.run.continue (this legacy in-memory-run path, distinct from the
+	// conversation-ledger's launchConversationTurn) has no FullTools field on
+	// the wire yet — out of scope for the composer's per-dispatch toggle, so
+	// this always launches strict, same as before.
+	argv, ok := continueArgv(agent, prompt, model, false)
 	if !ok {
 		return dispatchResult{Status: "error", Message: "continue not supported for agent: " + agent}
 	}
@@ -2350,7 +2449,10 @@ type observedSessionContinueParams struct {
 // the new runId exactly like dispatch/continueRun, and it can itself be
 // continued later via agent.run.continue.
 func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
-	argv, ok := resumeArgv(p.Vendor, p.SessionID, p.Prompt, p.Model)
+	// agent.observedSession.continue targets a terminal-started session, not
+	// a composer-dispatched conversation turn — out of scope for the
+	// composer's per-dispatch toggle, so this always launches strict.
+	argv, ok := resumeArgv(p.Vendor, p.SessionID, p.Prompt, p.Model, false)
 	if !ok {
 		return dispatchResult{Status: "error", Message: "resume-by-id not supported for agent: " + p.Vendor}
 	}
@@ -2435,8 +2537,21 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 // bindVendorSession (all keyed by run_id). The caller (conversationsAppend)
 // is responsible for never invoking this twice for the same ledger turn (an
 // idempotent clientTurnId replay must not double-launch).
+//
+// Desired semantic order (do not reorder):
+//  1. clean policy command + attachment identity digest → ContentHash
+//  2. policy allow
+//  3. canonical / content validation (receipt, root, re-hash)
+//  4. Claude auth preflight (ensureClaudeAuth, from 85c14180)
+//  5. ephemeral JSON attachment manifest
+//  6. run insert / launch
 func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
-	argv, _, ok := buildConversationArgv(p)
+	// 1. Policy/audit argv uses the CLEAN user prompt only. hostPath must never
+	// enter ApprovalEvent.Command, ContentHash command material, audit Command,
+	// or the in-memory run.Prompt (phone-visible surfaces / receipts).
+	policyParams := p
+	policyParams.Prompt = p.Prompt
+	policyArgv, _, ok := buildConversationArgv(policyParams)
 	if !ok {
 		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
 	}
@@ -2457,21 +2572,25 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		return dispatchResult{Status: "budgetExceeded", Message: fmt.Sprintf("daily spend $%.2f >= cap $%.2f", spent, p.BudgetUSD)}
 	}
 
-	// Policy gate (same risk scoring as dispatch/continueRun/resumeObservedSession).
-	command := "[conversation-append] " + strings.Join(argv, " ")
+	// ContentHash binds clean argv + attachment identity digest in toolInput
+	// (computeContentHash's existing 4th field) — not mutable hostPath text.
+	command := "[conversation-append] " + strings.Join(policyArgv, " ")
+	attDigest := attachmentIdentityDigest(p.Attachments)
 	event := ApprovalEvent{
 		ApprovalID:  newUUID(),
 		Agent:       normalizeAgentSource(p.Agent),
 		Kind:        "command",
 		Command:     command,
 		CWD:         p.CWD,
-		Risk:        d.launchRisk(argv),
+		Risk:        d.launchRisk(policyArgv),
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 		RunID:       runID,
-		ContentHash: computeContentHash(command, "", p.CWD, ""),
+		ContentHash: computeContentHash(command, "", p.CWD, attDigest),
 	}
+
+	// 2. Policy gate.
 	effect, rule, fromDefault := evalFn(event)
-	effect = relaxLaunchEscalation(effect, fromDefault, argv, d.hookWired)
+	effect = relaxLaunchEscalation(effect, fromDefault, policyArgv, d.hookWired)
 	switch effect {
 	case "deny":
 		audit(AuditEntry{Action: "conversation-append-denied", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
@@ -2481,12 +2600,51 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
+	// Adapter scope: path manifest only for audited Claude Code. Other agents
+	// with attachments fail closed with a path-free unsupported error — no
+	// launch and no path in argv/ps.
+	if len(p.Attachments) > 0 && normalizeAgentSource(p.Agent) != "claudeCode" {
+		audit(AuditEntry{Action: "conversation-append-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
+		return dispatchResult{Status: "error", Message: "attachments are not supported for this agent yet"}
+	}
+
+	// 3. Canonical path + content validation (receipt lookup, root trust
+	// boundary, re-hash). Errors name id/name only — never hostPath.
+	resolved, err := resolveAndVerifyAttachments(p.Attachments)
+	if err != nil {
+		audit(AuditEntry{Action: "conversation-append-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+
+	// 4. Claude auth preflight — fail promptly rather than launching into a
+	// stalled auth prompt (see 85c14180).
 	if err := d.ensureClaudeAuth(p.Agent); err != nil {
 		audit(AuditEntry{Action: "conversation-append-auth-preflight", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "deny", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
 	}
 
-	// See dispatch()'s identical comment: the run record must exist before
+	// 5. Ephemeral JSON attachment manifest (Claude only; empty → clean prompt).
+	vendorPrompt, err := vendorAttachmentPrompt(p.Prompt, resolved)
+	if err != nil {
+		audit(AuditEntry{Action: "conversation-append-error", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
+		return dispatchResult{Status: "error", Message: err.Error()}
+	}
+	launchParams := p
+	launchParams.Prompt = vendorPrompt
+	launchArgv, _, ok := buildConversationArgv(launchParams)
+	if !ok {
+		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
+	}
+
+	attRoot := ""
+	placeholders := attachmentPathPlaceholders(resolved)
+	if len(resolved) > 0 {
+		if root, rerr := ensureAttachmentRoot(); rerr == nil {
+			attRoot = root
+		}
+	}
+
+	// 6. See dispatch()'s identical comment: the run record must exist before
 	// launch runs, or a fast-exiting process's terminal-status event races
 	// past a nil run and worktree cleanup silently no-ops.
 	d.mu.Lock()
@@ -2495,12 +2653,18 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		audit(AuditEntry{Action: "conversation-append-emergency-stopped", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt})
 		return emergencyStoppedResult()
 	}
-	d.runs[runID] = &dispatchRun{ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, Contract: p.Contract, WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot}
+	// run.Prompt stays the clean user intent — never the vendor path prefix.
+	d.runs[runID] = &dispatchRun{
+		ID: runID, Agent: p.Agent, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model,
+		Status: "running", BudgetUSD: p.BudgetUSD, Contract: p.Contract,
+		WorktreePath: p.worktreePath, RepoRoot: p.worktreeRepoRoot,
+		attachmentRoot: attRoot, attachmentPlaceholders: placeholders,
+	}
 	d.mu.Unlock()
 	d.startReceiptAccum(runID, d.receiptStartFromDispatch(dispatchParams{
 		Agent: p.Agent, CWD: p.CWD, Model: p.Model, Contract: p.Contract, worktreePath: p.worktreePath, worktreeRepoRoot: p.worktreeRepoRoot,
 	}))
-	handle, err := d.launch(argv, p.CWD, runID, d.wrapEmitForRun(runID, true))
+	handle, err := d.launch(launchArgv, p.CWD, runID, d.wrapEmitForRun(runID, true))
 	if err != nil {
 		d.mu.Lock()
 		delete(d.runs, runID)

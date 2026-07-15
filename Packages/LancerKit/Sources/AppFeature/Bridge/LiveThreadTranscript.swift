@@ -34,6 +34,12 @@ public enum LiveThreadTranscript: Sendable {
         !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// After a successful observed-session adopt, an empty host transcript must
+    /// still keep the composer usable but must not render a blank thread.
+    public static func shouldShowAdoptedNoHistoryPlaceholder(transcriptMessageCount: Int) -> Bool {
+        transcriptMessageCount == 0
+    }
+
     static func isObservedWrapperUserText(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.hasPrefix("<local-command-caveat>")
@@ -53,7 +59,8 @@ public enum LiveThreadTranscript: Sendable {
     }
 
     static func shouldRenderPromptBubble(for turn: ChatTurn) -> Bool {
-        !isObservedWrapperUserText(turn.prompt)
+        if !turn.attachments.isEmpty { return true }
+        return !isObservedWrapperUserText(turn.prompt)
     }
 
     static func assistantFallback(for turn: ChatTurn) -> String? {
