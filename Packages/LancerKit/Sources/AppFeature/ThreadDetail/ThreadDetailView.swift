@@ -440,6 +440,10 @@ struct ThreadDetailView: View {
             prompt: prompt
         )
         queuedReviewComments.removeAll()
+        // Same stacked-sheet hazard as WorkspacesView.handleSend — dismiss
+        // the follow-up composer explicitly instead of letting it race the
+        // live-thread sheet's presentation.
+        isFollowUpPresented = false
         activeLiveThread = LiveThreadIdentifier(prompt: composed, cwd: normalized, attachments: attachments)
     }
 

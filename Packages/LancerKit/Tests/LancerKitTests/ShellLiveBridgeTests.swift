@@ -396,6 +396,66 @@ struct ShellLiveBridgeTests {
             Issue.record("expected lastAttempt to retain clientTurnId after retries")
         }
     }
+
+    /// Regression for the 2026-07-15 duplicate-turn investigation's Bug 2:
+    /// `send`/`sendFollowUp` used to guard only on `isSendInFlight`, but
+    /// `sendState` doesn't flip to `.working` until AFTER the (up to 8s)
+    /// `waitForConnectedMachine` await returns — so two concurrent `send`
+    /// calls could both pass the guard while `sendState` was still `.idle`
+    /// and both reach the daemon. This test forces exactly that ordering
+    /// (both calls parked past their dispatch-gate claim, before either
+    /// resolves a machine) using `testAfterSendDispatchGateClaimed` — the
+    /// same synchronization technique `concurrentRetrySingleFlights` above
+    /// uses for `retryLastAttempt` — and asserts only the FIRST claims the
+    /// gate and only ONE dispatch reaches the transport/coordinator.
+    @Test("concurrent send() calls single-flight the dispatch, not just isSendInFlight")
+    func concurrentSendSingleFlightsDispatch() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        _ = makeConnectedMachine(into: store)
+        let bridge = makeBridge(repo: repo, relayFleetStore: store)
+        bridge.markHydrated()
+
+        struct DispatchTestError: Error {}
+        let appendCallCount = CallCounter()
+        bridge.testTransportOverride = ConversationTransport(
+            append: { _ in
+                await appendCallCount.increment()
+                throw DispatchTestError()
+            },
+            fetch: { _ in throw DispatchTestError() },
+            archive: { req in ConversationArchiveResponse(ok: true, conversationId: req.conversationId) }
+        )
+
+        let gateClaimed = AsyncGate()
+        let allowDispatch = AsyncGate()
+        bridge.testAfterSendDispatchGateClaimed = {
+            await gateClaimed.open()
+            await allowDispatch.wait()
+        }
+
+        async let first: Void = bridge.send(prompt: "hello", cwd: "/proj", clientTurnId: "turn-a")
+        await gateClaimed.wait()
+
+        // The second call races in while the first is parked past its gate
+        // claim but before `sendState` has flipped to `.working` — exactly
+        // the window Bug 2 exploited.
+        async let second: Void = bridge.send(prompt: "hello", cwd: "/proj", clientTurnId: "turn-b")
+        try await Task.sleep(nanoseconds: 50_000_000)
+        await allowDispatch.open()
+
+        await first
+        await second
+
+        #expect(bridge.testSendDispatchGateClaimCount == 1)
+        // `ConversationSyncCoordinator.appendWithRetry` retries a throwing
+        // `transport.append` up to 3 times (hardcoded `attempts: 3`) before
+        // surfacing `.blocked` — so ONE logical dispatch here means exactly
+        // 3 append calls. Without the Bug 2 fix, the second `send()` would
+        // also have reached dispatch, doubling this to 6.
+        #expect(await appendCallCount.value == 3)
+    }
 }
 
 /// One-shot async gate for coordinating MainActor test races.
@@ -417,6 +477,15 @@ private actor AsyncGate {
         await withCheckedContinuation { continuation in
             waiters.append(continuation)
         }
+    }
+}
+
+/// Thread-safe call counter for asserting a transport closure fired exactly once.
+private actor CallCounter {
+    private(set) var value = 0
+
+    func increment() {
+        value += 1
     }
 }
 #endif

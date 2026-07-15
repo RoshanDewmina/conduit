@@ -274,6 +274,15 @@ public struct WorkspacesView: View {
     private func handleSend(_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference] = []) {
         guard WorkspaceRepoCatalog.isAbsoluteSendTarget(cwd) else { return }
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
+        // Explicitly dismiss the composer sheet rather than leaving it to
+        // stack with the live-thread sheet — both are separate `.sheet`
+        // modifiers on this same view, so without this the composer's
+        // `TextEditor` (still showing the just-sent prompt) can remain
+        // enumerable by the accessibility tree during its dismiss animation
+        // at the same time the live thread's prompt bubble renders, reading
+        // as a duplicate turn to AX-tree-based tests even with no visual
+        // double-paint (found in the 2026-07-15 reconnect re-proof).
+        isComposerPresented = false
         activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized, attachments: attachments)
     }
 

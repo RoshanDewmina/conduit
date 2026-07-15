@@ -428,6 +428,15 @@ public struct NewChatComposerView: View {
         }
 
         let cleanPrompt = prompt
+        // Clear the bound TextEditor state before requesting dismiss —
+        // `dismiss()` on a `.sheet(isPresented:)` only requests an async
+        // teardown, so without this the composer's TextEditor can still show
+        // the just-sent prompt (and be enumerable by the accessibility tree)
+        // during the dismiss transition, racing the live-thread sheet's own
+        // presentation of the same prompt as a bubble (found in the
+        // 2026-07-15 reconnect re-proof — reads as a duplicate turn to
+        // AX-tree-based tests with no visual double-paint).
+        draftText = ""
         onSend(cleanPrompt, cwd, refs)
         dismiss()
     }

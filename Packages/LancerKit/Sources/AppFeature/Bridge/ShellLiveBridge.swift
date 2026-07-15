@@ -114,6 +114,18 @@ public final class ShellLiveBridge {
     /// double-dispatch while `send`/`sendFollowUp` are still idle.
     private var isRetryDispatchInFlight = false
 
+    /// Single-flight gate for `send`/`sendFollowUp` themselves — claimed
+    /// synchronously before any `waitForConnectedMachine` await, mirroring
+    /// `isRetryDispatchInFlight` exactly. `isSendInFlight` alone is not
+    /// enough: `sendState` doesn't flip to `.working` until AFTER the
+    /// (up to 8s) connection wait returns, so two concurrent calls to
+    /// `send`/`sendFollowUp` (double-tap, or two call sites both firing)
+    /// could both pass `!isSendInFlight`, each mint their own `clientTurnId`,
+    /// and both reach the daemon — which has no conflict-check for a
+    /// brand-new conversation and only a `baseSeq`-race-dependent check for
+    /// follow-ups (found in the 2026-07-15 reconnect re-proof investigation).
+    private var isSendDispatchInFlight = false
+
     /// True while a send/follow-up is still awaiting a terminal turn
     /// (including degraded unreachable polling). Composer must stay disabled.
     public var isSendInFlight: Bool {
@@ -133,6 +145,14 @@ public final class ShellLiveBridge {
     var testAfterRetryGateClaimed: (@MainActor () async -> Void)?
     /// How many times `retryLastAttempt` claimed the single-flight gate.
     private(set) var testRetryGateClaimCount = 0
+    /// Runs after `send`/`sendFollowUp`'s dispatch gate is claimed (before
+    /// `waitForConnectedMachine`) — mirrors `testAfterRetryGateClaimed`.
+    var testAfterSendDispatchGateClaimed: (@MainActor () async -> Void)?
+    /// How many times `send`/`sendFollowUp` claimed the dispatch single-flight gate.
+    private(set) var testSendDispatchGateClaimCount = 0
+    /// Overrides the real relay transport in `send`/`sendFollowUp` so tests
+    /// can count/gate dispatch without a live relay connection.
+    var testTransportOverride: ConversationTransport?
     var testSessionEpoch: UInt64 { sessionEpoch }
     /// When set, `adoptArmedObservedContinue` uses this instead of the live RPC.
     var testRelayFetchTranscript: (@MainActor (String, Int) async throws -> (
@@ -228,6 +248,7 @@ public final class ShellLiveBridge {
     public func resetForNewThread() {
         sessionEpoch &+= 1
         isRetryDispatchInFlight = false
+        isSendDispatchInFlight = false
         sendState = .idle
         activeConversationID = nil
         transcriptTurns = []
@@ -356,7 +377,13 @@ public final class ShellLiveBridge {
         attachments: [ConversationAttachmentReference] = [],
         clientTurnId: String? = nil
     ) async {
-        guard !isSendInFlight else { return }
+        guard !isSendInFlight, !isSendDispatchInFlight else { return }
+        isSendDispatchInFlight = true
+        testSendDispatchGateClaimCount += 1
+        defer { isSendDispatchInFlight = false }
+        if let hold = testAfterSendDispatchGateClaimed {
+            await hold()
+        }
         let epoch = sessionEpoch
         guard let machine = await waitForConnectedMachine() else {
             guard epoch == sessionEpoch else { return }
@@ -389,7 +416,7 @@ public final class ShellLiveBridge {
         inFlightAttachments = attachments
         inFlightRunID = nil
 
-        let transport = Self.transport(for: machine.bridge)
+        let transport = testTransportOverride ?? Self.transport(for: machine.bridge)
         let vendor = DispatchVendorSelection.load()
         let model = DispatchModelSelection.dispatchSlug(for: vendor)
         // "Full tools" only means anything for claudeCode — never send it true
@@ -688,7 +715,13 @@ public final class ShellLiveBridge {
         attachments: [ConversationAttachmentReference] = [],
         clientTurnId: String? = nil
     ) async {
-        guard !isSendInFlight else { return }
+        guard !isSendInFlight, !isSendDispatchInFlight else { return }
+        isSendDispatchInFlight = true
+        testSendDispatchGateClaimCount += 1
+        defer { isSendDispatchInFlight = false }
+        if let hold = testAfterSendDispatchGateClaimed {
+            await hold()
+        }
         let epoch = sessionEpoch
 
         // Observed sessions are not in the conversation ledger — keep routing
@@ -745,7 +778,7 @@ public final class ShellLiveBridge {
         inFlightAttachments = attachments
         inFlightRunID = nil
 
-        let transport = Self.transport(for: machine.bridge)
+        let transport = testTransportOverride ?? Self.transport(for: machine.bridge)
         let outcome = await conversationSyncCoordinator.continueConversation(
             conversationID: conversationID,
             baseSeq: baseSeq,
