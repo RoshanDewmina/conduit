@@ -5,20 +5,47 @@ import LancerCore
 import PersistenceKit
 @testable import AppFeature
 @testable import SessionFeature
+@testable import SSHTransport
+@testable import SecurityKit
 
 /// Regressions for the lane-V chat-loop robustness review:
 /// 1. stale in-flight poll must not repopulate transcript after `resetForNewThread`
 /// 2. rapid concurrent `retryLastAttempt` must single-flight (one dispatch)
+/// 3. empty observed-transcript adopt exposes `.adoptedNoHistory`, not bare `.idle`
 @MainActor
 @Suite("ShellLiveBridge")
 struct ShellLiveBridgeTests {
 
-    private func makeBridge(repo: ChatConversationRepository) -> ShellLiveBridge {
+    private func makeBridge(
+        repo: ChatConversationRepository,
+        relayFleetStore: RelayFleetStore = RelayFleetStore(connectionStates: ConnectionStateStore())
+    ) -> ShellLiveBridge {
         ShellLiveBridge(
-            relayFleetStore: RelayFleetStore(connectionStates: ConnectionStateStore()),
+            relayFleetStore: relayFleetStore,
             conversationSyncCoordinator: ConversationSyncCoordinator(chatRepo: repo),
             chatRepo: repo
         )
+    }
+
+    private func makeConnectedMachine(
+        into store: RelayFleetStore
+    ) -> (machine: RelayFleetStore.Machine, client: E2ERelayClient) {
+        RelayMachineMigration.indexKeychain = Keychain(
+            service: "dev.lancer.relay.test.\(UUID().uuidString)",
+            inMemory: true
+        )
+        let relayURL = URL(string: "https://relay.example.com")!
+        let client = E2ERelayClient(relayURL: relayURL, pairingCode: "111222")
+        let bridge = E2ERelayBridge(
+            relayClient: client,
+            approvalRelay: ApprovalRelay(),
+            machineID: client.machineID
+        )
+        let record = RelayMachineRecord(id: client.machineID, displayName: "Test Machine")
+        let machine = RelayFleetStore.Machine(record: record, client: client, bridge: bridge)
+        store.add(machine)
+        client.setStateForTesting(pairing: .paired, connection: .connected)
+        return (machine, client)
     }
 
     private func seedRunningTurn(
@@ -139,6 +166,57 @@ struct ShellLiveBridgeTests {
             Issue.record("expected .failed after the single retry dispatch, got \(bridge.sendState)")
             return
         }
+    }
+
+    @Test("adopt with empty transcript exposes adoptedNoHistory, not bare idle")
+    func adoptEmptyTranscriptExposesNoHistoryState() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        _ = makeConnectedMachine(into: store)
+        let bridge = makeBridge(repo: repo, relayFleetStore: store)
+        bridge.markHydrated()
+        bridge.armObservedContinue(vendor: "claudeCode", sessionId: "sess-empty", cwd: "/proj")
+        bridge.testRelayFetchTranscript = { sessionId, _ in
+            #expect(sessionId == "sess-empty")
+            return (messages: [], nextLine: 0, resetRequired: false)
+        }
+
+        await bridge.adoptArmedObservedContinue(fallbackCwd: "/proj")
+
+        #expect(bridge.sendState == .adoptedNoHistory)
+        #expect(bridge.sendState != .idle)
+        #expect(bridge.transcriptTurns.isEmpty)
+        #expect(bridge.activeConversationID == "observed:sess-empty")
+        #expect(bridge.canAcceptFollowUp)
+        #expect(!bridge.isSendInFlight)
+    }
+
+    @Test("adopt with transcript history leaves sendState idle")
+    func adoptWithHistoryLeavesIdle() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        _ = makeConnectedMachine(into: store)
+        let bridge = makeBridge(repo: repo, relayFleetStore: store)
+        bridge.markHydrated()
+        bridge.armObservedContinue(vendor: "claudeCode", sessionId: "sess-hist", cwd: "/proj")
+        bridge.testRelayFetchTranscript = { _, _ in
+            (
+                messages: [
+                    SessionMessage(role: .user, text: "hello"),
+                    SessionMessage(role: .assistant, text: "hi"),
+                ],
+                nextLine: 2,
+                resetRequired: false
+            )
+        }
+
+        await bridge.adoptArmedObservedContinue(fallbackCwd: "/proj")
+
+        #expect(bridge.sendState == .idle)
+        #expect(bridge.transcriptTurns.count == 1)
+        #expect(bridge.activeConversationID == "observed:sess-hist")
     }
 }
 

@@ -22,6 +22,9 @@ import SessionFeature
 public final class ShellLiveBridge {
     public enum SendState: Equatable {
         case idle
+        /// Observed-session adopt succeeded but host returned zero transcript
+        /// messages — composer stays usable; UI shows a no-history placeholder.
+        case adoptedNoHistory
         /// Run in flight, no assistant text yet.
         case working
         /// Run in flight with accumulating `assistantText` from host refresh.
@@ -34,7 +37,7 @@ public final class ShellLiveBridge {
 
         public static func == (lhs: SendState, rhs: SendState) -> Bool {
             switch (lhs, rhs) {
-            case (.idle, .idle), (.working, .working):
+            case (.idle, .idle), (.working, .working), (.adoptedNoHistory, .adoptedNoHistory):
                 return true
             case (.streaming(let l), .streaming(let r)),
                  (.completed(let l), .completed(let r)):
@@ -105,7 +108,7 @@ public final class ShellLiveBridge {
         switch sendState {
         case .working, .streaming, .degraded:
             return true
-        case .idle, .completed, .failed:
+        case .idle, .adoptedNoHistory, .completed, .failed:
             return false
         }
     }
@@ -119,6 +122,12 @@ public final class ShellLiveBridge {
     /// How many times `retryLastAttempt` claimed the single-flight gate.
     private(set) var testRetryGateClaimCount = 0
     var testSessionEpoch: UInt64 { sessionEpoch }
+    /// When set, `adoptArmedObservedContinue` uses this instead of the live RPC.
+    var testRelayFetchTranscript: (@MainActor (String, Int) async throws -> (
+        messages: [SessionMessage],
+        nextLine: Int,
+        resetRequired: Bool
+    ))?
 
     func testArmLastAttempt(_ attempt: LastSendAttempt) {
         lastAttempt = attempt
@@ -268,10 +277,15 @@ public final class ShellLiveBridge {
         boundObservedContinue = resolved
 
         do {
-            let result = try await machine.bridge.relayFetchTranscript(
-                sessionId: resolved.sessionId,
-                sinceLine: 0
-            )
+            let result: (messages: [SessionMessage], nextLine: Int, resetRequired: Bool)
+            if let override = testRelayFetchTranscript {
+                result = try await override(resolved.sessionId, 0)
+            } else {
+                result = try await machine.bridge.relayFetchTranscript(
+                    sessionId: resolved.sessionId,
+                    sinceLine: 0
+                )
+            }
             guard epoch == sessionEpoch else { return }
             let conversationID = "observed:\(resolved.sessionId)"
             activeConversationID = conversationID
@@ -281,7 +295,11 @@ public final class ShellLiveBridge {
                 vendorSessionID: resolved.sessionId
             )
             inFlightPrompt = nil
-            sendState = .idle
+            // Empty host transcript still adopts (composer usable) but must not
+            // look like a blank failed tap — surface an explicit no-history state.
+            sendState = LiveThreadTranscript.shouldShowAdoptedNoHistoryPlaceholder(
+                transcriptMessageCount: result.messages.count
+            ) ? .adoptedNoHistory : .idle
         } catch {
             guard epoch == sessionEpoch else { return }
             sendState = .failed(error.localizedDescription)

@@ -7,6 +7,7 @@ import SessionFeature
 /// Polls `agent.sessions.list` + `agent.status` ~every 5s while visible; stops when not.
 public struct RunningAgentsSection: View {
     @Environment(RelayFleetStore.self) private var relayFleetStore
+    @Environment(ShellLiveBridge.self) private var shellLiveBridge
 
     /// Called when the user opens an observed session into a Lancer live thread.
     /// Prompt is empty on row tap — the live thread adopts/hydrates; the first
@@ -29,6 +30,14 @@ public struct RunningAgentsSection: View {
 
             if let statusMessage, rows.isEmpty {
                 Text(statusMessage)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                Divider().padding(.leading, 58)
+            } else if rows.isEmpty && statusMessage == nil && !tracker.hasEverSucceeded {
+                Text("Checking for agents…")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -152,6 +161,17 @@ public struct RunningAgentsSection: View {
     private func refreshOnce() async {
         let now = Date()
         guard let machine = relayFleetStore.firstConnectedMachine else {
+            // Cold-launch / reconnect: banner may already say Connected while
+            // ConnectionStateStore is still transitional — don't burn failure
+            // budget on that tick.
+            if isAwaitingConnectedMachine {
+                statusMessage = RunningAgentsFreshness.statusMessage(
+                    rowCount: rows.count,
+                    tracker: tracker,
+                    now: now
+                )
+                return
+            }
             _ = RunningAgentsFreshness.recordFailure(&tracker)
             statusMessage = RunningAgentsFreshness.statusMessage(
                 rowCount: rows.count,
@@ -183,6 +203,21 @@ public struct RunningAgentsSection: View {
                 now: now
             )
         }
+    }
+
+    /// True while fleet hydration is incomplete or any machine is still
+    /// `.reconnecting` / `.hostOffline` (could become connected without a re-pair).
+    private var isAwaitingConnectedMachine: Bool {
+        if !shellLiveBridge.isHydrated { return true }
+        for machine in relayFleetStore.machines {
+            switch relayFleetStore.connectionState(for: machine.id) {
+            case .reconnecting, .hostOffline:
+                return true
+            case .connected, .pairingInvalid, .none:
+                continue
+            }
+        }
+        return false
     }
 }
 
