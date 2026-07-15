@@ -71,6 +71,43 @@ func normalizeClaudeModel(model string) string {
 	}
 }
 
+// claudeStrictMCPArgs disables loading of every configured MCP server for a
+// claudeCode dispatch: this project's 5 dev-tooling servers (XcodeBuildMCP,
+// xcode, apple-docs, context7, ios-simulator) AND, because MCP server config
+// is user-scoped, whatever personal/global remote connectors the operator has
+// connected (Figma, Gmail, Calendar, Vercel, etc.) — 23 servers total were
+// observed loaded in a local measurement, none relevant to a phone-dispatched
+// chat turn.
+//
+// Measured root cause (2026-07-14, local headless timing against installed
+// claude 2.1.209 — the owner's reported "11.0s for a plain Hi" reproduced
+// almost exactly, 11.278s wall clock, via the same argv shape fed the same
+// way realLauncher feeds it: prompt delivered as a stream-json stdin message,
+// not positionally, since --input-format stream-json requires that). The
+// CLI's own stream-json "result" event carries `time_to_request_ms` (local
+// process-spawn + hook-execution time before the API request is even sent)
+// and `ttft_ms` (server-side time-to-first-token). Across every trial run,
+// cold or warm, `time_to_request_ms` was 39-166ms — local overhead is NOT the
+// bottleneck. The entire multi-second gap was `ttft_ms`: a cold prompt-cache
+// write of the system prompt measured ttft_ms ~9,966ms with
+// cache_creation_input_tokens ~20,214 (full MCP config); a repeat call within
+// the cache TTL read the same prompt from cache in ttft_ms ~2-4s. The MCP
+// server list (a tool-schema block for every connected server, most
+// irrelevant to a plain chat reply) is the largest, most controllable
+// component of that system prompt.
+//
+// --strict-mcp-config with an empty --mcp-config cut cache_creation_input_tokens
+// from ~20,214 to ~15,345 in a direct back-to-back cold comparison, and cut
+// ttft_ms from 9,966ms to 4,110ms (58%) in that same comparison; on a fully
+// warm cache it still averaged ~15% faster with lower variance across 3
+// back-to-back trials each (ttft_ms 3,407ms vs 3,929ms). It only removes
+// which MCP servers load — it does not touch --permission-prompt-tool or
+// --input-format (the live control channel for AskUserQuestion, itself a
+// built-in tool unaffected by MCP config — confirmed present in the CLI's
+// own "tools" list in both configurations) or CLAUDE.md/AGENTS.md/skill
+// loading, so project-context awareness for the reply is unchanged.
+var claudeStrictMCPArgs = []string{"--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`}
+
 // agentArgv builds an explicit, shell-free argv for launching an agent with a
 // prompt. Explicit argv (never `sh -c "<interpolated>"`) avoids command injection.
 func agentArgv(agent, prompt, model string) ([]string, bool) {
@@ -103,6 +140,7 @@ func agentArgv(agent, prompt, model string) ([]string, bool) {
 		// it from the actual exec argv and delivers prompt as the initial
 		// stdin message instead — see claudeStdinPromptArgv's doc comment.
 		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"}
+		argv = append(argv, claudeStrictMCPArgs...)
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -153,6 +191,7 @@ func continueArgv(agent, prompt, model string) ([]string, bool) {
 		// protocol applies to a continued turn; realLauncher strips the
 		// trailing "-p", prompt pair and delivers it over stdin the same way.
 		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue"}
+		argv = append(argv, claudeStrictMCPArgs...)
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -214,6 +253,7 @@ func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
 		// protocol applies to a resumed turn; realLauncher strips the trailing
 		// "-p", prompt pair and delivers it over stdin the same way.
 		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", sessionID}
+		argv = append(argv, claudeStrictMCPArgs...)
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}

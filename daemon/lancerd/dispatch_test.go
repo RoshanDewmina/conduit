@@ -48,7 +48,7 @@ func TestAgentArgv(t *testing.T) {
 	if !ok {
 		t.Fatal("claude should be supported")
 	}
-	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "-p", "start"}
+	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "-p", "start"}
 	if !reflect.DeepEqual(claude, want) {
 		t.Fatalf("claude argv mismatch:\n got %v\nwant %v", claude, want)
 	}
@@ -62,7 +62,7 @@ func TestContinueArgv(t *testing.T) {
 	if !ok {
 		t.Fatal("claude continue should be supported")
 	}
-	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue", "-p", "next step"}
+	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "-p", "next step"}
 	if !reflect.DeepEqual(claude, want) {
 		t.Fatalf("claude argv mismatch:\n got %v\nwant %v", claude, want)
 	}
@@ -123,7 +123,7 @@ func TestContinueRunDeniedDoesNotLaunch(t *testing.T) {
 
 func TestResumeArgv(t *testing.T) {
 	claude, ok := resumeArgv("claudeCode", "sess-123", "next step", "")
-	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", "sess-123", "-p", "next step"}
+	want := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", "sess-123", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "-p", "next step"}
 	if !ok || !reflect.DeepEqual(claude, want) {
 		t.Fatalf("claude resume argv mismatch:\n got %v (ok=%v)\nwant %v", claude, ok, want)
 	}

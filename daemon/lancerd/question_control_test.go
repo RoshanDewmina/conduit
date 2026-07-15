@@ -28,7 +28,7 @@ func TestClaudeStdinPromptArgvSplitsTrailingPrompt(t *testing.T) {
 	if prompt != "hello there" {
 		t.Fatalf("prompt = %q, want %q", prompt, "hello there")
 	}
-	wantExec := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "-p"}
+	wantExec := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "-p"}
 	if !reflect.DeepEqual(execArgv, wantExec) {
 		t.Fatalf("execArgv mismatch:\n got %v\nwant %v", execArgv, wantExec)
 	}
