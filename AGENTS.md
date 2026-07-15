@@ -59,6 +59,20 @@ Both ported from the same set: `lancer-context-onboarding`, `lancer-verification
 `lancer-dead-view-sweep`, `lancer-onboarding-smoke`, `agent-next-prompt`,
 `agent-feature-loop`, `agent-session-handoff`.
 
+## Simulator provisioning (Simurgh)
+
+Use the Simurgh MCP tools for all simulator work: `lease_acquire`, `lease_renew`,
+`lease_release`, `lease_status`, `pool_status`. Never pick a UDID from `simctl`
+yourself — always go through `lease_acquire`. Always call `lease_release` when
+done so the device is torn down and capacity returns to the pool. Leases are
+session-bound by default: if this session crashes or ends without releasing,
+the lease is reclaimed automatically. Do not pass `detach=true` unless a lease
+must deliberately outlive the session. If using the CLI instead of MCP,
+acquire with `--rm` so the lease dies with your shell session. Source:
+`~/Documents/simurgh` (private repo, not published) — `README.md` for the CLI
+reference, `docs/ARCHITECTURE.md` for how lease isolation/XcodeBuildMCP
+integration/PATH-shim audit mode work.
+
 ## Local workflow conventions
 
 The owner's canonical local rules live at `~/.hermes/knowledge-base/AGENTS.md` (durable reports → files;
