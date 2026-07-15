@@ -28,13 +28,37 @@ public enum ThreadListWorkspace: Hashable {
     }
 }
 
+/// Unified list row so ledger threads and desktop observed sessions share one
+/// recency-grouped list without corrupting the ledger model.
+enum ThreadListRowKind: Identifiable {
+    case ledger(ThreadListItem)
+    case desktopSession(ObservedSession)
+
+    var id: String {
+        switch self {
+        case .ledger(let t): return t.id
+        case .desktopSession(let s): return s.id
+        }
+    }
+
+    var sortDate: Date {
+        switch self {
+        case .ledger(let t): return t.lastActivityAt
+        case .desktopSession(let s): return s.lastActivity
+        }
+    }
+}
+
 /// Per-workspace thread list backed by `WorkspaceDataStore` conversations.
 public struct ThreadListView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(WorkspaceDataStore.self) private var workspaceData
+    @Environment(RelayFleetStore.self) private var relayFleetStore
+    @Environment(ShellLiveBridge.self) private var bridge
     @State private var isSearchPresented = false
     @State private var isComposerPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
+    @State private var observedSessions: [ObservedSession] = []
 
     let workspace: ThreadListWorkspace
 
@@ -53,8 +77,25 @@ public struct ThreadListView: View {
         workspaceData.threads(forCwd: workspace.cwd, allRepos: workspace.isAllRepos)
     }
 
-    private var groups: [(title: String, items: [ThreadListItem])] {
-        WorkspaceRepoCatalog.groupByRecency(threads)
+    /// Desktop sessions scoped to this list: all (claudeCode) for All Repos,
+    /// cwd-matched for a single-repo list.
+    private var scopedObservedSessions: [ObservedSession] {
+        guard let cwd = workspace.cwd else { return observedSessions }
+        // Exact-path equality misses sessions that ran in a worktree
+        // subdirectory of this repo (e.g. `.claude/worktrees/<slug>`) — the
+        // exact case that produced every session tonight. `isEqualOrUnder`
+        // is the same repo/descendant check the rest of the app already uses.
+        return observedSessions.filter {
+            WorkspaceRepoCatalog.isEqualOrUnder(cwd: $0.cwd, repoPath: cwd)
+        }
+    }
+
+    private var groups: [(title: String, items: [ThreadListRowKind])] {
+        let rows: [ThreadListRowKind] =
+            threads.map(ThreadListRowKind.ledger)
+            + scopedObservedSessions.map(ThreadListRowKind.desktopSession)
+        let sorted = rows.sorted { $0.sortDate > $1.sortDate }
+        return WorkspaceRepoCatalog.groupByRecency(sorted, date: \.sortDate)
     }
 
     public var body: some View {
@@ -73,7 +114,7 @@ public struct ThreadListView: View {
                     .padding(.top, 28)
                     .padding(.bottom, 8)
 
-                if threads.isEmpty {
+                if threads.isEmpty && scopedObservedSessions.isEmpty {
                     Text("No threads yet")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -88,16 +129,38 @@ public struct ThreadListView: View {
                                 sectionHeader(group.title)
                                     .padding(.top, group.title == groups.first?.title ? 0 : 20)
 
-                                ForEach(group.items) { thread in
-                                    NavigationLink {
-                                        ThreadDetailView(thread: thread)
-                                    } label: {
-                                        ThreadListRow(
-                                            thread: thread,
-                                            showsRepoName: workspace.isAllRepos
-                                        )
+                                ForEach(group.items) { row in
+                                    switch row {
+                                    case .ledger(let thread):
+                                        NavigationLink {
+                                            ThreadDetailView(thread: thread)
+                                        } label: {
+                                            ThreadListRow(
+                                                thread: thread,
+                                                showsRepoName: workspace.isAllRepos
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                    case .desktopSession(let session):
+                                        Button {
+                                            // Match WorkspacesView RunningAgentsSection continue path.
+                                            bridge.armObservedContinue(
+                                                vendor: session.provider,
+                                                sessionId: session.sessionId,
+                                                cwd: session.cwd
+                                            )
+                                            activeLiveThread = LiveThreadIdentifier(
+                                                prompt: "",
+                                                cwd: session.cwd
+                                            )
+                                        } label: {
+                                            DesktopSessionListRow(
+                                                session: session,
+                                                showsRepoName: workspace.isAllRepos
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
                                     }
-                                    .buttonStyle(.plain)
                                     Divider()
                                         .padding(.leading, 40)
                                 }
@@ -122,6 +185,7 @@ public struct ThreadListView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task {
             await workspaceData.refresh()
+            await loadObservedSessions()
         }
         .sheet(isPresented: $isSearchPresented) {
             SearchView()
@@ -136,6 +200,16 @@ public struct ThreadListView: View {
             )
         }
         .liveThreadPresentation($activeLiveThread)
+    }
+
+    private func loadObservedSessions() async {
+        guard let machine = relayFleetStore.firstConnectedMachine else {
+            observedSessions = []
+            return
+        }
+        let sessions = (try? await machine.bridge.relayListSessions()) ?? []
+        // Other providers (codex, etc.) are future work — model already has `provider`.
+        observedSessions = sessions.filter { $0.provider == "claudeCode" }
     }
 
     private var isInsideSpecificRepo: Bool {
@@ -187,9 +261,6 @@ public struct ThreadListView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Search"))
-
-                circleButton(systemImage: "line.3.horizontal")
-                    .accessibilityHidden(true)
             }
         }
     }
@@ -243,6 +314,63 @@ public struct ThreadListView: View {
         .padding(.vertical, 8)
         .background(Capsule().fill(Color(.secondarySystemBackground)))
         .overlay(Capsule().strokeBorder(Color(.separator), lineWidth: 0.5))
+    }
+}
+
+/// Desktop Claude Code session row — matches `ThreadListRow` padding/typography
+/// with a desktop icon + "Desktop" capsule badge.
+private struct DesktopSessionListRow: View {
+    let session: ObservedSession
+    var showsRepoName: Bool = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "desktopcomputer")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 8, alignment: .center)
+                .padding(.top, 6)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(session.title.isEmpty ? "Untitled session" : session.title)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text("Desktop")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                }
+
+                HStack(spacing: 4) {
+                    Text(relativeActivity)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+
+                    if showsRepoName {
+                        Text("· \(WorkspaceRepoCatalog.displayName(forCwd: session.cwd))")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    private var relativeActivity: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: session.lastActivity, relativeTo: .now)
     }
 }
 

@@ -342,6 +342,27 @@ public enum TurnTranscriptAssembler: Sendable {
         }
     }
 
+    /// SF Symbol for a tool's normalized name — one switch, shared by every
+    /// vendor (Claude Code, Codex, OpenCode, …) since they all report into the
+    /// same `ToolChipItem.name` field. No per-provider icon code needed.
+    public static func chipIcon(name: String) -> String {
+        switch normalizeToolName(name) {
+        case "edit": return "pencil"
+        case "write": return "square.and.pencil"
+        case "read": return "doc.text"
+        case "bash", "shell", "command": return "terminal"
+        default: return "wrench.and.screwdriver"
+        }
+    }
+
+    /// Same one-switch pattern as `chipIcon`, extended to a run of chips: one
+    /// shared icon when they're all the same tool type, a "mixed" icon otherwise.
+    public static func groupedChipIcon(_ chips: [ToolChipItem]) -> String {
+        guard let first = chips.first else { return "wrench.and.screwdriver" }
+        let normalized = Set(chips.map { normalizeToolName($0.name) })
+        return normalized.count == 1 ? chipIcon(name: first.name) : "square.stack"
+    }
+
     /// Collapsed group label: "Read 3 files" or "Read a file, edited a file".
     public static func groupedChipTitle(_ chips: [ToolChipItem]) -> String {
         guard !chips.isEmpty else { return "Tools" }

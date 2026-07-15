@@ -9,17 +9,25 @@ struct LiveThreadIdentifier: Identifiable, Sendable, Hashable {
     let prompt: String
     let cwd: String
     let attachments: [ConversationAttachmentReference]
+    /// Set when this presentation is a follow-up on an already-existing
+    /// conversation (e.g. from `ThreadDetailView`) — `LiveThreadView` uses
+    /// this to call `bridge.sendFollowUp(conversationID:)` and continue the
+    /// same thread instead of `bridge.send()` starting a brand-new one.
+    /// `nil` for the New Chat composer's genuinely-new-conversation flow.
+    let existingConversationID: String?
 
     init(
         prompt: String,
         cwd: String,
         attachments: [ConversationAttachmentReference] = [],
+        existingConversationID: String? = nil,
         id: UUID = UUID()
     ) {
         self.id = id
         self.prompt = prompt
         self.cwd = cwd
         self.attachments = attachments
+        self.existingConversationID = existingConversationID
     }
 }
 
@@ -40,7 +48,12 @@ private struct LiveThreadPresentationModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .sheet(item: $activeLiveThread) { thread in
-                LiveThreadView(prompt: thread.prompt, cwd: thread.cwd, attachments: thread.attachments)
+                LiveThreadView(
+                    prompt: thread.prompt,
+                    cwd: thread.cwd,
+                    attachments: thread.attachments,
+                    existingConversationID: thread.existingConversationID
+                )
                     .environment(shellLiveBridge)
                     .environment(relayApprovalIngest)
                     .environment(relayQuestionIngest)

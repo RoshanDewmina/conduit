@@ -353,4 +353,136 @@ struct ChatFollowUpComposerBar: View {
         .padding(.vertical, 10)
     }
 }
+
+/// Inline governed-approval card: a tool call mid-turn escalated to "ask" and
+/// is genuinely paused server-side awaiting a phone decision — this is not
+/// part of the turn's own polling loop (the daemon's policy gate pauses the
+/// vendor process itself), so any view that can show a live/in-flight turn
+/// must render this or the pause is invisible (owner report 2026-07-15: two
+/// pending approvals sat unresolved for 20+ minutes with no card ever shown
+/// because `ThreadDetailView`'s inline follow-up path didn't render one).
+struct ChatPendingApprovalCard: View {
+    @Environment(RelayApprovalIngest.self) private var approvalIngest
+    let approval: Approval
+    let machineID: RelayMachineID
+
+    /// Collapsed by default (owner feedback 2026-07-15: the full monospace
+    /// command dump competed with the chat for attention on every approval).
+    /// Expand reveals the same detail the old always-open card showed.
+    @State private var isExpanded = false
+
+    private var detailText: String {
+        approval.command ?? approval.patch ?? "(no detail)"
+    }
+
+    /// First non-empty line only, for the collapsed row.
+    private var summaryLine: String {
+        detailText
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .first
+            .map(String.init) ?? detailText
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.snappy(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.shield")
+                        .foregroundStyle(.blue)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(approval.kind.rawValue.capitalized)
+                                .font(.system(size: 15, weight: .semibold))
+                            riskLabel(approval.risk)
+                        }
+                        Text(summaryLine)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(14)
+            .accessibilityLabel(Text("\(approval.kind.rawValue.capitalized), \(approval.risk.rawValue) risk. \(isExpanded ? "Expanded" : "Collapsed"), double tap to toggle detail."))
+
+            if isExpanded {
+                Text(detailText)
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(20)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 12)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            Divider()
+                .overlay(Color(.separator).opacity(0.5))
+
+            HStack(spacing: 0) {
+                Button(role: .destructive) {
+                    Task { await approvalIngest.decide(approval, decision: .rejected, machineID: machineID) }
+                } label: {
+                    Text("Deny")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+
+                Divider().frame(height: 24)
+                    .overlay(Color(.separator).opacity(0.5))
+
+                Button {
+                    Task { await approvalIngest.decide(approval, decision: .approved, machineID: machineID) }
+                } label: {
+                    Text("Approve")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.blue)
+                .accessibilityIdentifier("cursor.approval.approve")
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.4), lineWidth: 0.5)
+        )
+    }
+
+    private func riskLabel(_ risk: Approval.Risk) -> some View {
+        let (text, color): (String, Color) = {
+            switch risk {
+            case .low: return ("Low", .secondary)
+            case .medium: return ("Medium", .secondary)
+            case .high: return ("High", .orange)
+            case .critical: return ("Critical", .red)
+            }
+        }()
+        return Text(text)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(color.opacity(0.15)))
+    }
+}
 #endif

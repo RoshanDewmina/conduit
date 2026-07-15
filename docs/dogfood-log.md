@@ -10,4 +10,6 @@ phone 5 days of 7). Mid-August: this log is the App Store go/no-go input.
 
 <!-- entries below, newest first -->
 
+2026-07-14 · Beta phone review proof — 2026-07-14
+
 2026-07-13 · loop-completed? n · forced laptop: New Chat "Hi" stuck Working (dispatch launched, UI never completed); Agents "unreachable" while Connected; photo attach spinner hang · POST-110 installed; Attach UI + fixture session-pill fixed in tree; C7 blocked (no 2nd device); evidence docs/test-runs/2026-07-13-post110-session4-continuity/

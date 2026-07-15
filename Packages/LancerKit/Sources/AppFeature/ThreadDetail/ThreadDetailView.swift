@@ -10,8 +10,24 @@ struct ThreadDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(RelayFleetStore.self) private var relayFleetStore
     @Environment(WorkspaceDataStore.self) private var workspaceData
-    @State private var isFollowUpPresented = false
-    @State private var activeLiveThread: LiveThreadIdentifier?
+    @Environment(ShellLiveBridge.self) private var bridge
+    @Environment(RelayApprovalIngest.self) private var approvalIngest
+    /// Inline follow-up text, typed directly on this thread — mirrors
+    /// LiveThreadView's own follow-up bar instead of popping the full New
+    /// Chat composer (vendor/model pickers included) as a second sheet on
+    /// top of an already-open thread.
+    @State private var followUpText: String = ""
+    @FocusState private var isFollowUpFocused: Bool
+    /// True from the moment a follow-up is dispatched until it reaches a
+    /// terminal state — drives an inline "sending" row instead of ever
+    /// navigating to a separate screen (owner report 2026-07-15: every send
+    /// was popping a full-screen "Chat" sheet with its own Close button on
+    /// top of the thread the user was already looking at).
+    @State private var isSendingFollowUp = false
+    @State private var pendingFollowUpPrompt: String?
+    @State private var followUpError: String?
+    @State private var followUpDispatchGeneration = 0
+    @State private var hasPerformedInitialScroll = false
     @State private var turns: [ChatTurn] = []
     @State private var eventsByTurnID: [String: [ChatEvent]] = [:]
     /// How many of the most-recent turns to render. Extended via "Show earlier…".
@@ -67,6 +83,23 @@ struct ThreadDetailView: View {
                 hasAssistantArtifacts: hasAssistantArtifacts(for: $0)
             )
         }
+    }
+
+    /// Falls back to the sole connected machine when `bridge.activeMachineID`
+    /// hasn't been set yet this app session (e.g. thread reopened cold after
+    /// a relaunch, before any new send from this view) — a genuinely pending
+    /// approval from before the relaunch must still surface (owner report
+    /// 2026-07-15: two tool-use approvals sat unresolved with no card shown).
+    private var pendingApprovalMachineID: RelayMachineID? {
+        bridge.activeMachineID ?? relayFleetStore.firstConnectedMachine?.id
+    }
+
+    private var pendingApproval: Approval? {
+        guard let machineID = pendingApprovalMachineID,
+              let approval = approvalIngest.latestPendingApproval[machineID],
+              approval.isPending
+        else { return nil }
+        return approval
     }
 
     private var hasEarlierTurns: Bool {
@@ -170,6 +203,33 @@ struct ThreadDetailView: View {
                                 }
                             }
 
+                            if let pendingFollowUpPrompt {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    ChatUserBubble(text: pendingFollowUpPrompt, attachments: [])
+                                    if let followUpError {
+                                        HStack(alignment: .top, spacing: 8) {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .foregroundStyle(.orange)
+                                            Text(followUpError)
+                                                .font(.system(size: 14))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    } else {
+                                        HStack(spacing: 8) {
+                                            ProgressView()
+                                            Text("Working…")
+                                                .font(.system(size: 14))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                                .accessibilityIdentifier("thread-detail-pending-followup")
+                            }
+
+                            if let machineID = pendingApprovalMachineID, let pendingApproval {
+                                ChatPendingApprovalCard(approval: pendingApproval, machineID: machineID)
+                            }
+
                             // Tail marker doubles as the bar-clearance spacer
                             // (96pt): anchoring it .bottom lands the last
                             // message fully above the ZStack-overlaid follow-up
@@ -208,6 +268,22 @@ struct ThreadDetailView: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                     }
+                    // Land at the tail by default when a thread first opens —
+                    // it previously opened at the top, requiring a manual
+                    // scroll or the jump-arrow tap every time (owner report
+                    // 2026-07-15). Same two-hop technique as the jump arrow;
+                    // only once per view instance (own turn appends already
+                    // get the jump-arrow affordance, not a forced re-scroll).
+                    .onChange(of: turns.count) { _, newValue in
+                        guard !hasPerformedInitialScroll, newValue > 0 else { return }
+                        hasPerformedInitialScroll = true
+                        if let last = renderedVisibleTurns.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                            proxy.scrollTo(Self.scrollTailID, anchor: .bottom)
+                        }
+                    }
                 }
             }
 
@@ -220,13 +296,18 @@ struct ThreadDetailView: View {
                 if !queuedReviewComments.isEmpty {
                     reviewCommentChips
                 }
-                Button {
-                    isFollowUpPresented = true
-                } label: {
-                    ChatFollowUpPlaceholderBar()
-                }
-                .buttonStyle(.plain)
-                .disabled(thread.cwd.isEmpty)
+                ChatFollowUpComposerBar(
+                    text: $followUpText,
+                    isFocused: $isFollowUpFocused,
+                    isDisabled: thread.cwd.isEmpty || isSendingFollowUp,
+                    canSend: !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    onSend: {
+                        let prompt = followUpText
+                        followUpText = ""
+                        handleSend(prompt, thread.cwd)
+                    }
+                )
+                .disabled(thread.cwd.isEmpty || isSendingFollowUp)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
@@ -235,20 +316,6 @@ struct ThreadDetailView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task(id: transcriptLoadGeneration) {
             await loadTurns()
-        }
-        .sheet(isPresented: $isFollowUpPresented) {
-            NewChatComposerView(
-                initialRepo: thread.cwd.isEmpty
-                    ? nil
-                    : WorkspaceRepo(
-                        name: WorkspaceRepoCatalog.displayName(forCwd: thread.cwd),
-                        cwd: thread.cwd,
-                        threadCount: 0,
-                        isUserAdded: false
-                    ),
-                lockRepo: true,
-                onSend: handleSend
-            )
         }
         .sheet(item: $reviewPresentation) { presentation in
             ReviewSheetView(
@@ -265,7 +332,6 @@ struct ThreadDetailView: View {
                 }
             )
         }
-        .liveThreadPresentation($activeLiveThread)
     }
 
     @ViewBuilder
@@ -440,11 +506,31 @@ struct ThreadDetailView: View {
             prompt: prompt
         )
         queuedReviewComments.removeAll()
-        // Same stacked-sheet hazard as WorkspacesView.handleSend — dismiss
-        // the follow-up composer explicitly instead of letting it race the
-        // live-thread sheet's presentation.
-        isFollowUpPresented = false
-        activeLiveThread = LiveThreadIdentifier(prompt: composed, cwd: normalized, attachments: attachments)
+        // Dispatch inline and stay on this screen — no sheet/navigation.
+        // Every follow-up used to open a full-screen LiveThreadView on top
+        // of the thread the owner was already looking at (2026-07-15 report).
+        followUpDispatchGeneration += 1
+        let generation = followUpDispatchGeneration
+        pendingFollowUpPrompt = composed
+        followUpError = nil
+        isSendingFollowUp = true
+        Task {
+            await bridge.sendFollowUp(
+                prompt: composed,
+                conversationID: thread.id,
+                cwd: normalized,
+                attachments: attachments
+            )
+            guard generation == followUpDispatchGeneration else { return }
+            isSendingFollowUp = false
+            if case .failed(let message) = bridge.sendState {
+                followUpError = message
+            } else {
+                pendingFollowUpPrompt = nil
+                followUpError = nil
+                transcriptLoadGeneration += 1
+            }
+        }
     }
 
     private var topBar: some View {

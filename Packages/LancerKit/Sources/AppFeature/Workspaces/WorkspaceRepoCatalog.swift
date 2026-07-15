@@ -447,30 +447,41 @@ public enum WorkspaceRepoCatalog {
         now: Date = .now,
         calendar: Calendar = .current
     ) -> [(title: String, items: [ThreadListItem])] {
+        groupByRecency(items, date: \.lastActivityAt, now: now, calendar: calendar)
+    }
+
+    /// Same recency buckets as the ledger overload, keyed by an arbitrary date.
+    public static func groupByRecency<T>(
+        _ items: [T],
+        date: KeyPath<T, Date>,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> [(title: String, items: [T])] {
         guard !items.isEmpty else { return [] }
 
-        var today: [ThreadListItem] = []
-        var yesterday: [ThreadListItem] = []
-        var thisWeek: [ThreadListItem] = []
-        var earlier: [ThreadListItem] = []
+        var today: [T] = []
+        var yesterday: [T] = []
+        var thisWeek: [T] = []
+        var earlier: [T] = []
 
         let startOfToday = calendar.startOfDay(for: now)
         let startOfYesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday
         let startOfWeek = calendar.date(byAdding: .day, value: -7, to: startOfToday) ?? startOfToday
 
         for item in items {
-            if item.lastActivityAt >= startOfToday {
+            let activity = item[keyPath: date]
+            if activity >= startOfToday {
                 today.append(item)
-            } else if item.lastActivityAt >= startOfYesterday {
+            } else if activity >= startOfYesterday {
                 yesterday.append(item)
-            } else if item.lastActivityAt >= startOfWeek {
+            } else if activity >= startOfWeek {
                 thisWeek.append(item)
             } else {
                 earlier.append(item)
             }
         }
 
-        var groups: [(title: String, items: [ThreadListItem])] = []
+        var groups: [(title: String, items: [T])] = []
         if !today.isEmpty { groups.append(("Today", today)) }
         if !yesterday.isEmpty { groups.append(("Yesterday", yesterday)) }
         if !thisWeek.isEmpty { groups.append(("This Week", thisWeek)) }

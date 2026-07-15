@@ -42,15 +42,9 @@ struct ToolCallChipView: View {
     }
 
     private var collapsedRow: some View {
-        HStack(spacing: 6) {
-            if chips.contains(where: { $0.status == .running }) {
-                ProgressView()
-                    .controlSize(.mini)
-            } else if chips.contains(where: { $0.isError || $0.status == .failed }) {
-                Image(systemName: "exclamationmark.circle.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.red)
-            }
+        HStack(spacing: 8) {
+            statusOrTypeIcon
+                .frame(width: 16, height: 16)
 
             Text(collapsedTitle)
                 .font(.system(size: 14, weight: .medium))
@@ -61,19 +55,50 @@ struct ToolCallChipView: View {
                 diffLabels(added: diff.added, removed: diff.removed)
             }
 
+            Spacer(minLength: 0)
+
             Image(systemName: "chevron.right")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.tertiary)
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
-
-            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5)
+        )
         .contentShape(Rectangle())
     }
 
+    /// Running/error states override the per-tool-type icon — those are more
+    /// urgent than "which tool is this" once you already know something's
+    /// wrong or in flight.
+    @ViewBuilder
+    private var statusOrTypeIcon: some View {
+        if chips.contains(where: { $0.status == .running }) {
+            ProgressView().controlSize(.mini)
+        } else if chips.contains(where: { $0.isError || $0.status == .failed }) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(.red)
+        } else {
+            Image(systemName: TurnTranscriptAssembler.groupedChipIcon(chips))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func expandedRow(_ chip: ToolChipItem) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
+                Image(systemName: TurnTranscriptAssembler.chipIcon(name: chip.name))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
                 Text(TurnTranscriptAssembler.chipTitle(name: chip.name, inputJSON: chip.inputJSON))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
@@ -88,20 +113,42 @@ struct ToolCallChipView: View {
                 statusBadge(chip)
             }
 
-            if let detail = detailText(for: chip), !detail.isEmpty {
-                Text(TurnTranscriptAssembler.cappedDetail(detail))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color(.tertiarySystemFill))
-                    )
+            if let input = chip.inputJSON, !input.isEmpty {
+                detailSection(label: "Input", text: input)
+            }
+            if let result = chip.resultText, !result.isEmpty {
+                detailSection(label: "Output", text: result)
             }
         }
-        .padding(.leading, 2)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(.tertiarySystemBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.25), lineWidth: 0.5)
+        )
+    }
+
+    private func detailSection(label: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .kerning(0.4)
+            Text(TurnTranscriptAssembler.cappedDetail(text))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(.quaternarySystemFill))
+                )
+        }
     }
 
     private var collapsedTitle: String {
@@ -114,13 +161,6 @@ struct ToolCallChipView: View {
             parts.append("+\(diff.added) −\(diff.removed)")
         }
         return parts.joined(separator: " ")
-    }
-
-    private func detailText(for chip: ToolChipItem) -> String? {
-        if let result = chip.resultText, !result.isEmpty {
-            return result
-        }
-        return chip.inputJSON
     }
 
     @ViewBuilder

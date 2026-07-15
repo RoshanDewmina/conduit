@@ -28,6 +28,10 @@ public struct LiveThreadView: View {
     let prompt: String
     let cwd: String
     let initialAttachments: [ConversationAttachmentReference]
+    /// Non-nil ⇒ this presentation is a follow-up on an existing conversation
+    /// (opened from `ThreadDetailView`); the initial send continues that
+    /// conversation via `sendFollowUp` instead of starting a new one.
+    let existingConversationID: String?
 
     @State private var hasSentInitialPrompt = false
     @State private var followUpText: String = ""
@@ -88,11 +92,13 @@ public struct LiveThreadView: View {
     public init(
         prompt: String,
         cwd: String,
-        attachments: [ConversationAttachmentReference] = []
+        attachments: [ConversationAttachmentReference] = [],
+        existingConversationID: String? = nil
     ) {
         self.prompt = prompt
         self.cwd = cwd
         self.initialAttachments = attachments
+        self.existingConversationID = existingConversationID
     }
 
     public var body: some View {
@@ -227,7 +233,9 @@ public struct LiveThreadView: View {
         .task {
             guard !hasSentInitialPrompt else { return }
             hasSentInitialPrompt = true
-            if LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
+            if let conversationID = existingConversationID, LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
+                await bridge.sendFollowUp(prompt: prompt, conversationID: conversationID, cwd: cwd, attachments: initialAttachments)
+            } else if LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
                 await bridge.send(prompt: prompt, cwd: cwd, attachments: initialAttachments)
             } else {
                 await bridge.adoptArmedObservedContinue(fallbackCwd: cwd)

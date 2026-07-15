@@ -1,5 +1,105 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ SESSION 8 2026-07-15 — five-stream reliability brief (owner switches to phone daily-driving today)
+
+Brief: `docs/plans/2026-07-14-fable-handoff-attachments-latency-PASTE.md`. Master @ `292525b7`
+(verified matches origin at session start). Owner decisions taken this session (AskUserQuestion):
+**Stream 1 proof = sim-first (isolated daemon over real Fly relay) then short owner device pass;
+Stream 4 = per-dispatch "Full tools" toggle, strict/fast default — not blanket ship.**
+
+- **Stream 1 (10× reconnect proof) — FAILED at cycle 2/10; ROOT CAUSE FOUND (fifth-fix
+  skepticism vindicated).** Method that finally worked: XCUITest `ReconnectCycleUITests`
+  (uncommitted, main checkout LancerUITests/ — KEEP as permanent regression harness; HID/idb
+  taps can't drive SwiftUI on this sim, documented gotcha). Cycle 1 passed; cycle 2 Retry.
+  **Root cause, evidenced BOTH directions:** session key is static across reconnects
+  (deriveSessionKey e2e_client.go:340-346 uses only static pairing keys — the 2026-07-04 open
+  P2 "no epoch nonce") + replaySequencer (e2e_crypto.go:156-185) is a bare monotonic counter
+  reset on peer_joined ⇒ a stale in-flight old-generation frame (still decryptable) arriving
+  AFTER the reset is accepted, re-poisons `last` to a high value, and every legitimate
+  new-generation frame (seq 0..) is rejected — one direction deaf until the next peer_joined.
+  Daemon-side proof: /tmp/s1-reconnect/lancerd.stderr.log rejected phone seq=0..29 for 5 min
+  post-restart (10:56→11:01). Phone-side proof: sim os_log 11:01:50 "replayed or out-of-order
+  sequence 0,1,2…" while audit.log shows the cycle-2 send DID launch (2 UITest
+  conversation-append-launched entries) — phone deaf to the reply ⇒ Retry. ALL prior fixes
+  (#111 seq resets, append correlation) were symptom patches of this. **Fix lane IN FLIGHT:**
+  `.worktrees/relay-generation-guard` (fix/relay-generation-guard, Sonnet): generation-tagged
+  seq envelopes (random 16B gen id minted per reset; receiver tracks currentGen+seenGens;
+  stale-generation frames rejected WITHOUT touching the counter; legacy no-gen peers keep old
+  behavior — co-deploy iOS+daemon closes the hole, no relay/backend change). Then re-run the
+  10-cycle UITest on the fix build. Evidence dir: `docs/test-runs/2026-07-15-reconnect-10x-sim/`.
+- **Stream 2 (Agents continuity)** — CODE DONE, gates green, unmerged. Diagnosis (Explore):
+  p1-agents-direct-open DID merge (#94/c49ec4f5); Bug A = blank thread on adopt-with-empty-
+  transcript (ShellLiveBridge.swift:270-288 set .idle on 0 messages); Bug B =
+  `!hasEverSucceeded && consecutiveFailures>0` bypassed the 2-failure degrade threshold
+  (RunningAgentsMapping.swift:209) + first-tick false failure during hydration
+  (RunningAgentsSection.swift:154). Fix on `fix/s2-agents-continuity` @ `00485128` (Grok impl,
+  Fable-reviewed): degraded copy only at ≥2 failures, "No agents running" after first success,
+  "Checking for agents…" pre-success, transitional machines don't burn failure budget, new
+  `.adoptedNoHistory` sendState + visible placeholder. Verified by orchestrator re-run:
+  swift build ✓, RunningAgents 10/10 ✓, LiveThread 12/12 ✓, app-target BUILD SUCCEEDED
+  (worktree needs `xcodegen generate` first — .xcodeproj not checked in). ui-risk → owner
+  eyeball batched with device pass; then merge.
+- **Stream 3 (attachment integration)** — MERGE DONE + REVIEWED, gates green, unpushed.
+  `feat/attachment-integration` @ `72fd250e` = master merged in; only conflict dispatch.go
+  launchConversationTurn, resolved to documented 6-step order (clean policy+digest → policy →
+  attachment verify → ensureClaudeAuth → vendor manifest → launch). Fable full-diff review of
+  dispatch.go + e2e_router.go + conversation_rpc.go: PASS (hardening intact; nits: swallowed
+  ensureAttachmentRoot err weakens root redaction to per-path placeholders; one unreachable
+  error path lacks audit). Gates: go vet/test/-race 514 PASS, full swift test 732+62+13 (no
+  Keychain collision), app-target SUCCEEDED, AttachmentPreviewUITests 2/2. REMAINING owner-
+  gated: co-install daemon+app pair on phone + live proof (chip .done, PDF, multi, persistence,
+  Retry same clientTurnId, no hostPath in UI/AX).
+- **Stream 4 (latency toggle)** — IN FLIGHT, Sonnet: `.worktrees/s4-mcp-toggle`
+  (`feat/s4-fulltools-toggle` = master + cherry-picked 9992701f strict-mcp perf commit).
+  `fullTools` bool threaded append/dispatch→argv builders; absent→strict (backward compat);
+  composer toggle (Claude-only, a11y id composer-full-tools-toggle). Sensitive → Fable
+  full-diff review on completion.
+- **Orca second opinion** (owner-requested): `docs/product/2026-07-15-orca-reconnect-mcp-port-map.md`.
+  Validates strict-by-default+toggle (Orca always-loads only because CLIs are resident).
+  Post-proof hardening queue: send-after-connected gating, send-time desync self-heal,
+  foreground probe + backoff reset (task #7).
+- Worktrees added this session: `.worktrees/s2-agents-continuity`, `.worktrees/s4-mcp-toggle`.
+- Merge order once Stream 1 verdict lands: s2 → attachment-integration → s4 (dispatch.go
+  overlap s3/s4: s3 touched launchConversationTurn, s4 touches argv builders — re-gate after
+  each merge).
+
+## ⚡ SESSION 7 2026-07-14 — attachment lanes to feature-complete (WIP only); P0 relay/auth phone proofs still owner-gated; beta NOT READY
+
+- **master HEAD `e1309f95`** ("fix(ios): hydrate imported assistant replies"), **10 commits
+  ahead of `origin/master`, unpushed**: e1309f95, 53ed9eea, 7df8b831, 5850df3d, d46eb716,
+  67b26ef6, 28169869, a566425f, dcb2d553, 4a6677b7.
+- **P0 blocker unchanged — relay/auth phone proofs still owner-gated, still open:**
+  - `fix/relay-append-correlated-resume` (`.worktrees/relay-append-correlated-resume` @
+    `292525b7`, clean, `go test ./...` passes) **NOT merged to master** — gated on the owner
+    performing, on a physical phone: logged-out fail-closed proof → `claude auth login` →
+    ≥16s post-rekey first-append proof with no duplicate/no Retry.
+  - `fix/claude-auth-ttfo` (`.worktrees/claude-auth-ttfo` @ `d9ee016c`, clean) is a subset of
+    the above branch, same gate.
+  - **Live auth ambiguity, still unresolved:** `~/.claude/.credentials.json` is missing but
+    `claude auth status --json` reports `loggedIn: true` — contradiction, treat as UNPROVEN
+    per existing project convention.
+  - Installed daemon `~/.lancer/bin/lancerd` (pid 84648, sha256
+    `cf50089bbf6b6af31f08dcd6df5f43fb172329d8c7e98fde3472f755c300ee99`) matches the
+    relay-append-correlated-resume build. No `contentDigest` strings in it — attachment
+    hardening is NOT installed on the running daemon.
+- **Attachment work driven to feature-complete this session (multiple REQUEST_CHANGES review
+  cycles), but WIP-only — not integrated, not gated, not merged to master:**
+  - `feat/attachment-daemon-dispatch` (WIP commit `6b5329fe`) — server-issued `contentDigest`,
+    content-addressed objects, TOCTOU rehash, path/symlink containment, event redaction.
+  - `feat/attachment-ios-ux` (WIP commit `75445047`) — iOS consumes server id/path/
+    contentDigest with stable `clientTurnId` retry.
+  - Both are mutually compatible; new integration worktree `.worktrees/attachment-integration`
+    on `feat/attachment-integration` (off `e1309f95`) is merging both — **in progress, not
+    yet complete, not yet gated, not yet merged to master.**
+- **External handoff bundle** for today's session at
+  `/Users/roshansilva/Downloads/lancer-beta-handoff-2026-07-14/` (README,
+  BETA_READINESS_HANDOFF.md, NEXT_AGENT_PROMPT.md, REPO_STATE.md, SOURCE_PATHS.md, patches,
+  git bundle) — reference it, don't duplicate its content here.
+- **Verdict: TestFlight beta NOT READY.** P0 (auth/relay phone proofs) is owner-gated and
+  blocks merging auth/relay to master. P1 (attachment integration) is being prepped in
+  parallel in worktrees only — not blocking, but also not merging to master until P0 clears,
+  per the project's co-deploy rule.
+
 ## ⚡ SESSION 6 2026-07-14 ~02:00 — #114/#118 merged; pairing-durability SUPERSEDED; P1b lane live
 
 **Context at start:** a Codex session (not this orchestrator) had already merged #115
