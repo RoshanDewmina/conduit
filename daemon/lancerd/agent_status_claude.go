@@ -13,7 +13,12 @@ func collectClaudeStatus(home string) AgentVendorStatus {
 	claudeDir := filepath.Join(home, ".claude")
 	projectsDir := filepath.Join(claudeDir, "projects")
 	status.SessionCount = countClaudeSessionFiles(projectsDir)
-	if loggedIn := claudeLoggedIn(claudeDir); loggedIn != nil { status.LoggedIn = loggedIn }
+	// Authoritative login comes from `claude auth status --json` (cached TTL),
+	// not ~/.claude/.credentials.json presence — that file can be mcpOAuth-only
+	// and is not API login (2026-07-14).
+	if loggedIn := probeClaudeLoggedInCached(); loggedIn != nil {
+		status.LoggedIn = loggedIn
+	}
 	if model := claudeActiveModel(claudeDir); model != "" { status.Model = ptrString(model) }
 	if usd, period, ok := claudeUsageUSD(claudeDir); ok {
 		status.UsageUSD = ptrFloat(usd)
@@ -34,17 +39,6 @@ func countClaudeSessionFiles(projectsDir string) int {
 		}
 	}
 	return n
-}
-
-func claudeLoggedIn(claudeDir string) *bool {
-	if fileExists(filepath.Join(claudeDir, ".credentials.json")) {
-		var cred map[string]json.RawMessage
-		if readJSONFile(filepath.Join(claudeDir, ".credentials.json"), &cred) && len(cred) > 0 {
-			return ptrBool(true)
-		}
-	}
-	if fileExists(claudeDir) { return ptrBool(false) }
-	return nil
 }
 
 func claudeActiveModel(claudeDir string) string {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -889,6 +890,159 @@ func TestConversationsAttachObservedSessionFallsBackToRealUserPrompt(t *testing.
 	}
 	if fetched.Conversation.Title != "ship the feature" {
 		t.Fatalf("Title = %q, want ship the feature", fetched.Conversation.Title)
+	}
+}
+
+// TestConversationsAppendResponseEchoesClientTurnId proves the append wire
+// response carries the request's clientTurnId on started (incl. needsApproval),
+// conflict, and idempotent-replay paths — the phone correlates append results
+// to waiters with this echo. Also pins the JSON key name.
+func TestConversationsAppendResponseEchoesClientTurnId(t *testing.T) {
+	home := t.TempDir()
+	s := newServer(home)
+	defer s.poller.stopForTest()
+
+	proj := t.TempDir()
+
+	// --- started / needsApproval (fresh turn under fail-closed default policy)
+	startedReq := map[string]interface{}{
+		"clientTurnId": "device-echo:started",
+		"agent":        "claudeCode",
+		"cwd":          proj,
+		"prompt":       "echo clientTurnId on started",
+	}
+	sshMsg := callSSHRPC(t, s, "agent.conversations.append", startedReq)
+	if sshMsg.Error != nil {
+		t.Fatalf("started append error: %+v", sshMsg.Error)
+	}
+	var started conversationAppendResponse
+	decodeInto(t, sshMsg.Result, &started)
+	if started.ClientTurnID != "device-echo:started" {
+		t.Fatalf("started ClientTurnID = %q, want device-echo:started", started.ClientTurnID)
+	}
+	rawStarted, err := json.Marshal(started)
+	if err != nil {
+		t.Fatalf("marshal started: %v", err)
+	}
+	var startedObj map[string]interface{}
+	if err := json.Unmarshal(rawStarted, &startedObj); err != nil {
+		t.Fatalf("unmarshal started JSON: %v", err)
+	}
+	if startedObj["clientTurnId"] != "device-echo:started" {
+		t.Fatalf("started JSON clientTurnId = %v, want device-echo:started", startedObj["clientTurnId"])
+	}
+
+	// --- conflict (stale baseSeq on follow-up)
+	conflictReq := map[string]interface{}{
+		"conversationId": started.ConversationID,
+		"baseSeq":        int64(0), // stale — started already advanced seq
+		"clientTurnId":   "device-echo:conflict",
+		"prompt":         "should conflict",
+	}
+	if started.NextSeq == 0 {
+		t.Fatal("started NextSeq is 0 — cannot assert a stale-baseSeq conflict")
+	}
+	conflictMsg := callSSHRPC(t, s, "agent.conversations.append", conflictReq)
+	if conflictMsg.Error != nil {
+		t.Fatalf("conflict append error: %+v", conflictMsg.Error)
+	}
+	var conflict conversationAppendResponse
+	decodeInto(t, conflictMsg.Result, &conflict)
+	if conflict.Status != "conflict" {
+		t.Fatalf("conflict status = %q, want conflict", conflict.Status)
+	}
+	if conflict.ClientTurnID != "device-echo:conflict" {
+		t.Fatalf("conflict ClientTurnID = %q, want device-echo:conflict", conflict.ClientTurnID)
+	}
+
+	// --- idempotent replay (same clientTurnId as started) — one ledger turn
+	replayMsg := callSSHRPC(t, s, "agent.conversations.append", startedReq)
+	if replayMsg.Error != nil {
+		t.Fatalf("idempotent replay error: %+v", replayMsg.Error)
+	}
+	var replay conversationAppendResponse
+	decodeInto(t, replayMsg.Result, &replay)
+	if replay.ClientTurnID != "device-echo:started" {
+		t.Fatalf("idempotent ClientTurnID = %q, want device-echo:started", replay.ClientTurnID)
+	}
+	if replay.ConversationID != started.ConversationID || replay.TurnID != started.TurnID {
+		t.Fatalf("idempotent replay changed identity: got conv=%s turn=%s, want conv=%s turn=%s",
+			replay.ConversationID, replay.TurnID, started.ConversationID, started.TurnID)
+	}
+	listRes, err := s.conversations.list(50, "", false)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(listRes.Conversations) != 1 {
+		t.Fatalf("conversations = %d, want 1 after idempotent replay", len(listRes.Conversations))
+	}
+}
+
+// TestConversationsAppendRelayErrorEchoesClientTurnId proves the relay append
+// path echoes clientTurnId on failure payloads — not only on success. Without
+// the echo, the phone's fail-closed correlation drops the error and the waiter
+// times out instead of surfacing RelayConversationError.host.
+func TestConversationsAppendRelayErrorEchoesClientTurnId(t *testing.T) {
+	home := t.TempDir()
+	s := newServer(home)
+	defer s.poller.stopForTest()
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, s)
+	router.client = client
+
+	// Invalid cwd — deterministic, no ledger side effects.
+	appendReq := map[string]interface{}{
+		"clientTurnId": "device-error:rel-cwd",
+		"agent":        "claudeCode",
+		"cwd":          "relative/path",
+		"prompt":       "should fail before beginTurn",
+	}
+	env := callRelay(t, router, client, "agentConversationsAppend", appendReq)
+	if env.Type != "agentConversationsAppendResult" {
+		t.Fatalf("relay type = %q, want agentConversationsAppendResult", env.Type)
+	}
+	var invalidCWD map[string]interface{}
+	if err := json.Unmarshal(env.Payload, &invalidCWD); err != nil {
+		t.Fatalf("unmarshal invalid-cwd payload: %v", err)
+	}
+	if invalidCWD["clientTurnId"] != "device-error:rel-cwd" {
+		t.Fatalf("invalid-cwd clientTurnId = %v, want device-error:rel-cwd", invalidCWD["clientTurnId"])
+	}
+	errStr, ok := invalidCWD["error"].(string)
+	if !ok || errStr == "" {
+		t.Fatalf("invalid-cwd error = %v, want non-empty string", invalidCWD["error"])
+	}
+	if !strings.Contains(errStr, "absolute path") {
+		t.Fatalf("invalid-cwd error = %q, want cwd must be an absolute path", errStr)
+	}
+
+	// Store unavailable — injected nil store, same relay envelope contract.
+	nilStore := &server{}
+	routerNil := newE2ERouter(nil, nilStore)
+	clientNil := &fakeRelayClient{paired: true}
+	routerNil.client = clientNil
+	storeReq := map[string]interface{}{
+		"clientTurnId": "device-error:store-down",
+		"prompt":       "store unavailable",
+	}
+	envStore := callRelay(t, routerNil, clientNil, "agentConversationsAppend", storeReq)
+	if envStore.Type != "agentConversationsAppendResult" {
+		t.Fatalf("store-down relay type = %q, want agentConversationsAppendResult", envStore.Type)
+	}
+	var storeDown map[string]interface{}
+	if err := json.Unmarshal(envStore.Payload, &storeDown); err != nil {
+		t.Fatalf("unmarshal store-down payload: %v", err)
+	}
+	if storeDown["clientTurnId"] != "device-error:store-down" {
+		t.Fatalf("store-down clientTurnId = %v, want device-error:store-down", storeDown["clientTurnId"])
+	}
+	storeErr, ok := storeDown["error"].(string)
+	if !ok || storeErr == "" {
+		t.Fatalf("store-down error = %v, want non-empty string", storeDown["error"])
+	}
+	if !strings.Contains(storeErr, "conversation store unavailable") {
+		t.Fatalf("store-down error = %q, want conversation store unavailable", storeErr)
 	}
 }
 

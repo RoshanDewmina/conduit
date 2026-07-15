@@ -661,6 +661,10 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		// transports call the exact same r.server.conversationsAppend, so a
 		// relay-only pairing gets identical dispatch behavior to SSH.
 		result, err := r.server.conversationsAppend(req)
+		// Always echo request identity on the wire — error paths return a
+		// zero-value conversationAppendResponse{}, and the phone's fail-closed
+		// correlation drops results that omit clientTurnId (timeout vs host err).
+		result.ClientTurnID = req.ClientTurnID
 		payloadOut := conversationRelayPayload(result, err)
 		msg := map[string]interface{}{"type": "agentConversationsAppendResult", "payload": payloadOut}
 		data, _ := json.Marshal(msg)

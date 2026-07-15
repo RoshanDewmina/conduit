@@ -28,17 +28,15 @@ public final class E2ERelayBridge: ObservableObject {
     private let relayClient: E2ERelayClient
     private let approvalRelay: ApprovalRelay
     private var messageTask: Task<Void, Never>?
-    /// Wall-clock time of the most recent transition into `isActive` (session
-    /// key derived AND peer_joined observed) — every fresh pairing AND every
-    /// re-pair after a reconnect, not just the first ever. Used to gate the
-    /// one-shot dispatch retry below: a send that times out shortly after a
-    /// re-key event is the known race (2026-07-12), not a genuinely
-    /// unresponsive host.
-    private var lastReadyAt: Date?
-    /// Window after a re-key event within which a `sendDispatch` timeout is
-    /// assumed to be the first-send race rather than a real non-response, so
-    /// it gets ONE automatic retry instead of surfacing to the user.
-    nonisolated static let firstSendRetryWindow: TimeInterval = 5
+    /// Armed on a genuine paired/rekey epoch (`!wasActive → isActive`). The next
+    /// gated mutating RPC (`sendDispatch` / `relayAppendConversation`) may claim
+    /// a one-shot timeout resend — event-based, not wall-clock. Consumed on
+    /// success or after the timeout resend; not re-armed by duplicate `.paired`
+    /// emissions while already active.
+    private var postRekeyMutatingRetryArmed = false
+    /// True while a claimed protected mutating RPC holds the one-shot slot
+    /// (at most one concurrent protected logical operation).
+    private var postRekeyMutatingRetryClaimed = false
     private var dispatchContinuation: CheckedContinuation<DispatchResult, Error>?
     private var continueContinuation: CheckedContinuation<DispatchResult, Error>?
     private var fsListContinuation: CheckedContinuation<RelayDirListing, Error>?
@@ -56,6 +54,12 @@ public final class E2ERelayBridge: ObservableObject {
     private var conversationsListContinuation: CheckedContinuation<ConversationListResponse, Error>?
     private var conversationsFetchContinuation: CheckedContinuation<ConversationFetchResponse, Error>?
     private var conversationsAppendContinuation: CheckedContinuation<ConversationAppendResponse, Error>?
+    /// Monotonic id for the in-flight append wait — timeout tasks no-op if a
+    /// newer wait (or `stop`) has superseded them.
+    private var appendWaitEpoch: UInt64 = 0
+    /// Expected `clientTurnId` for the active append waiter — results are
+    /// accepted only when the echoed id matches (fail-closed if missing).
+    private var expectedAppendClientTurnId: String?
     private var conversationsArchiveContinuation: CheckedContinuation<ConversationArchiveResponse, Error>?
     private var conversationsAttachObservedSessionContinuation: CheckedContinuation<ConversationAttachObservedSessionResponse, Error>?
     private var repoTurnDiffContinuation: CheckedContinuation<Data, Error>?
@@ -73,6 +77,11 @@ public final class E2ERelayBridge: ObservableObject {
     private var attachmentPutContinuation: CheckedContinuation<AttachmentPutResult, Error>?
 #if DEBUG
     var boundedRPCWaitTimeoutOverride: Duration?
+    /// Test-only: shorten the append result wait (production is 20s, matching
+    /// `sendDispatch`) so first-send/timeout paths are deterministic.
+    var appendRPCWaitTimeoutOverride: Duration?
+    /// Test-only: shorten the dispatch result wait (production is 20s).
+    var dispatchRPCWaitTimeoutOverride: Duration?
 #endif
 
     private var boundedRPCWaitTimeout: Duration {
@@ -88,6 +97,22 @@ public final class E2ERelayBridge: ObservableObject {
         boundedRPCWaitTimeoutOverride ?? Self.conversationFetchRPCTimeout
 #else
         Self.conversationFetchRPCTimeout
+#endif
+    }
+
+    private var appendRPCWaitTimeout: Duration {
+#if DEBUG
+        appendRPCWaitTimeoutOverride ?? .seconds(20)
+#else
+        .seconds(20)
+#endif
+    }
+
+    private var dispatchRPCWaitTimeout: Duration {
+#if DEBUG
+        dispatchRPCWaitTimeoutOverride ?? .seconds(20)
+#else
+        .seconds(20)
 #endif
     }
 
@@ -112,15 +137,16 @@ public final class E2ERelayBridge: ObservableObject {
             for await state in self.relayClient.$pairingState.values {
                 let wasActive = self.isActive
                 self.isActive = (state == .paired)
-                if self.isActive {
-                    self.lastReadyAt = Date()
-                }
-                // A machine coming back online may have decisions sitting in
-                // ApprovalRelay's queue that failed to send while it was down
-                // (the queue's SSH-attach drain never fires for a relay-only
-                // pairing) — retry them now instead of leaving them stuck
-                // until the daemon's 120s timeout auto-denies them.
+                // Arm exactly on a new paired/rekey epoch — not every duplicate
+                // `.paired` emission while already active (disconnect clears to
+                // unpaired before peer_joined re-pairs).
                 if self.isActive && !wasActive {
+                    self.armPostRekeyMutatingRetry()
+                    // A machine coming back online may have decisions sitting in
+                    // ApprovalRelay's queue that failed to send while it was down
+                    // (the queue's SSH-attach drain never fires for a relay-only
+                    // pairing) — retry them now instead of leaving them stuck
+                    // until the daemon's 120s timeout auto-denies them.
                     await self.approvalRelay.machineBridgeReconnected(self.machineID, bridge: self)
                 }
             }
@@ -131,6 +157,9 @@ public final class E2ERelayBridge: ObservableObject {
         messageTask?.cancel()
         messageTask = nil
         isActive = false
+        appendWaitEpoch &+= 1
+        expectedAppendClientTurnId = nil
+        disarmPostRekeyMutatingRetry()
         for (_, continuation) in pendingDecisionAcks {
             continuation.resume(returning: false)
         }
@@ -262,14 +291,10 @@ public final class E2ERelayBridge: ObservableObject {
     /// Dispatch an agent run through the E2E relay.
     /// Returns the dispatch result, or nil if the relay is not active.
     ///
-    /// If the FIRST attempt times out shortly after a re-key event
-    /// (`isFirstSendRace`), retries exactly once — the narrowest fix for the
-    /// 2026-07-12 race where a dispatch sent in the window between
-    /// socket-connected and session-key derivation/peer ack is lost, surfacing
-    /// as "machine didn't respond" even though a manual Retry always recovers
-    /// (re-sending the same dispatch envelope is already idempotent — Retry
-    /// proves it). Deliberately not a general retry queue: only this one
-    /// bounded, narrowly-gated retry.
+    /// After a genuine paired/rekey epoch, the first gated mutating RPC that
+    /// times out gets exactly one automatic resend (REL-1). Eligibility is
+    /// event-based (armed on rekey, consumed on success or after the resend) —
+    /// not a wall-clock window — so a first send 16s after pair still recovers.
     public func sendDispatch(
         agent: String, cwd: String, prompt: String, budgetUSD: Double?, model: String?,
         contract: ProofReceipt.Contract? = nil
@@ -277,12 +302,10 @@ public final class E2ERelayBridge: ObservableObject {
         guard isActive else {
             throw E2EError.notPaired
         }
-        let attemptedAt = Date()
-        do {
-            return try await sendDispatchOnce(agent: agent, cwd: cwd, prompt: prompt, budgetUSD: budgetUSD, model: model, contract: contract)
-        } catch E2EError.timedOut where Self.isFirstSendRace(attemptedAt: attemptedAt, lastReadyAt: lastReadyAt) {
-            Self.logger.warning("sendDispatch: first attempt timed out within \(Self.firstSendRetryWindow, privacy: .public)s of a re-key event (machine=\(self.machineID.uuidString, privacy: .public)) — retrying once")
-            return try await sendDispatchOnce(agent: agent, cwd: cwd, prompt: prompt, budgetUSD: budgetUSD, model: model, contract: contract)
+        return try await withPostRekeyOneShotRetry(label: "sendDispatch") {
+            try await sendDispatchOnce(
+                agent: agent, cwd: cwd, prompt: prompt, budgetUSD: budgetUSD, model: model, contract: contract
+            )
         }
     }
 
@@ -302,8 +325,9 @@ public final class E2ERelayBridge: ObservableObject {
         // A newer dispatch supersedes an in-flight one (avoids a leaked continuation).
         dispatchContinuation?.resume(throwing: E2EError.superseded)
         dispatchContinuation = nil
+        let wait = dispatchRPCWaitTimeout
         let timeout = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(20))
+            try? await Task.sleep(for: wait)
             guard let self, !Task.isCancelled else { return }
             self.dispatchContinuation?.resume(throwing: E2EError.timedOut)
             self.dispatchContinuation = nil
@@ -314,15 +338,57 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
-    /// Pure readiness-gate check (unit-testable without a live relay): was
-    /// `attemptedAt` within `firstSendRetryWindow` of the most recent re-key
-    /// event? A `nil` lastReadyAt (never paired this bridge instance) is never
-    /// a race — there's no re-key to blame.
-    nonisolated static func isFirstSendRace(attemptedAt: Date, lastReadyAt: Date?) -> Bool {
-        guard let lastReadyAt else { return false }
-        let delta = attemptedAt.timeIntervalSince(lastReadyAt)
-        return delta >= 0 && delta < firstSendRetryWindow
+    /// One-shot post-rekey retry shared by `sendDispatch` and
+    /// `relayAppendConversation` only — do not widen to unrelated RPCs.
+    private func withPostRekeyOneShotRetry<T>(
+        label: String,
+        operation: () async throws -> T
+    ) async throws -> T {
+        let protected = claimPostRekeyMutatingRetry()
+        do {
+            let result = try await operation()
+            if protected { releasePostRekeyMutatingRetryClaim() }
+            return result
+        } catch E2EError.timedOut where protected {
+            Self.logger.warning("\(label, privacy: .public): first attempt timed out after re-key (machine=\(self.machineID.uuidString, privacy: .public)) — retrying once")
+            defer { releasePostRekeyMutatingRetryClaim() }
+            return try await operation()
+        } catch {
+            if protected { releasePostRekeyMutatingRetryClaim() }
+            throw error
+        }
     }
+
+    private func armPostRekeyMutatingRetry() {
+        postRekeyMutatingRetryArmed = true
+        postRekeyMutatingRetryClaimed = false
+    }
+
+    private func disarmPostRekeyMutatingRetry() {
+        postRekeyMutatingRetryArmed = false
+        postRekeyMutatingRetryClaimed = false
+    }
+
+    /// Atomically claim the one-shot post-rekey retry slot if armed.
+    private func claimPostRekeyMutatingRetry() -> Bool {
+        guard postRekeyMutatingRetryArmed, !postRekeyMutatingRetryClaimed else { return false }
+        postRekeyMutatingRetryClaimed = true
+        postRekeyMutatingRetryArmed = false
+        return true
+    }
+
+    private func releasePostRekeyMutatingRetryClaim() {
+        postRekeyMutatingRetryClaimed = false
+    }
+
+#if DEBUG
+    /// Test-only: whether the post-rekey one-shot slot is still armed.
+    var postRekeyMutatingRetryArmedForTesting: Bool { postRekeyMutatingRetryArmed }
+    /// Test-only: force-arm without a pairing transition (isolated unit paths).
+    func armPostRekeyMutatingRetryForTesting() { armPostRekeyMutatingRetry() }
+    /// Test-only: force-disarm.
+    func disarmPostRekeyMutatingRetryForTesting() { disarmPostRekeyMutatingRetry() }
+#endif
 
     /// Sends a run-control action (stop / pause / resume) for a dispatched relay
     /// run. Fire-and-forget: the daemon applies it via dispatcher.cancel/pause/resume
@@ -664,16 +730,36 @@ public final class E2ERelayBridge: ObservableObject {
     /// mediated append the cross-device sync design requires. A 20s timeout
     /// (matching `sendDispatch`, not the 15s used by the read-only conversation
     /// RPCs above) since this can launch a vendor CLI process on the host.
+    ///
+    /// Same post-rekey one-shot recovery as `sendDispatch`. Resend keeps the
+    /// same `clientTurnId`, so the daemon's beginTurn replay path will not
+    /// launch a second vendor run. Append results are accepted only when the
+    /// echoed `clientTurnId` matches the active waiter (fail-closed if missing);
+    /// timeout tasks are epoch-guarded so a superseded wait cannot cancel a newer one.
     public func relayAppendConversation(_ request: ConversationAppendRequest) async throws -> ConversationAppendResponse {
         guard isActive else { throw E2EError.notPaired }
+        return try await withPostRekeyOneShotRetry(label: "relayAppendConversation") {
+            try await relayAppendConversationOnce(request)
+        }
+    }
+
+    private func relayAppendConversationOnce(_ request: ConversationAppendRequest) async throws -> ConversationAppendResponse {
         try await relayClient.send(type: "agentConversationsAppend", payload: request)
         conversationsAppendContinuation?.resume(throwing: E2EError.superseded)
         conversationsAppendContinuation = nil
+        appendWaitEpoch &+= 1
+        let epoch = appendWaitEpoch
+        expectedAppendClientTurnId = request.clientTurnId
+        let wait = appendRPCWaitTimeout
         let timeout = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(20))
+            try? await Task.sleep(for: wait)
             guard let self, !Task.isCancelled else { return }
+            guard self.appendWaitEpoch == epoch else { return }
             self.conversationsAppendContinuation?.resume(throwing: E2EError.timedOut)
             self.conversationsAppendContinuation = nil
+            if self.expectedAppendClientTurnId == request.clientTurnId {
+                self.expectedAppendClientTurnId = nil
+            }
         }
         defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
@@ -1205,19 +1291,38 @@ public final class E2ERelayBridge: ObservableObject {
             conversationsFetchContinuation = nil
 
         case "agentConversationsAppendResult":
+            // Orphan/late frames with no waiter are dropped — a timed-out wait
+            // already cleared its continuation, so a delayed result must not
+            // invent a completion.
+            guard conversationsAppendContinuation != nil else { return }
             let envelope = try? JSONDecoder().decode(
                 E2ERelayMessage.RelayInnerEnvelope<ConversationAppendResponse>.self, from: message.payload
             )
-            if let response = envelope?.payload {
-                if let err = response.error, !err.isEmpty {
-                    conversationsAppendContinuation?.resume(throwing: RelayConversationError.host(err))
-                } else {
-                    conversationsAppendContinuation?.resume(returning: response)
-                }
-            } else {
+            guard let response = envelope?.payload else {
                 conversationsAppendContinuation?.resume(throwing: E2EError.decryptFailed)
+                conversationsAppendContinuation = nil
+                expectedAppendClientTurnId = nil
+                return
+            }
+            // Fail-closed correlation: accept only when the daemon echoed the
+            // active waiter's clientTurnId. Missing echo (legacy daemon) or
+            // mismatch → drop without resolving, so late A cannot complete B.
+            // Same-id late attempt-1 may still complete attempt-2 (retry).
+            if let expected = expectedAppendClientTurnId {
+                guard let echoed = response.clientTurnId, echoed == expected else {
+                    Self.logger.warning(
+                        "append result dropped: clientTurnId mismatch or missing (expected=\(expected, privacy: .public) got=\(response.clientTurnId ?? "nil", privacy: .public))"
+                    )
+                    return
+                }
+            }
+            if let err = response.error, !err.isEmpty {
+                conversationsAppendContinuation?.resume(throwing: RelayConversationError.host(err))
+            } else {
+                conversationsAppendContinuation?.resume(returning: response)
             }
             conversationsAppendContinuation = nil
+            expectedAppendClientTurnId = nil
 
         case "agentConversationsArchiveResult":
             let envelope = try? JSONDecoder().decode(

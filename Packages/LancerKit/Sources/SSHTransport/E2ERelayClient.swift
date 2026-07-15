@@ -114,6 +114,12 @@ public final class E2ERelayClient: ObservableObject {
     /// Test-only seam: bypasses websocket send so bridge timeout paths can be
     /// exercised without a live relay socket.
     var bypassSendForTesting = false
+    /// Count of `send` calls swallowed by `bypassSendForTesting` — used to prove
+    /// post-rekey one-shot retries actually re-issue the append/dispatch envelope.
+    private(set) var bypassedSendCountForTesting = 0
+    /// Optional hook fired on each bypassed send (type string) so tests can
+    /// deliver a synthetic result on the Nth attempt.
+    var onBypassSendForTesting: ((String) -> Void)?
 #endif
 
     private lazy var messageStream: AsyncStream<ReceivedMessage> = {
@@ -493,12 +499,23 @@ public final class E2ERelayClient: ObservableObject {
     public func setEverConfirmedForTesting(_ value: Bool) {
         everConfirmed = value
     }
+
+    /// Test-only seam: yield an already-decrypted inner message onto the same
+    /// `messages` stream `E2ERelayBridge` consumes — exercises result routing
+    /// without a live websocket/crypto round trip.
+    public func deliverReceivedMessageForTesting(type: String, payload: Data) {
+        // Touch `messages` first so the lazy stream (and its continuation) exists.
+        _ = messages
+        messageContinuation?.yield(ReceivedMessage(type: type, payload: payload))
+    }
 #endif
 
     /// Send an encrypted message to the daemon through the relay.
     public func send(type: String, payload: some Codable) async throws {
 #if DEBUG
         if bypassSendForTesting {
+            bypassedSendCountForTesting += 1
+            onBypassSendForTesting?(type)
             return
         }
 #endif

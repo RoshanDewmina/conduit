@@ -374,6 +374,46 @@ struct ConversationSyncCoordinatorTests {
         #expect(await coordinator.currentSyncState("conv-1") == .synced, "a recovered append must not leave the conversation flagged hostOffline")
     }
 
+    @Test("append retries keep the same clientTurnId so the host can dedupe")
+    func appendRetriesPreserveClientTurnId() async throws {
+        struct Blip: Error {}
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 2, syncState: .synced)
+
+        let seen = ClientTurnIDCapture()
+        let transport = makeTransport(append: { request in
+            await seen.append(request.clientTurnId)
+            let n = await seen.count()
+            if n < 2 { throw Blip() }
+            return ConversationAppendResponse(
+                status: "started", conversationId: "conv-1", turnId: "turn-1", runId: "run-1",
+                cwd: "/proj", baseSeq: 2, nextSeq: 4, resumeMode: "exact",
+                clientTurnId: request.clientTurnId
+            )
+        })
+
+        let outcome = await coordinator.continueConversation(
+            conversationID: "conv-1", baseSeq: 2, prompt: "follow up", clientTurnID: "device:idempotent-1",
+            hostName: "h", hostID: nil, transport: transport
+        )
+        guard case .started = outcome else {
+            Issue.record("expected .started, got \(outcome)")
+            return
+        }
+        let ids = await seen.all()
+        #expect(ids == ["device:idempotent-1", "device:idempotent-1"])
+    }
+
+    private actor ClientTurnIDCapture {
+        private var values: [String] = []
+        func append(_ id: String) { values.append(id) }
+        func count() -> Int { values.count }
+        func all() -> [String] { values }
+    }
+
     private actor Counter {
         private(set) var value = 0
         @discardableResult
