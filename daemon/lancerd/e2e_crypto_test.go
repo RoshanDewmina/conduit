@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"testing"
 )
 
@@ -112,7 +113,9 @@ func TestE2ECryptoWrongPeerKeyFails(t *testing.T) {
 // happily decrypts a captured/replayed frame a second time (it has no notion
 // of "already seen"), so replay resistance must come from the seq envelope +
 // replaySequencer layered on top. A frame that decrypts successfully twice
-// must still only be ACCEPTED once by the sequencer.
+// must still only be ACCEPTED once by the sequencer. This exercises the
+// legacy (no generation tag) path — gen == "" throughout — proving no
+// regression against a not-yet-upgraded counterpart.
 func TestE2EReplayedFrameRejected(t *testing.T) {
 	priv, _, err := generateKeyPair()
 	if err != nil {
@@ -143,11 +146,14 @@ func TestE2EReplayedFrameRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decryptFrame (first delivery): %v", err)
 	}
-	gotSeq, _, err := unwrapSeq(plaintext)
+	gotSeq, gotGen, _, err := unwrapSeq(plaintext)
 	if err != nil {
 		t.Fatalf("unwrapSeq: %v", err)
 	}
-	if !seq.accept(gotSeq) {
+	if gotGen != "" {
+		t.Fatalf("legacy wrapSeq must produce an empty gen, got %q", gotGen)
+	}
+	if seq.accept(gotGen, gotSeq) != replayAccepted {
 		t.Fatal("first delivery of seq=0 must be accepted")
 	}
 
@@ -157,12 +163,12 @@ func TestE2EReplayedFrameRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decryptFrame (replay) unexpectedly failed: %v", err)
 	}
-	replaySeq, _, err := unwrapSeq(replayPlaintext)
+	replaySeq, replayGen, _, err := unwrapSeq(replayPlaintext)
 	if err != nil {
 		t.Fatalf("unwrapSeq (replay): %v", err)
 	}
-	if seq.accept(replaySeq) {
-		t.Fatal("a replayed frame (same seq) must be rejected, not accepted a second time")
+	if result := seq.accept(replayGen, replaySeq); result != replayRejectedReplay {
+		t.Fatalf("a replayed frame (same seq) must be rejected as replayRejectedReplay, got %v", result)
 	}
 
 	// A genuinely new, higher sequence is still accepted.
@@ -175,17 +181,208 @@ func TestE2EReplayedFrameRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decryptFrame seq=1: %v", err)
 	}
-	gotSeq1, _, err := unwrapSeq(plaintext1)
+	gotSeq1, gotGen1, _, err := unwrapSeq(plaintext1)
 	if err != nil {
 		t.Fatalf("unwrapSeq seq=1: %v", err)
 	}
-	if !seq.accept(gotSeq1) {
+	if seq.accept(gotGen1, gotSeq1) != replayAccepted {
 		t.Fatal("a strictly-increasing new sequence must be accepted")
 	}
 
-	// reset() (a new pairing generation) allows seq=0 again.
+	// reset() (a new pairing generation) allows seq=0 again — the legacy
+	// no-gen path must behave exactly like the original bare counter.
 	seq.reset()
-	if !seq.accept(0) {
+	if seq.accept("", 0) != replayAccepted {
 		t.Fatal("after reset(), seq=0 must be acceptable again (new generation)")
+	}
+}
+
+// TestE2EGenerationGuardStopsCrossGenerationPoisoning is the exact scenario
+// reproduced live on 2026-07-15 (both directions of the stuck-Working/Retry
+// bug): a stale in-flight frame from a PREVIOUS reconnect generation arrives
+// AFTER reset(), and — on the old bare-counter design — gets accepted because
+// its seq is high, poisoning `last` so every legitimate new-generation frame
+// (seq starting at 0) is rejected as "out of order" until the next
+// peer_joined. The generation tag must close this: a frame tagged with a
+// RETIRED generation is rejected without touching currentGen/last, so the new
+// generation's low sequence numbers are unaffected.
+func TestE2EGenerationGuardStopsCrossGenerationPoisoning(t *testing.T) {
+	var seq replaySequencer
+
+	// Generation A: frames 100, 101 accepted normally.
+	if seq.accept("gen-A", 100) != replayAccepted {
+		t.Fatal("gen-A seq=100 (first frame of first generation) must be accepted")
+	}
+	if seq.accept("gen-A", 101) != replayAccepted {
+		t.Fatal("gen-A seq=101 must be accepted (strictly increasing within gen-A)")
+	}
+
+	// A peer_joined fires (daemon restarted / app relaunched) — reset().
+	seq.reset()
+
+	// A stale gen-A frame (seq=102, sent before the reconnect but delivered
+	// after it) arrives. On the OLD bare-counter code this would be accepted
+	// (102 > 0) and poison `last` to 102. The fix must reject it as a stale
+	// generation and leave currentGen/last untouched.
+	if result := seq.accept("gen-A", 102); result != replayRejectedStaleGeneration {
+		t.Fatalf("stale gen-A seq=102 after reset() must be rejected as replayRejectedStaleGeneration, got %v", result)
+	}
+
+	// The new generation B's frames, starting at seq=0, MUST be accepted —
+	// this is the exact assertion that fails on the old code (the bug: the
+	// poisoned `last` from the stale frame rejects every new-generation frame
+	// as "out of order" for the life of the connection).
+	if seq.accept("gen-B", 0) != replayAccepted {
+		t.Fatal("gen-B seq=0 (first frame of the new generation) must be accepted after a stale gen-A frame arrived")
+	}
+	if seq.accept("gen-B", 1) != replayAccepted {
+		t.Fatal("gen-B seq=1 must be accepted (strictly increasing within gen-B)")
+	}
+	if seq.accept("gen-B", 2) != replayAccepted {
+		t.Fatal("gen-B seq=2 must be accepted (strictly increasing within gen-B)")
+	}
+
+	// A later, even-more-stale gen-A frame (seq=103) must still be rejected —
+	// gen-A stays retired even after gen-B has become current.
+	if result := seq.accept("gen-A", 103); result != replayRejectedStaleGeneration {
+		t.Fatalf("gen-A seq=103 must still be rejected as replayRejectedStaleGeneration after gen-B is current, got %v", result)
+	}
+
+	// True replay WITHIN gen-B (the current generation) must still be
+	// rejected — the fix must not weaken in-generation replay resistance.
+	if result := seq.accept("gen-B", 1); result != replayRejectedReplay {
+		t.Fatalf("replaying gen-B seq=1 must be rejected as replayRejectedReplay, got %v", result)
+	}
+	if result := seq.accept("gen-B", 0); result != replayRejectedReplay {
+		t.Fatalf("replaying gen-B seq=0 (below last) must be rejected as replayRejectedReplay, got %v", result)
+	}
+}
+
+// TestE2EGenerationGuardLegacyPeerUnchanged proves a peer that never tags a
+// frame with a generation (gen == "" on every frame — a not-yet-upgraded
+// counterpart) sees byte-for-byte the same accept/reject decisions as the
+// original bare monotonic counter, including across reset(). Co-deploy
+// closes the security hole; this test guards against a regression for the
+// window before both sides have upgraded.
+func TestE2EGenerationGuardLegacyPeerUnchanged(t *testing.T) {
+	var seq replaySequencer
+
+	if seq.accept("", 0) != replayAccepted {
+		t.Fatal("legacy first-ever seq=0 must be accepted")
+	}
+	if seq.accept("", 0) != replayRejectedReplay {
+		t.Fatal("legacy replay of seq=0 must be rejected")
+	}
+	if seq.accept("", 1) != replayAccepted {
+		t.Fatal("legacy seq=1 must be accepted")
+	}
+	if seq.accept("", 1) != replayRejectedReplay {
+		t.Fatal("legacy replay of seq=1 must be rejected")
+	}
+	if seq.accept("", 0) != replayRejectedReplay {
+		t.Fatal("legacy earlier seq=0 must be rejected even though seq=1 was already accepted")
+	}
+
+	seq.reset()
+	if seq.accept("", 0) != replayAccepted {
+		t.Fatal("after reset(), legacy seq=0 must be acceptable again")
+	}
+
+	// A legacy peer's stale in-flight frame (high seq from before reset)
+	// arriving after reset() is still subject to the ORIGINAL bare-counter
+	// check (gen == currentGen == ""), not the generation-guard rejection —
+	// this is the documented no-regression tradeoff: only co-deploy (every
+	// frame tagged) closes the hole completely.
+	if seq.accept("", 1) != replayAccepted {
+		t.Fatal("legacy seq=1 after reset() must be accepted (strictly increasing from the fresh seq=0)")
+	}
+}
+
+// TestE2EGenerationGuardUntaggedFrameCannotHijackTaggedGeneration closes the
+// review-flagged downgrade hole: with a tagged generation active, an untagged
+// frame (gen == "") must NOT hit the adopt branch — that would retire the
+// live generation into seenGens, set currentGen="", accept the frame
+// unconditionally, and then reject every subsequent legitimate tagged frame
+// as stale — a single stale (or deliberately replayed pre-upgrade) untagged
+// frame recreating the exact deafness bug this change exists to fix. Because
+// the session key is static across reconnects (the unfixed P2), any recorded
+// pre-upgrade frame decrypts forever, making this a permanent replay+
+// downgrade door if left open.
+func TestE2EGenerationGuardUntaggedFrameCannotHijackTaggedGeneration(t *testing.T) {
+	var seq replaySequencer
+
+	// Tagged generation B is active with some accepted frames.
+	if seq.accept("gen-B", 0) != replayAccepted {
+		t.Fatal("gen-B seq=0 must be accepted")
+	}
+	if seq.accept("gen-B", 1) != replayAccepted {
+		t.Fatal("gen-B seq=1 must be accepted")
+	}
+
+	// An untagged frame arrives (stale pre-upgrade residue or a replayed
+	// recorded frame). It must be rejected as stale-generation and must not
+	// touch currentGen/last/seenGens.
+	if result := seq.accept("", 999); result != replayRejectedStaleGeneration {
+		t.Fatalf("untagged frame while tagged gen-B is active must be rejected as replayRejectedStaleGeneration, got %v", result)
+	}
+
+	// gen-B must still be the live generation: its next in-order frame is
+	// accepted (no state damage), and in-generation replay is still caught.
+	if seq.accept("gen-B", 2) != replayAccepted {
+		t.Fatal("gen-B seq=2 must still be accepted after the untagged frame was rejected — the live generation must be undamaged")
+	}
+	if result := seq.accept("gen-B", 2); result != replayRejectedReplay {
+		t.Fatalf("replaying gen-B seq=2 must still be rejected as replayRejectedReplay, got %v", result)
+	}
+
+	// A second untagged frame is still rejected — the door stays closed.
+	if result := seq.accept("", 1000); result != replayRejectedStaleGeneration {
+		t.Fatalf("untagged frames must stay rejected while a tagged generation is active, got %v", result)
+	}
+
+	// After reset() the mode is decided by the first frame again: a legacy
+	// peer (untagged) works, exactly as before the upgrade.
+	seq.reset()
+	if seq.accept("", 0) != replayAccepted {
+		t.Fatal("after reset(), an untagged first frame must be accepted (legacy peer support)")
+	}
+}
+
+// TestE2EGenerationGuardSeenGensCapEviction proves seenGens is bounded: once
+// more than maxTrackedGenerations distinct generations have been retired, the
+// OLDEST is evicted (FIFO) so a long-lived daemon with many reconnects can't
+// grow this set without bound. A frame tagged with an evicted generation is
+// no longer classified as "stale" (it looks like a brand-new generation) —
+// an accepted tradeoff for boundedness, since a generation that old is
+// realistically long gone from the wire.
+func TestE2EGenerationGuardSeenGensCapEviction(t *testing.T) {
+	var seq replaySequencer
+
+	// Retire maxTrackedGenerations+1 distinct generations one at a time: each
+	// new gen's first frame adopts it, retiring the previous currentGen into
+	// seenGens. This produces maxTrackedGenerations+1 total remembers (gen-0
+	// through gen-maxTrackedGenerations), one more than the cap, so the
+	// oldest (gen-0) must be evicted.
+	if seq.accept("gen-0", 0) != replayAccepted {
+		t.Fatal("gen-0 seq=0 must be accepted")
+	}
+	for i := 1; i <= maxTrackedGenerations+1; i++ {
+		gen := fmt.Sprintf("gen-%d", i)
+		if seq.accept(gen, 0) != replayAccepted {
+			t.Fatalf("first frame of %s must be accepted", gen)
+		}
+	}
+	// Check gen-1 (retired more recently, still within the cap) BEFORE gen-0:
+	// a stale-generation rejection doesn't mutate state, but the later
+	// gen-0 check below (a genuinely-new-looking generation) does adopt and
+	// evict, so order matters for this assertion.
+	if result := seq.accept("gen-1", 999); result != replayRejectedStaleGeneration {
+		t.Fatalf("gen-1 should still be tracked in seenGens (not evicted), got %v", result)
+	}
+	// gen-0 was the FIRST generation retired into seenGens, so it must be the
+	// first evicted once the set exceeds its cap — a frame tagged with it now
+	// looks like a brand-new (never-seen) generation rather than "stale".
+	if result := seq.accept("gen-0", 999); result == replayRejectedStaleGeneration {
+		t.Fatal("gen-0 should have been evicted from seenGens (FIFO) once the cap was exceeded, but it was still classified as stale")
 	}
 }
