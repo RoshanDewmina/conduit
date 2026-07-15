@@ -180,6 +180,36 @@ struct E2EReplayResistanceTests {
         #expect(seq.accept(gen: "", seq: 1) == .accepted)
     }
 
+    // Mirrors the Go daemon's
+    // TestE2EGenerationGuardUntaggedFrameCannotHijackTaggedGeneration: with a
+    // tagged generation active, an untagged frame must not hit the adopt
+    // branch (which would retire the live generation, accept unconditionally,
+    // and reject every subsequent legitimate tagged frame as stale — a
+    // permanent replay/downgrade door, since the static session key means
+    // recorded pre-upgrade frames decrypt forever).
+    @Test("an untagged frame cannot hijack an active tagged generation")
+    func untaggedFrameCannotHijackTaggedGeneration() {
+        let seq = ReplaySequencer()
+
+        #expect(seq.accept(gen: "gen-B", seq: 0) == .accepted)
+        #expect(seq.accept(gen: "gen-B", seq: 1) == .accepted)
+
+        // Untagged frame while gen-B is active: rejected, no state damage.
+        #expect(seq.accept(gen: "", seq: 999) == .staleGeneration, "untagged frame while a tagged generation is active must be rejected as staleGeneration")
+
+        // gen-B is still live: next in-order frame accepted, replay still caught.
+        #expect(seq.accept(gen: "gen-B", seq: 2) == .accepted, "the live tagged generation must be undamaged by the rejected untagged frame")
+        #expect(seq.accept(gen: "gen-B", seq: 2) == .replayed)
+
+        // The door stays closed.
+        #expect(seq.accept(gen: "", seq: 1000) == .staleGeneration)
+
+        // After reset(), the first frame decides the mode again — a legacy
+        // (untagged) peer keeps working.
+        seq.reset()
+        #expect(seq.accept(gen: "", seq: 0) == .accepted, "after reset(), an untagged first frame must be accepted (legacy peer support)")
+    }
+
     // seenGens is bounded: once more than maxTrackedGenerations distinct
     // generations have been retired, the oldest is evicted (FIFO).
     @Test("seenGens evicts the oldest retired generation once its cap is exceeded")

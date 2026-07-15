@@ -298,6 +298,56 @@ func TestE2EGenerationGuardLegacyPeerUnchanged(t *testing.T) {
 	}
 }
 
+// TestE2EGenerationGuardUntaggedFrameCannotHijackTaggedGeneration closes the
+// review-flagged downgrade hole: with a tagged generation active, an untagged
+// frame (gen == "") must NOT hit the adopt branch — that would retire the
+// live generation into seenGens, set currentGen="", accept the frame
+// unconditionally, and then reject every subsequent legitimate tagged frame
+// as stale — a single stale (or deliberately replayed pre-upgrade) untagged
+// frame recreating the exact deafness bug this change exists to fix. Because
+// the session key is static across reconnects (the unfixed P2), any recorded
+// pre-upgrade frame decrypts forever, making this a permanent replay+
+// downgrade door if left open.
+func TestE2EGenerationGuardUntaggedFrameCannotHijackTaggedGeneration(t *testing.T) {
+	var seq replaySequencer
+
+	// Tagged generation B is active with some accepted frames.
+	if seq.accept("gen-B", 0) != replayAccepted {
+		t.Fatal("gen-B seq=0 must be accepted")
+	}
+	if seq.accept("gen-B", 1) != replayAccepted {
+		t.Fatal("gen-B seq=1 must be accepted")
+	}
+
+	// An untagged frame arrives (stale pre-upgrade residue or a replayed
+	// recorded frame). It must be rejected as stale-generation and must not
+	// touch currentGen/last/seenGens.
+	if result := seq.accept("", 999); result != replayRejectedStaleGeneration {
+		t.Fatalf("untagged frame while tagged gen-B is active must be rejected as replayRejectedStaleGeneration, got %v", result)
+	}
+
+	// gen-B must still be the live generation: its next in-order frame is
+	// accepted (no state damage), and in-generation replay is still caught.
+	if seq.accept("gen-B", 2) != replayAccepted {
+		t.Fatal("gen-B seq=2 must still be accepted after the untagged frame was rejected — the live generation must be undamaged")
+	}
+	if result := seq.accept("gen-B", 2); result != replayRejectedReplay {
+		t.Fatalf("replaying gen-B seq=2 must still be rejected as replayRejectedReplay, got %v", result)
+	}
+
+	// A second untagged frame is still rejected — the door stays closed.
+	if result := seq.accept("", 1000); result != replayRejectedStaleGeneration {
+		t.Fatalf("untagged frames must stay rejected while a tagged generation is active, got %v", result)
+	}
+
+	// After reset() the mode is decided by the first frame again: a legacy
+	// peer (untagged) works, exactly as before the upgrade.
+	seq.reset()
+	if seq.accept("", 0) != replayAccepted {
+		t.Fatal("after reset(), an untagged first frame must be accepted (legacy peer support)")
+	}
+}
+
 // TestE2EGenerationGuardSeenGensCapEviction proves seenGens is bounded: once
 // more than maxTrackedGenerations distinct generations have been retired, the
 // OLDEST is evicted (FIFO) so a long-lived daemon with many reconnects can't

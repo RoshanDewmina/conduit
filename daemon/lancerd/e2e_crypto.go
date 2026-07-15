@@ -219,11 +219,21 @@ const (
 //     before.
 //
 // accept()'s rules, in order (gen == "" means the sender hasn't upgraded —
-// this collapses to the original bare-counter behavior with no regression):
+// when currentGen is also "" this collapses to the original bare-counter
+// behavior with no regression):
 //  1. gen == currentGen: require seq > last (the original check).
-//  2. gen != "" and gen is a retired generation (in seenGens): reject WITHOUT
+//  2. gen == "" while currentGen is a real tag: reject as stale WITHOUT
+//     touching any state. Once a tagged generation is active on this
+//     connection, an untagged frame is either stale pre-upgrade residue or a
+//     replay/downgrade attempt (the session key is static across reconnects,
+//     so ANY recorded pre-upgrade frame decrypts forever) — letting it
+//     through would retire the live generation and recreate the deafness
+//     bug. Legacy peers are unaffected: they never tag, so currentGen stays
+//     "" and rule 1 handles them; after reset() currentGen is "" again and
+//     the first frame decides the mode for that generation.
+//  3. gen != "" and gen is a retired generation (in seenGens): reject WITHOUT
 //     touching currentGen/last — this is the line that kills the poisoning.
-//  3. otherwise (a genuinely new generation, or the very first frame ever
+//  4. otherwise (a genuinely new generation, or the very first frame ever
 //     seen): retire the old currentGen into seenGens and adopt the new one
 //     unconditionally — the first frame of a new generation is always
 //     accepted regardless of its seq value.
@@ -283,10 +293,16 @@ func (r *replaySequencer) accept(gen string, seq uint64) replayAccept {
 		return replayAccepted
 	}
 
-	if gen != "" {
-		if _, stale := r.seenGensSet[gen]; stale {
-			return replayRejectedStaleGeneration
-		}
+	// Rule 2: an untagged frame while a tagged generation is active is stale
+	// pre-upgrade residue or a replay/downgrade attempt — reject without
+	// touching any state, or it would retire the live generation and
+	// recreate the deafness bug.
+	if gen == "" {
+		return replayRejectedStaleGeneration
+	}
+
+	if _, stale := r.seenGensSet[gen]; stale {
+		return replayRejectedStaleGeneration
 	}
 
 	if r.currentGen != "" {
