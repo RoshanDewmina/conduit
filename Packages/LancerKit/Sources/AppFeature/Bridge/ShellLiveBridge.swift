@@ -67,6 +67,15 @@ public final class ShellLiveBridge {
     /// Structured attachments for the in-flight send — rendered with the live
     /// user bubble until the mirrored turn arrives.
     public private(set) var inFlightAttachments: [ConversationAttachmentReference] = []
+    /// The run ID this bridge is currently polling for (`send`/`sendFollowUp`/
+    /// `sendObservedContinue`), if any. Set alongside `inFlightPrompt` and
+    /// cleared alongside it. `LiveThreadView.liveTurnID` prefers matching
+    /// `ChatTurn.runID` against this over inferring liveness from
+    /// `ChatTurn.status == .running` — the mirrored `transcriptTurns` status
+    /// can flip to `.completed` up to one poll tick before `sendState` catches
+    /// up, and `.status` was the field driving that stale read (found in the
+    /// 10x reconnect re-proof, 2026-07-15).
+    public private(set) var inFlightRunID: String?
     /// M4: the machine the most recent send/follow-up resolved via
     /// `RelayFleetStore.firstConnectedMachine`. `LiveThreadView` reads this to
     /// look up `RelayApprovalIngest.latestPendingApproval[activeMachineID]` —
@@ -224,6 +233,7 @@ public final class ShellLiveBridge {
         transcriptTurns = []
         inFlightPrompt = nil
         inFlightAttachments = []
+        inFlightRunID = nil
         activeMachineID = nil
         lastAttempt = nil
         pendingObservedContinue = nil
@@ -321,6 +331,7 @@ public final class ShellLiveBridge {
             )
             inFlightPrompt = nil
             inFlightAttachments = []
+            inFlightRunID = nil
             // Empty host transcript still adopts (composer usable) but must not
             // look like a blank failed tap — surface an explicit no-history state.
             sendState = LiveThreadTranscript.shouldShowAdoptedNoHistoryPlaceholder(
@@ -376,6 +387,7 @@ public final class ShellLiveBridge {
         transcriptTurns = []
         inFlightPrompt = prompt
         inFlightAttachments = attachments
+        inFlightRunID = nil
 
         let transport = Self.transport(for: machine.bridge)
         let vendor = DispatchVendorSelection.load()
@@ -403,6 +415,7 @@ public final class ShellLiveBridge {
         switch outcome {
         case .started(let started):
             activeConversationID = started.conversationID
+            inFlightRunID = started.runID
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
         case .blocked(let message):
@@ -410,6 +423,7 @@ public final class ShellLiveBridge {
             // budget / transport) are surfaced via `.failed` — not silent.
             inFlightPrompt = nil
             inFlightAttachments = []
+            inFlightRunID = nil
             sendState = .failed(message)
         }
     }
@@ -429,6 +443,7 @@ public final class ShellLiveBridge {
         activeConversationID = conversationID
         // Keep hydrated history; append the in-flight turn once polling starts.
         inFlightPrompt = prompt
+        inFlightRunID = nil
 
         let resumeCwd = target.cwd.isEmpty ? cwd : target.cwd
         let result: DispatchResult
@@ -443,6 +458,7 @@ public final class ShellLiveBridge {
             guard epoch == sessionEpoch else { return }
             inFlightPrompt = nil
             inFlightAttachments = []
+            inFlightRunID = nil
             sendState = .failed(error.localizedDescription)
             return
         }
@@ -451,6 +467,7 @@ public final class ShellLiveBridge {
         switch result.status {
         case "started":
             let runID = result.startedRunId ?? UUID().uuidString
+            inFlightRunID = runID
             await pollObservedTranscriptReply(
                 sessionId: target.sessionId,
                 prompt: prompt,
@@ -461,19 +478,23 @@ public final class ShellLiveBridge {
         case "needsApproval":
             inFlightPrompt = nil
             inFlightAttachments = []
+            inFlightRunID = nil
             sendState = .failed("Waiting for approval on \(machine.record.displayName).")
         case "denied":
             inFlightPrompt = nil
             inFlightAttachments = []
+            inFlightRunID = nil
             let rule = result.rule.map { " (\($0))" } ?? ""
             sendState = .failed("Denied by policy on \(machine.record.displayName)\(rule).")
         case "budgetExceeded":
             inFlightPrompt = nil
             inFlightAttachments = []
+            inFlightRunID = nil
             sendState = .failed("Daily budget reached on \(machine.record.displayName).")
         default:
             inFlightPrompt = nil
             inFlightAttachments = []
+            inFlightRunID = nil
             sendState = .failed(result.message ?? "Couldn't continue session on \(machine.record.displayName).")
         }
     }
@@ -574,6 +595,7 @@ public final class ShellLiveBridge {
                     if transcriptSettled {
                         inFlightPrompt = nil
                         inFlightAttachments = []
+                        inFlightRunID = nil
                         switch terminal {
                         case .completed:
                             turn.status = .completed
@@ -721,6 +743,7 @@ public final class ShellLiveBridge {
         sendState = .working
         inFlightPrompt = prompt
         inFlightAttachments = attachments
+        inFlightRunID = nil
 
         let transport = Self.transport(for: machine.bridge)
         let outcome = await conversationSyncCoordinator.continueConversation(
@@ -740,12 +763,14 @@ public final class ShellLiveBridge {
         switch outcome {
         case .started(let started):
             activeConversationID = started.conversationID
+            inFlightRunID = started.runID
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
         case .blocked(let message):
             // Surface blocked reason in the UI (same `.failed` path as send).
             inFlightPrompt = nil
             inFlightAttachments = []
+            inFlightRunID = nil
             sendState = .failed(message)
         }
     }
@@ -792,34 +817,48 @@ public final class ShellLiveBridge {
             }
 
             guard epoch == sessionEpoch else { return }
-            await refreshTranscript(conversationID: conversationID, epoch: epoch)
 
+            // Decide terminal-vs-running and flip `sendState`/`inFlightPrompt`
+            // BEFORE refreshing `transcriptTurns` — the reverse order left a
+            // real await-window where `transcriptTurns` already showed this
+            // turn `.completed` while `sendState` was still `.working` and
+            // `inFlightPrompt` still set, so `LiveThreadView` rendered the
+            // turn via both the frozen-history path and the live in-flight
+            // path simultaneously (duplicate prompt bubble + phantom
+            // "Working…", found in the 10x reconnect re-proof, 2026-07-15).
+            // Flipping first closes the window instead of narrowing it.
             if let turn = try? await chatRepo.turnByRunID(runID) {
                 switch turn.status {
                 case .completed:
                     inFlightPrompt = nil
                     inFlightAttachments = []
+                    inFlightRunID = nil
                     guard epoch == sessionEpoch else { return }
                     sendState = .completed(turn)
+                    await refreshTranscript(conversationID: conversationID, epoch: epoch)
                     return
                 case .failed:
                     inFlightPrompt = nil
                     inFlightAttachments = []
+                    inFlightRunID = nil
                     guard epoch == sessionEpoch else { return }
                     sendState = .failed(turn.errorMessage ?? "Run failed")
+                    await refreshTranscript(conversationID: conversationID, epoch: epoch)
                     return
                 case .running:
+                    await refreshTranscript(conversationID: conversationID, epoch: epoch)
+                    guard epoch == sessionEpoch else { return }
                     if !tracker.isDegraded {
                         switch LivePollPolicy.runningPublish(assistantText: turn.assistantText) {
                         case .working:
-                            guard epoch == sessionEpoch else { return }
                             sendState = .working
                         case .streaming:
-                            guard epoch == sessionEpoch else { return }
                             sendState = .streaming(turn)
                         }
                     }
                 }
+            } else {
+                await refreshTranscript(conversationID: conversationID, epoch: epoch)
             }
 
             do {

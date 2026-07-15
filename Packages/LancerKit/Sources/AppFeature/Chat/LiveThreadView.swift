@@ -379,6 +379,16 @@ public struct LiveThreadView: View {
         case .degraded(_, let turn):
             return turn?.id
         case .working:
+            // Prefer the bridge's own authoritative in-flight runID over
+            // inferring liveness from `ChatTurn.status == .running` —
+            // `transcriptTurns` can mirror a turn as `.completed` up to one
+            // poll tick before `sendState` catches up (10x reconnect
+            // re-proof, 2026-07-15), which made the `.status`-based lookup
+            // resolve to nil right when it mattered most.
+            if let inFlightRunID = bridge.inFlightRunID,
+               let match = bridge.transcriptTurns.first(where: { $0.runID == inFlightRunID }) {
+                return match.id
+            }
             return bridge.transcriptTurns.last(where: { $0.status == .running })?.id
         case .failed:
             return bridge.transcriptTurns.last(where: { $0.status == .failed })?.id

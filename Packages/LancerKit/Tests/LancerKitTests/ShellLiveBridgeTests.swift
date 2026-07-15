@@ -221,6 +221,135 @@ struct ShellLiveBridgeTests {
         #expect(bridge.activeConversationID == "observed:sess-hist")
     }
 
+    /// Regression for the 10x reconnect re-proof duplicate-prompt-bubble bug:
+    /// `pollUntilTerminal` used to call `refreshTranscript` (which writes
+    /// `transcriptTurns` to already show the turn `.completed`) BEFORE
+    /// checking `turnByRunID` and flipping `sendState`/`inFlightPrompt` — a
+    /// real await-window where `transcriptTurns` said "completed" while
+    /// `sendState` still said "working". `LiveThreadView.liveTurnID`'s
+    /// `.working` case resolved to `nil` in that window (no turn is
+    /// `.running` anymore), so the just-finished turn rendered via BOTH the
+    /// frozen-history path and the live in-flight path — duplicate prompt
+    /// bubble + phantom "Working…" from one single turn.
+    ///
+    /// This test forces the exact ordering that used to be buggy — using
+    /// `testPostTranscriptFetchHold` to pause mid-`refreshTranscript`, after
+    /// the DB fetch resolves but before the `transcriptTurns` write lands —
+    /// and asserts `sendState`/`inFlightPrompt` have ALREADY flipped to the
+    /// terminal state by that point, proving the ordering fix rather than
+    /// just a narrower race window.
+    @Test("pollUntilTerminal flips sendState before the transcript write lands, closing the race")
+    func pollUntilTerminalFlipsSendStateBeforeTranscriptWrite() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conversationID = "conv-race"
+        let runID = "run-race"
+
+        _ = try await repo.upsertConversationMirror(
+            ChatConversation(
+                id: conversationID,
+                title: "T",
+                agentID: "claudeCode",
+                hostName: "h",
+                hostID: nil,
+                cwd: "/proj"
+            ),
+            lastHostSeq: 2,
+            syncState: .synced
+        )
+        _ = try await repo.upsertTurnMirror(
+            ChatTurn(
+                id: "turn-race",
+                conversationID: conversationID,
+                ordinal: 0,
+                prompt: "hello",
+                runID: runID,
+                status: .completed,
+                assistantText: "the full reply"
+            ),
+            vendorSessionID: nil,
+            hostSeqStart: nil,
+            hostSeqEnd: nil
+        )
+
+        let bridge = makeBridge(repo: repo)
+
+        let holdEntered = AsyncGate()
+        let allowWrite = AsyncGate()
+        var sendStateAtHold: ShellLiveBridge.SendState?
+        var inFlightPromptAtHold: String??
+        var inFlightRunIDAtHold: String??
+        var transcriptTurnsAtHold: [ChatTurn]?
+        bridge.testPostTranscriptFetchHold = {
+            sendStateAtHold = bridge.sendState
+            inFlightPromptAtHold = bridge.inFlightPrompt
+            inFlightRunIDAtHold = bridge.inFlightRunID
+            transcriptTurnsAtHold = bridge.transcriptTurns
+            await holdEntered.open()
+            await allowWrite.wait()
+        }
+
+        let transport = ConversationTransport(
+            append: { _ in
+                ConversationAppendResponse(status: "started", conversationId: conversationID)
+            },
+            fetch: { _ in
+                // Force the refresh path into the catch so the loop still
+                // reaches the terminal-status decision on the first tick.
+                struct TestRefreshError: Error {}
+                throw TestRefreshError()
+            },
+            archive: { req in
+                ConversationArchiveResponse(ok: true, conversationId: req.conversationId)
+            }
+        )
+
+        let pollTask = Task { @MainActor in
+            await bridge.testPollUntilTerminal(
+                runID: runID,
+                conversationID: conversationID,
+                transport: transport
+            )
+        }
+
+        await holdEntered.wait()
+
+        // At the hold point, refreshTranscript's DB fetch has resolved but
+        // the epoch-guarded `transcriptTurns` write has NOT happened yet
+        // (transcriptTurnsAtHold is still the pre-poll empty array). Despite
+        // that, sendState/inFlightPrompt must already reflect the terminal
+        // turn — the fix's whole point.
+        #expect(transcriptTurnsAtHold?.isEmpty == true)
+        guard case .completed(let turnAtHold) = sendStateAtHold else {
+            Issue.record("expected sendState already .completed at the hold, got \(String(describing: sendStateAtHold))")
+            await allowWrite.open()
+            pollTask.cancel()
+            await pollTask.value
+            return
+        }
+        #expect(turnAtHold.id == "turn-race")
+        #expect(inFlightPromptAtHold == .some(.none))
+        #expect(inFlightRunIDAtHold == .some(.none))
+
+        await allowWrite.open()
+        await pollTask.value
+
+        #expect(bridge.sendState == .completed(turnAtHold))
+        #expect(bridge.transcriptTurns.count == 1)
+        #expect(bridge.transcriptTurns.first?.id == "turn-race")
+        #expect(bridge.inFlightPrompt == nil)
+        #expect(bridge.inFlightRunID == nil)
+
+        // No-duplicate check mirroring LiveThreadView's liveTurnID/priorTurns
+        // split: the turn bound to sendState must be excluded from the
+        // "frozen history" set so it never renders twice.
+        let liveTurnID = turnAtHold.id
+        let priorTurns = LiveThreadTranscript.priorTurns(
+            turns: bridge.transcriptTurns, liveTurnID: liveTurnID
+        )
+        #expect(priorTurns.isEmpty)
+    }
+
     @Test("retry reuses the same clientTurnId and attachment refs")
     func retryPreservesClientTurnIdAndAttachments() async throws {
         let db = try AppDatabase.inMemory()
