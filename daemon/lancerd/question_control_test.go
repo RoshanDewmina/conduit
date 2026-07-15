@@ -20,7 +20,7 @@ import (
 // --- claudeStdinPromptArgv --------------------------------------------------
 
 func TestClaudeStdinPromptArgvSplitsTrailingPrompt(t *testing.T) {
-	argv, _ := agentArgv("claudeCode", "hello there", "")
+	argv, _ := agentArgv("claudeCode", "hello there", "", false)
 	execArgv, prompt, ok := claudeStdinPromptArgv(argv)
 	if !ok {
 		t.Fatalf("claudeStdinPromptArgv should recognize a claudeCode agentArgv build, got ok=false for %v", argv)
@@ -41,11 +41,11 @@ func TestClaudeStdinPromptArgvSplitsTrailingPrompt(t *testing.T) {
 }
 
 func TestClaudeStdinPromptArgvAppliesToContinueAndResume(t *testing.T) {
-	cont, _ := continueArgv("claudeCode", "next", "")
+	cont, _ := continueArgv("claudeCode", "next", "", false)
 	if _, _, ok := claudeStdinPromptArgv(cont); !ok {
 		t.Fatalf("claudeStdinPromptArgv should recognize continueArgv's claudeCode build: %v", cont)
 	}
-	res, _ := resumeArgv("claudeCode", "sess-1", "next", "")
+	res, _ := resumeArgv("claudeCode", "sess-1", "next", "", false)
 	if _, _, ok := claudeStdinPromptArgv(res); !ok {
 		t.Fatalf("claudeStdinPromptArgv should recognize resumeArgv's claudeCode build: %v", res)
 	}
@@ -53,9 +53,9 @@ func TestClaudeStdinPromptArgvAppliesToContinueAndResume(t *testing.T) {
 
 func TestClaudeStdinPromptArgvRejectsOtherVendors(t *testing.T) {
 	for _, agent := range []string{"codex", "kimi", "opencode"} {
-		argv, ok := agentArgv(agent, "hello", "")
+		argv, ok := agentArgv(agent, "hello", "", false)
 		if !ok {
-			t.Fatalf("agentArgv(%q) should be supported", agent)
+			t.Fatalf("agentArgv(%q, false) should be supported", agent)
 		}
 		if _, _, ok := claudeStdinPromptArgv(argv); ok {
 			t.Fatalf("claudeStdinPromptArgv must reject a non-claudeCode argv, got ok=true for %v", argv)

@@ -1109,13 +1109,22 @@ public struct ConversationAppendRequest: Codable, Sendable {
     /// Optional run contract echoed in the terminal proof receipt.
     public let contract: ProofReceipt.Contract?
     public let attachments: [ConversationAttachmentReference]?
+    /// Per-dispatch "Full tools" opt-in (claudeCode only — mirrors Go's
+    /// `conversationAppendRequest.FullTools`, conversation_store.go). Default
+    /// `false` (omitted from the wire — the daemon's zero-value decode) keeps
+    /// the fast `--strict-mcp-config` path; `true` re-enables normal MCP
+    /// loading (XcodeBuildMCP/apple-docs/context7/…) for this one turn at the
+    /// cost of first-token latency. See `FullToolsSelection` (Composer/) for
+    /// the persisted picker state this is read from.
+    public let fullTools: Bool?
 
     public init(
         conversationId: String? = nil, baseSeq: Int = 0, clientTurnId: String,
         agent: String? = nil, cwd: String? = nil, prompt: String, model: String? = nil,
         budgetUSD: Double? = nil, useWorktree: Bool? = nil,
         contract: ProofReceipt.Contract? = nil,
-        attachments: [ConversationAttachmentReference]? = nil
+        attachments: [ConversationAttachmentReference]? = nil,
+        fullTools: Bool? = nil
     ) {
         self.conversationId = conversationId
         self.baseSeq = baseSeq
@@ -1128,11 +1137,12 @@ public struct ConversationAppendRequest: Codable, Sendable {
         self.useWorktree = useWorktree
         self.contract = contract
         self.attachments = attachments
+        self.fullTools = fullTools
     }
 
     enum CodingKeys: String, CodingKey {
         case conversationId, baseSeq, clientTurnId, agent, cwd, prompt, model, budgetUSD
-        case useWorktree, contract, attachments
+        case useWorktree, contract, attachments, fullTools
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1150,6 +1160,9 @@ public struct ConversationAppendRequest: Codable, Sendable {
         if let attachments, !attachments.isEmpty {
             try c.encode(attachments, forKey: .attachments)
         }
+        if let fullTools, fullTools {
+            try c.encode(fullTools, forKey: .fullTools)
+        }
     }
 
     public init(from decoder: Decoder) throws {
@@ -1165,6 +1178,7 @@ public struct ConversationAppendRequest: Codable, Sendable {
         useWorktree = try c.decodeIfPresent(Bool.self, forKey: .useWorktree)
         contract = try c.decodeIfPresent(ProofReceipt.Contract.self, forKey: .contract)
         attachments = try c.decodeIfPresent([ConversationAttachmentReference].self, forKey: .attachments)
+        fullTools = try c.decodeIfPresent(Bool.self, forKey: .fullTools)
     }
 }
 

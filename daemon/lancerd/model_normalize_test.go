@@ -25,7 +25,7 @@ func TestNormalizeClaudeModel(t *testing.T) {
 }
 
 func TestAgentArgvRemapsClaudeModel(t *testing.T) {
-	argv, ok := agentArgv("claudeCode", "hi", "anthropic/claude-haiku-4")
+	argv, ok := agentArgv("claudeCode", "hi", "anthropic/claude-haiku-4", false)
 	if !ok {
 		t.Fatal("expected ok")
 	}

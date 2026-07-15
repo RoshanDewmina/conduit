@@ -560,6 +560,7 @@ public actor ConversationSyncCoordinator {
     public func startConversation(
         agent: String, cwd: String, prompt: String, model: String?, budgetUSD: Double?,
         contract: ProofReceipt.Contract? = nil,
+        fullTools: Bool = false,
         hostName: String, hostID: String?, clientTurnID: String,
         transport: ConversationTransport
     ) async -> TurnOutcome {
@@ -572,7 +573,7 @@ public actor ConversationSyncCoordinator {
             ConversationAppendRequest(
                 conversationId: nil, baseSeq: 0, clientTurnId: clientTurnID,
                 agent: vendor, cwd: cwd, prompt: prompt, model: model, budgetUSD: budgetUSD,
-                contract: contract
+                contract: contract, fullTools: fullTools
             ),
             hostName: hostName, hostID: hostID, transport: transport,
             routingAgentID: agent.contains("|") ? agent : nil
@@ -586,6 +587,7 @@ public actor ConversationSyncCoordinator {
         conversationID: String, baseSeq: Int, prompt: String, clientTurnID: String,
         agent: String? = nil, model: String? = nil, budgetUSD: Double? = nil,
         contract: ProofReceipt.Contract? = nil,
+        fullTools: Bool = false,
         hostName: String, hostID: String?,
         transport: ConversationTransport
     ) async -> TurnOutcome {
@@ -593,7 +595,7 @@ public actor ConversationSyncCoordinator {
             ConversationAppendRequest(
                 conversationId: conversationID, baseSeq: baseSeq, clientTurnId: clientTurnID,
                 agent: agent, cwd: nil, prompt: prompt, model: model, budgetUSD: budgetUSD,
-                contract: contract
+                contract: contract, fullTools: fullTools
             ),
             hostName: hostName, hostID: hostID, transport: transport
         )
@@ -750,7 +752,8 @@ public actor ConversationSyncCoordinator {
             conversationId: request.conversationId, baseSeq: refreshedSeq,
             clientTurnId: request.clientTurnId, agent: request.agent, cwd: request.cwd,
             prompt: request.prompt, model: request.model, budgetUSD: request.budgetUSD,
-            useWorktree: request.useWorktree, contract: request.contract
+            useWorktree: request.useWorktree, contract: request.contract,
+            fullTools: request.fullTools
         )
 
         let retryResponse: ConversationAppendResponse

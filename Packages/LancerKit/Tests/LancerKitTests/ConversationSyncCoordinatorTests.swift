@@ -154,6 +154,72 @@ struct ConversationSyncCoordinatorTests {
         #expect(turns.last?.vendorSessionID == "sess-1")
     }
 
+    @Test("startConversation threads fullTools into the append request")
+    func startConversationThreadsFullTools() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let transport = makeTransport(append: { request in
+            #expect(request.fullTools == true)
+            return ConversationAppendResponse(
+                status: "started", conversationId: "conv-1", turnId: "turn-1", runId: "run-1",
+                cwd: "/proj", baseSeq: 0, nextSeq: 2, resumeMode: "new"
+            )
+        })
+
+        _ = await coordinator.startConversation(
+            agent: "claudeCode", cwd: "/proj", prompt: "hello", model: nil, budgetUSD: nil,
+            fullTools: true,
+            hostName: "MacBook Pro", hostID: "host-1", clientTurnID: "device-1:1", transport: transport
+        )
+    }
+
+    @Test("startConversation omits fullTools from the request by default")
+    func startConversationDefaultsFullToolsFalse() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let transport = makeTransport(append: { request in
+            #expect(request.fullTools == false)
+            return ConversationAppendResponse(
+                status: "started", conversationId: "conv-1", turnId: "turn-1", runId: "run-1",
+                cwd: "/proj", baseSeq: 0, nextSeq: 2, resumeMode: "new"
+            )
+        })
+
+        _ = await coordinator.startConversation(
+            agent: "claudeCode", cwd: "/proj", prompt: "hello", model: nil, budgetUSD: nil,
+            hostName: "MacBook Pro", hostID: "host-1", clientTurnID: "device-1:1", transport: transport
+        )
+    }
+
+    @Test("continueConversation threads fullTools into the append request")
+    func continueConversationThreadsFullTools() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 2, syncState: .synced)
+        _ = try await repo.upsertTurnMirror(
+            ChatTurn(id: "turn-0", conversationID: "conv-1", ordinal: 0, prompt: "hi", runID: "run-0", clientTurnID: "d:1"),
+            vendorSessionID: nil, hostSeqStart: nil, hostSeqEnd: nil
+        )
+
+        let transport = makeTransport(append: { request in
+            #expect(request.fullTools == true)
+            return ConversationAppendResponse(
+                status: "started", conversationId: "conv-1", turnId: "turn-1", runId: "run-1",
+                vendorSessionId: "sess-1", cwd: "/proj", baseSeq: 2, nextSeq: 4, resumeMode: "exact"
+            )
+        })
+
+        _ = await coordinator.continueConversation(
+            conversationID: "conv-1", baseSeq: 2, prompt: "follow up", clientTurnID: "d:2",
+            fullTools: true,
+            hostName: "h", hostID: nil, transport: transport
+        )
+    }
+
     @Test("conflict auto-recovers: stale baseSeq refetches then retries with fresh nextSeq")
     func conflictAutoRecoversOnce() async throws {
         let db = try AppDatabase.inMemory()

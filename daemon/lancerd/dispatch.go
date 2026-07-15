@@ -110,7 +110,15 @@ var claudeStrictMCPArgs = []string{"--strict-mcp-config", "--mcp-config", `{"mcp
 
 // agentArgv builds an explicit, shell-free argv for launching an agent with a
 // prompt. Explicit argv (never `sh -c "<interpolated>"`) avoids command injection.
-func agentArgv(agent, prompt, model string) ([]string, bool) {
+//
+// fullTools is claudeCode-only (every other vendor ignores it): false (the
+// default — flag absent on the wire decodes to the zero value) appends
+// claudeStrictMCPArgs, same as this dispatch path's original unconditional
+// behavior; true omits them so the phone's opt-in "Full tools" toggle gets a
+// normal MCP-loaded turn (XcodeBuildMCP/apple-docs/context7 etc.) at the cost
+// of the ~58% first-token-latency win strict mode buys. See claudeStrictMCPArgs'
+// doc comment for the underlying measurement this trades off.
+func agentArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
 		// --permission-prompt-tool stdio + --input-format stream-json together
@@ -140,7 +148,9 @@ func agentArgv(agent, prompt, model string) ([]string, bool) {
 		// it from the actual exec argv and delivers prompt as the initial
 		// stdin message instead — see claudeStdinPromptArgv's doc comment.
 		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio"}
-		argv = append(argv, claudeStrictMCPArgs...)
+		if !fullTools {
+			argv = append(argv, claudeStrictMCPArgs...)
+		}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -183,7 +193,7 @@ func agentArgv(agent, prompt, model string) ([]string, bool) {
 // vendor session in the run's cwd with a new prompt. It mirrors agentArgv (same
 // streaming flags + per-vendor gating) so a continued run streams identically to
 // the original. ok=false means the agent is unknown.
-func continueArgv(agent, prompt, model string) ([]string, bool) {
+func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
 		// --permission-prompt-tool stdio + --input-format stream-json: see
@@ -191,7 +201,9 @@ func continueArgv(agent, prompt, model string) ([]string, bool) {
 		// protocol applies to a continued turn; realLauncher strips the
 		// trailing "-p", prompt pair and delivers it over stdin the same way.
 		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--continue"}
-		argv = append(argv, claudeStrictMCPArgs...)
+		if !fullTools {
+			argv = append(argv, claudeStrictMCPArgs...)
+		}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -245,7 +257,7 @@ func continueArgv(agent, prompt, model string) ([]string, bool) {
 //   - kimi:     -S/--session <id>  (from --help only; kimi CLI errored on an
 //     unrelated account/billing check during this session, so resume-by-id was
 //     not live-smoke-tested — re-verify before relying on it in production)
-func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
+func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
 		// --permission-prompt-tool stdio + --input-format stream-json: see
@@ -253,7 +265,9 @@ func resumeArgv(agent, sessionID, prompt, model string) ([]string, bool) {
 		// protocol applies to a resumed turn; realLauncher strips the trailing
 		// "-p", prompt pair and delivers it over stdin the same way.
 		argv := []string{"claude", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--resume", sessionID}
-		argv = append(argv, claudeStrictMCPArgs...)
+		if !fullTools {
+			argv = append(argv, claudeStrictMCPArgs...)
+		}
 		if m := normalizeClaudeModel(model); m != "" {
 			argv = append(argv, "--model", m)
 		}
@@ -306,6 +320,14 @@ type conversationLaunchParams struct {
 	VendorSessionID string // "" ⇒ no turn on this conversation has bound one yet
 	IsNew           bool   // true ⇒ first turn of a brand-new conversation
 
+	// FullTools opts THIS turn out of claudeStrictMCPArgs (claudeCode only;
+	// every other agent ignores it) — the phone composer's per-dispatch "Full
+	// tools" toggle (default off ⇒ strict/fast). Threaded straight from this
+	// turn's own request into whichever of agentArgv/continueArgv/resumeArgv
+	// buildConversationArgv picks, never re-derived from an earlier turn on
+	// the same conversation.
+	FullTools bool
+
 	// Contract mirrors dispatchParams.Contract — see conversationAppendRequest's
 	// identical field (conversation_store.go) for why this exists: without it,
 	// every receipt created through agent.conversations.append (the live
@@ -340,13 +362,13 @@ type conversationLaunchParams struct {
 func buildConversationArgv(p conversationLaunchParams) (argv []string, resumeMode string, ok bool) {
 	switch {
 	case p.IsNew:
-		argv, ok = agentArgv(p.Agent, p.Prompt, p.Model)
+		argv, ok = agentArgv(p.Agent, p.Prompt, p.Model, p.FullTools)
 		return argv, "new", ok
 	case p.VendorSessionID != "":
-		argv, ok = resumeArgv(p.Agent, p.VendorSessionID, p.Prompt, p.Model)
+		argv, ok = resumeArgv(p.Agent, p.VendorSessionID, p.Prompt, p.Model, p.FullTools)
 		return argv, "exact", ok
 	default:
-		argv, ok = continueArgv(p.Agent, p.Prompt, p.Model)
+		argv, ok = continueArgv(p.Agent, p.Prompt, p.Model, p.FullTools)
 		return argv, "latestInCwdFallback", ok
 	}
 }
@@ -408,6 +430,10 @@ type dispatchParams struct {
 	Model       string  `json:"model"`
 	UseWorktree bool    `json:"useWorktree,omitempty"`
 	Contract    *runContract `json:"contract,omitempty"`
+	// FullTools — see conversationLaunchParams.FullTools's doc comment. Absent
+	// on the wire (older clients) decodes to false ⇒ strict/fast, so this is
+	// backward compatible with no co-deploy requirement.
+	FullTools bool `json:"fullTools,omitempty"`
 
 	// worktreePath/worktreeRepoRoot are set by runDispatch (never over the wire —
 	// unexported) so dispatch() can record them on the run BEFORE launching the
@@ -2115,7 +2141,7 @@ func (d *dispatcher) getQuotaGuard() QuotaGuardResult {
 // dispatch applies the budget + policy gate, then launches. It NEVER launches a
 // run that policy denies/escalates, and refuses once the budget cap is reached.
 func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
-	argv, ok := agentArgv(p.Agent, p.Prompt, p.Model)
+	argv, ok := agentArgv(p.Agent, p.Prompt, p.Model, p.FullTools)
 	if !ok {
 		return dispatchResult{Status: "error", Message: "unknown agent: " + p.Agent}
 	}
@@ -2290,7 +2316,11 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 		return dispatchResult{Status: "error", Message: "unknown run: " + runID}
 	}
 
-	argv, ok := continueArgv(agent, prompt, model)
+	// agent.run.continue (this legacy in-memory-run path, distinct from the
+	// conversation-ledger's launchConversationTurn) has no FullTools field on
+	// the wire yet — out of scope for the composer's per-dispatch toggle, so
+	// this always launches strict, same as before.
+	argv, ok := continueArgv(agent, prompt, model, false)
 	if !ok {
 		return dispatchResult{Status: "error", Message: "continue not supported for agent: " + agent}
 	}
@@ -2390,7 +2420,10 @@ type observedSessionContinueParams struct {
 // the new runId exactly like dispatch/continueRun, and it can itself be
 // continued later via agent.run.continue.
 func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
-	argv, ok := resumeArgv(p.Vendor, p.SessionID, p.Prompt, p.Model)
+	// agent.observedSession.continue targets a terminal-started session, not
+	// a composer-dispatched conversation turn — out of scope for the
+	// composer's per-dispatch toggle, so this always launches strict.
+	argv, ok := resumeArgv(p.Vendor, p.SessionID, p.Prompt, p.Model, false)
 	if !ok {
 		return dispatchResult{Status: "error", Message: "resume-by-id not supported for agent: " + p.Vendor}
 	}

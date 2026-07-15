@@ -327,12 +327,18 @@ public final class ShellLiveBridge {
         let transport = Self.transport(for: machine.bridge)
         let vendor = DispatchVendorSelection.load()
         let model = DispatchModelSelection.dispatchSlug(for: vendor)
+        // "Full tools" only means anything for claudeCode — never send it true
+        // for another vendor even if the toggle was left on from a prior
+        // claudeCode send (the daemon ignores it for other agents anyway, but
+        // don't rely on that: keep the wire payload honest per-vendor).
+        let fullTools = vendor.usesClaudeModelPicker && FullToolsSelection.load()
         let outcome = await conversationSyncCoordinator.startConversation(
             agent: "relay|\(machine.id.uuidString)|\(vendor.wireID)",
             cwd: cwd,
             prompt: prompt,
             model: model,
             budgetUSD: nil,
+            fullTools: fullTools,
             hostName: machine.record.displayName,
             hostID: machine.id.uuidString,
             clientTurnID: UUID().uuidString,
@@ -630,6 +636,12 @@ public final class ShellLiveBridge {
             conversationModel: conversation?.model,
             selected: DispatchModelSelection.load()
         )
+        // Follow-up honors the CURRENT composer toggle for this new turn (not
+        // whatever an earlier turn on this conversation sent) — same "thread
+        // the request's own flag, don't re-derive from history" rule
+        // buildConversationArgv follows on the daemon (dispatch.go).
+        let followUpVendor = DispatchVendorSelection.resolve(conversation?.vendor)
+        let fullTools = followUpVendor.usesClaudeModelPicker && FullToolsSelection.load()
 
         lastAttempt = .followUp(prompt: prompt, conversationID: conversationID, cwd: cwd)
         sendState = .working
@@ -642,6 +654,7 @@ public final class ShellLiveBridge {
             prompt: prompt,
             clientTurnID: UUID().uuidString,
             model: model,
+            fullTools: fullTools,
             hostName: machine.record.displayName,
             hostID: machine.id.uuidString,
             transport: transport

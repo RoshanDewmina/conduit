@@ -40,20 +40,65 @@ func TestClaudeArgvUsesStrictMCPConfig(t *testing.T) {
 		}
 	}
 
-	fresh, ok := agentArgv("claudeCode", "Hi", "haiku")
+	fresh, ok := agentArgv("claudeCode", "Hi", "haiku", false)
 	assertStrictMCP(t, "agentArgv", fresh, ok)
 
-	cont, ok := continueArgv("claudeCode", "next", "haiku")
+	cont, ok := continueArgv("claudeCode", "next", "haiku", false)
 	assertStrictMCP(t, "continueArgv", cont, ok)
 
-	res, ok := resumeArgv("claudeCode", "sess-123", "next", "haiku")
+	res, ok := resumeArgv("claudeCode", "sess-123", "next", "haiku", false)
 	assertStrictMCP(t, "resumeArgv", res, ok)
 
 	// Non-claudeCode vendors must be untouched: no strict-mcp-config flag was
 	// ever requested or verified for their CLIs, and the fix is explicitly
 	// scoped to claudeCode only.
 	for _, agent := range []string{"codex", "kimi", "opencode"} {
-		argv, ok := agentArgv(agent, "hi", "")
+		argv, ok := agentArgv(agent, "hi", "", false)
+		if !ok {
+			t.Fatalf("agentArgv(%q) should be supported", agent)
+		}
+		if slices.Contains(argv, "--strict-mcp-config") {
+			t.Fatalf("agent %q must not gain --strict-mcp-config: %v", agent, argv)
+		}
+	}
+}
+
+// Regression: fullTools=true (the phone composer's per-dispatch "Full tools"
+// opt-in) must OMIT claudeStrictMCPArgs entirely for all three launch shapes
+// — the whole point of the toggle is to let a real coding dispatch keep
+// XcodeBuildMCP/apple-docs/context7 for that one turn — while still never
+// disturbing the trailing "-p", prompt pair claudeStdinPromptArgv depends on,
+// and never leaking onto non-claudeCode vendors (which ignore the flag).
+func TestClaudeArgvFullToolsOmitsStrictMCPConfig(t *testing.T) {
+	assertNoStrictMCP := func(t *testing.T, label string, argv []string, ok bool) {
+		t.Helper()
+		if !ok {
+			t.Fatalf("%s: expected ok=true", label)
+		}
+		if slices.Contains(argv, "--strict-mcp-config") {
+			t.Fatalf("%s: fullTools=true must omit --strict-mcp-config: %v", label, argv)
+		}
+		if slices.Contains(argv, "--mcp-config") {
+			t.Fatalf("%s: fullTools=true must omit --mcp-config: %v", label, argv)
+		}
+		if argv[len(argv)-2] != "-p" {
+			t.Fatalf("%s: -p not trailing with fullTools=true: %v", label, argv)
+		}
+	}
+
+	fresh, ok := agentArgv("claudeCode", "Hi", "haiku", true)
+	assertNoStrictMCP(t, "agentArgv", fresh, ok)
+
+	cont, ok := continueArgv("claudeCode", "next", "haiku", true)
+	assertNoStrictMCP(t, "continueArgv", cont, ok)
+
+	res, ok := resumeArgv("claudeCode", "sess-123", "next", "haiku", true)
+	assertNoStrictMCP(t, "resumeArgv", res, ok)
+
+	// A non-claudeCode vendor must never gain --strict-mcp-config regardless
+	// of fullTools — it's a claudeCode-only concept, ignored elsewhere.
+	for _, agent := range []string{"codex", "kimi", "opencode"} {
+		argv, ok := agentArgv(agent, "hi", "", true)
 		if !ok {
 			t.Fatalf("agentArgv(%q) should be supported", agent)
 		}
@@ -88,5 +133,41 @@ func TestBuildConversationArgvUsesStrictMCPConfig(t *testing.T) {
 	})
 	if !ok || !slices.Contains(fallbackArgv, "--strict-mcp-config") {
 		t.Fatalf("continue-fallback argv missing --strict-mcp-config: %v (ok=%v)", fallbackArgv, ok)
+	}
+}
+
+// Regression: buildConversationArgv with FullTools:true must OMIT
+// --strict-mcp-config for all three resume-mode branches — the per-dispatch
+// toggle threaded straight from conversationAppendRequest.FullTools
+// (conversation_store.go) through conversationLaunchParams, never re-derived.
+func TestBuildConversationArgvFullToolsOmitsStrictMCPConfig(t *testing.T) {
+	newArgv, mode, ok := buildConversationArgv(conversationLaunchParams{
+		Agent: "claudeCode", Prompt: "Hi", Model: "haiku", IsNew: true, FullTools: true,
+	})
+	if !ok || mode != "new" || slices.Contains(newArgv, "--strict-mcp-config") {
+		t.Fatalf("new-conversation argv should omit --strict-mcp-config with FullTools:true: %v (ok=%v mode=%s)", newArgv, ok, mode)
+	}
+
+	exactArgv, mode, ok := buildConversationArgv(conversationLaunchParams{
+		Agent: "claudeCode", Prompt: "next", Model: "haiku", VendorSessionID: "sess-abc", FullTools: true,
+	})
+	if !ok || mode != "exact" || slices.Contains(exactArgv, "--strict-mcp-config") {
+		t.Fatalf("exact-resume argv should omit --strict-mcp-config with FullTools:true: %v (ok=%v mode=%s)", exactArgv, ok, mode)
+	}
+
+	fallbackArgv, mode, ok := buildConversationArgv(conversationLaunchParams{
+		Agent: "claudeCode", Prompt: "next", Model: "haiku", FullTools: true,
+	})
+	if !ok || mode != "latestInCwdFallback" || slices.Contains(fallbackArgv, "--strict-mcp-config") {
+		t.Fatalf("continue-fallback argv should omit --strict-mcp-config with FullTools:true: %v (ok=%v mode=%s)", fallbackArgv, ok, mode)
+	}
+
+	// FullTools:false (the default zero value, matching an omitted wire field)
+	// must still be strict — no regression to the existing default behavior.
+	defaultArgv, _, ok := buildConversationArgv(conversationLaunchParams{
+		Agent: "claudeCode", Prompt: "Hi", Model: "haiku", IsNew: true,
+	})
+	if !ok || !slices.Contains(defaultArgv, "--strict-mcp-config") {
+		t.Fatalf("FullTools omitted (zero value) should default to strict: %v (ok=%v)", defaultArgv, ok)
 	}
 }

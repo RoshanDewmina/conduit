@@ -16,7 +16,7 @@ func TestClaudeModelKeepsPromptPairTrailing(t *testing.T) {
 	_ = cases
 
 	for _, model := range []string{"", "haiku", "sonnet", "opus"} {
-		argv, ok := agentArgv("claudeCode", "do the thing", model)
+		argv, ok := agentArgv("claudeCode", "do the thing", model, false)
 		if !ok {
 			t.Fatalf("agentArgv failed for model %q", model)
 		}
@@ -26,11 +26,11 @@ func TestClaudeModelKeepsPromptPairTrailing(t *testing.T) {
 		if _, prompt, ok := claudeStdinPromptArgv(argv); !ok || prompt != "do the thing" {
 			t.Fatalf("model %q: claudeStdinPromptArgv disengaged: %v", model, argv)
 		}
-		cont, ok := continueArgv("claudeCode", "again", model)
+		cont, ok := continueArgv("claudeCode", "again", model, false)
 		if !ok || cont[len(cont)-2] != "-p" {
 			t.Fatalf("continueArgv model %q: -p not trailing: %v", model, cont)
 		}
-		res, ok := resumeArgv("claudeCode", "sess-123", "again", model)
+		res, ok := resumeArgv("claudeCode", "sess-123", "again", model, false)
 		if !ok || res[len(res)-2] != "-p" {
 			t.Fatalf("resumeArgv model %q: -p not trailing: %v", model, res)
 		}
