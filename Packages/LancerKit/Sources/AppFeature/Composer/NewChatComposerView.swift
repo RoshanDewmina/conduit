@@ -341,6 +341,8 @@ public struct NewChatComposerView: View {
                 fullToolsToggleChip
             }
 
+            ChatPermissionModePill()
+
             Spacer()
 
             let trimmedDraft = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
