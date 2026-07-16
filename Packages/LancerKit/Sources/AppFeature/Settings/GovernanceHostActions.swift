@@ -116,8 +116,9 @@ enum GovernanceHostActions {
         var lines = yaml.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var replaced = false
         for i in lines.indices {
-            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("default:") {
+            // Top-level key only — an indented `default:` inside a rule block
+            // must never be rewritten to an unindented line.
+            if lines[i].hasPrefix("default:") {
                 lines[i] = "default: \(mode)"
                 replaced = true
                 break
