@@ -1,5 +1,15 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-16 ~16:40 ET — master has sweep (#140); folding FX10 + phone reinstall
+
+- **`origin/master` (pre-FX10 push):** `99fd4526` (PR #140 = sweep tip `fe450949`).
+- **FX10:** `5a3fce93` (`fix/background-tasks-pill`) merged onto master line in `docs/dogfood-smoke-2026-07-16` @ merge commit pending push — relay `lancerE2EArtifact` → `RelayArtifactIngest`.
+- **Phone:** prior install was `b8bb778c` **without** FX10; rebuild+reinstall via `/tmp/lancer-device-dogfood-dd` IN PROGRESS.
+- **Re-pair:** production code **`300552`** minted (replaced stale `310440`); still **unconfirmed** — owner must enter code on phone (C4 isolated at `/tmp/sweep-C4`, safe).
+- **Smoke:** `DOGFOOD_SMOKE.md` — pair/send/approve **BLOCKED** on owner tap; launch PASS earlier.
+- **GAP #10:** FIXED (code) / live owed.
+- **C4:** still may use Simurgh `lease-197` — do not steal.
+
 ## ⚡ 2026-07-16 ~16:35 ET — owner ordered merge→master + phone dogfood (supersedes C4-wait autonomy stop)
 
 **Sweep tip:** `integration/2026-07-16-untested-sweep` @ `b8bb778c` (+ docs hygiene commit pending).  
@@ -11,6 +21,7 @@
 - **Dogfood:** next after `origin/master` tip confirmed + device install.
 - **#10 fx10-bg-tasks:** leave in-flight worktree alone (not green/committed).
 - **Owner re-pair:** still owed if production slot `310440` unconfirmed — only after confirming C4 will not fight the single relay slot (or document owner pairs after sim quiesces).
+*(Superseded by 16:40 FX10 fold + `99fd4526` master merge above.)*
 
 ## ⚡ 2026-07-16 ~16:20 ET — Wave 1 MERGED + Simurgh preflight green; Lane C4 IN FLIGHT
 
