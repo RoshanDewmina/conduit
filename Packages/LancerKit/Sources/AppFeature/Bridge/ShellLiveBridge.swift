@@ -1057,10 +1057,14 @@ public final class ShellLiveBridge {
     /// Without this, opening a live thread immediately after launch/relaunch
     /// races ahead of reconnection and dead-ends on "No connected machine"
     /// with no auto-retry (found 2026-07-10 sim dogfood: `firstConnectedMachine`
-    /// was read once, synchronously, at call time). Skips the wait entirely
-    /// when no machine is paired at all, so the true no-host path still fails
-    /// fast instead of stalling for `timeout`.
-    private func waitForConnectedMachine(timeout: TimeInterval = 8) async -> RelayFleetStore.Machine? {
+    /// was read once, synchronously, at call time). Default timeout is 30s —
+    /// a 2026-07-16 daily-use audit measured auto-pair completion at ~21s from
+    /// launch under the same conditions, so the previous 8s default raced the
+    /// first send and surfaced a spurious "No connected machine" even though
+    /// the pair finished moments later. Skips the wait entirely when no
+    /// machine is paired at all, so the true no-host path still fails fast
+    /// instead of stalling for `timeout`.
+    private func waitForConnectedMachine(timeout: TimeInterval = 30) async -> RelayFleetStore.Machine? {
         let deadline = Date().addingTimeInterval(timeout)
         while !isHydrated, Date() < deadline {
             try? await Task.sleep(nanoseconds: 100_000_000)
