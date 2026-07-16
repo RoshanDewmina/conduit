@@ -283,7 +283,17 @@ public struct WorkspacesView: View {
             case "search":
                 isSearchPresented = true
             case "terminal":
-                Task { await terminalCoordinator.openFirstHostIfAvailable() }
+                Task {
+                    // Hydration + autoPair run in AppRoot.task; wait before opening.
+                    var connected = relayFleetStore.firstConnectedMachine
+                    let deadline = Date().addingTimeInterval(30)
+                    while connected == nil, Date() < deadline {
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        connected = relayFleetStore.firstConnectedMachine
+                    }
+                    let startup = ProcessInfo.processInfo.environment["LANCER_TERMINAL_STARTUP_COMMAND"]
+                    await terminalCoordinator.openOnFirstConnectedMachine(startupCommand: startup)
+                }
             default:
                 break
             }
