@@ -27,6 +27,8 @@ public final class ShellLiveBridge {
         case adoptedNoHistory
         /// Run in flight, no assistant text yet.
         case working
+        /// Sync returned needsApproval; daemon will resume under the same runID.
+        case awaitingApproval(String)
         /// Run in flight with accumulating `assistantText` from host refresh.
         case streaming(LancerCore.ChatTurn)
         case completed(LancerCore.ChatTurn)
@@ -39,6 +41,8 @@ public final class ShellLiveBridge {
             switch (lhs, rhs) {
             case (.idle, .idle), (.working, .working), (.adoptedNoHistory, .adoptedNoHistory):
                 return true
+            case (.awaitingApproval(let l), .awaitingApproval(let r)):
+                return l == r
             case (.streaming(let l), .streaming(let r)),
                  (.completed(let l), .completed(let r)):
                 return l.id == r.id && l.status == r.status && l.assistantText == r.assistantText
@@ -131,7 +135,7 @@ public final class ShellLiveBridge {
     /// be typed and enqueued; the bridge flushes the queue when this flips false.
     public var isSendInFlight: Bool {
         switch sendState {
-        case .working, .streaming, .degraded:
+        case .working, .awaitingApproval, .streaming, .degraded:
             return true
         case .idle, .adoptedNoHistory, .completed, .failed:
             return false
@@ -219,6 +223,15 @@ public final class ShellLiveBridge {
         transport: ConversationTransport
     ) async {
         await pollUntilTerminal(runID: runID, conversationID: conversationID, transport: transport)
+    }
+
+    func testSetSendState(_ state: SendState) {
+        sendState = state
+    }
+
+    func testSetInFlight(runID: String?, prompt: String?) {
+        inFlightRunID = runID
+        inFlightPrompt = prompt
     }
 
     /// Composer can send when a Lancer conversation is active or an observed
@@ -566,6 +579,13 @@ public final class ShellLiveBridge {
         case .started(let started):
             activeConversationID = started.conversationID
             inFlightRunID = started.runID
+            await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
+            await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
+            await flushNextQueuedFeedback()
+        case .awaitingApproval(let started, let message):
+            activeConversationID = started.conversationID
+            inFlightRunID = started.runID
+            sendState = .awaitingApproval(message)
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
             await flushNextQueuedFeedback()
@@ -937,6 +957,13 @@ public final class ShellLiveBridge {
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
             await flushNextQueuedFeedback()
+        case .awaitingApproval(let started, let message):
+            activeConversationID = started.conversationID
+            inFlightRunID = started.runID
+            sendState = .awaitingApproval(message)
+            await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
+            await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
+            await flushNextQueuedFeedback()
         case .blocked(let message):
             // Surface blocked reason in the UI (same `.failed` path as send).
             inFlightPrompt = nil
@@ -1014,18 +1041,32 @@ public final class ShellLiveBridge {
                     inFlightAttachments = []
                     inFlightRunID = nil
                     guard epoch == sessionEpoch else { return }
-                    sendState = .failed(turn.errorMessage ?? "Run failed")
+                    let failMessage: String
+                    if case .awaitingApproval = sendState {
+                        failMessage = turn.errorMessage ?? "Approval denied — the run did not start."
+                    } else {
+                        failMessage = turn.errorMessage ?? "Run failed"
+                    }
+                    sendState = .failed(failMessage)
                     await refreshTranscript(conversationID: conversationID, epoch: epoch)
                     return
                 case .running:
                     await refreshTranscript(conversationID: conversationID, epoch: epoch)
                     guard epoch == sessionEpoch else { return }
                     if !tracker.isDegraded {
-                        switch LivePollPolicy.runningPublish(assistantText: turn.assistantText) {
-                        case .working:
-                            sendState = .working
-                        case .streaming:
-                            sendState = .streaming(turn)
+                        // Host maps needsApproval → `.running`; keep the honest
+                        // awaiting card until text streams or the turn terminates.
+                        if case .awaitingApproval = sendState {
+                            if !turn.assistantText.isEmpty {
+                                sendState = .streaming(turn)
+                            }
+                        } else {
+                            switch LivePollPolicy.runningPublish(assistantText: turn.assistantText) {
+                            case .working:
+                                sendState = .working
+                            case .streaming:
+                                sendState = .streaming(turn)
+                            }
                         }
                     }
                 }

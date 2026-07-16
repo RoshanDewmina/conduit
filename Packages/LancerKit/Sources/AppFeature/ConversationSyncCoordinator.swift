@@ -618,6 +618,9 @@ public actor ConversationSyncCoordinator {
     /// call sites need minimal changes to adopt this.
     public enum TurnOutcome: Sendable {
         case started(TurnStarted)
+        /// Sync RPC returned `needsApproval` with a runID — turn is persisted and
+        /// the daemon will resume under that same runID after Inbox approval.
+        case awaitingApproval(TurnStarted, message: String)
         case blocked(String)
     }
 
@@ -1016,8 +1019,33 @@ public actor ConversationSyncCoordinator {
             publish(.synced, for: response.conversationId)
             return .blocked("Blocked by policy\(response.rule.map { " (\($0))" } ?? "").")
         case "needsApproval":
-            publish(.synced, for: response.conversationId)
-            return .blocked("Awaiting your approval — check the Inbox.")
+            // Without a runID there is nothing to poll for the resumed launch —
+            // fall back to the terminal blocked path rather than spin on "".
+            guard let runID = response.runId, !runID.isEmpty else {
+                publish(.synced, for: response.conversationId)
+                return .blocked("Awaiting your approval — check the Inbox.")
+            }
+            await persistStartedTurn(
+                request: request, response: response, hostName: hostName, hostID: hostID,
+                routingAgentID: routingAgentID
+            )
+            let uiState: ConversationSyncUIState = response.resumeMode == "latestInCwdFallback" ? .degradedResume : .synced
+            publish(uiState, for: response.conversationId)
+            let message = "Awaiting your approval — check the Inbox."
+            return .awaitingApproval(
+                TurnStarted(
+                    conversationID: response.conversationId,
+                    turnID: response.turnId,
+                    runID: runID,
+                    cwd: response.cwd ?? request.cwd ?? "",
+                    baseSeqForNextTurn: response.nextSeq,
+                    resumeMode: response.resumeMode,
+                    vendorSessionID: response.vendorSessionId,
+                    worktreePath: response.worktreePath,
+                    isolated: response.isolated ?? false
+                ),
+                message: message
+            )
         case "budgetExceeded":
             publish(.synced, for: response.conversationId)
             return .blocked(response.message ?? "Daily budget cap reached.")
