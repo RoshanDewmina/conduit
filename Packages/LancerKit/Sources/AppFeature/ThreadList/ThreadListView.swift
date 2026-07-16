@@ -47,6 +47,16 @@ enum ThreadListRowKind: Identifiable {
         case .desktopSession(let s): return s.lastActivity
         }
     }
+
+    /// Repo section title for Customize → Group by Repo.
+    var repoGroupTitle: String {
+        switch self {
+        case .ledger(let t):
+            return t.repoName ?? WorkspaceRepoCatalog.displayName(forCwd: t.cwd)
+        case .desktopSession(let s):
+            return WorkspaceRepoCatalog.displayName(forCwd: s.cwd)
+        }
+    }
 }
 
 /// Per-workspace thread list backed by `WorkspaceDataStore` conversations.
@@ -57,6 +67,8 @@ public struct ThreadListView: View {
     @Environment(ShellLiveBridge.self) private var bridge
     @State private var isSearchPresented = false
     @State private var isComposerPresented = false
+    @State private var isCustomizePresented = false
+    @State private var filterPrefs = ThreadListFilters.load()
     @State private var activeLiveThread: LiveThreadIdentifier?
     @State private var observedSessions: [ObservedSession] = []
     @State private var isObservedSessionsLoading = false
@@ -93,12 +105,28 @@ public struct ThreadListView: View {
         }
     }
 
+    private var filteredRows: [ThreadListRowKind] {
+        let ledger = threads
+            .filter { ThreadListFilters.allowsLedger(filterPrefs, thread: $0) }
+            .map(ThreadListRowKind.ledger)
+        let desktop = scopedObservedSessions
+            .filter { ThreadListFilters.allowsDesktop(filterPrefs, session: $0) }
+            .map(ThreadListRowKind.desktopSession)
+        return (ledger + desktop).sorted { $0.sortDate > $1.sortDate }
+    }
+
     private var groups: [(title: String, items: [ThreadListRowKind])] {
-        let rows: [ThreadListRowKind] =
-            threads.map(ThreadListRowKind.ledger)
-            + scopedObservedSessions.map(ThreadListRowKind.desktopSession)
-        let sorted = rows.sorted { $0.sortDate > $1.sortDate }
-        return WorkspaceRepoCatalog.groupByRecency(sorted, date: \.sortDate)
+        let rows = filteredRows
+        switch filterPrefs.groupBy {
+        case .recency:
+            return WorkspaceRepoCatalog.groupByRecency(rows, date: \.sortDate)
+        case .repo:
+            return WorkspaceRepoCatalog.groupByRepo(rows, title: \.repoGroupTitle)
+        }
+    }
+
+    private var hasAnyThreads: Bool {
+        !threads.isEmpty || !scopedObservedSessions.isEmpty
     }
 
     /// First paint only — never treat a failed refresh as an empty list.
@@ -159,11 +187,11 @@ public struct ThreadListView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 24)
                     Spacer(minLength: 0)
-                } else if threads.isEmpty && scopedObservedSessions.isEmpty {
+                } else if groups.isEmpty {
                     if workspaceData.fetchPhase.failureMessage == nil
                         && observedSessionsError == nil
                     {
-                        Text("No threads yet")
+                        Text(hasAnyThreads ? "No threads match filters" : "No threads yet")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -190,6 +218,9 @@ public struct ThreadListView: View {
                                             ThreadListRow(
                                                 thread: thread,
                                                 showsRepoName: workspace.isAllRepos
+                                                    && filterPrefs.groupBy != .repo,
+                                                showDiffStats: filterPrefs.showDiffStats,
+                                                showLastUpdated: filterPrefs.showLastUpdated
                                             )
                                         }
                                         .buttonStyle(.plain)
@@ -208,8 +239,10 @@ public struct ThreadListView: View {
                                         } label: {
                                             DesktopSessionListRow(
                                                 session: session,
-                                                showsRepoName: workspace.isAllRepos,
-                                                isHostConnected: relayFleetStore.firstConnectedMachine != nil
+                                                showsRepoName: workspace.isAllRepos
+                                                    && filterPrefs.groupBy != .repo,
+                                                isHostConnected: relayFleetStore.firstConnectedMachine != nil,
+                                                showLastUpdated: filterPrefs.showLastUpdated
                                             )
                                         }
                                         .buttonStyle(.plain)
@@ -241,8 +274,14 @@ public struct ThreadListView: View {
             await loadObservedSessions()
             hasCompletedInitialBootstrap = true
         }
+        .onChange(of: filterPrefs) { _, newValue in
+            ThreadListFilters.save(newValue)
+        }
         .sheet(isPresented: $isSearchPresented) {
             SearchView()
+        }
+        .sheet(isPresented: $isCustomizePresented) {
+            ThreadListCustomizeSheet(prefs: $filterPrefs)
         }
         .sheet(isPresented: $isComposerPresented) {
             NewChatComposerView(
@@ -323,6 +362,15 @@ public struct ThreadListView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Search"))
+
+                Button {
+                    isCustomizePresented = true
+                } label: {
+                    circleButton(systemImage: "line.3.horizontal.decrease")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Filter and customize"))
+                .accessibilityIdentifier("thread-list-customize-button")
             }
         }
     }
@@ -376,6 +424,7 @@ private struct DesktopSessionListRow: View {
     let session: ObservedSession
     var showsRepoName: Bool = false
     var isHostConnected: Bool = false
+    var showLastUpdated: Bool = true
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -405,9 +454,11 @@ private struct DesktopSessionListRow: View {
                         .font(.system(size: 14))
                         .foregroundStyle(isHostConnected ? .green : .secondary)
 
-                    Text("· \(relativeActivity)")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
+                    if showLastUpdated {
+                        Text("· \(relativeActivity)")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
 
                     if showsRepoName {
                         Text("· \(WorkspaceRepoCatalog.displayName(forCwd: session.cwd))")

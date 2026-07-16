@@ -6,6 +6,10 @@ import SwiftUI
 struct ThreadListRow: View {
     let thread: ThreadListItem
     var showsRepoName: Bool = false
+    /// Customize → Agent Metadata: Diff stats (defaults on).
+    var showDiffStats: Bool = true
+    /// Customize → Agent Metadata: Last updated (defaults on).
+    var showLastUpdated: Bool = true
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -23,7 +27,8 @@ struct ThreadListRow: View {
 
                     Spacer(minLength: 0)
 
-                    if let added = thread.addedLines, let removed = thread.removedLines,
+                    if showDiffStats,
+                       let added = thread.addedLines, let removed = thread.removedLines,
                        added > 0 || removed > 0 {
                         chatDiffStatText(added: added, removed: removed)
                             .font(.system(size: 13, design: .monospaced))
@@ -81,9 +86,11 @@ struct ThreadListRow: View {
                 .foregroundStyle(.secondary)
                 .italic(thread.statusKind == .idle)
 
-            Text("· \(ThreadListMetadata.relativeActivity(thread.lastActivityAt))")
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
+            if showLastUpdated {
+                Text("· \(ThreadListMetadata.relativeActivity(thread.lastActivityAt))")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
 
             if showsRepoName, let repoName = thread.repoName {
                 Text("· \(repoName)")
