@@ -5,8 +5,20 @@ import (
 	"log"
 	"os/exec"
 	"sync"
+	"time"
 
 	"lancer/lancerd/policy"
+)
+
+// e2eApprovalRetry{InitialDelay,MaxDelay,Window} bound sendApproval's
+// short-lived background retry when the relay client is not yet paired at
+// delivery time (see sendApproval doc comment for the race this closes).
+// Vars, not consts, so tests can shrink them to run the whole retry loop in
+// milliseconds instead of real seconds.
+var (
+	e2eApprovalRetryInitialDelay = 200 * time.Millisecond
+	e2eApprovalRetryMaxDelay     = 2 * time.Second
+	e2eApprovalRetryWindow       = 10 * time.Second
 )
 
 // relayClient is the minimal interface the e2eRouter needs from a relay
@@ -27,6 +39,18 @@ type e2eRouter struct {
 
 	termClientMu sync.Mutex
 	termClient   *relayTerminalClient
+
+	// approvalRetryDoneForTest, when non-nil, receives an approval's ID after
+	// its background retrySendApproval goroutine finishes (delivered or gave
+	// up). Production code never sets this (nil ⇒ no-op send, matching every
+	// other *ForTest seam in this package, e.g. decisionPoller.pollIntervalForTest).
+	// Tests that shrink e2eApprovalRetry* to run the loop in milliseconds
+	// still need this rather than a time.Sleep margin: time.Sleep gives no
+	// happens-before edge against another goroutine, so the race detector
+	// (correctly) flags a plain sleep-then-read as racy against the
+	// goroutine's own log/sendMessage calls no matter how long the sleep is.
+	// A channel receive is a real synchronization point.
+	approvalRetryDoneForTest chan string
 }
 
 func newE2ERouter(client *e2eRelayClient, srv *server) *e2eRouter {
@@ -80,10 +104,42 @@ func (r *e2eRouter) resendPendingQuestions() {
 }
 
 // sendApproval routes an approval event through the E2E relay.
+//
+// A conversation-append that needs approval can call this within 0-1s of the
+// daemon logging "e2e: paired with phone" — the literal pair-then-send
+// workflow a first-time user follows. Live reproduction (2026-07-16,
+// docs/test-runs/2026-07-16-untested-feature-sweep/LC-report.md) proved this
+// isn't a fixed-point check: a relay identity change (e.g. the app's own
+// onboarding flow re-registering) tears down an already-paired session and
+// redials from scratch (resident.go's startRelayWatch → connectRelay), and
+// the daemon can observe "connected to relay as daemon" long before the new
+// session finishes its own peer_joined handshake — sometimes well over a
+// minute later (observed: 09:48:57 connected, 09:50:55 paired in
+// /tmp/sweep-C/daemon4.log from that reproduction). A conversation-append
+// evaluated in that window sees isPaired()==false here.
+//
+// resendPendingApprovals (fired on the NEXT real peer_joined) is the durable
+// backstop for that case — the event was already added to s.approvals before
+// this call (deliverApprovalEvent), so it is never lost. But relying on it
+// exclusively means the phone's synchronous needsApproval response (already
+// rendered as a terminal error client-side — an iOS-side concern, out of
+// scope here) has no live card to replace for however long the NEXT pairing
+// takes. Retrying with short backoff for a bounded window covers the much
+// more common case — the session finishing its handshake a moment later —
+// without waiting on an unrelated future pairing event.
 func (r *e2eRouter) sendApproval(ev ApprovalEvent) {
+	if r.trySendApproval(ev) {
+		return
+	}
+	go r.retrySendApproval(ev)
+}
+
+// trySendApproval makes one delivery attempt. Returns false (having already
+// logged why) without sending anything when the client isn't paired.
+func (r *e2eRouter) trySendApproval(ev ApprovalEvent) bool {
 	if r.client == nil || !r.client.isPaired() {
 		log.Printf("e2e: dropped approval %s — relay client not paired", ev.ApprovalID)
-		return
+		return false
 	}
 
 	msg := map[string]interface{}{
@@ -105,13 +161,38 @@ func (r *e2eRouter) sendApproval(ev ApprovalEvent) {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		log.Printf("e2e: marshal approval failed: %v", err)
-		return
+		return false
 	}
 
 	if err := r.client.sendMessage("approval", data); err != nil {
 		log.Printf("e2e: send approval failed: %v", err)
-	} else {
-		log.Printf("e2e: sent approval %s over relay", ev.ApprovalID)
+		return false
+	}
+	log.Printf("e2e: sent approval %s over relay", ev.ApprovalID)
+	return true
+}
+
+// retrySendApproval retries trySendApproval with short exponential backoff
+// for a bounded window after an initial not-paired drop. It is not a
+// replacement for resendPendingApprovals — that remains the durable backstop
+// across an actual re-pair — this only closes the narrow gap where pairing
+// finishes shortly after this specific call found isPaired() false.
+func (r *e2eRouter) retrySendApproval(ev ApprovalEvent) {
+	if r.approvalRetryDoneForTest != nil {
+		defer func() { r.approvalRetryDoneForTest <- ev.ApprovalID }()
+	}
+	delay := e2eApprovalRetryInitialDelay
+	deadline := time.Now().Add(e2eApprovalRetryWindow)
+	for time.Now().Before(deadline) {
+		time.Sleep(delay)
+		if r.trySendApproval(ev) {
+			log.Printf("e2e: delivered approval %s on retry after initial not-paired drop", ev.ApprovalID)
+			return
+		}
+		delay *= 2
+		if delay > e2eApprovalRetryMaxDelay {
+			delay = e2eApprovalRetryMaxDelay
+		}
 	}
 }
 

@@ -24,7 +24,20 @@ type fakeRelayClient struct {
 	paired bool
 }
 
-func (f *fakeRelayClient) isPaired() bool { return f.paired }
+func (f *fakeRelayClient) isPaired() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.paired
+}
+
+// setPaired flips paired under the same lock isPaired reads through — used
+// by tests that simulate pairing completing shortly after an initial
+// not-paired send attempt (concurrently with a background retry goroutine).
+func (f *fakeRelayClient) setPaired(v bool) {
+	f.mu.Lock()
+	f.paired = v
+	f.mu.Unlock()
+}
 
 func (f *fakeRelayClient) stop() {}
 
@@ -896,14 +909,36 @@ func TestE2ERouterHandleApprovalResponseAckFailure(t *testing.T) {
 // logs when an approval is dropped because the relay is unpaired.
 func TestE2ERouterSendApproval(t *testing.T) {
 	t.Run("unpaired logs and does not send", func(t *testing.T) {
+		// sendApproval now spawns a bounded background retry (see
+		// TestE2ERouterSendApprovalSurvivesFirstSendRace) when the first
+		// attempt finds the client unpaired. Shrink the retry window so the
+		// goroutine gives up quickly, and wait on approvalRetryDoneForTest
+		// (a real synchronization point) rather than time.Sleep — a sleep
+		// gives the race detector no happens-before edge against the
+		// goroutine's own log/sendMessage calls, so it (correctly) flags a
+		// sleep-then-read as racy no matter how generous the margin.
+		origInitial, origMax, origWindow := e2eApprovalRetryInitialDelay, e2eApprovalRetryMaxDelay, e2eApprovalRetryWindow
+		e2eApprovalRetryInitialDelay = time.Millisecond
+		e2eApprovalRetryMaxDelay = time.Millisecond
+		e2eApprovalRetryWindow = 5 * time.Millisecond
+		t.Cleanup(func() {
+			e2eApprovalRetryInitialDelay, e2eApprovalRetryMaxDelay, e2eApprovalRetryWindow = origInitial, origMax, origWindow
+		})
+
 		var buf bytes.Buffer
 		orig := log.Writer()
 		log.SetOutput(&buf)
 		t.Cleanup(func() { log.SetOutput(orig) })
 
 		client := &fakeRelayClient{paired: false}
-		router := &e2eRouter{client: client}
+		router := &e2eRouter{client: client, approvalRetryDoneForTest: make(chan string, 1)}
 		router.sendApproval(ApprovalEvent{ApprovalID: "appr-drop"})
+
+		select {
+		case <-router.approvalRetryDoneForTest:
+		case <-time.After(2 * time.Second):
+			t.Fatal("background retry goroutine never finished")
+		}
 
 		if msgType, _ := client.lastMessage(); msgType != "" {
 			t.Fatalf("expected no message sent while unpaired, got %q", msgType)
@@ -1099,4 +1134,81 @@ func TestE2ERouterResendsPendingApprovalsOnPair(t *testing.T) {
 	if n := len(client.messages); n != 1 {
 		t.Fatalf("expected 1 re-send after resolving one of two, got %d", n)
 	}
+}
+
+// TestE2ERouterSendApprovalSurvivesFirstSendRace reproduces the 2026-07-16
+// live-repro bug (docs/test-runs/2026-07-16-untested-feature-sweep/LC-report.md,
+// "Why every dispatch blocked — precise root cause"): a conversation-append
+// that needs approval is evaluated in the narrow window right after the
+// daemon reports "e2e: paired with phone" but before the relay session it
+// actually depends on (post a relay identity change / re-pair, per
+// resident.go's startRelayWatch->connectRelay) has finished its own handshake
+// — i.e. sendApproval sees isPaired()==false even though pairing is, from the
+// phone's perspective, already settled.
+//
+// Before the fix, sendApproval dropped the event unconditionally on that one
+// false reading and returned — the only remaining path back to the phone was
+// an unrelated FUTURE peer_joined firing resendPendingApprovals, which in the
+// live repro's daemon4.log took ~2 minutes (09:48:57 connected -> 09:50:55
+// paired) while the phone had already rendered a terminal, non-recoverable
+// error. This test asserts the approval is delivered once the client pairs
+// WITHOUT ever calling resendPendingApprovals/pairedHandler directly — i.e.
+// sendApproval's own retry, not the peer_joined backstop, must be what
+// recovers it.
+func TestE2ERouterSendApprovalSurvivesFirstSendRace(t *testing.T) {
+	origInitial, origMax, origWindow := e2eApprovalRetryInitialDelay, e2eApprovalRetryMaxDelay, e2eApprovalRetryWindow
+	e2eApprovalRetryInitialDelay = 5 * time.Millisecond
+	e2eApprovalRetryMaxDelay = 20 * time.Millisecond
+	e2eApprovalRetryWindow = 500 * time.Millisecond
+	t.Cleanup(func() {
+		e2eApprovalRetryInitialDelay, e2eApprovalRetryMaxDelay, e2eApprovalRetryWindow = origInitial, origMax, origWindow
+	})
+
+	// Client starts NOT paired — simulating a conversation-append arriving
+	// while the relay session is mid-(re)connect (e.g. right after a relay
+	// identity change tore down an already-paired session).
+	client := &fakeRelayClient{paired: false}
+	router := &e2eRouter{client: client, approvalRetryDoneForTest: make(chan string, 1)}
+
+	ev := ApprovalEvent{ApprovalID: "appr-race", Agent: "claude", Kind: "command", Command: "git commit"}
+	router.sendApproval(ev)
+
+	// Immediately after the call: dropped, nothing sent — matches the
+	// pre-fix synchronous behavior (sendApproval must still return promptly;
+	// launchConversationTurn's caller returns dispatchResult{needsApproval}
+	// to the phone before any human could decide either way).
+	if msgType, _ := client.lastMessage(); msgType != "" {
+		t.Fatalf("expected no message sent while still unpaired, got %q", msgType)
+	}
+
+	// Pairing completes shortly after — e.g. the re-dialed relay session
+	// finishes its peer_joined handshake — well within the retry window but
+	// with NO peer_joined/resendPendingApprovals ever invoked in this test.
+	time.Sleep(30 * time.Millisecond)
+	client.setPaired(true)
+
+	select {
+	case <-router.approvalRetryDoneForTest:
+	case <-time.After(2 * time.Second):
+		t.Fatal("background retry goroutine never finished")
+	}
+
+	msgType, data := client.lastMessage()
+	if msgType != "approval" {
+		t.Fatalf("approval %s was never delivered after pairing completed (last message type = %q)", ev.ApprovalID, msgType)
+	}
+	var env struct {
+		Type    string `json:"type"`
+		Payload struct {
+			ApprovalID string `json:"approvalID"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Type != "approvalPending" || env.Payload.ApprovalID != "appr-race" {
+		t.Fatalf("unexpected envelope: %+v", env)
+	}
+	// The retry recovered the initial not-paired drop — no
+	// resendPendingApprovals/pairedHandler was ever invoked in this test.
 }
