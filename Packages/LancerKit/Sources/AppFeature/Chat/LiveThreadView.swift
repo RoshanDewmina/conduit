@@ -501,11 +501,26 @@ public struct LiveThreadView: View {
         }) {
             TurnTranscriptItemsView(
                 items: merged,
-                emptyFallback: LiveThreadTranscript.assistantFallback(for: turn)
+                emptyFallback: LiveThreadTranscript.assistantFallback(for: turn),
+                activitySummary: activitySummary(for: turn, items: merged)
             )
         } else if let body = LiveThreadTranscript.assistantFallback(for: turn) {
             ChatMarkdownBody(markdown: body)
         }
+    }
+
+    /// Post-turn activity row only after the turn leaves `.running`.
+    private func activitySummary(
+        for turn: LancerCore.ChatTurn,
+        items: [TurnTranscriptItem]
+    ) -> TurnActivitySummary? {
+        guard turn.status != .running else { return nil }
+        let completedAt = turn.completedAt ?? Date()
+        return TurnTranscriptAssembler.activitySummary(
+            from: items,
+            startedAt: turn.createdAt,
+            completedAt: completedAt
+        )
     }
 
     private func hasAssistantArtifacts(for turn: LancerCore.ChatTurn) -> Bool {

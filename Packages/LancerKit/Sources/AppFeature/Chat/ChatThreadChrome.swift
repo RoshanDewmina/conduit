@@ -31,6 +31,8 @@ struct ChatMarkdownBody: View {
                     }
                 case .codeFence(let language, let code):
                     ChatCodeFenceBlock(language: language, code: code)
+                case .table(let table):
+                    ChatMarkdownTableView(table: table, bodyFontSize: max(12, bodyFontSize - 3))
                 }
             }
         }
