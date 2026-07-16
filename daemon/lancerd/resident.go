@@ -65,6 +65,10 @@ func newResident() (*resident, error) {
 	core.approvalRetired = func(id string) error {
 		return r.queue.remove(id)
 	}
+	// Gives dispatcher-originated approvals (launch-time policy "ask" gates —
+	// see deliverApprovalEvent) the same disk-queue + attach durability a
+	// mid-run PreToolUse escalation already gets via handleHookWithNotify.
+	core.notifyApproval = r.notifyAttachOrQueue
 	core.setEmitter(r.writeToAttach)
 	if err := r.restoreQueue(); err != nil {
 		return nil, fmt.Errorf("restore queue: %w", err)

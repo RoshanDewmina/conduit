@@ -1486,6 +1486,14 @@ type dispatcher struct {
 	// but never become a first-class QuestionEvent — no server wired yet, same
 	// fail-safe-no-op convention as bindVendorSession/onRunTerminal being nil.
 	onQuestion func(event QuestionEvent)
+	// deliverApproval routes a launch-time policy "ask" gate's ApprovalEvent
+	// through the server's real delivery chokepoint (approvals store + durable
+	// queue + E2E relay) so it actually reaches the phone as a decidable card,
+	// instead of the event being constructed and then discarded. Nil ⇒ no
+	// server wired yet (e.g. a dispatcher built directly in tests) — the
+	// "ask" branch still returns dispatchResult{Status:"needsApproval"}, it
+	// just can't deliver a card, same as before this field existed.
+	deliverApproval func(ApprovalEvent) <-chan hookDecision
 	// claudeAuthPreflight gates Claude Code launches. Nil ⇒ package default
 	// (claudeAuthPreflight) unless tests disable it via
 	// claudeAuthPreflightDisabledForTest. loggedIn:false and probe failures
@@ -1529,6 +1537,24 @@ func e2eFakeRelayLaunch(argv []string, cwd, runID string, emit emitFunc) (*procH
 func (d *dispatcher) emitAudit(e AuditEntry) {
 	if d.audit != nil {
 		d.audit(e)
+	}
+}
+
+// deliverLaunchApproval routes a launch-time policy "ask" gate's constructed
+// ApprovalEvent through deliverApproval (server.deliverApprovalEvent) so it
+// actually reaches the phone as a decidable card. Fire-and-forget: the
+// returned decision channel is intentionally not awaited here — this call
+// site already returns a synchronous dispatchResult{Status:"needsApproval"}
+// to its caller before a human could possibly decide, exactly like the
+// existing mid-run hook path returns immediately while the hook's own
+// connection (not this one) blocks on the decision. Not observing the
+// decision here does not lose it: applyDecision/resolve() still record it,
+// audit it, and (for approveAlways) persist the allow-rule regardless of
+// whether anything reads the channel. Nil-safe: a dispatcher with no server
+// wired (tests) just skips delivery, matching pre-fix behavior.
+func (d *dispatcher) deliverLaunchApproval(event ApprovalEvent) {
+	if d.deliverApproval != nil {
+		d.deliverApproval(event)
 	}
 }
 
@@ -2209,6 +2235,7 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
 		audit(AuditEntry{Action: "dispatch-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
+		d.deliverLaunchApproval(event)
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
@@ -2385,6 +2412,7 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
 		audit(AuditEntry{Action: "continue-needs-approval", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "ask", Rule: rule})
+		d.deliverLaunchApproval(event)
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
@@ -2490,6 +2518,7 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
 		audit(AuditEntry{Action: "observed-continue-needs-approval", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
+		d.deliverLaunchApproval(event)
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
@@ -2597,6 +2626,7 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
 		audit(AuditEntry{Action: "conversation-append-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
+		d.deliverLaunchApproval(event)
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 

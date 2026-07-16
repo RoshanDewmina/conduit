@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -199,6 +200,10 @@ type server struct {
 	// stdio-only tests). Removing by ID avoids whole-store snapshot races when
 	// multiple approvals resolve concurrently.
 	approvalRetired func(string) error
+	// notifyApproval durably enqueues + attach-notifies a pending approval
+	// (resident.notifyAttachOrQueue) — the same durability handleHookWithNotify
+	// gets for a mid-run PreToolUse escalation. nil outside the resident daemon.
+	notifyApproval func(ApprovalEvent) error
 	// relayToken is the per-session capability secret minted at session attach
 	// (lancer.device.register), delivered to the app over the DaemonChannel and
 	// presented as `Authorization: Bearer <relayToken>` on the decision relay.
@@ -293,6 +298,10 @@ func newServer(home string) *server {
 	s.poller = newDecisionPoller(s.applyDecision)
 	// Run-control actions (pause/resume/stop/budget-exceeded) feed the same audit log.
 	s.dispatcher.audit = s.auditEntry
+	// Launch-time policy "ask" gates (dispatch/continueRun/resumeObservedSession/
+	// launchConversationTurn) deliver their ApprovalEvent through the same
+	// chokepoint a mid-run PreToolUse escalation uses — see deliverApprovalEvent.
+	s.dispatcher.deliverApproval = s.deliverApprovalEvent
 	// Launch escalation is relaxed only for agents whose per-action hook is
 	// verifiably wired (Claude today); everything else stays fail-closed.
 	s.dispatcher.hookWired = hookWiredForAgent(home)
@@ -322,6 +331,35 @@ func (s *server) handleRunTerminal(runID, status string, exitCode int) {
 	if status == "exited" && exitCode == 0 {
 		_, _ = s.removeManagedWorktree(repoRoot, wtPath)
 	}
+}
+
+// deliverApprovalEvent is the single delivery chokepoint for an ApprovalEvent
+// that needs a decidable phone-side card: register it in the in-memory
+// approvals store (so a later agent.approval.response/poll decision can find
+// it), durably enqueue it (notifyApproval — survives a daemon restart before
+// it's decided), and push it over the E2E relay when a phone is paired.
+// Mirrors exactly what handleHookWithNotify already does for a mid-run
+// PreToolUse escalation (server.go's "Send through E2E relay when paired"
+// block) — reused here so a launch-time policy "ask" gate (dispatch.go's
+// dispatch/continueRun/resumeObservedSession/launchConversationTurn) also
+// produces a real card instead of silently discarding the constructed event.
+// Root cause: those four functions built an ApprovalEvent (with a real
+// ApprovalID/ContentHash) for the "ask" branch but never routed it through
+// approvals.add/notify/e2e.sendApproval — s.approvals.pendingEvents() was
+// always empty for a launch-gate escalation, so it never appeared in
+// resendPendingApprovals() either. Not a pairing-timing race: this dropped
+// the event unconditionally, on every "ask" launch outcome.
+func (s *server) deliverApprovalEvent(event ApprovalEvent) <-chan hookDecision {
+	ch := s.approvals.add(event)
+	if s.notifyApproval != nil {
+		if err := s.notifyApproval(event); err != nil {
+			log.Printf("approval: durable enqueue failed for %s: %v", event.ApprovalID, err)
+		}
+	}
+	if s.e2e != nil {
+		s.e2e.sendApproval(event)
+	}
+	return ch
 }
 
 // applyDecision resolves a pending approval and persists the outcome IDENTICALLY
