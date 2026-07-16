@@ -61,6 +61,7 @@ targets:
         NSFaceIDUsageDescription: "Lancer uses Face ID to protect your SSH keys and authenticate before connecting to remote servers."
         NSMicrophoneUsageDescription: "Lancer uses the microphone so you can dictate terminal commands and agent prompts by voice."
         NSSpeechRecognitionUsageDescription: "Lancer transcribes your speech to text so you can dictate terminal commands and agent prompts instead of typing."
+        NSSiriUsageDescription: "Lancer lets Siri check agent status, search conversations, and pause or stop runs — approving an agent's action always stays an in-app or Live Activity action, never a voice command."
         NSSupportsLiveActivities: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -221,6 +222,7 @@ targets:
     dependencies:
       - target: Lancer
       - sdk: AppIntents.framework
+      - sdk: AppIntentsTesting.framework
 
   LancerMac:
     type: application
