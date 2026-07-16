@@ -377,6 +377,7 @@ struct ThreadDetailView: View {
             }
         } else {
             let items = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+            let receipt = receiptForTurn(turn)
             if items.contains(where: {
                 if case .toolChip = $0 { return true }
                 if case .thinking = $0 { return true }
@@ -387,17 +388,32 @@ struct ThreadDetailView: View {
             }) {
                 TurnTranscriptItemsView(
                     items: items,
-                    emptyFallback: LiveThreadTranscript.assistantFallback(for: turn)
+                    emptyFallback: LiveThreadTranscript.assistantFallback(for: turn),
+                    activitySummary: threadActivitySummary(for: turn, items: items),
+                    receipt: receipt
                 )
             } else if let body = LiveThreadTranscript.assistantFallback(for: turn) {
-                ChatMarkdownBody(markdown: body)
-            }
-            // Same proof chip as the live view — reopened threads previously
-            // dropped receipts entirely (owner report 2026-07-12).
-            if let receipt = receiptForTurn(turn) {
-                ReceiptChipRow(receipt: receipt)
+                VStack(alignment: .leading, spacing: 12) {
+                    ChatMarkdownBody(markdown: body)
+                    if let summary = threadActivitySummary(for: turn, items: []) {
+                        TurnActivitySummaryRow(summary: summary, receipt: receipt)
+                    }
+                }
             }
         }
+    }
+
+    private func threadActivitySummary(
+        for turn: ChatTurn,
+        items: [TurnTranscriptItem]
+    ) -> TurnActivitySummary? {
+        guard turn.status != .running else { return nil }
+        let completedAt = turn.completedAt ?? Date()
+        return TurnTranscriptAssembler.activitySummary(
+            from: items,
+            startedAt: turn.createdAt,
+            completedAt: completedAt
+        )
     }
 
     private func hasAssistantArtifacts(for turn: ChatTurn) -> Bool {

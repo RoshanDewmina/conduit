@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 17:30 Cursor Composer — proof receipts open from ⋯ menu on "Worked Ns" row; no inline Proof card under every turn (`fix/proof-under-menu`)
 - 17:22 Cursor Grok — dogfood smoke: phone `"Hi"` launched after auth-preflight fix (PR #145); DOGFOOD_SMOKE → PASS launch (`docs/dogfood-auth-smoke-pass`)
 - 17:20 Cursor Grok — fix Claude auth-preflight cold deny under launchd: probe 20s→35s, boot cache warm, skip shim bin, install PATH into plist; host conversation-append launched after reload (pair 149884 kept) (`fix/auth-preflight-cold-probe`)
 - 17:10 Cursor Composer — PolicyEditorView clears stale SSH error when relay mode picker loads; LC4 evidence + GAP_LIST/orchestrator sync (`fix/policy-stale-ssh-error`)
