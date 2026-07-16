@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 17:10 Cursor Composer — PolicyEditorView clears stale SSH error when relay mode picker loads; LC4 evidence + GAP_LIST/orchestrator sync (`fix/policy-stale-ssh-error`)
 - 16:50 Cursor Grok — FX10 on master (`fbc85191` via PR #141); device rebuild+reinstall SUCCEEDED; DOGFOOD_SMOKE BLOCKED on pair code 347051; GAP #10 FIXED (code)/live owed
 - 16:40 Cursor Grok — fold FX10 (`5a3fce93`) into master after PR #140: background-tasks pill via relay artifact mirror; rebuild+reinstall phone; GAP_LIST #10 → FIXED (code) / live owed (`docs/dogfood-smoke-2026-07-16`)
 - 16:35 Cursor Grok — owner-ordered docs hygiene + dogfood prep: refresh orchestrator-state/STATUS_LEDGER/GAP_LIST tip `b8bb778c`, commit sweep + daily-use audit evidence + DOGFOOD_READY + policy/audit port-map; delete staging `.deploy-staging` + `fable-sweep-overview.html`; merge→master + phone install next (`integration/2026-07-16-untested-sweep`)

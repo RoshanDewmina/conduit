@@ -29,7 +29,7 @@ public struct PolicyEditorView: View {
 
     public var body: some View {
         List {
-            if let errorMessage {
+            if let errorMessage, !relayPickerLoaded {
                 Section {
                     Text(errorMessage)
                         .font(.footnote)
@@ -131,6 +131,11 @@ public struct PolicyEditorView: View {
         }
     }
 
+    /// Relay mode picker is usable — hide a stale SSH-first load error (C4 #2).
+    private var relayPickerLoaded: Bool {
+        !hasSSH && permissionMode != nil
+    }
+
     private var renderedRules: [PolicyRule] {
         policy?.documents?.flatMap { $0.rules ?? [] } ?? []
     }
@@ -202,6 +207,7 @@ public struct PolicyEditorView: View {
     private func loadPermissionMode() async {
         do {
             permissionMode = try await GovernanceHostActions.fetchPermissionMode(cwd: cwd, relayFleetStore: relayFleetStore)
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }

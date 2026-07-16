@@ -1,5 +1,13 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-16 ~17:05 ET — Lane C4 PARTIAL (pairing harness blocked; Audit PASS, FX5 PASS)
+
+Sweep tip `671047a7` (C4 run). Evidence: `LC4-report.md` + `screenshots/LC4-*.png`. Daemon never
+`paired with phone` → #7 chain ungraded (**not disproven** — harness pairing gate). Lane P: Audit
+**PASS** relay; Policy **PARTIAL** (picker + stale SSH error — fix branch `fix/policy-stale-ssh-error`).
+FX5 **PASS**. #10 FAIL on C4 was pre-FX10 tip; **FX10 `5a3fce93` on `origin/master`** — live re-proof
+owed on owner phone. C4 retry needs single-session harness + pairing gate. Owner re-pair in progress.
+
 ## ⚡ 2026-07-16 ~16:50 ET — master `fbc85191` includes FX10; phone reinstalled; smoke BLOCKED on pair
 
 - **`origin/master`:** `fbc85191` (PR #140 sweep + PR #141 FX10 `5a3fce93` + dogfood docs).
