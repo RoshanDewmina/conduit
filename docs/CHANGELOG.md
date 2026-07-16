@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 17:05 Cursor Grok — Lane C4 post-Wave-1 live re-test (`99a7a23e`): Simurgh `lease-197` + `SweepLaneC4Tests`; Audit relay PASS, Policy PARTIAL, FX5 Connect PASS, #7 chain blocked (pairing never settled); `LC4-report.md` (`integration/2026-07-16-untested-sweep`)
 - 16:35 Cursor Grok — owner-ordered docs hygiene + dogfood prep: refresh orchestrator-state/STATUS_LEDGER/GAP_LIST tip `b8bb778c`, commit sweep + daily-use audit evidence + DOGFOOD_READY + policy/audit port-map; delete staging `.deploy-staging` + `fable-sweep-overview.html`; merge→master + phone install next (`integration/2026-07-16-untested-sweep`)
 - 16:10 Cursor Grok — continue Claude `3ddbf98e` wave-1 integration: merge FX7 + FX5 + Lane P into `integration/2026-07-16-untested-sweep`; drop accidental sentry-cocoa `Package.resolved` pin from FX7
 - 14:34 Cursor Composer — FX5: pin pairing-sheet Connect/Disconnect in `.safeAreaInset` bottom bar so number pad cannot occlude them (`fix/onboarding-connect-occlusion`)
