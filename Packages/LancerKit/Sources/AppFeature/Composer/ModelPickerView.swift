@@ -1,8 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-/// Model picker sheet — Active + More layout matching the Cursor reference
-/// (`docs/design/cursor-reference/IMG_2356.PNG`). Claude Code models only.
+/// Model picker sheet — single list of Claude Code models with one checkmark
+/// source of truth (no duplicated "Active" + "More" rows).
 public struct ModelPickerView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -28,16 +28,7 @@ public struct ModelPickerView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    RepoSectionHeader(title: "Active")
-                        .padding(.top, 20)
-                    modelRow(selected, showsCheckmark: true) {
-                        onSelect(selected)
-                        dismiss()
-                    }
-                    Divider()
-                        .padding(.leading, 58)
-
-                    RepoSectionHeader(title: "More")
+                    RepoSectionHeader(title: "Claude Code")
                         .padding(.top, 20)
 
                     ForEach(DispatchModelSelection.allCases, id: \.self) { model in
@@ -72,6 +63,7 @@ public struct ModelPickerView: View {
                 Text(model.displayName)
                     .font(.system(size: 17))
                     .foregroundStyle(.primary)
+                    .lineLimit(2)
 
                 Spacer()
 

@@ -22,8 +22,7 @@ public struct NewChatComposerView: View {
     @State private var draftText: String = ""
     @FocusState private var isTextFieldFocused: Bool
     @State private var isRepoPickerPresented = false
-    @State private var isModelPickerPresented = false
-    @State private var isVendorPickerPresented = false
+    @State private var isDispatchPickerPresented = false
     @State private var isContextPresented = false
     @State private var selectedRepo: WorkspaceRepo?
     @State private var attachments: [AttachmentDraft] = []
@@ -34,6 +33,11 @@ public struct NewChatComposerView: View {
         DispatchVendorSelection.default.rawValue
     @AppStorage(FullToolsSelection.storageKey) private var fullToolsEnabled: Bool =
         FullToolsSelection.default
+    /// Same key/default as `AutonomySelection` (`lancer.autonomy.preset` /
+    /// `.autoSafeWrites`) — not Full bypass. See AutonomySelection on the
+    /// mid-run-feedback line; inlined here so Composer stays within write-set.
+    @AppStorage("lancer.autonomy.preset") private var autonomyPresetRaw: String =
+        AutonomyPreset.autoSafeWrites.rawValue
     private let initiallyShowsRepoPicker: Bool
     private let lockRepo: Bool
     private let hostStyle: ComposerHostStyle
@@ -51,12 +55,28 @@ public struct NewChatComposerView: View {
         DispatchVendorSelection.resolve(selectedVendorSlug)
     }
 
+    private var selectedAutonomy: AutonomyPreset {
+        AutonomyPreset(rawValue: autonomyPresetRaw) ?? .autoSafeWrites
+    }
+
     /// "Full tools" only means anything for claudeCode (`--strict-mcp-config`
     /// is claudeCode-only, dispatch.go's agentArgv) — hidden for every other
     /// vendor rather than shown-but-inert.
     private var showFullToolsToggle: Bool { selectedVendor.usesClaudeModelPicker }
 
     private var showFullToolsCaption: Bool { showFullToolsToggle && fullToolsEnabled }
+
+    /// One summary chip: model (or vendor) · tools-or-permission. Keeps the
+    /// bottom row legible at default Dynamic Type instead of 3–4 narrow pills.
+    private var dispatchSummaryLabel: String {
+        let primary = selectedVendor.usesClaudeModelPicker
+            ? selectedModel.displayName
+            : selectedVendor.displayName
+        if showFullToolsToggle && fullToolsEnabled {
+            return "\(primary) · Full tools"
+        }
+        return "\(primary) · \(selectedAutonomy.shortLabel)"
+    }
 
     private var composerHeight: CGFloat {
         var height: CGFloat = attachments.isEmpty ? 280 : 340
@@ -119,18 +139,26 @@ public struct NewChatComposerView: View {
                     }
                 )
             }
-            .sheet(isPresented: $isModelPickerPresented) {
-                ModelPickerView(selected: selectedModel) { model in
-                    selectedModelSlug = model.rawValue
-                }
-            }
-            .sheet(isPresented: $isVendorPickerPresented) {
-                VendorPickerView(
-                    selected: selectedVendor,
-                    installed: relayFleetStore.firstConnectedMachine?.installedAgentVendors
-                ) { vendor in
-                    selectedVendorSlug = vendor.rawValue
-                }
+            .sheet(isPresented: $isDispatchPickerPresented) {
+                ComposerDispatchPickerView(
+                    selectedVendor: selectedVendor,
+                    selectedModel: selectedModel,
+                    fullToolsEnabled: fullToolsEnabled,
+                    selectedAutonomy: selectedAutonomy,
+                    installedVendors: relayFleetStore.firstConnectedMachine?.installedAgentVendors,
+                    onSelectVendor: { vendor in
+                        selectedVendorSlug = vendor.rawValue
+                    },
+                    onSelectModel: { model in
+                        selectedModelSlug = model.rawValue
+                    },
+                    onToggleFullTools: { enabled in
+                        fullToolsEnabled = enabled
+                    },
+                    onSelectAutonomy: { preset in
+                        autonomyPresetRaw = preset.rawValue
+                    }
+                )
             }
             .sheet(isPresented: $isContextPresented) {
                 ContextAttachView(attachments: $attachments)
@@ -228,31 +256,35 @@ public struct NewChatComposerView: View {
         }
     }
 
-    /// Per-dispatch opt-out of `--strict-mcp-config` (default OFF = fast
-    /// strict mode) — see `FullToolsSelection`'s doc comment for the tradeoff.
-    /// Only rendered when `showFullToolsToggle` (claudeCode selected).
-    private var fullToolsToggleChip: some View {
+    /// Single summary chip that opens `ComposerDispatchPickerView` — agent,
+    /// model, full tools, and permission mode live in the sheet, not as
+    /// separate narrow inline pills.
+    private var dispatchSummaryChip: some View {
         Button {
-            fullToolsEnabled.toggle()
+            isDispatchPickerPresented = true
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "wrench.and.screwdriver.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                Text("Full tools")
+                Text(dispatchSummaryLabel)
                     .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
             }
-            .foregroundStyle(fullToolsEnabled ? Color.accentColor : Color(.secondaryLabel))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(
-                Capsule().fill(fullToolsEnabled ? Color.accentColor.opacity(0.15) : Color.clear)
+                Capsule().fill(Color(.secondarySystemFill).opacity(0.6))
             )
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("composer-full-tools-toggle")
-        .accessibilityLabel(Text("Full tools"))
-        .accessibilityValue(Text(fullToolsEnabled ? "On" : "Off"))
-        .accessibilityHint(Text("Slower first reply; enables MCP tools"))
+        .layoutPriority(1)
+        .accessibilityIdentifier("composer-dispatch-summary")
+        .accessibilityLabel(Text("Dispatch settings, \(dispatchSummaryLabel)"))
+        .accessibilityHint(Text("Choose agent, model, tools, and permission mode"))
     }
 
     private var attachmentChips: some View {
@@ -305,43 +337,9 @@ public struct NewChatComposerView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text("Add context"))
 
-            Button {
-                isVendorPickerPresented = true
-            } label: {
-                HStack(spacing: 4) {
-                    Text(selectedVendor.displayName)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Agent, \(selectedVendor.displayName)"))
+            dispatchSummaryChip
 
-            if selectedVendor.usesClaudeModelPicker {
-                Button {
-                    isModelPickerPresented = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(selectedModel.displayName)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("Model, \(selectedModel.displayName)"))
-            }
-
-            if showFullToolsToggle {
-                fullToolsToggleChip
-            }
-
-            Spacer()
+            Spacer(minLength: 8)
 
             let trimmedDraft = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
             // Pending attachments upload on send; errored chips must be removed first.

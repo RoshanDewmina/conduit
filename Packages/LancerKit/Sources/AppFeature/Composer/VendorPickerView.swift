@@ -2,7 +2,8 @@
 import SwiftUI
 
 /// Agent (vendor CLI) picker for New Chat — filters to host-installed CLIs
-/// when `installed` is known; otherwise shows the full catalog.
+/// when `installed` is known; otherwise shows the full catalog. Single list
+/// with one checkmark source of truth (no duplicated Active + Installed rows).
 public struct VendorPickerView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -35,15 +36,6 @@ public struct VendorPickerView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    RepoSectionHeader(title: "Active")
-                        .padding(.top, 20)
-                    vendorRow(selected, showsCheckmark: true) {
-                        onSelect(selected)
-                        dismiss()
-                    }
-                    Divider()
-                        .padding(.leading, 58)
-
                     RepoSectionHeader(title: "Installed")
                         .padding(.top, 20)
 
@@ -79,6 +71,7 @@ public struct VendorPickerView: View {
                 Text(vendor.displayName)
                     .font(.system(size: 17))
                     .foregroundStyle(.primary)
+                    .lineLimit(2)
 
                 Spacer()
 
