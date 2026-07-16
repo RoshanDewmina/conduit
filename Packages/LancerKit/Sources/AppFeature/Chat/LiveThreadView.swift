@@ -258,6 +258,10 @@ public struct LiveThreadView: View {
                 await bridge.sendFollowUp(prompt: prompt, conversationID: conversationID, cwd: cwd, attachments: initialAttachments)
             } else if LiveThreadTranscript.shouldSendInitialPrompt(prompt) {
                 await bridge.send(prompt: prompt, cwd: cwd, attachments: initialAttachments)
+            } else if bridge.activeMachineID != nil {
+                // Home pending-approvals banner focuses the machine then opens
+                // with an empty prompt — show the approval card, don't adopt.
+                isFollowUpFocused = true
             } else {
                 await bridge.adoptArmedObservedContinue(fallbackCwd: cwd)
                 switch bridge.sendState {

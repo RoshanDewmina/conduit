@@ -38,6 +38,18 @@ public final class RelayApprovalIngest {
     /// limitation above for why this is machine-scoped, not run-scoped.
     public private(set) var latestPendingApproval: [RelayMachineID: Approval] = [:]
 
+    /// Fleet-wide pending approvals (one most-recent per machine). Home banner
+    /// and other cross-machine surfaces read this instead of a single
+    /// `activeMachineID` lookup.
+    public var allPendingApprovals: [(machineID: RelayMachineID, approval: Approval)] {
+        latestPendingApproval
+            .compactMap { machineID, approval -> (RelayMachineID, Approval)? in
+                guard approval.isPending else { return nil }
+                return (machineID, approval)
+            }
+            .sorted { $0.1.createdAt > $1.1.createdAt }
+    }
+
     private let database: AppDatabase
     private var listenTask: Task<Void, Never>?
 
@@ -117,13 +129,20 @@ public final class RelayApprovalIngest {
     }
 
     #if DEBUG
-    /// UITest-only: surface the first DB-seeded pending approval on a stable
-    /// machine id so `LiveThreadView`'s in-thread card renders without a relay.
-    public func hydratePendingForUITestIfRequested() async {
-        guard ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1" else { return }
+    /// UITest / SEED_DEMO: surface the first DB-seeded pending approval so
+    /// home-banner + `LiveThreadView` can render without a live relay.
+    /// Prefers `preferredMachineID` (a paired machine) when provided; otherwise
+    /// the stable UITest machine id.
+    public func hydratePendingForUITestIfRequested(
+        preferredMachineID: RelayMachineID? = nil
+    ) async {
+        let uitest = ProcessInfo.processInfo.environment["LANCER_UITEST_RESEED"] == "1"
+        let seedDemo = ProcessInfo.processInfo.environment["LANCER_SEED_DEMO"] == "1"
+        guard uitest || seedDemo else { return }
+        guard allPendingApprovals.isEmpty else { return }
         let repo = ApprovalRepository(database)
         guard let approval = try? await repo.pending().first else { return }
-        let machineID = RelayMachineID(UUID(uuidString: "00000000-0000-0000-0000-0000000000e2")!)
+        let machineID = preferredMachineID ?? Self.uitestMachineID
         ApprovalRelay.shared.registerRelayOrigin(approvalID: approval.id.uuidString, machineID: machineID)
         latestPendingApproval[machineID] = approval
     }

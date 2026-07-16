@@ -53,6 +53,14 @@ public struct WorkspacesView: View {
 
                 ScrollView {
                     VStack(spacing: 0) {
+                        PendingApprovalsBanner { machineID, approval in
+                            shellLiveBridge.focusMachineForPendingApproval(machineID)
+                            let cwd = approval.cwd.isEmpty
+                                ? (repos.first?.cwd ?? "")
+                                : approval.cwd
+                            activeLiveThread = LiveThreadIdentifier(prompt: "", cwd: cwd)
+                        }
+
                         NavigationLink {
                             ThreadListView(workspace: .allRepos)
                         } label: {
