@@ -1215,6 +1215,30 @@ public actor ConversationSyncCoordinator {
             )
         }
 
+        // Host `conversation_artifacts` (tool chips, background Bash, …) arrive
+        // in `response.artifacts`. Live relay delivery is
+        // `lancerE2EArtifact` → `RelayArtifactIngest`; without this mirror a
+        // reconnect/refresh would leave `toolArtifactsByTurnID` empty even
+        // though the daemon ledger has running Bash rows (sweep #10/#14).
+        var mirroredToolArtifact = false
+        for envelope in response.artifacts {
+            let artifact = ChatArtifact(
+                id: envelope.id,
+                conversationID: envelope.conversationId,
+                turnID: envelope.turnId ?? "",
+                runID: envelope.runId,
+                kind: ChatArtifact.Kind(rawValue: envelope.kind) ?? .tool,
+                title: envelope.title,
+                summary: envelope.summary,
+                payloadJSON: envelope.payloadJson,
+                status: ChatArtifact.Status(rawValue: envelope.status) ?? .running,
+                createdAt: Self.parseDate(envelope.createdAt) ?? .now,
+                updatedAt: Self.parseDate(envelope.updatedAt) ?? .now
+            )
+            try? await chatRepo.upsertArtifact(artifact)
+            if artifact.kind == .tool { mirroredToolArtifact = true }
+        }
+
         // A terminal `lancer.proof/v0` receipt is stored on the host ONLY as a
         // `conversation_events` row (kind "receipt" — see appendRunReceipt in
         // conversation_store.go); it is never itself a conversation_artifacts
@@ -1243,7 +1267,7 @@ public actor ConversationSyncCoordinator {
         // (AppRoot's lancerE2ERunReceipt handler) — lets an already-open
         // thread's artifact list pick up a receipt that arrived while this
         // device was disconnected, without requiring a manual re-open.
-        if materializedReceipt {
+        if materializedReceipt || mirroredToolArtifact {
             NotificationCenter.default.post(
                 name: .lancerChatArtifactPersisted,
                 object: nil,

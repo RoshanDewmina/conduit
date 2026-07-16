@@ -1,10 +1,9 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-16 ~16:35 ET.  
-**Active tip for dogfood:** `integration/2026-07-16-untested-sweep` @ `b8bb778c` — owner ordered
-**merge → `master` + phone install** this session (supersedes prior C4-wait autonomy stop).  
-**`origin/master` pre-merge:** `1b76cbf3` (night stack already on master). Re-check
-`git rev-parse origin/master` after this merge.
+**Last updated:** 2026-07-16 ~16:40 ET.  
+**`origin/master`:** `99fd4526` (PR #140 sweep) + FX10 fold in flight (`5a3fce93` → phone reinstall).  
+**Dogfood:** install pre-FX10 done; reinstall with pill fix; re-pair code `300552` owner-owed.  
+Re-check `git rev-parse origin/master` after FX10 push.
 
 > **2026-07-16 sweep in one line:** untested-feature live sweep found + fixed F1/F4 daemon
 > approval bugs; Wave 1 merged FX7 (needsApproval→awaiting), FX5 (Connect above keypad),

@@ -12,7 +12,7 @@
 |---|---|
 | **Worktree** | `/Users/roshansilva/Documents/command-center/.worktrees/untested-sweep-2026-07-16` |
 | **Branch** | `integration/2026-07-16-untested-sweep` |
-| **Current HEAD** | `b8bb778c0cad118c3d19834ba44950bf39eb3508` (`b8bb778c`) |
+| **Current HEAD** | master after FX10 fold (see Build status); prior dogfood brief tip was `b8bb778c` |
 | **FX merge baseline** | `7707e4fa` — still an ancestor; tip advanced **+1** doc-only commit (`b8bb778c`: Simurgh/orchestrator doc sync). FX7 + FX5 + Lane P code is on this tip. |
 
 ```bash
@@ -204,10 +204,10 @@ xcrun devicectl device install app --device 557A7877-F729-5031-9606-0E04F2B67822
 
 | Field | Value |
 |---|---|
-| **Status** | PENDING (this dogfood session) |
-| **Built from** | (fill after install — expect `origin/master` tip post-merge) |
+| **Status** | REINSTALL after FX10 (in progress) |
+| **Built from** | master tip including `5a3fce93` FX10 |
 | **.app path** | `/tmp/lancer-device-dogfood-dd/Build/Products/Debug-iphoneos/Lancer.app` |
-| **Install** | PENDING |
+| **Install** | prior `b8bb778c` SUCCEEDED; FX10 reinstall pending |
 
 ## Evidence to paste back
 
@@ -218,3 +218,8 @@ When done (PASS or FAIL), write sibling `DOGFOOD_SMOKE.md` and optionally note h
 - Screenshot: completed turn (no **Couldn't get a reply**)
 - Policy/Audit screens if reached
 - Any FAIL: exact UI string + daemon log window
+
+
+## Re-pair (this session)
+
+Production `lancerd pair` minted code **300552** (replaced 310440). Still unconfirmed until phone Connect. See `DOGFOOD_SMOKE.md`.

@@ -151,6 +151,8 @@ public struct AppRoot: View {
     /// publishes them for `LiveThreadView`'s question card. Same construction
     /// constraint as `relayApprovalIngest` — needs `env.chatRepo`.
     @State private var relayQuestionIngest: RelayQuestionIngest?
+    /// Live tool artifacts over relay → local mirror (background-tasks pill / chips).
+    @State private var relayArtifactIngest: RelayArtifactIngest?
     /// Derived + user-added workspace repos for the Workspaces shell.
     @State private var workspaceDataStore: WorkspaceDataStore?
     /// Phase 1 interactive SSH terminal presentation.
@@ -191,6 +193,7 @@ public struct AppRoot: View {
             ))
             _relayApprovalIngest = State(initialValue: RelayApprovalIngest(database: env.database))
             _relayQuestionIngest = State(initialValue: RelayQuestionIngest(chatRepo: env.chatRepo))
+            _relayArtifactIngest = State(initialValue: RelayArtifactIngest(chatRepo: env.chatRepo))
             let workspaceStore = WorkspaceDataStore(chatRepo: env.chatRepo)
             let coordinator = env.conversationSyncCoordinator
             // Capture the same fleet instance wired into ShellLiveBridge so
@@ -252,6 +255,7 @@ public struct AppRoot: View {
             _shellLiveBridge = State(initialValue: nil)
             _relayApprovalIngest = State(initialValue: nil)
             _relayQuestionIngest = State(initialValue: nil)
+            _relayArtifactIngest = State(initialValue: nil)
             _workspaceDataStore = State(initialValue: nil)
             _terminalCoordinator = State(initialValue: nil)
         }
@@ -338,6 +342,7 @@ public struct AppRoot: View {
             .task {
                 relayApprovalIngest.start()
                 relayQuestionIngest.start()
+                relayArtifactIngest?.start()
                 await RelayFleetHydration.hydrate(into: relayFleetStore)
                 shellLiveBridge.markHydrated()
                 await workspaceDataStore.refresh()
