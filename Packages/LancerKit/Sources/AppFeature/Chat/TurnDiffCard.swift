@@ -3,10 +3,13 @@ import SwiftUI
 
 /// Inline turn-diff card (Codex mobile): "N files changed +A −D", expandable file rows.
 public struct TurnDiffCard: View {
+    private static let visibleFileCap = 3
+
     let summary: RepoDiffSummary
     var onOpenReview: () -> Void
 
     @State private var isExpanded = false
+    @State private var showAllFiles = false
 
     public init(summary: RepoDiffSummary, onOpenReview: @escaping () -> Void) {
         self.summary = summary
@@ -34,6 +37,7 @@ public struct TurnDiffCard: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         isExpanded.toggle()
+                        if !isExpanded { showAllFiles = false }
                     }
                 } label: {
                     Image(systemName: "chevron.down")
@@ -52,36 +56,30 @@ public struct TurnDiffCard: View {
 
             if isExpanded {
                 Divider()
-                ForEach(Array(summary.files.enumerated()), id: \.element.id) { index, file in
-                    Button {
-                        onOpenReview()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "doc.text")
-                                .font(.system(size: 14))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
-                            Text(file.path)
-                                .font(.system(size: 14))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Spacer(minLength: 8)
-                            Text(file.countsLabel)
-                                .font(.system(size: 13, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("turn-diff-file-\(index)")
-
-                    if index < summary.files.count - 1 {
+                ForEach(Array(visibleFiles.enumerated()), id: \.element.id) { index, file in
+                    fileRow(file: file, index: index)
+                    if index < visibleFiles.count - 1 || showsMoreExpander {
                         Divider()
                             .padding(.leading, 44)
                     }
+                }
+                if showsMoreExpander {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            showAllFiles = true
+                        }
+                    } label: {
+                        Text("\(hiddenFileCount) more")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("turn-diff-more-files")
+                    .accessibilityLabel(Text("Show \(hiddenFileCount) more files"))
                 }
             }
         }
@@ -95,6 +93,48 @@ public struct TurnDiffCard: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("turn-diff-card")
+    }
+
+    private var visibleFiles: [RepoDiffFile] {
+        if showAllFiles || summary.files.count <= Self.visibleFileCap {
+            return summary.files
+        }
+        return Array(summary.files.prefix(Self.visibleFileCap))
+    }
+
+    private var hiddenFileCount: Int {
+        max(0, summary.files.count - Self.visibleFileCap)
+    }
+
+    private var showsMoreExpander: Bool {
+        !showAllFiles && hiddenFileCount > 0
+    }
+
+    private func fileRow(file: RepoDiffFile, index: Int) -> some View {
+        Button {
+            onOpenReview()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+                Text(file.path)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 8)
+                Text(file.countsLabel)
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("turn-diff-file-\(index)")
     }
 }
 #endif
