@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 19:55 Claude Fable — owner iPhone dogfood walkthrough @ `62b4424d`: approve loop/Proof ⋯/Policy/Audit/follow-up all **PASS live**; lock-push **FAIL**; 3 new P1s (WT-A autonomy pill unwired, WT-B stale Running chip, WT-E no APNs push) — evidence + verdicts in `docs/test-runs/2026-07-16-untested-feature-sweep/DOGFOOD_DEVICE_WALKTHROUGH.md`; GAP_LIST/orchestrator/DOGFOOD_SMOKE synced (`claude/lancer-iphone-dogfood-424a6e`)
 - 19:20 Cursor Grok — expand SESSION_HOP_REPORT §2.4 Simurgh coverage (LE reclaim, DD collision, HOME pin, 30→60m TTL, wave commits `2fe3a2b`/`c11fb11`/`b1305a7`/`85f3907`, `~/bin/simurgh` hot-swap, C4 `simurgh exec`) (`docs/simurgh-hop-coverage`)
 - 18:20 Cursor Composer — SESSION_HOP_REPORT §0: verbatim owner goals from session JSONL/transcripts (amends PR #150 without §0) (`docs/session-hop-goals-section`)
 - 18:15 Cursor Composer — session-hop doc sync: GAP_LIST/DOGFOOD_READY/orchestrator aligned to master `62b4424d` + verified pair/launch PASS (`docs/session-hop-doc-sync`)

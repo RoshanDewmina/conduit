@@ -1,5 +1,14 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-16 ~19:50 ET — owner device walkthrough DONE: approve loop + Proof + Policy + Audit + follow-up PASS on phone; 3 new P1s
+
+- **Walkthrough:** live owner iPhone @ `62b4424d` (`DOGFOOD_DEVICE_WALKTHROUGH.md`). Approve loop **PASS** (escalate→relay→approve→exit 0, 21s); Proof-under-⋯ **PASS** (#147); Policy picker **PASS** (#144); Audit feed **PASS on phone** (#3); follow-up same-thread **PASS** (same vendor session `d50a2002…`); All Repos cold paint **PASS** (#149). Pairing `…9884` kept — no remint all night.
+- **New P1s:** **WT-A** autonomy pill ("Full bypass") display-only — never sent to daemon; `policy.PresetDocument` dead code (GAP #12's PASS was rendering-only). **WT-B** live thread never renders completion (stale "Running" chip + "1 running task"; correct on re-entry). **WT-E** no APNs approval push while locked — relay-only delivery; re-send-on-repair recovered it (suspect in-memory push-backend registry post-redeploy).
+- **P2s:** WT-C return-visit spinner never resolves; WT-D top-right ⋯ missing on first thread entry. P3: `ls -la` risk-rated High.
+- **Owner product call (WT-A2):** per-chat permission mode should be the real control; kill/demote the global Policy default ("like everyone else").
+- **Skipped:** Emergency Stop (owner deferred; #1 stays BLOCKED); FX5 Connect (pair never broke — by design).
+- **Next:** wire WT-A (per-chat autonomy → daemon policy), fix WT-B stream terminal-state, diagnose WT-E push path; then C4 #7 chain; publish/TestFlight.
+
 ## ⚡ 2026-07-16 ~18:15 ET — session-hop sync: master `62b4424d`; pair confirmed; launch PASS
 
 - **Tip:** `origin/master` `62b4424d` (PR #149). Sweep #140–#143, auth #145, Proof #147, ISO #148, Repos #149 all merged.
