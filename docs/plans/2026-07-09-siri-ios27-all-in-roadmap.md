@@ -1,6 +1,7 @@
 # Siri / iOS 27 All-In Roadmap
 
 **Date:** 2026-07-09  
+**Last updated: 2026-07-15.**  
 **Decision:** Owner chose **C — raise deployment target to iOS 27** and go all-in on seamless Siri / App Intents / system integration.  
 **Inventory:** [`2026-07-09-wwdc-ios-capability-inventory.md`](2026-07-09-wwdc-ios-capability-inventory.md)  
 **Prior plan (superseded for target strategy):** [`2026-07-03-siri-primary-ios27-fast-follow-plan.md`](2026-07-03-siri-primary-ios27-fast-follow-plan.md) — Phase 1 entity work largely landed; this roadmap starts from **live code**, not the July 3 “zero entities” premise.
@@ -84,7 +85,8 @@ Live code already has entities, IndexedEntity, IndexedEntityQuery, SyncableEntit
 ### Verify
 ```bash
 cd Packages/LancerKit && swift test --filter IntentsKit
-# Manual: Siri phrases 1–7 on device/sim with LANCER_CURSOR_SHELL_LIVE if needed
+# Manual: Siri phrases 1–7 on device/sim with Workspaces + LANCER_DESTINATION if needed
+# (LANCER_CURSOR_SHELL_LIVE was removed 2026-07-11 — historical only)
 ```
 
 **Done-when:** after a pending approval arrives, RelevantEntities/Spotlight refresh without relaunch; phrases 1–7 work with ≥2 machines/runs.

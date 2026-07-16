@@ -1,7 +1,12 @@
 # ADR: Repo-first Workspaces (vs. host-first)
 
-> Resolves `docs/product/FEATURE_BACKLOG.md` §6 "Workspaces repo-first vs host-first" and
-> master-plan §9. Scope: Tier 0/1 Cursor shell only — Home/Away Digest stays frozen.
+> **Last updated: 2026-07-15.** Module paths naming `CursorShellLiveBridge` / CursorStyle below
+> are **historical** (pre-`6b97da65`); the ADR decision (repo-first Workspaces) remains in force
+> for the current `AppFeature/Workspaces/` production root. Do not treat CursorStyle types as
+> present in the tree.
+
+> Resolves `docs/product/FEATURE_BACKLOG.md` "Workspaces repo-first vs host-first".
+> Scope when written: Tier 0/1 shell — Home/Away Digest stays frozen.
 
 ## 1. Context
 

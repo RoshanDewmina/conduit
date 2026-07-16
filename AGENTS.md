@@ -20,20 +20,17 @@ Three layers: the **iOS app** (`Packages/LancerKit/`), the **`lancerd`** residen
 0. **`docs/STATUS_LEDGER.md`** — owner hub: current priority, branches, deadlines, canonical doc map. **Humans start here.**
 0. **`docs/AGENT_READ_FIRST.md`** — agent index: read order by task type, standing instructions, Codex session chain. **Agents start here.**
 1. **`ARCHITECTURE.md` §0.1** — current-state snapshot (implemented / partial / planned / deprecated / priorities). **Start here for code.**
-2. **`ARCHITECTURE.md` §4.1** — navigation. **Correction (2026-07-15, verified via `find`/`grep`
-   against master `65bed890`):** `Packages/LancerKit/Sources/AppFeature/CursorStyle/` and the
-   `LANCER_CURSOR_SHELL`/`LANCER_CURSOR_SHELL_LIVE` env vars this line used to cite were removed
-   by commit `6b97da65` ("revert(ios): restore Codex Workspaces shell as the frontend (owner
-   decision 2026-07-11)") — zero matches for either in the current tree. The production root is
+2. **`ARCHITECTURE.md` §4.1** — navigation. Production root is
    `AppFeature/Workspaces/WorkspacesView.swift` (`AppRoot.readyRoot` → `NavigationStack {
    WorkspacesView() }`); DEBUG deep-links use `LANCER_DESTINATION` (e.g. `profile`, `settings`,
-   `composer`, `threadList`, `threadDetail`, `trustedMachines`, `addRepo`, `search`), not the old
-   flags. The "not a tab bar" rule and `enum Tab` being vestigial in `AppRoot.swift` are still
-   accurate. Legacy sidebar / Command Home remains deprecated — not current design.
+   `composer`, `threadList`, `threadDetail`, `trustedMachines`, `addRepo`, `search`, `review`).
+   The retired `AppFeature/CursorStyle/` module and `LANCER_CURSOR_SHELL*` flags were removed by
+   commit `6b97da65` (2026-07-11). The "not a tab bar" rule and `enum Tab` being vestigial in
+   `AppRoot.swift` remain accurate. Legacy sidebar / Command Home remains deprecated.
 3. **`docs/agent-contract.md`** — architecture invariants you must not regress (module discipline, terminal/PTY rules, security/TOFU, testing).
 4. **`docs/KNOWN_ISSUES.md`** (issue tracker) and **`docs/PUBLISH_READINESS_CHECKLIST.md`** (launch state).
 5. **`docs/LIVE_LOOP_RUNBOOK.md`** — step-by-step bring-up + proof of the governed-approval loop and push notifications. The #1 priority for V1 is closing this loop on a real device.
-6. Launch readiness and P0/P1 gates → **`docs/STATUS_LEDGER.md`** (owner hub) + **`docs/PUBLISH_READINESS_CHECKLIST.md`** (engineering checklist). Feature scope → **`docs/product/2026-07-05-lancer-feature-master-plan.md`** + **`docs/product/FEATURE_BACKLOG.md`**.
+6. Launch readiness and P0/P1 gates → **`docs/STATUS_LEDGER.md`** (owner hub) + **`docs/PUBLISH_READINESS_CHECKLIST.md`** (engineering checklist). Feature scope → **`docs/product/FEATURE_BACKLOG.md`** (+ direction in `docs/product/2026-07-10-lancer-daily-driver-definition.md`).
 7. Point-in-time docs (`docs/LANCER_PROJECT_DOSSIER.md`, `docs/_archive/`, `docs/audit/`, `docs/superpowers/`, `docs/design-questions/`) were **purged 2026-07-06** — do not cite or recreate them. Use **`ARCHITECTURE.md` §0.1** + **`docs/STATUS_LEDGER.md`** for current state.
 
 ## Working rules

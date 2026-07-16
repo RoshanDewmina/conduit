@@ -1,5 +1,7 @@
 # Orca terminal → Lancer port map (2026-07-12)
 
+**Last updated: 2026-07-15.**
+
 Owner ask: "look at how Orca handles the terminal feature, then add full terminal support."
 Method per AGENTS.md borrow-don't-reinvent (precedent: 2026-07-09 chat-ui port map).
 Source: local clone `research-repos/orca` (MIT — portable with attribution comments;
@@ -42,7 +44,7 @@ that makes multi-client attach cheap.
 
 ## Port plan (phased; each phase independently shippable)
 
-**Phase 1 — re-wire what exists (days).** Entry points in the Cursor shell: Machine detail →
+**Phase 1 — re-wire what exists (days).** Entry points in the Workspaces shell: Machine detail →
 "Terminal" + thread ⋯ menu → "Open terminal at this cwd". Lancer's existing SSH block terminal
 as-is. Gate: open terminal on the paired machine from the phone, run vim/htop, survive
 app background. (This alone is "full terminal support" v0 — it worked in 2026-06 builds.)

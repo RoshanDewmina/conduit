@@ -17,7 +17,7 @@
 > further decompose `NewChatTabView`/`SessionView` bodies. The redesigned screens themselves
 > profile fine; these are pre-existing hotspots.
 
-> **Compiled:** 2026-06-19 · branch `master` (updated).
+> **Compiled:** 2026-06-19 · **Last updated: 2026-07-15** · branch `master` (updated).
 > This is the canonical "what's broken / what's verified / what's residual" doc. It supersedes the
 > scattered point-in-time audit docs for **issue tracking**. For launch *checklist* state use
 > `docs/PUBLISH_READINESS_CHECKLIST.md`; for product/architecture narrative use `ARCHITECTURE.md`
@@ -26,7 +26,7 @@
 > the frontend") — confirmed zero matches in the current tree. The current production root is
 > `AppFeature/Workspaces/WorkspacesView.swift`, DEBUG-gated by `LANCER_DESTINATION` (not the old
 > `LANCER_CURSOR_SHELL*` flags). The "not a tab bar" / not-the-legacy-sidebar framing still holds
-> — see `ARCHITECTURE.md` §0.1/§4.1 correction notes and `docs/STATUS_LEDGER.md`'s 2026-07-11
+> — see `ARCHITECTURE.md` §0.1/§4.1 and `docs/STATUS_LEDGER.md`'s 2026-07-11
 > "frontend reversal" note. The old `LANCER_PROJECT_DOSSIER.md` and `docs/_archive/`
 > were **purged 2026-07-06** — use `ARCHITECTURE.md` §0.1 + `docs/STATUS_LEDGER.md`.
 >
@@ -84,11 +84,12 @@
 Only compiler **warnings** in our code (8 total) are "getter took >300ms to type-check" hints — compile-time
 only, no runtime effect. See §4.
 
-**Open test debt — `UI-IA-1` (tracked 2026-06-19, updated 2026-07-08):** legacy tab-bar/sidebar
-`TapInjectionProofTests` XCTSkip cases were **removed**; the file now runs **Cursor-shell**
-injection proofs (`LANCER_CURSOR_SHELL_LIVE=1`). Remaining skips: opt-in relay E2E (owner-gated)
-and one permanently-skipped SSH path. See `CursorAppShellExhaustiveTests` and
-`docs/test-runs/user-ready-tier0-2026-07-06/`.
+**Open test debt — `UI-IA-1` (tracked 2026-06-19, updated 2026-07-15):** legacy tab-bar/sidebar
+`TapInjectionProofTests` XCTSkip cases were removed. UITests now deep-link via
+`LANCER_DESTINATION` into the Workspaces production root (retired `LANCER_CURSOR_SHELL_LIVE=1`
+/ CursorStyle suite names are historical). Remaining skips: opt-in relay E2E (owner-gated)
+and one permanently-skipped SSH path. See Workspaces UITests + `docs/LIVE_LOOP_RUNBOOK.md`.
+(Former `docs/test-runs/user-ready-tier0-2026-07-06/` path is absent from the tree.)
 
 ---
 

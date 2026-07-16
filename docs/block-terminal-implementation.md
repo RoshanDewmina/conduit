@@ -5,7 +5,7 @@
 > them, and what didn't. Read alongside `agent-contract.md` §5 (terminal-engine
 > rules) and `block-model-redesign-research.md`.
 
-Last updated: 2026-05-29.
+Last updated: 2026-07-15.
 
 ---
 
@@ -172,7 +172,7 @@ xcrun simctl install booted /tmp/lancer-dd/Build/Products/Debug-iphonesimulator/
 # launch the LIVE block session (real SSH) — run as a STANDALONE command
 xcrun simctl terminate booted dev.lancer.mobile 2>/dev/null; sleep 2
 PW="$(security find-generic-password -s lancer-localhost-ssh -w)"
-env SIMCTL_CHILD_LANCER_CURSOR_SHELL_LIVE=1 \
+env SIMCTL_CHILD_LANCER_DAEMON_E2E=1 \
     SIMCTL_CHILD_LANCER_DESTINATION=review \
     SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 \
     SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
@@ -184,12 +184,15 @@ sleep 11; xcrun simctl io booted screenshot /tmp/shot.png   # then view it
 ```
 
 ### Debug entry points
-- `LANCER_CURSOR_SHELL_LIVE=1` + `LANCER_DESTINATION=review` — live Cursor shell with approval
-  surface (`CursorReviewView`). Primary DEBUG path for governed-loop work.
-- `LANCER_DAEMON_E2E=1` + `LANCER_DESTINATION=inbox` — legacy SSH block-session harness
-  (historical; sidebar/Command Home shell deleted 2026-07-06).
+- `LANCER_DAEMON_E2E=1` + `LANCER_DESTINATION=review` — Workspaces approval / review surface
+  (matches `scripts/relay-regression.sh`). Primary DEBUG path for governed-loop work.
+- `LANCER_DESTINATION=inbox` — inbox deep-link (historical SSH harness notes may still mention
+  this; sidebar/Command Home shell deleted 2026-07-06).
 - `LANCER_TERMINAL_TEST=1` → `DebugTerminalHarness` → raw-only `LiveTerminalView`
   (routed in `Lancer/LancerApp.swift`, not `AppRoot`).
+>
+> **Historical (pre-2026-07-11):** `LANCER_CURSOR_SHELL_LIVE=1` targeted the removed CursorStyle
+> shell — do not use.
 
 ### Env vars the harnesses read
 - `LANCER_TEST_HOST` (default `127.0.0.1`), `LANCER_TEST_PORT` (`22`),
@@ -255,5 +258,5 @@ sleep 11; xcrun simctl io booted screenshot /tmp/shot.png   # then view it
 | Block card UI | `SessionFeature/Chat/ToolCardView.swift`, `ChatTranscriptView.swift` |
 | Composer | `SessionFeature/Chat/ChatInputBar.swift`, `DesignSystem/TerminalSafeTextField.swift` |
 | Canonical block card (design system) | `DesignSystem/Components/Composites.swift` (`DSBlockCard`) |
-| Debug harnesses | `DebugTerminalHarness.swift`; live session coverage uses `LANCER_DAEMON_E2E=1` through the legacy SSH block path (sidebar deleted; prefer `LANCER_CURSOR_SHELL_LIVE=1`) |
+| Debug harnesses | `DebugTerminalHarness.swift`; live session coverage uses `LANCER_DAEMON_E2E=1` + `LANCER_DESTINATION=review` (Workspaces; retired `LANCER_CURSOR_SHELL_LIVE` removed 2026-07-11) |
 | Raw terminal view + model | `SessionFeature/LiveTerminalView.swift`, `TerminalEngine/RawTerminalView.swift` |
