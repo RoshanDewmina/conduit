@@ -1,9 +1,8 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-16 ~16:40 ET.  
-**`origin/master`:** `99fd4526` (PR #140 sweep) + FX10 fold in flight (`5a3fce93` → phone reinstall).  
-**Dogfood:** install pre-FX10 done; reinstall with pill fix; re-pair code `300552` owner-owed.  
-Re-check `git rev-parse origin/master` after FX10 push.
+**Last updated:** 2026-07-16 ~16:50 ET.  
+**`origin/master`:** `fbc85191` (PR #140 + PR #141 FX10). Phone reinstalled with FX10.  
+**Dogfood:** pair code **347051** owner-owed — see `DOGFOOD_SMOKE.md`.
 
 > **2026-07-16 sweep in one line:** untested-feature live sweep found + fixed F1/F4 daemon
 > approval bugs; Wave 1 merged FX7 (needsApproval→awaiting), FX5 (Connect above keypad),
