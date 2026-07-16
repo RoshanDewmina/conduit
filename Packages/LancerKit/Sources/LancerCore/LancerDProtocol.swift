@@ -131,6 +131,17 @@ public struct AuditTailResult: Codable, Sendable {
     public let entries: [AuditLogEntry]
 }
 
+/// Result of `agent.emergencyStop` / relay `agentEmergencyStop`.
+public struct EmergencyStopResult: Codable, Sendable, Equatable {
+    public let emergencyStopped: Bool
+    public let stoppedRuns: Int
+
+    public init(emergencyStopped: Bool, stoppedRuns: Int) {
+        self.emergencyStopped = emergencyStopped
+        self.stoppedRuns = stoppedRuns
+    }
+}
+
 /// Legacy single-YAML response (older lancerd); prefer PolicyGetResult.
 public struct PolicyYAMLResult: Codable, Sendable {
     public let yaml: String
