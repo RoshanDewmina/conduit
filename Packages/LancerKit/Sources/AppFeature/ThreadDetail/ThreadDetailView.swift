@@ -42,6 +42,8 @@ struct ThreadDetailView: View {
     @State private var transcriptLoadGeneration = 0
     @State private var transcriptLoadGate = TranscriptRefreshLoadGate()
     @State private var isBackgroundTasksPresented = false
+    /// True while `refreshThreadFromHost` is in flight (not just local mirror read).
+    @State private var isHostTranscriptRefreshing = false
 
     private static let initialWindowSize = 100
     private static let windowExtendStep = 100
@@ -140,36 +142,35 @@ struct ThreadDetailView: View {
                                 }
                             }
 
-                            if transcriptRefreshFailed {
-                                HStack(alignment: .top, spacing: 10) {
-                                    Image(systemName: "exclamationmark.triangle")
-                                        .foregroundStyle(.orange)
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("Transcript refresh failed or timed out.")
-                                            .font(.system(size: 14, weight: .medium))
-                                        Text("Cached turns stay available. Tap Retry to try again.")
-                                            .font(.system(size: 13))
-                                            .foregroundStyle(.secondary)
-                                        Button("Retry refresh") {
-                                            transcriptLoadGeneration += 1
-                                        }
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .accessibilityLabel("Retry transcript refresh")
-                                    }
+                            if isHostTranscriptRefreshing {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text("Refreshing transcript…")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.secondary)
                                 }
-                                .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                                 .accessibilityElement(children: .combine)
-                                .accessibilityLabel(Text("Transcript refresh failed or timed out. Retry refresh."))
+                                .accessibilityLabel(Text("Refreshing transcript"))
                             }
 
-                            if turns.isEmpty {
+                            if transcriptRefreshFailed {
+                                InlineRetryBanner(
+                                    title: "Transcript refresh failed or timed out.",
+                                    message: "Cached turns stay available. Tap Retry to try again.",
+                                    retryTitle: "Retry refresh",
+                                    accessibilityRetryLabel: "Retry transcript refresh"
+                                ) {
+                                    transcriptLoadGeneration += 1
+                                }
+                            }
+
+                            if turns.isEmpty && !isHostTranscriptRefreshing {
                                 Text("No turns in the local mirror yet. Follow up below to continue in this repo.")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
-                            } else {
+                            } else if !turns.isEmpty {
                                 if hasEarlierTurns {
                                     Button {
                                         visibleTurnLimit = min(
@@ -414,6 +415,8 @@ struct ThreadDetailView: View {
         // Local events render before this await so offline opens do not hide
         // already-hydrated tool or assistant content during the timeout.
         if let refresh = workspaceData.refreshThreadFromHost {
+            isHostTranscriptRefreshing = true
+            defer { isHostTranscriptRefreshing = false }
             do {
                 try await refresh(thread.id)
                 guard !Task.isCancelled else { return }

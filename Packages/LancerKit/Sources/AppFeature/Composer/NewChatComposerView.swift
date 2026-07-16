@@ -28,6 +28,8 @@ public struct NewChatComposerView: View {
     @State private var selectedRepo: WorkspaceRepo?
     @State private var attachments: [AttachmentDraft] = []
     @State private var isUploadingAttachments = false
+    /// Sheet-level honesty when attachment upload aborts for missing transport.
+    @State private var attachmentNoTransportBanner: String?
     @AppStorage(DispatchModelSelection.storageKey) private var selectedModelSlug: String =
         DispatchModelSelection.default.rawValue
     @AppStorage(DispatchVendorSelection.storageKey) private var selectedVendorSlug: String =
@@ -161,6 +163,19 @@ public struct NewChatComposerView: View {
                 attachmentChips
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
+            }
+
+            if let attachmentNoTransportBanner {
+                InlineRetryBanner(
+                    title: attachmentNoTransportBanner,
+                    message: "Connect a machine, then retry send.",
+                    retryTitle: "Dismiss",
+                    accessibilityRetryLabel: "Dismiss attachment upload error"
+                ) {
+                    self.attachmentNoTransportBanner = nil
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
             }
 
             textField
@@ -397,12 +412,14 @@ public struct NewChatComposerView: View {
             let sshChannel = ApprovalRelay.shared.channel
             let relayMachine = relayFleetStore.firstConnectedMachine
             guard sshChannel != nil || relayMachine != nil else {
+                let message = AttachmentUploadError.noTransport.localizedDescription
                 for draft in drafts where draft.state == .pending {
                     drafts = AttachmentDraftStore.withState(
-                        drafts, id: draft.id, state: .error(message: AttachmentUploadError.noTransport.localizedDescription)
+                        drafts, id: draft.id, state: .error(message: message)
                     )
                 }
                 publishDrafts(&drafts)
+                attachmentNoTransportBanner = message
                 isUploadingAttachments = false
                 return
             }

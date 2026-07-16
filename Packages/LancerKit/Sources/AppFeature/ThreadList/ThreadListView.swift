@@ -59,6 +59,9 @@ public struct ThreadListView: View {
     @State private var isComposerPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
     @State private var observedSessions: [ObservedSession] = []
+    @State private var isObservedSessionsLoading = false
+    @State private var observedSessionsError: String?
+    @State private var hasCompletedInitialBootstrap = false
 
     let workspace: ThreadListWorkspace
 
@@ -98,6 +101,14 @@ public struct ThreadListView: View {
         return WorkspaceRepoCatalog.groupByRecency(sorted, date: \.sortDate)
     }
 
+    /// First paint only — never treat a failed refresh as an empty list.
+    private var showsInitialLoading: Bool {
+        !hasCompletedInitialBootstrap
+            || workspaceData.showsInitialLoading
+            || (isObservedSessionsLoading && threads.isEmpty && scopedObservedSessions.isEmpty
+                && workspaceData.fetchPhase.failureMessage == nil)
+    }
+
     public var body: some View {
         ZStack(alignment: .bottom) {
             Color(.systemGroupedBackground)
@@ -114,13 +125,51 @@ public struct ThreadListView: View {
                     .padding(.top, 28)
                     .padding(.bottom, 8)
 
-                if threads.isEmpty && scopedObservedSessions.isEmpty {
-                    Text("No threads yet")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
+                if let catalogError = workspaceData.fetchPhase.failureMessage {
+                    InlineRetryBanner(
+                        title: "Couldn’t refresh threads",
+                        message: catalogError,
+                        retryTitle: "Retry",
+                        accessibilityRetryLabel: "Retry thread list refresh"
+                    ) {
+                        Task {
+                            await workspaceData.refresh()
+                            await loadObservedSessions()
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                }
+
+                if let observedSessionsError {
+                    InlineRetryBanner(
+                        title: "Couldn’t load desktop sessions",
+                        message: observedSessionsError,
+                        retryTitle: "Retry",
+                        accessibilityRetryLabel: "Retry loading desktop sessions"
+                    ) {
+                        Task { await loadObservedSessions() }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                }
+
+                if showsInitialLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 24)
+                    Spacer(minLength: 0)
+                } else if threads.isEmpty && scopedObservedSessions.isEmpty {
+                    if workspaceData.fetchPhase.failureMessage == nil
+                        && observedSessionsError == nil
+                    {
+                        Text("No threads yet")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
+                    }
                     Spacer(minLength: 0)
                 } else {
                     ScrollView {
@@ -190,6 +239,7 @@ public struct ThreadListView: View {
         .task {
             await workspaceData.refresh()
             await loadObservedSessions()
+            hasCompletedInitialBootstrap = true
         }
         .sheet(isPresented: $isSearchPresented) {
             SearchView()
@@ -207,13 +257,21 @@ public struct ThreadListView: View {
     }
 
     private func loadObservedSessions() async {
+        isObservedSessionsLoading = true
+        defer { isObservedSessionsLoading = false }
         guard let machine = relayFleetStore.firstConnectedMachine else {
             observedSessions = []
+            observedSessionsError = nil
             return
         }
-        let sessions = (try? await machine.bridge.relayListSessions()) ?? []
-        // Other providers (codex, etc.) are future work — model already has `provider`.
-        observedSessions = sessions.filter { $0.provider == "claudeCode" }
+        do {
+            let sessions = try await machine.bridge.relayListSessions()
+            // Other providers (codex, etc.) are future work — model already has `provider`.
+            observedSessions = sessions.filter { $0.provider == "claudeCode" }
+            observedSessionsError = nil
+        } catch {
+            observedSessionsError = error.localizedDescription
+        }
     }
 
     private var isInsideSpecificRepo: Bool {
