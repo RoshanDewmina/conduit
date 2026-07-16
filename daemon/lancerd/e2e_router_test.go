@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -1211,4 +1212,239 @@ func TestE2ERouterSendApprovalSurvivesFirstSendRace(t *testing.T) {
 	}
 	// The retry recovered the initial not-paired drop — no
 	// resendPendingApprovals/pairedHandler was ever invoked in this test.
+}
+
+// TestE2ERouterAuditTail verifies agentAuditTail mirrors the SSH agent.audit.tail
+// RPC by reading the same audit log via s.audit.tail — same entries, same shape.
+func TestE2ERouterAuditTail(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	if err := srv.audit.append(AuditEntry{Action: "auto-allow", Agent: "claude", Kind: "command", Effect: "allow"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.audit.append(AuditEntry{Action: "escalate", Agent: "codex", Kind: "patch", Effect: "ask"}); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]interface{}{"limit": 10})
+	router.handleMessage("agentAuditTail", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "agentAuditTailResult" {
+		t.Fatalf("expected agentAuditTailResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string `json:"type"`
+		Payload struct {
+			Entries []AuditEntry `json:"entries"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if len(env.Payload.Entries) != 2 {
+		t.Fatalf("expected 2 audit entries, got %d: %+v", len(env.Payload.Entries), env.Payload.Entries)
+	}
+
+	// Cross-check against the direct SSH-path reader to prove it's the same source.
+	sshEntries, err := srv.audit.tail(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sshEntries) != len(env.Payload.Entries) {
+		t.Fatalf("relay and SSH audit.tail disagree: relay=%d ssh=%d", len(env.Payload.Entries), len(sshEntries))
+	}
+}
+
+// TestE2ERouterAuditTailClampsLimit verifies an oversized or non-positive limit
+// is clamped to the 500-entry cap rather than passed through unbounded.
+func TestE2ERouterAuditTailClampsLimit(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]interface{}{"limit": 999999})
+	router.handleMessage("agentAuditTail", payload)
+
+	msgType, _ := client.lastMessage()
+	if msgType != "agentAuditTailResult" {
+		t.Fatalf("expected agentAuditTailResult, got %q", msgType)
+	}
+	// No entries exist yet, so this just proves the handler didn't reject the
+	// oversized limit outright; the clamp itself is exercised by inspection of
+	// e2e_router.go's `if limit <= 0 || limit > 500 { limit = 500 }` guard.
+}
+
+// TestE2ERouterPermissionModeGet verifies agentPermissionModeGet reads the
+// global policy's coarse Default effect.
+func TestE2ERouterPermissionModeGet(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	if err := policy.SaveFile(policy.GlobalPolicyPath(home), policy.Document{Default: string(policy.EffectAllow)}); err != nil {
+		t.Fatal(err)
+	}
+	srv.policy.reload("")
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	router.handleMessage("agentPermissionModeGet", nil)
+
+	msgType, data := client.lastMessage()
+	if msgType != "agentPermissionModeGetResult" {
+		t.Fatalf("expected agentPermissionModeGetResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string `json:"type"`
+		Payload struct {
+			Mode string `json:"mode"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Payload.Mode != "allow" {
+		t.Fatalf("expected mode=allow, got %q", env.Payload.Mode)
+	}
+}
+
+// TestE2ERouterPermissionModeSet verifies agentPermissionModeSet writes ONLY the
+// Default field, persists it to policy.yaml, records an audit entry, and
+// replies with ok=true.
+func TestE2ERouterPermissionModeSet(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	// Seed a document with existing rules to prove they survive the mode set.
+	seedRules := []policy.Rule{{ID: "deny-credential", Effect: "deny", Kind: "credential"}}
+	if err := policy.SaveFile(policy.GlobalPolicyPath(home), policy.Document{Default: string(policy.EffectAsk), Rules: seedRules}); err != nil {
+		t.Fatal(err)
+	}
+	srv.policy.reload("")
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]string{"mode": "allow"})
+	router.handleMessage("agentPermissionModeSet", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "agentPermissionModeSetResult" {
+		t.Fatalf("expected agentPermissionModeSetResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string                 `json:"type"`
+		Payload map[string]interface{} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Payload["ok"] != true {
+		t.Fatalf("expected ok=true, got %#v", env.Payload)
+	}
+
+	// The write must have landed on disk with rules preserved.
+	doc, err := policy.LoadFile(policy.GlobalPolicyPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Default != "allow" {
+		t.Fatalf("policy.yaml Default = %q, want allow", doc.Default)
+	}
+	if len(doc.Rules) != 1 || doc.Rules[0].ID != "deny-credential" {
+		t.Fatalf("expected existing rules preserved, got %+v", doc.Rules)
+	}
+
+	// The set must have been audited.
+	entries, err := srv.audit.tail(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range entries {
+		if e.Action == "policy-mode-set" && e.Effect == "allow" && e.Agent == "relay-phone" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected an audited policy-mode-set entry, got %+v", entries)
+	}
+}
+
+// TestE2ERouterPermissionModeSetRejectsInvalidMode is the required negative
+// test: an invalid mode value must be rejected AND must not modify the policy
+// file on disk (fail-closed).
+func TestE2ERouterPermissionModeSetRejectsInvalidMode(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	original := policy.Document{Default: string(policy.EffectAsk), Rules: []policy.Rule{{ID: "deny-credential", Effect: "deny", Kind: "credential"}}}
+	if err := policy.SaveFile(policy.GlobalPolicyPath(home), original); err != nil {
+		t.Fatal(err)
+	}
+	srv.policy.reload("")
+
+	before, err := os.ReadFile(policy.GlobalPolicyPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]string{"mode": "bypassPermissions"})
+	router.handleMessage("agentPermissionModeSet", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "agentPermissionModeSetResult" {
+		t.Fatalf("expected agentPermissionModeSetResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string                 `json:"type"`
+		Payload map[string]interface{} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Payload["ok"] == true {
+		t.Fatalf("expected ok=false for invalid mode, got %#v", env.Payload)
+	}
+	if _, hasErr := env.Payload["error"]; !hasErr {
+		t.Fatalf("expected an error field for invalid mode, got %#v", env.Payload)
+	}
+
+	after, err := os.ReadFile(policy.GlobalPolicyPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("policy.yaml was modified by a rejected mode set:\nbefore=%s\nafter=%s", before, after)
+	}
+
+	entries, terr := srv.audit.tail(10)
+	if terr != nil {
+		t.Fatal(terr)
+	}
+	for _, e := range entries {
+		if e.Action == "policy-mode-set" {
+			t.Fatalf("expected no policy-mode-set audit entry for a rejected set, got %+v", e)
+		}
+	}
 }

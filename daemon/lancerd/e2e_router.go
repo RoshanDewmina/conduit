@@ -539,6 +539,66 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("agentStatusQueryResult", data)
 
+	case "agentAuditTail":
+		// Read-only mirror of the SSH agent.audit.tail RPC (server.go) for a
+		// relay-only phone (no SSH DaemonChannel). Uses the same s.audit.tail so
+		// both transports report identical entries — no new daemon business logic.
+		var p struct {
+			Limit int `json:"limit"`
+		}
+		if err := json.Unmarshal(payload, &p); err != nil {
+			log.Printf("e2e: unmarshal agentAuditTail failed: %v", err)
+			return
+		}
+		limit := p.Limit
+		if limit <= 0 || limit > 500 {
+			limit = 500
+		}
+		entries, err := r.server.audit.tail(limit)
+		if entries == nil {
+			entries = []AuditEntry{}
+		}
+		payloadOut := map[string]interface{}{"entries": entries}
+		if err != nil {
+			payloadOut["error"] = err.Error()
+		}
+		msg := map[string]interface{}{"type": "agentAuditTailResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("agentAuditTailResult", data)
+
+	case "agentPermissionModeGet":
+		// Read-only mirror of the global policy's coarse Default effect
+		// (deny/ask/allow), mirroring agent.policy.get's Default field. No new
+		// business logic — reads the same policy.yaml via policyEngine.
+		mode := r.server.policy.getPermissionMode()
+		payloadOut := map[string]interface{}{"mode": mode}
+		msg := map[string]interface{}{"type": "agentPermissionModeGetResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("agentPermissionModeGetResult", data)
+
+	case "agentPermissionModeSet":
+		// Writes ONLY the coarse Default effect (deny/ask/allow) on the global
+		// policy document — never full policy YAML from a relay-only phone (see
+		// docs/product/2026-07-16-policy-audit-relay-port-map.md). Fails closed:
+		// an invalid mode is rejected and the policy file is left untouched.
+		var p struct {
+			Mode string `json:"mode"`
+		}
+		if err := json.Unmarshal(payload, &p); err != nil {
+			log.Printf("e2e: unmarshal agentPermissionModeSet failed: %v", err)
+			return
+		}
+		payloadOut := map[string]interface{}{"ok": false}
+		if err := r.server.setPermissionModeAudited(p.Mode, "relay-phone"); err != nil {
+			payloadOut["error"] = err.Error()
+		} else {
+			payloadOut["ok"] = true
+			payloadOut["mode"] = p.Mode
+		}
+		msg := map[string]interface{}{"type": "agentPermissionModeSetResult", "payload": payloadOut}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("agentPermissionModeSetResult", data)
+
 	case "agentRunContinue":
 		var p struct {
 			RunID     string  `json:"runId"`
