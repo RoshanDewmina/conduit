@@ -4,10 +4,13 @@ import SessionFeature
 
 /// Machine detail — connection state and Orca-style relay terminal entry.
 public struct MachineDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(RelayFleetStore.self) private var relayFleetStore
     @Environment(TerminalSessionCoordinator.self) private var terminalCoordinator
 
     public let machine: RelayFleetStore.Machine
+
+    @State private var isRemoveConfirming = false
 
     public init(machine: RelayFleetStore.Machine) {
         self.machine = machine
@@ -44,6 +47,13 @@ public struct MachineDetailView: View {
                 }
             }
 
+            Section {
+                Button("Remove Machine", role: .destructive) {
+                    isRemoveConfirming = true
+                }
+                .accessibilityIdentifier("machine-detail.remove")
+            }
+
             if let message = terminalCoordinator.lastErrorMessage {
                 Section {
                     Text(message)
@@ -54,6 +64,18 @@ public struct MachineDetailView: View {
         }
         .navigationTitle(machine.record.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .alert(
+            "Remove \(machine.record.displayName)?",
+            isPresented: $isRemoveConfirming
+        ) {
+            Button("Remove", role: .destructive) {
+                relayFleetStore.remove(machine.id)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This phone will no longer be able to connect to or approve actions on this machine.")
+        }
     }
 }
 #endif

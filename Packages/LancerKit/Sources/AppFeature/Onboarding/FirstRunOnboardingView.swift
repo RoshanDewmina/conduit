@@ -76,8 +76,11 @@ public struct FirstRunOnboardingView: View {
         .sheet(isPresented: $isPairingPresented) {
             RelayPairingSheet(existingMachineCount: relayFleetStore.usableMachineCount) { client, record in
                 RelayFleetHydration.addMachine(client: client, record: record, to: relayFleetStore)
-                isPairingPresented = false
-                finish(with: cautionLevel)
+                // Sheet dismisses itself after a brief paired confirmation.
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 950_000_000)
+                    finish(with: cautionLevel)
+                }
             }
             .environment(relayFleetStore)
         }
