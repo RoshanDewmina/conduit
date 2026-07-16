@@ -774,6 +774,69 @@ struct ConversationSyncCoordinatorTests {
         #expect(events.first(where: { $0.kind == "receipt" })?.runID == "run-remote-1")
     }
 
+    @Test("refreshConversation mirrors host tool artifacts for background-tasks pill")
+    func refreshConversationMirrorsToolArtifacts() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let coordinator = ConversationSyncCoordinator(chatRepo: repo)
+        let seed = ChatConversation(id: "conv-1", title: "T", agentID: "claudeCode", hostName: "h", hostID: nil, cwd: "/proj")
+        _ = try await repo.upsertConversationMirror(seed, lastHostSeq: 0, syncState: .syncing)
+
+        let transport = makeTransport(fetch: { _ in
+            ConversationFetchResponse(
+                conversation: ConversationSummary(
+                    id: "conv-1", title: "T", provider: "claudeCode", agentID: "claudeCode",
+                    hostName: "h", cwd: "/proj", state: "active", source: "app",
+                    createdAt: "2026-07-16T00:00:00Z", updatedAt: "2026-07-16T00:01:00Z",
+                    lastActivityAt: "2026-07-16T00:01:00Z", lastSeq: 2
+                ),
+                turns: [
+                    ConversationTurnEnvelope(
+                        id: "turn-1", conversationId: "conv-1", ordinal: 0, clientTurnId: "device-2:1",
+                        prompt: "sleep 40", runId: "run-bash-1", provider: "claudeCode",
+                        status: "exited", startedAt: "2026-07-16T00:00:00Z", completedAt: "2026-07-16T00:00:20Z"
+                    ),
+                ],
+                events: [
+                    ConversationEvent(conversationId: "conv-1", seq: 1, turnId: "turn-1", runId: "run-bash-1", kind: "output", role: "assistant", text: "running in background", createdAt: "2026-07-16T00:00:10Z"),
+                    ConversationEvent(conversationId: "conv-1", seq: 2, turnId: "turn-1", runId: "run-bash-1", kind: "status", payloadJson: #"{"exitCode":0,"status":"exited"}"#, createdAt: "2026-07-16T00:00:20Z"),
+                ],
+                artifacts: [
+                    ConversationArtifactEnvelope(
+                        id: "toolu_bg",
+                        conversationId: "conv-1",
+                        turnId: "turn-1",
+                        runId: "run-bash-1",
+                        kind: "tool",
+                        title: "Bash",
+                        payloadJson: #"{"command":"sleep 40 && echo done","run_in_background":true}"#,
+                        status: "running",
+                        createdAt: "2026-07-16T00:00:05Z",
+                        updatedAt: "2026-07-16T00:00:05Z"
+                    ),
+                ],
+                nextSeq: 2
+            )
+        })
+
+        _ = try await coordinator.refreshConversation(conversationID: "conv-1", transport: transport)
+
+        let artifacts = try await repo.artifacts(conversationID: "conv-1")
+        let tools = artifacts.filter { $0.kind == .tool }
+        #expect(tools.count == 1)
+        #expect(tools.first?.id == "toolu_bg")
+        #expect(tools.first?.status == .running)
+        #expect(tools.first?.turnID == "turn-1")
+
+        let rows = BackgroundTasksPresentation.rows(
+            items: [],
+            events: [],
+            artifacts: tools
+        )
+        #expect(BackgroundTasksPresentation.runningCount(in: rows) == 1)
+        #expect(rows.first?.title == "sleep 40 && echo done")
+    }
+
     @Test("refetching the same receipt event does not duplicate the materialized artifact")
     func refreshConversationReceiptMaterializationIsIdempotent() async throws {
         let db = try AppDatabase.inMemory()

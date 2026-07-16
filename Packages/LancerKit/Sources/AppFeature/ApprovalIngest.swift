@@ -66,6 +66,8 @@ public actor ChatRunPersistenceSink {
                     status: ChatArtifact.Status(rawValue: event.status) ?? .running
                 )
                 try? await chatRepo.upsertArtifact(artifact)
+                // Same notify LiveThreadView listens for (receipt/question paths).
+                await Self.postThreadArtifactUpdate(conversationID: turn.conversationID)
             }
         }
     }

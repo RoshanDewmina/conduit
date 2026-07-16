@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 16:25 Cursor Grok — FX10: wire relay `lancerE2EArtifact` → local tool-artifact mirror (`RelayArtifactIngest`) + fetch merge so background-tasks pill/chips hydrate after Bash/`run_in_background` (was posted into the void; daemon ledger already had running rows) (`fix/background-tasks-pill`)
 - 16:10 Cursor Grok — continue Claude `3ddbf98e` wave-1 integration: merge FX7 + FX5 + Lane P into `integration/2026-07-16-untested-sweep`; drop accidental sentry-cocoa `Package.resolved` pin from FX7
 - 14:34 Cursor Composer — FX5: pin pairing-sheet Connect/Disconnect in `.safeAreaInset` bottom bar so number pad cannot occlude them (`fix/onboarding-connect-occlusion`)
 - 14:14 Cursor Grok — FX7: client treats conversation-append `needsApproval` as pending (persist turn + poll same runID) instead of terminal "Couldn't get a reply"; awaiting-approval card (no Retry); deny → failed (`fix/client-needsapproval-resume`)
