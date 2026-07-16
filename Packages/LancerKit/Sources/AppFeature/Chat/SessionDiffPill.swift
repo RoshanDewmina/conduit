@@ -1,7 +1,7 @@
 #if os(iOS)
 import SwiftUI
 
-/// Floating session-total capsule above the composer: "N files +A −D". Hidden when zero.
+/// Floating session-total capsule above the composer: "Review +A −D". Hidden when zero.
 public struct SessionDiffPill: View {
     let summary: RepoDiffSummary
     var onTap: () -> Void
@@ -18,12 +18,15 @@ public struct SessionDiffPill: View {
                     Image(systemName: "doc.text.magnifyingglass")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
-                    Text(fileCountLabel)
+                    Text("Review")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.primary)
                     Text(summary.countsLabel)
                         .font(.system(size: 13, design: .monospaced))
                         .foregroundStyle(.secondary)
+                    Text(fileCountLabel)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
@@ -32,7 +35,7 @@ public struct SessionDiffPill: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("session-diff-pill")
-            .accessibilityLabel(Text("\(fileCountLabel) \(summary.countsLabel)"))
+            .accessibilityLabel(Text("Review \(summary.countsLabel), \(fileCountLabel)"))
         }
     }
 

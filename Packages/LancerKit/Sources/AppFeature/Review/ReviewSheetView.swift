@@ -12,8 +12,15 @@ public struct ReviewSheetView: View {
     let scope: Scope
     let dataSource: any ReviewDataSource
     var onAttachComment: (QueuedReviewComment) -> Void
+    /// Optional PR identity for the session branch. Absent → show "PR not opened yet".
+    var prState: ReviewPRState?
+    /// Host-backed Open PR. Nil → menu item disabled (no Review-sheet RPC wired yet).
+    var onOpenPR: (() -> Void)?
+    /// Host-backed Close PR. Nil → menu item disabled (no close RPC on the client surface).
+    var onClosePR: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var tab: Tab = .modified
     @State private var summary: RepoDiffSummary?
     @State private var fileDiffs: [String: RepoFileDiff] = [:]
@@ -41,18 +48,29 @@ public struct ReviewSheetView: View {
         conversationID: String,
         scope: Scope,
         dataSource: any ReviewDataSource = FixtureReviewDataSource.shared,
-        onAttachComment: @escaping (QueuedReviewComment) -> Void = { _ in }
+        onAttachComment: @escaping (QueuedReviewComment) -> Void = { _ in },
+        prState: ReviewPRState? = nil,
+        onOpenPR: (() -> Void)? = nil,
+        onClosePR: (() -> Void)? = nil
     ) {
         self.conversationID = conversationID
         self.scope = scope
         self.dataSource = dataSource
         self.onAttachComment = onAttachComment
+        self.prState = prState
+        self.onOpenPR = onOpenPR
+        self.onClosePR = onClosePR
     }
 
     public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 header
+                if !hasOpenPR {
+                    ReviewPRHintCard()
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
                 Picker("Mode", selection: $tab) {
                     ForEach(Tab.allCases, id: \.self) { tab in
                         Text(tab.rawValue).tag(tab)
@@ -90,15 +108,18 @@ public struct ReviewSheetView: View {
                     .accessibilityLabel(Text("Close"))
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        withAnimation {
-                            expandAll.toggle()
+                    HStack(spacing: 12) {
+                        prActionsMenu
+                        Button {
+                            withAnimation {
+                                expandAll.toggle()
+                            }
+                        } label: {
+                            Image(systemName: expandAll ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 14, weight: .medium))
                         }
-                    } label: {
-                        Image(systemName: expandAll ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 14, weight: .medium))
+                        .accessibilityLabel(Text(expandAll ? "Collapse all" : "Expand all"))
                     }
-                    .accessibilityLabel(Text(expandAll ? "Collapse all" : "Expand all"))
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -127,6 +148,69 @@ public struct ReviewSheetView: View {
                 dataSource: dataSource
             )
         }
+    }
+
+    private var hasOpenPR: Bool { prState?.hasOpenPR == true }
+
+    private var canOpenPR: Bool { onOpenPR != nil && !hasOpenPR }
+
+    private var canOpenInGitHub: Bool { prState?.url != nil }
+
+    private var canClosePR: Bool { onClosePR != nil && hasOpenPR }
+
+    private var prActionsMenu: some View {
+        Menu {
+            Section {
+                Button {
+                    onOpenPR?()
+                } label: {
+                    Label("Open PR…", systemImage: "plus.circle")
+                }
+                .disabled(!canOpenPR)
+
+                Button {
+                    if let url = prState?.url {
+                        openURL(url)
+                    }
+                } label: {
+                    Label("Open in GitHub", systemImage: "safari")
+                }
+                .disabled(!canOpenInGitHub)
+
+                Button(role: .destructive) {
+                    onClosePR?()
+                } label: {
+                    Label("Close PR", systemImage: "xmark.circle")
+                }
+                .disabled(!canClosePR)
+            } footer: {
+                if showsPRActionsFootnote {
+                    Text(prActionsFootnote)
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 14, weight: .medium))
+        }
+        .accessibilityLabel(Text("PR actions"))
+        .accessibilityIdentifier("review-pr-actions-menu")
+    }
+
+    private var showsPRActionsFootnote: Bool {
+        !canOpenPR || !canClosePR || (prState?.url == nil && onOpenPR == nil)
+    }
+
+    private var prActionsFootnote: String {
+        // SSH GitClient.createPullRequest / agent.git.ship(openPR:) exist, but the
+        // Review sheet has no AppFeature→host PR create/close/status binding yet.
+        // Close has no client RPC. Open-in-GitHub needs a known PR URL.
+        if hasOpenPR, prState?.url != nil, onClosePR == nil {
+            return "Close PR needs a host RPC — not available yet."
+        }
+        if canOpenInGitHub, onOpenPR == nil, onClosePR == nil {
+            return "Open/Close PR need host RPCs — not wired to this sheet yet."
+        }
+        return "PR actions need host RPCs — not wired to this sheet yet."
     }
 
     private var header: some View {

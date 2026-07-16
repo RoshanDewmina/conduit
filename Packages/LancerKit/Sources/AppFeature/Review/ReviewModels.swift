@@ -1,5 +1,31 @@
 import Foundation
 
+// MARK: - PR surface state (optional — callers wire when host PR info exists)
+
+/// Known pull-request identity for a session branch. Absent / empty → "PR not opened yet".
+public struct ReviewPRState: Equatable, Sendable {
+    public var url: URL?
+    public var title: String?
+    public var number: Int?
+    /// `true` when a PR is open for the branch; `false` when closed/merged/absent.
+    public var isOpen: Bool
+
+    public init(url: URL? = nil, title: String? = nil, number: Int? = nil, isOpen: Bool = false) {
+        self.url = url
+        self.title = title
+        self.number = number
+        self.isOpen = isOpen
+    }
+
+    public var hasOpenPR: Bool { isOpen && url != nil }
+
+    public var displayTitle: String {
+        if let title, !title.isEmpty { return title }
+        if let number { return "Pull request #\(number)" }
+        return "Pull request"
+    }
+}
+
 // MARK: - Wire shapes (G1 daemon / G2 fixtures — keep decode keys stable)
 
 /// `repo.turnDiff` / `repo.sessionDiff` response.
