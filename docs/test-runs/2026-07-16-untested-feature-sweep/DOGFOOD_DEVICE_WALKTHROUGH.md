@@ -42,6 +42,7 @@ All three turns tonight exited cleanly (`conversation_turns`: 23:27:45Z / 23:41:
 | **WT-D** | **Top-right ⋯ missing on first entry** into a live thread; appears only after backing out and re-entering | P2 | `WT-video-loading-and-menu.mp4`; owner report |
 | **WT-E** | **No APNs push for approvals** (lock-screen test): relay in-app delivery only. Prime suspect: push-backend device-token registry is in-memory and has been redeployed since the 2026-06-23 push-while-closed PASS; needs re-register→push trace on the backend | **P1** | Daemon log 19:42:49/19:43:13 ET (relay sends only, no push confirm); owner observed no lock-screen notification, twice |
 | **WT-F** | `ls -la` risk-scored **High** on the approval card — over-rated for a read-only listing; worth a scoring pass | P3 | `WT-05-approval-card-full-bypass.png` |
+| **WT-G** | **Audit feed renders oldest-first raw log lines** — top of the feed is 2026-07-11; tonight's entries require scrolling to the bottom. Should be newest-first (and ideally structured rows, not raw dump) | P3 | Owner screenshot 7:39 PM (in session chat; feed top shows `2026-07-11T22:07:25Z`) — step 8 stays PASS functionally |
 
 ---
 
