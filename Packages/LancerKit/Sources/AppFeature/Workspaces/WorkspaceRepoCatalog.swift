@@ -518,6 +518,28 @@ public enum WorkspaceRepoCatalog {
         return groups
     }
 
+    /// Group by repo display title. Callers should pass newest-first items so
+    /// first-seen order yields newest-activity groups; items keep input order.
+    public static func groupByRepo<T>(
+        _ items: [T],
+        title: KeyPath<T, String>
+    ) -> [(title: String, items: [T])] {
+        guard !items.isEmpty else { return [] }
+
+        var buckets: [String: [T]] = [:]
+        var order: [String] = []
+        for item in items {
+            let key = item[keyPath: title]
+            if buckets[key] == nil {
+                order.append(key)
+                buckets[key] = [item]
+            } else {
+                buckets[key]!.append(item)
+            }
+        }
+        return order.map { (title: $0, items: buckets[$0]!) }
+    }
+
     public static func statusKind(conversation: ChatConversation, lastTurn: ChatTurn?) -> ThreadStatusKind {
         if let lastTurn {
             switch lastTurn.status {
@@ -629,6 +651,34 @@ public final class AddedRepoStore {
     }
 }
 
+/// Catalog list/search fetch honesty — first paint vs failed refresh vs ready.
+public enum WorkspaceCatalogFetchPhase: Equatable, Sendable {
+    /// No successful load yet; not currently fetching.
+    case pending
+    /// In-flight refresh (first paint or retry).
+    case loading
+    /// At least one successful local row load.
+    case ready
+    /// Last refresh failed. `message` is user-facing; prior rows may still be present.
+    case failed(message: String)
+
+    public var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
+
+    public var failureMessage: String? {
+        if case .failed(let message) = self { return message }
+        return nil
+    }
+}
+
+/// Result of `WorkspaceDataStore.search` — never collapses transport failure into "no matches".
+public enum WorkspaceSearchResult: Equatable, Sendable {
+    case success([ThreadListItem])
+    case failure(String)
+}
+
 /// Observable shell-facing mirror of conversations + derived repos.
 @MainActor
 @Observable
@@ -636,10 +686,14 @@ public final class WorkspaceDataStore {
     public private(set) var conversations: [ChatConversation] = []
     public private(set) var lastTurnByConversationID: [String: ChatTurn] = [:]
     public private(set) var diffByConversationID: [String: (added: Int, removed: Int)] = [:]
+    /// First-paint / refresh honesty for Workspaces, ThreadList, and Search.
+    public private(set) var fetchPhase: WorkspaceCatalogFetchPhase = .pending
     public let addedRepos: AddedRepoStore
     public let readReceipts: ConversationReadReceiptStore
 
     private let chatRepo: ChatConversationRepository
+    private var refreshGeneration: UInt64 = 0
+    private var hasLoadedSuccessfully = false
     /// Optional host list sync — when any mirrored last-turn is still
     /// `.running`, `refresh()` awaits this before re-reading local rows so
     /// stale "Working" badges clear after daemon orphan reconciliation.
@@ -670,6 +724,11 @@ public final class WorkspaceDataStore {
         )
     }
 
+    /// True on first paint before any successful catalog load (show ProgressView, not empty).
+    public var showsInitialLoading: Bool {
+        !hasLoadedSuccessfully && fetchPhase.isLoading
+    }
+
     public func refresh() async {
         // Local rows render immediately; the host sync (which may wait for the
         // relay to reconnect) runs after, then local rows are re-read so a
@@ -677,15 +736,27 @@ public final class WorkspaceDataStore {
         // The sync must run UNCONDITIONALLY: gating it on a local running
         // turn meant a fresh install (empty mirror) never backfilled the
         // host's conversation history at all (owner phone, 2026-07-12).
-        await loadLocalRows()
-        if let syncRunningStatuses {
-            await syncRunningStatuses()
-            await loadLocalRows()
+        refreshGeneration += 1
+        let token = refreshGeneration
+        fetchPhase = .loading
+        do {
+            try await loadLocalRows()
+            if let syncRunningStatuses {
+                await syncRunningStatuses()
+                guard token == refreshGeneration else { return }
+                try await loadLocalRows()
+            }
+            guard token == refreshGeneration else { return }
+            hasLoadedSuccessfully = true
+            fetchPhase = .ready
+        } catch {
+            guard token == refreshGeneration else { return }
+            fetchPhase = .failed(message: error.localizedDescription)
         }
     }
 
-    private func loadLocalRows() async {
-        let recent = (try? await chatRepo.recent(limit: 200)) ?? []
+    private func loadLocalRows() async throws {
+        let recent = try await chatRepo.recent(limit: 200)
         var turns: [String: ChatTurn] = [:]
         var diffs: [String: (added: Int, removed: Int)] = [:]
         for conversation in recent {
@@ -704,8 +775,13 @@ public final class WorkspaceDataStore {
         diffByConversationID = diffs
     }
 
-    public func search(_ query: String) async -> [ThreadListItem] {
-        let results = (try? await chatRepo.search(query, limit: 50)) ?? []
+    public func search(_ query: String) async -> WorkspaceSearchResult {
+        let results: [ChatConversationSearchResult]
+        do {
+            results = try await chatRepo.search(query, limit: 50)
+        } catch {
+            return .failure(error.localizedDescription)
+        }
         var items: [ThreadListItem] = []
         items.reserveCapacity(results.count)
         for result in results {
@@ -729,7 +805,7 @@ public final class WorkspaceDataStore {
                 )
             )
         }
-        return items
+        return .success(items)
     }
 
     public func threads(forCwd cwd: String?, allRepos: Bool) -> [ThreadListItem] {

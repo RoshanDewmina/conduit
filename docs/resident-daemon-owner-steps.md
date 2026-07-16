@@ -1,5 +1,7 @@
 # Resident daemon (`lancerd daemon`) — owner steps
 
+**Last updated: 2026-07-15.**
+
 The resident bridge keeps approval state and the Unix socket alive while your phone is disconnected. SSH sessions run `lancerd serve`, which **attaches** to the resident instead of owning the socket.
 
 ## Prerequisites
@@ -111,5 +113,9 @@ Only kinds `read`, `grep`, `list`, `search` may fail-open when the flag is set.
 
 ## TODO(owner)
 
-- End-to-end validation with **live SSH + local-sshd fixture** per `docs/validation-playbook.md` (TC-1..TC-7).
-- APNs push while detached is delivered by the deployed `push-backend` (live; see `push-backend-deploy-env.md`); resident `queue.json` covers bridge persistence when the phone is offline. A real-device smoke test is the only open item — see `ship-gate-owner-steps.md`.
+- End-to-end validation with **live SSH + local-sshd fixture** per
+  `docs/LIVE_LOOP_RUNBOOK.md` (Phases 1–4) and `docs/PUBLISH_READINESS_CHECKLIST.md` (C1).
+  (Former `docs/validation-playbook.md` was purged — do not recreate.)
+- APNs push while detached is delivered by the deployed `push-backend` (live); resident
+  `queue.json` covers bridge persistence when the phone is offline. A real-device smoke test
+  is the only open item — see `docs/PUBLISH_READINESS_CHECKLIST.md` C2 / D3.

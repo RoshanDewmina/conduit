@@ -6,6 +6,7 @@ import SwiftUI
 public struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(RelayFleetStore.self) private var relayFleetStore
+    @Environment(TerminalSessionCoordinator.self) private var terminalCoordinator
     @State private var isTrustedMachinesPresented = false
 
     public init() {}
@@ -47,8 +48,11 @@ public struct ProfileView: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $isTrustedMachinesPresented) {
-            TrustedMachinesView()
-                .environment(relayFleetStore)
+            NavigationStack {
+                TrustedMachinesView(embedsInParentNavigation: true)
+            }
+            .environment(relayFleetStore)
+            .environment(terminalCoordinator)
         }
     }
 
@@ -148,13 +152,18 @@ public struct ProfileView: View {
                 NavigationLink {
                     AppSettingsView(embedsInParentNavigation: true)
                         .environment(relayFleetStore)
+                        .environment(terminalCoordinator)
                 } label: {
                     ProfileRow(systemImage: "gearshape", title: "Settings", accessory: .chevron)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("profile.row.settings")
 
-                ProfileRow(systemImage: "questionmark.circle", title: "Help", accessory: .externalLink)
+                Link(destination: URL(string: "https://github.com/RoshanDewmina/conduit/issues")!) {
+                    ProfileRow(systemImage: "questionmark.circle", title: "Help", accessory: .externalLink)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("profile.row.help")
             }
         }
     }

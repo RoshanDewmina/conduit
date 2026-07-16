@@ -1,5 +1,37 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ FULL-APP NIGHT TEST — 2026-07-15 ~22:40 ET
+
+**Workspace:** `master` @ `ba73c130` (not on integration checkout). Reviewable tip still
+`origin/integration/2026-07-15-night` @ `b17b6172` (PR #132 OPEN).
+
+**§3 status: PARTIAL — NOT PASS (publish gate B10).**
+Owner Approved in-app; audit has decide; hook `exit 0` **not** proven.
+
+```
+22:32:29 dropped approval 35b604b5-… — relay client not paired
+22:33:33 paired with phone; re-sending 1; sent approval 35b604b5-… over relay
+audit approve 35b604b5-… @ 2026-07-16T02:35:20Z
+hook terminal ended 02:34:32Z exit_code=unknown (before approve)
+queue pending=0
+```
+
+**A) Approval surface — deliberate machine-scope + missing home UI (not "you opened wrong thread" alone):**
+- `RelayApprovalIngest.swift:21-32,39` — no runId on wire; keyed by machine; Inbox "system of record" in comment but Workspaces shell has no Inbox nav
+- `LiveThreadView.swift:181-184` — card only when live thread open + `activeMachineID`
+- Push: `server.go:1669-1673` needs in-memory `s.device`; restart cleared it; `e2e_router.go:80-82` drop when unpaired; resend `e2e_router.go:40-58` is WS-only (no APNs). Silent Mode secondary. Historical push-backend 401/500/503 in stderr (earlier).
+
+**B) "Bash Bash:" + wall of prose — real gap on master AND integration (not night-only regression):**
+- `claude_transcript_adapter.go:320-336` Text=`"Bash: cmd"` + ToolName=`Bash`
+- `LiveThreadTranscript.swift:120-130` prepends `toolName+"\n"` → duplicated label
+- `LiveThreadView.swift:576-592` observed turns without event artifacts → `ChatMarkdownBody` only (not BlockRenderer/ToolCallChip)
+
+**Recommend:** stop §5 chat dogfood; file P0s for A+B. Optional §4 Emergency Stop only. Do not mark B10/C2 PASS.
+
+**Digest:** merged-N/A / in-flight: diagnosis / blocked: P0 UX / next: owner decide fix-first vs §4 / decisions-needed: continue gates?
+
+---
+
 ## ⚡ SESSION 8 2026-07-15 — five-stream reliability brief (owner switches to phone daily-driving today)
 
 Brief: `docs/plans/2026-07-14-fable-handoff-attachments-latency-PASTE.md`. Master @ `292525b7`

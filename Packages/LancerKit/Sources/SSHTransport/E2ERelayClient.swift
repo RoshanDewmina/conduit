@@ -485,6 +485,12 @@ public final class E2ERelayClient: ObservableObject {
         handleMessage(text)
     }
 
+    /// Test-only seam: drive the real disconnect path (preserves `.pairingFailed`
+    /// / `.codeExpired`, schedules reconnect otherwise) without a live socket.
+    public func simulateDisconnectForTesting() {
+        handleDisconnect()
+    }
+
     /// Test-only seam: exercises the real replay sequencer state transitions
     /// without needing a live websocket/crypto round trip in unit tests.
     /// Uses the legacy (no generation tag) call shape — see the `gen:`
@@ -783,6 +789,25 @@ public final class E2ERelayClient: ObservableObject {
         guard pairingState != .codeExpired else {
             connectionState = .disconnected
             webSocketTask = nil
+            return
+        }
+
+        // Same class of bug for hard pairing failures: the relay often closes
+        // the socket right after the error frame, and wiping `.pairingFailed`
+        // → `.unpaired` here made the pairing sheet's error flash then vanish
+        // (owner video 2026-07-16). Keep the failure visible and do not
+        // auto-redial until the user taps Connect again.
+        if case .pairingFailed = pairingState {
+            connectionState = .disconnected
+            webSocketTask = nil
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            keepaliveTask?.cancel()
+            keepaliveTask = nil
+            sessionKey = nil
+            sendSeq = 0
+            sendGen = Self.mintGeneration()
+            recv.reset()
             return
         }
 

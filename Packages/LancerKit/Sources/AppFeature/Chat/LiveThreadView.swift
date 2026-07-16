@@ -125,6 +125,14 @@ public struct LiveThreadView: View {
                                 )
                             }
 
+                            ForEach(bridge.queuedFeedback.items) { item in
+                                ChatUserBubble(
+                                    text: item.text,
+                                    attachments: item.attachments,
+                                    isQueued: true
+                                )
+                            }
+
                             replyState
                                 .id(Self.scrollTailID)
 
@@ -156,6 +164,9 @@ public struct LiveThreadView: View {
                     .onChange(of: bridge.transcriptTurns.count) { _, _ in
                         scrollToTailIfFollowing(proxy)
                         Task { await refreshTranscriptExtras() }
+                    }
+                    .onChange(of: bridge.queuedFeedback.count) { _, _ in
+                        scrollToTailIfFollowing(proxy)
                     }
                     .onChange(of: streamingAssistantText) { _, newValue in
                         if !newValue.isEmpty {
@@ -212,10 +223,17 @@ public struct LiveThreadView: View {
                         .padding(.bottom, 6)
                     }
                     followUpAttachmentChips
+                    HStack {
+                        ChatPermissionModePill()
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 2)
                     ChatFollowUpComposerBar(
                         text: $followUpText,
                         isFocused: $isFollowUpFocused,
-                        isDisabled: bridge.isSendInFlight || isUploadingAttachments,
+                        placeholder: bridge.isSendInFlight ? "Add feedback…" : "Follow up…",
+                        isDisabled: isUploadingAttachments,
                         canSend: canSendFollowUpWithAttachments,
                         onSend: {
                             followUpUploadTask?.cancel()
@@ -223,9 +241,18 @@ public struct LiveThreadView: View {
                         },
                         onAddContext: { isContextPresented = true }
                     )
-                    .sheet(isPresented: $isContextPresented) {
-                        ContextAttachView(attachments: $followUpAttachments)
+                    if !bridge.queuedFeedback.isEmpty {
+                        Text("Will send when the agent finishes")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 26)
+                            .padding(.bottom, 6)
+                            .accessibilityIdentifier("mid-run-feedback-caption")
                     }
+                }
+                .sheet(isPresented: $isContextPresented) {
+                    ContextAttachView(attachments: $followUpAttachments)
                 }
             }
             .background(Color(.systemBackground))
@@ -389,7 +416,6 @@ public struct LiveThreadView: View {
         let hasText = !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasComments = !queuedReviewComments.isEmpty
         return (hasText || hasComments)
-            && !bridge.isSendInFlight
             && bridge.canAcceptFollowUp
     }
 

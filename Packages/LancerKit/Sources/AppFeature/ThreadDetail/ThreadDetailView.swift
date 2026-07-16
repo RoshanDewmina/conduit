@@ -12,6 +12,7 @@ struct ThreadDetailView: View {
     @Environment(WorkspaceDataStore.self) private var workspaceData
     @Environment(ShellLiveBridge.self) private var bridge
     @Environment(RelayApprovalIngest.self) private var approvalIngest
+    @Environment(TerminalSessionCoordinator.self) private var terminalCoordinator
     /// Inline follow-up text, typed directly on this thread — mirrors
     /// LiveThreadView's own follow-up bar instead of popping the full New
     /// Chat composer (vendor/model pickers included) as a second sheet on
@@ -42,6 +43,8 @@ struct ThreadDetailView: View {
     @State private var transcriptLoadGeneration = 0
     @State private var transcriptLoadGate = TranscriptRefreshLoadGate()
     @State private var isBackgroundTasksPresented = false
+    /// True while `refreshThreadFromHost` is in flight (not just local mirror read).
+    @State private var isHostTranscriptRefreshing = false
 
     private static let initialWindowSize = 100
     private static let windowExtendStep = 100
@@ -140,36 +143,35 @@ struct ThreadDetailView: View {
                                 }
                             }
 
-                            if transcriptRefreshFailed {
-                                HStack(alignment: .top, spacing: 10) {
-                                    Image(systemName: "exclamationmark.triangle")
-                                        .foregroundStyle(.orange)
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("Transcript refresh failed or timed out.")
-                                            .font(.system(size: 14, weight: .medium))
-                                        Text("Cached turns stay available. Tap Retry to try again.")
-                                            .font(.system(size: 13))
-                                            .foregroundStyle(.secondary)
-                                        Button("Retry refresh") {
-                                            transcriptLoadGeneration += 1
-                                        }
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .accessibilityLabel("Retry transcript refresh")
-                                    }
+                            if isHostTranscriptRefreshing {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text("Refreshing transcript…")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.secondary)
                                 }
-                                .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                                 .accessibilityElement(children: .combine)
-                                .accessibilityLabel(Text("Transcript refresh failed or timed out. Retry refresh."))
+                                .accessibilityLabel(Text("Refreshing transcript"))
                             }
 
-                            if turns.isEmpty {
+                            if transcriptRefreshFailed {
+                                InlineRetryBanner(
+                                    title: "Transcript refresh failed or timed out.",
+                                    message: "Cached turns stay available. Tap Retry to try again.",
+                                    retryTitle: "Retry refresh",
+                                    accessibilityRetryLabel: "Retry transcript refresh"
+                                ) {
+                                    transcriptLoadGeneration += 1
+                                }
+                            }
+
+                            if turns.isEmpty && !isHostTranscriptRefreshing {
                                 Text("No turns in the local mirror yet. Follow up below to continue in this repo.")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
-                            } else {
+                            } else if !turns.isEmpty {
                                 if hasEarlierTurns {
                                     Button {
                                         visibleTurnLimit = min(
@@ -225,6 +227,14 @@ struct ThreadDetailView: View {
                                     }
                                 }
                                 .accessibilityIdentifier("thread-detail-pending-followup")
+                            }
+
+                            ForEach(bridge.queuedFeedback.items) { item in
+                                ChatUserBubble(
+                                    text: item.text,
+                                    attachments: item.attachments,
+                                    isQueued: true
+                                )
                             }
 
                             if let machineID = pendingApprovalMachineID, let pendingApproval {
@@ -302,18 +312,30 @@ struct ThreadDetailView: View {
                         isBackgroundTasksPresented = true
                     }
                 }
+                HStack {
+                    ChatPermissionModePill()
+                    Spacer(minLength: 0)
+                }
                 ChatFollowUpComposerBar(
                     text: $followUpText,
                     isFocused: $isFollowUpFocused,
-                    isDisabled: thread.cwd.isEmpty || isSendingFollowUp,
-                    canSend: !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    placeholder: bridge.isSendInFlight ? "Add feedback…" : "Follow up…",
+                    isDisabled: thread.cwd.isEmpty,
+                    canSend: !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        && !thread.cwd.isEmpty,
                     onSend: {
                         let prompt = followUpText
                         followUpText = ""
                         handleSend(prompt, thread.cwd)
                     }
                 )
-                .disabled(thread.cwd.isEmpty || isSendingFollowUp)
+                if !bridge.queuedFeedback.isEmpty {
+                    Text("Will send when the agent finishes")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("mid-run-feedback-caption")
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
@@ -414,6 +436,8 @@ struct ThreadDetailView: View {
         // Local events render before this await so offline opens do not hide
         // already-hydrated tool or assistant content during the timeout.
         if let refresh = workspaceData.refreshThreadFromHost {
+            isHostTranscriptRefreshing = true
+            defer { isHostTranscriptRefreshing = false }
             do {
                 try await refresh(thread.id)
                 guard !Task.isCancelled else { return }
@@ -515,14 +539,16 @@ struct ThreadDetailView: View {
             prompt: prompt
         )
         queuedReviewComments.removeAll()
-        // Dispatch inline and stay on this screen — no sheet/navigation.
-        // Every follow-up used to open a full-screen LiveThreadView on top
-        // of the thread the owner was already looking at (2026-07-15 report).
+        // Mid-run: bridge enqueues and returns immediately — don't paint the
+        // inline "Working…" row for queued guidance.
+        let enqueueOnly = bridge.isSendInFlight
         followUpDispatchGeneration += 1
         let generation = followUpDispatchGeneration
-        pendingFollowUpPrompt = composed
-        followUpError = nil
-        isSendingFollowUp = true
+        if !enqueueOnly {
+            pendingFollowUpPrompt = composed
+            followUpError = nil
+            isSendingFollowUp = true
+        }
         Task {
             await bridge.sendFollowUp(
                 prompt: composed,
@@ -531,6 +557,7 @@ struct ThreadDetailView: View {
                 attachments: attachments
             )
             guard generation == followUpDispatchGeneration else { return }
+            if enqueueOnly { return }
             isSendingFollowUp = false
             if case .failed(let message) = bridge.sendState {
                 followUpError = message
@@ -568,6 +595,14 @@ struct ThreadDetailView: View {
             Spacer()
 
             Menu {
+                Button {
+                    openTerminalAtCWD()
+                } label: {
+                    Label("Open terminal at this cwd", systemImage: "terminal")
+                }
+                .disabled(thread.cwd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || relayFleetStore.firstConnectedMachine == nil)
+
                 NavigationLink {
                     FlightRecorderTurnListView(thread: thread, turns: turns)
                 } label: {
@@ -609,6 +644,15 @@ struct ThreadDetailView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.primary)
             )
+    }
+
+    private func openTerminalAtCWD() {
+        guard let startupCommand = TerminalShellCommand.cdToWorkingDirectory(thread.cwd) else { return }
+        let cwd = thread.cwd.trimmingCharacters(in: .whitespacesAndNewlines)
+        terminalCoordinator.openOnFirstConnectedMachine(
+            cwd: cwd.isEmpty ? nil : cwd,
+            startupCommand: startupCommand
+        )
     }
 }
 

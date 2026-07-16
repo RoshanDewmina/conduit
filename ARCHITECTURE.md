@@ -2,9 +2,9 @@
 
 > *Phone-native cockpit for remote AI coding workspaces.*
 
-Last updated: 2026-07-06 (Cursor shell design reconciliation)
+Last updated: 2026-07-15 (Workspaces-root frontend reconciliation)
 Target platform: iOS 26.0+ deployment (`project.yml` and `Package.swift`); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on). iOS 27-only affordances are fast-follow candidates and must stay gated or out of the shipping path while the deployment target remains 26.0.
-Status: **production UI target is the Cursor shell** (`AppFeature/CursorStyle`). Governed relay loop is shipped in code; Tier 0 proves `LANCER_CURSOR_SHELL_LIVE=1` end-to-end against real `lancerd`. Legacy sidebar / Command Home shell was **deleted** (2026-07-06 lean sweep); see §4.1.
+Status: **production UI root is Workspaces** (`AppFeature/Workspaces/WorkspacesView.swift` via `AppRoot.readyRoot` → `NavigationStack { WorkspacesView() }`). DEBUG deep-links use `LANCER_DESTINATION` (e.g. `profile`, `settings`, `composer`, `threadList`, `threadDetail`, `trustedMachines`, `addRepo`, `search`, `review`). The retired `AppFeature/CursorStyle/` module and `LANCER_CURSOR_SHELL*` flags were removed by commit `6b97da65` (2026-07-11). Legacy sidebar / Command Home was **deleted** (2026-07-06); see §4.1.
 
 ---
 
@@ -21,7 +21,7 @@ the reason for rejection.
 
 ---
 
-## 0.1 Current state snapshot (authoritative — 2026-07-06)
+## 0.1 Current state snapshot (authoritative — 2026-07-15)
 
 > A new agent should be able to read **this section + §4.1** and know where the project
 > stands without opening any other doc. Where older sections below conflict with this
@@ -35,14 +35,13 @@ the reason for rejection.
 > defensible wedge is the **policy + audit + emergency-stop governance layer** for agents on your own
 > machines across providers (durable per-host policy, blast-radius/reason on approvals, hash-chained
 > audit, fleet drift, team-owned stop). **Lead the product with policy/audit; demote chat/terminal
-> depth.** This is a *conditional* continue, gated on `docs/validation-cycle-v1.md`; if that returns a
-> weak signal, salvage to open-source/SDK. Rationale + verification: the verdict memo (plan file
-> `read-this-claude-code-encapsulated-blossom.md`).
+> depth.** Direction SSOT since 2026-07-10: `docs/product/2026-07-10-lancer-daily-driver-definition.md`
+> (personal daily-driver first). Rationale archaeology lives in git history only.
 
 **What Lancer is:** an iOS "mission control" for AI coding agents (Claude Code, Codex,
 OpenCode, Kimi) that run on the developer's own machines/servers. The phone steers and
 approves; it is not where code is written. Three fused layers:
-1. **iOS app** — `Packages/LancerKit/` (SwiftUI, 23 SPM targets / 21 products). **Cursor shell** (3-root IA: Home / Workspaces / Settings — see §4.1). Legacy sidebar / Command Home **deleted** (see §0.1 Deprecated).
+1. **iOS app** — `Packages/LancerKit/` (SwiftUI, 23 SPM targets / 21 products). **Workspaces root** (`WorkspacesView` — see §4.1). Legacy sidebar / Command Home **deleted** (see §0.1 Deprecated).
 2. **`lancerd`** — Go resident daemon on the dev's host: policy/approval/audit/dispatch, survives SSH drops. `daemon/lancerd/`.
 3. **`push-backend`** + **`agent-runner`** — Go hosted-cloud control plane (Stripe credits, quotas, multi-cloud run dispatch). `daemon/push-backend/`, `daemon/agent-runner/`. **Deferred to V2** (see scope below). Note: `push-backend` **also hosts the APNs relay** used by V1 — only the *hosted-execution* product is deferred, not the push relay.
 
@@ -59,34 +58,25 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 > and cloud session-migration (Omnara) are largely **non-gaps** for Lancer — the phone was never the
 > session holder.
 
-### V1 scope (locked 2026-06-18; transport corrected 2026-06-19; terminal scope corrected 2026-06-30)
-- **V1 ships:** the **Cursor shell** UI (wireframed in `docs/design-audit/lancer-workflows-2026-07-05/`), the **E2E-relay transport** (SSH is legacy/secondary, not the V1 story), governed approvals (hook→policy→inbox→approve→audit), APNs notifications, and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
+### V1 scope (locked 2026-06-18; transport corrected 2026-06-19; terminal scope corrected 2026-06-30; frontend corrected 2026-07-15)
+- **V1 ships:** the **Workspaces** UI root (`AppFeature/Workspaces/`), the **E2E-relay transport** (SSH is legacy/secondary, not the V1 story), governed approvals (hook→policy→inbox→approve→audit), APNs notifications, and **multi-vendor dispatch *with `continue`/follow-up*** for Claude/Codex/OpenCode/Kimi.
 - **Deferred to V2 — code is RETAINED, not deleted:** the **hosted-cloud execution** product (run agents on Fly/GCP/Lightsail, prepaid credits, the `Provider*/Hosted*/SelfHostVsHosted` UI). It compiles and stays in tree; it is simply **not wired into V1 navigation**. Do not delete this code. The relay-first / self-host positioning is the V1 lead bet; hosted-cloud is the V2 expansion.
-- **Deferred to V2 — full interactive terminal (owner decision 2026-06-30):** V1 does not need a full interactive terminal. `LiveTerminalView`, the unified-PTY block terminal pipeline (`SessionFeature`/`TerminalEngine`/`SSHTransport`), SFTP file browsing, port forwarding, and the SOCKS preview proxy are **not part of V1 scope** — do not wire them into the new Home/Work/Machines/Settings IA, do not spend further V1 implementation effort polishing them. Code is retained (it already works — see "Implemented" below), but as of 2026-07-01 it is fully unwired from V1 nav — the "Open workspace"/"Open terminal" entry points in Work Thread and Machines that previously reached it (contradicting this correction) were removed, closing the gap the 06-30 correction identified but hadn't yet been enforced against. V1's Work Thread shows agent activity (tool calls, file changes, run status) as a read-only log sourced from daemon/relay events — **not** a live interactive shell. This matches the pre-existing strategic direction above ("demote chat/terminal depth," 2026-06-24) and the non-goal "Generic 'mobile terminal' positioning" (§1.1) — it had drifted back into the V1 implementation plan via file dispositions that implied active terminal work; that drift is corrected here. Scope for V1 is defined in `docs/product/2026-07-05-lancer-feature-master-plan.md` and `docs/product/FEATURE_BACKLOG.md`: the governed attention/approval loop, not terminal depth.
+- **Deferred to V2 pieces of interactive terminal (owner Orca 1:1, 2026-07-16):** Core daemon-owned PTY + relay + phone UI **shipped** (see Implemented). Still deferred vs full Orca: headless xterm SerializeAddon (ring-buffer snapshot for now), history-manager cold restore, pause/resume/background thinning, agent-pane `launchAgent` sharing, SFTP / port-forward / SOCKS preview. V1 Work Thread remains a read-only agent log; the interactive shell is a separate drill-in.
 
 ### Implemented (✅ verified in code / tests)
-- **Production UI shell:** <!-- NEEDS VERIFICATION: exact current root count/composition — see note below --> the
-  `AppFeature/CursorStyle` target and its `LANCER_CURSOR_SHELL`/`LANCER_CURSOR_SHELL_LIVE` env
-  seams described in the paragraph below (and in the old §4.1) **no longer exist in the tree**
-  as of commit `6b97da65` ("revert(ios): restore Codex Workspaces shell as the frontend (owner
-  decision 2026-07-11)") — confirmed 2026-07-15: `find Packages/LancerKit/Sources/AppFeature`
-  has no `CursorStyle` directory, and `grep -r LANCER_CURSOR_SHELL Packages/LancerKit/Sources`
-  has zero matches. The current production root is `AppFeature/Workspaces/WorkspacesView.swift`
-  (`AppRoot.readyRoot` → `NavigationStack { WorkspacesView() }`), gated in DEBUG by the
-  `LANCER_DESTINATION` env var (values incl. `profile`, `settings`, `composer`, `threadList`,
-  `threadDetail`, `trustedMachines`, `addRepo`, `search` — see `WorkspacesView.swift:218+`), not
-  the old `LANCER_CURSOR_SHELL*` flags. This whole "Implemented" bullet and §4.1 below describe
-  the *retired* CursorStyle shell from before the 07-11 reversal — treat both as historical, not
-  current design, until rewritten. (Original stale text retained below for the wireframe/root
-  references it still points at correctly; do not trust its module paths or launch flags.)
-  ~~**Cursor shell (production UI target):** in-tree under `AppFeature/CursorStyle`.
-  `LANCER_CURSOR_SHELL=1` — seeded shell for UITests/design review. `LANCER_CURSOR_SHELL_LIVE=1`
-  — live bridge via `CursorShellLiveBridge` (pairing, workspaces, dispatch, approval, continue,
-  Settings). Wireframes: `docs/design-audit/lancer-workflows-2026-07-05/`.~~
+- **Production UI shell:** `AppFeature/Workspaces/WorkspacesView.swift` is the app home
+  (`AppRoot.readyRoot` → `NavigationStack { WorkspacesView() }`). DEBUG deep-links use
+  `LANCER_DESTINATION` (values incl. `profile`, `settings`, `composer`, `threadList`,
+  `threadDetail`, `trustedMachines`, `addRepo`, `search`, `review` — see
+  `WorkspacesView.swift` / `scripts/relay-regression.sh`). Visual IA reference:
+  `docs/design/cursor-reference/`. The retired `AppFeature/CursorStyle/` module and
+  `LANCER_CURSOR_SHELL` / `LANCER_CURSOR_SHELL_LIVE` flags were removed by commit `6b97da65`
+  (2026-07-11 owner reversal) — do not cite them as current.
 - **Cross-device conversation continuation** (landed 2026-07-03, `feat/cross-device-conversation-sync`): host-owned SQLite conversation ledger (`daemon/lancerd/conversation_store.go`) is execution truth; iOS mirrors it locally via GRDB `v13` and `ConversationSyncCoordinator`, and across Apple devices via a CloudKit private-DB custom-zone mirror (`ConversationSyncEngine`); observed (non-Lancer-dispatched) terminal sessions can be imported into the ledger via `attachObservedSession`. Full model in §11.2. `go test ./...` (daemon) and `swift test`/app-target `build_sim` (iOS) all green; **two-device CloudKit behavior and `CKDatabaseSubscription` silent-push delivery remain unverified on physical hardware** — see §11.2's "Known gaps" and the Device Hub matrix in `docs/LIVE_LOOP_RUNBOOK.md`.
-- **Governed chat + approvals (shell-agnostic):** durable chat (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn) — works through legacy sidebar and Cursor live bridge.
+- **Governed chat + approvals:** durable chat (`ChatConversationRepository`), thread resume, inline tool-call/artifact cards, follow-up continuation (new `runId` per turn) — through the Workspaces shell and relay bridge.
 - **Governance in Settings:** policy presets/matrix, audit trail, team & roles under Settings' "Policy & Governance" — matches wireframe `10-settings.html`; not a separate root.
-- **SSH + block terminal:** TOFU, Ed25519/password, unified PTY → OSC-133/7 → `BlockRenderer`, alt-screen TUIs in-block, auto-reconnect + tmux resume, GRDB persistence.
+- **SSH + interactive terminal (Orca-style Phase 2, 2026-07-16):** Daemon-owned PTY in `lancerd/terminal` (creack/pty); phone opens via relay `terminalCreate`/`terminalSubscribe`/`terminalSend`/`terminalResize` and receives Orca `terminal-stream-protocol` frames. UI: `RelayTerminalModel` + `LiveTerminalView` (SwiftTerm). Trusted Machines → Open Terminal; thread ⋯ → open at cwd. Phase 1 phone-direct-SSH path removed.
+- **SSH + block terminal (engine):** TOFU, Ed25519/password, unified PTY → OSC-133/7 → `BlockRenderer`, alt-screen TUIs in-block, auto-reconnect + tmux resume, GRDB persistence (block UI shell deleted 2026-07-08; engine retained).
 - **lancerd:** policy engine (deny>ask>allow, fail-closed default ask), audit log, allow-always persistence, blast radius, offline queue, dispatch + schedules, push POST; per-vendor argv for Claude/Codex/OpenCode/Kimi incl. continue/resume.
 - **push-backend:** Stripe billing + prepaid credits + overage/402, quotas, orgs, schedules + cron, artifacts, run-logs, dispatch spine + per-run scoped runner tokens.
 - **Cross-cutting:** APNs models + relay POST, Live Activity, Watch app/widgets, audit redaction, relay key in Keychain, StoreKit lifetime IAP, onboarding redesign, fleet (≤3 slots), emergency stop (client-orchestrated, not yet an atomic daemon-side primitive — see gap below). **Biometric gating removed entirely (2026-07-07, commit `9e18d679` — permanent product decision, not a regression):** `BiometricGate` and `ApprovalDecisionAuth` were deleted along with every call site. No local-auth prompt exists on approval decisions or SSH key loading — the OS-level device lock is the only boundary. Do not reintroduce it. See `docs/legal/SECURITY_ARCHITECTURE.md` §5.1.
@@ -117,7 +107,8 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 - Cross-vendor breadth beyond the four CLIs; open-sourcing `lancerd`.
 
 ### Deprecated / removed
-- **Legacy sidebar / Command Home shell** (`LancerSidebarView`, `SidebarShellState`, drawer IA) — **deleted** (2026-07-06); superseded by Cursor shell (§4.1). Do not reintroduce or cite as current design.
+- **Legacy sidebar / Command Home shell** (`LancerSidebarView`, `SidebarShellState`, drawer IA) — **deleted** (2026-07-06). Do not reintroduce or cite as current design.
+- **CursorStyle shell** (`AppFeature/CursorStyle/`, `LANCER_CURSOR_SHELL` / `LANCER_CURSOR_SHELL_LIVE`) — **removed** 2026-07-11 (`6b97da65`); production root is Workspaces. Do not cite as current design.
 - **Tab-bar IA** (`Inbox/Fleet/Activity/Settings`, `…/Control/…`) — vestigial; never reintroduce.
 - Deleted dead files (2026-06-18): `ControlView.swift` (old Control tab), `AdaptiveRoot.swift`, `LibrarySupportViews.swift` (`KeysManagementView`, superseded by `KeysFeature`). Earlier: `PreviewFeature`, `SnippetEditorView`, zero-ref design-system atoms.
 - Deleted dead files (2026-06-27 lean sweep): `WorktreesFeature` whole target, `RunnerSetupView`, `EditScheduleSheet`, `LoopDetailView`, `GitStore`, unused Go agent-status helpers, unused quota/secrets/policy/audit helpers, stale StoreKit Conduit metadata, and the one-time `scripts/rebrand-lancer.py`.
@@ -283,52 +274,35 @@ Legend: ✅ first-class · 🟡 supported · ⚪ not supported · 🔒 paid tier
 
 ## 4. UX architecture
 
-### 4.1 Top-level navigation — **Cursor shell** (approved 2026-07-05)
+### 4.1 Top-level navigation — **Workspaces root** (authoritative 2026-07-15)
 
-<!-- STALE as of 2026-07-11: commit `6b97da65` ("revert(ios): restore Codex Workspaces
-shell as the frontend (owner decision 2026-07-11)") deleted `AppFeature/CursorStyle/` and
-the `LANCER_CURSOR_SHELL`/`LANCER_CURSOR_SHELL_LIVE` flags described below entirely —
-confirmed 2026-07-15 via `find`/`grep` (zero matches for both). The current production
-root is `AppFeature/Workspaces/WorkspacesView.swift` behind `AppRoot.readyRoot`, using the
-`LANCER_DESTINATION` env var for DEBUG deep-links (not the flags below). The "no tab bar"
-framing and the Home/Workspaces/Settings 3-root *intent* likely still hold at a product
-level (see `docs/STATUS_LEDGER.md` 2026-07-11 "frontend reversal" note and root `AGENTS.md`),
-but the specific Swift types (`CursorHomeView`, `CursorWorkspacesView`), module path, and
-launch flags in the table/list below are stale.
-NEEDS VERIFICATION: whether the current shell still exposes Home/Settings as full sibling
-roots, or whether Workspaces is now the sole root with Settings reached via a nested
-Profile/nav-link surface — `AppRoot.swift`'s `readyRoot` shows only `WorkspacesView()` at
-top level, which reads more like the latter, but confirming that needs a dedicated pass
-through `WorkspacesView.swift`'s internal navigation, not asserted here. -->
+The home is **not** a tab bar. Production UI root is the **Codex Workspaces shell**:
 
-The home is **not** a tab bar. Production UI target is the **Cursor-style shell**
-(`AppFeature/CursorStyle/`), wireframed in
-`docs/design-audit/lancer-workflows-2026-07-05/` (MASTER-REPORT + `artifacts/01`–`12`).
+`AppRoot.readyRoot` → `NavigationStack { WorkspacesView() }`
+(`Packages/LancerKit/Sources/AppFeature/Workspaces/WorkspacesView.swift`).
 
-**3 visible roots:** Home (Away Digest), Workspaces, Settings. Inbox/approvals fold into
-Home as ledger rows; governance folds into Settings. No fourth root.
+Settings, profile, composer, thread list/detail, trusted machines, add-repo, and search are
+reached from Workspaces (nav push / sheets), not as sibling tab-bar roots. Visual IA reference:
+`docs/design/cursor-reference/`.
 
-| Root | Wireframe | Swift surface (Cursor shell) | Notes |
-|---|---|---|---|
-| **Home** | `artifacts/02-home.html` | `CursorHomeView` | Away Digest / needs-you-first ledger (V1 target; not fully wired). |
-| **Workspaces** | `artifacts/03-workspaces.html` | `CursorWorkspacesView` → thread list → work thread | Repo-first IA target; live bridge hydrates from `ChatConversationRepository`. |
-| **Settings** | `artifacts/10-settings.html` | Profile drawer → `SettingsWithLibraryView` | Policy, connection, account — real Settings handoff in live mode. |
+**DEBUG deep-links** (`LANCER_DESTINATION` env / `SIMCTL_CHILD_LANCER_DESTINATION`):
 
-**Depth surfaces (not roots):** Onboarding (`01`), Launch setup / composer (`04`), Work Thread
-+ proof (`05`), Review & Diff / approvals (`06`), Ship & History (`08`), Search overlay.
-
-**Launch flags** (`AppRoot.swift`):
-
-| Flag | Behavior |
+| Value | Behavior |
 |---|---|
-| `LANCER_CURSOR_SHELL=1` | Seeded Cursor shell for UITests / design review (mock data). |
-| `LANCER_CURSOR_SHELL_LIVE=1` | Cursor shell with `CursorShellLiveBridge` → real pairing, dispatch, approval, continue, Settings. |
+| `profile` / `settings` | Opens profile / Settings surfaces |
+| `composer` | Opens composer |
+| `threadList` / `threadDetail` | Thread list / a thread |
+| `trustedMachines` / `addRepo` / `search` | Matching Workspaces destinations |
+| `review` | Approval / review surface (used by `scripts/relay-regression.sh`) |
 
-> **Deprecated — do not cite as current design:** legacy **sidebar / Command Home**
-> (`LancerSidebarView`, `SidebarDestination`, drawer + Recent list). Still reachable on
-> `master` when Cursor flags are off; scheduled for retirement after Tier 0 proof.
->
-> **Also deprecated:** `enum Tab` tab-bar IA (`Inbox/Fleet/Activity/Settings`). Vestigial only.
+Live-loop / relay harness launches use `LANCER_DAEMON_E2E=1` + `LANCER_DESTINATION=review`
+(see `scripts/relay-regression.sh:70–78`) — **not** any `LANCER_CURSOR_SHELL*` flag.
+
+> **Deprecated — do not cite as current design:**
+> - Legacy **sidebar / Command Home** (`LancerSidebarView`, `SidebarDestination`) — deleted 2026-07-06.
+> - **CursorStyle shell** (`AppFeature/CursorStyle/`, `CursorHomeView`, `CursorAppShell`,
+>   `LANCER_CURSOR_SHELL=1`, `LANCER_CURSOR_SHELL_LIVE=1`) — removed 2026-07-11 (`6b97da65`).
+> - `enum Tab` tab-bar IA (`Inbox/Fleet/Activity/Settings`) — vestigial only in `AppRoot.swift`.
 
 ### 4.2 Session screen layout
 
@@ -1093,7 +1067,7 @@ These are decisions we will revisit; recording them prevents re-litigation.
 | Q5 | Local LLM (Apple Intelligence / WhisperKit) for offline NL→cmd? | Out of scope at launch | When Apple Intelligence on-device proves capable |
 | Q6 | Run lancerd as a systemd unit or per-ssh-session? | Per-ssh-session via `exec` channel | If users ask for proactive event push |
 | Q7 | License model for engine modules? | Likely MIT/Apache for engines | Before App Store submission |
-| Q8 | Product positioning: broad mobile manager vs. narrow governance layer? | **Narrow to policy + audit + emergency-stop governance** across own-machine, multi-provider agents (see §0.1 strategic note). Mobile approvals alone are commodity (Omnara/native). | After `docs/validation-cycle-v1.md` — continue vs. open-source salvage |
+| Q8 | Product positioning: broad mobile manager vs. narrow governance layer? | **Narrow to policy + audit + emergency-stop governance** across own-machine, multi-provider agents (see §0.1 strategic note). Mobile approvals alone are commodity (Omnara/native). | Direction SSOT: `docs/product/2026-07-10-lancer-daily-driver-definition.md` (personal daily-driver first) |
 | Q9 | Self-host/SSH vs. hosted-cloud execution as the V1 story? | **Self-host/relay supervision is V1; hosted-cloud execution stays V2** (retained, unwired). The narrowed governance wedge lives above any one backend. | If validation shows demand for hosted execution |
 
 ---

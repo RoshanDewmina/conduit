@@ -17,6 +17,12 @@ public struct RelayPairingSheet: View {
 
     @ObservedObject private var client: E2ERelayClient
     @State private var pairingCode: String = ""
+    /// Sticky copy of the last Connect failure. `E2ERelayClient.handleDisconnect`
+    /// used to wipe `.pairingFailed` → `.unpaired` on socket close, so the
+    /// Status/error sections flashed then vanished before the owner could read
+    /// them (2026-07-16 pairing-sheet feedback). Cleared only on a fresh Connect
+    /// or a successful pair — never by dismissing the sheet for the user.
+    @State private var stickyFailureReason: String?
 
     public init(
         existingMachineCount: Int,
@@ -33,11 +39,31 @@ public struct RelayPairingSheet: View {
     private var isAtCap: Bool { existingMachineCount >= relayFleetMaxMachines }
 
     private var pairingFailureReason: String? {
+        if let stickyFailureReason { return stickyFailureReason }
         guard case .pairingFailed(let reason) = client.pairingState else { return nil }
         return Self.humanizePairingFailure(reason)
     }
 
     private var isCodeExpired: Bool { client.pairingState == .codeExpired }
+
+    /// True while the relay handshake or peer wait is in flight — drives the
+    /// ProgressView + disabled Connect button (audit item 11).
+    private var isConnecting: Bool {
+        switch client.connectionState {
+        case .connecting, .reconnecting:
+            return true
+        case .connected, .disconnected:
+            break
+        }
+        return client.pairingState == .waitingForPeer
+    }
+
+    private var connectingStatusLabel: String {
+        if client.pairingState == .waitingForPeer {
+            return "Waiting for your Mac…"
+        }
+        return "Connecting…"
+    }
 
     public var body: some View {
         NavigationStack {
@@ -69,8 +95,25 @@ public struct RelayPairingSheet: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    if client.connectionState != .disconnected || pairingFailureReason != nil || isCodeExpired {
+                    if isConnecting
+                        || client.connectionState != .disconnected
+                        || pairingFailureReason != nil
+                        || isCodeExpired
+                        || client.pairingState == .paired
+                    {
                         Section("Status") {
+                            if isConnecting {
+                                HStack(spacing: 10) {
+                                    ProgressView()
+                                    Text(connectingStatusLabel)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .accessibilityIdentifier("relay-pairing.connecting")
+                            } else if client.pairingState == .paired {
+                                Text("Paired — keeping this sheet open briefly so you can confirm.")
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("relay-pairing.paired")
+                            }
                             LabeledContent("Relay", value: "\(client.connectionState)")
                             LabeledContent("Pairing", value: "\(client.pairingState)")
                             if client.pairingState == .waitingForPeer, let expiresAt = client.pairingExpiresAt {
@@ -83,17 +126,23 @@ public struct RelayPairingSheet: View {
                         Section {
                             Text("Pairing code expired — generate a new one on your machine, then enter it above.")
                                 .foregroundStyle(.red)
+                                .accessibilityIdentifier("relay-pairing.error")
                         }
                     } else if let pairingFailureReason {
                         Section {
                             Text(pairingFailureReason)
                                 .foregroundStyle(.red)
+                                .accessibilityIdentifier("relay-pairing.error")
                         }
                     }
 
                     Section {
                         Button("Connect") { connect() }
-                            .disabled(pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).count != 6)
+                            .disabled(
+                                isConnecting
+                                    || client.pairingState == .paired
+                                    || pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).count != 6
+                            )
                         if client.pairingState == .paired {
                             Button("Disconnect", role: .destructive) { client.disconnect() }
                         }
@@ -106,11 +155,29 @@ public struct RelayPairingSheet: View {
                     Button("Close") { dismiss() }
                 }
             }
+            // Keep the Connect button reachable above the number pad.
+            .scrollDismissesKeyboard(.interactively)
         }
+        .interactiveDismissDisabled(isConnecting || client.pairingState == .paired)
         .onChange(of: client.pairingState) { _, newValue in
-            guard newValue == .paired else { return }
-            let record = RelayMachineRecord(id: client.machineID, displayName: "Relay host", pairedAt: .now)
-            onPaired(client, record)
+            switch newValue {
+            case .pairingFailed(let reason):
+                stickyFailureReason = Self.humanizePairingFailure(reason)
+            case .codeExpired:
+                stickyFailureReason = "That pairing code expired. Run `lancerd pair` on the host for a new code."
+            case .paired:
+                stickyFailureReason = nil
+                let record = RelayMachineRecord(id: client.machineID, displayName: "Relay host", pairedAt: .now)
+                onPaired(client, record)
+                // Delay dismiss so success is visible instead of vanishing
+                // the instant peer_joined lands (owner: "disappears too fast").
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 900_000_000)
+                    dismiss()
+                }
+            case .unpaired, .waitingForPeer:
+                break
+            }
         }
         .onDisappear {
             if client.pairingState != .paired {
@@ -137,6 +204,7 @@ public struct RelayPairingSheet: View {
     private func connect() {
         let code = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard code.count == 6 else { return }
+        stickyFailureReason = nil
         client.pairingCode = code
         client.connect()
     }

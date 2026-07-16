@@ -1,8 +1,11 @@
 # Lancer feature backlog
 
 **Living tracker** — update status when code or tests change.  
+**Last updated: 2026-07-15.**  
 **Scope decisions (SSOT since 2026-07-10):** [`2026-07-10-lancer-daily-driver-definition.md`](2026-07-10-lancer-daily-driver-definition.md) · build detail in [`2026-07-10-lancer-agent-build-roadmap.md`](2026-07-10-lancer-agent-build-roadmap.md)  
 **Owner hub:** [`../STATUS_LEDGER.md`](../STATUS_LEDGER.md)  
+**Frontend (2026-07-15):** production root is Workspaces (`WorkspacesView`); CursorStyle /
+`LANCER_CURSOR_SHELL*` / `CursorAppShell` rows below are **historical** unless retargeted.  
 *(Pre–07-10 scope docs cited in rows below were purged 2026-07-10 — git history only. Where a row's tier conflicts with the 07-10 definition, the definition wins.)*
 
 Columns: **Feature | Tier | Status | Source session(s) | Wireframe | Evidence | Owner-gated?**
@@ -15,14 +18,14 @@ Freeze Tier 2 until these pass.
 
 | Feature | Tier | Status | Source | Wireframe | Evidence | Owner? |
 |---------|------|--------|--------|-----------|----------|--------|
-| E2E relay pairing from live shell | T0 | Partial live | `019f3763` | `01-onboarding.html` | `CursorShellLiveBridge` → `E2ERelayPairingView` | E2E verify |
-| Workspaces / thread list hydration | T0 | Partial live | `019f3763` | `03-workspaces.html` | `ChatConversationRepository` via bridge | Sim verify |
+| E2E relay pairing from live shell | T0 | Partial live | `019f3763` | `01-onboarding.html` | Workspaces pairing → `E2ERelayPairingView` (historical bridge name: `CursorShellLiveBridge`) | E2E verify |
+| Workspaces / thread list hydration | T0 | Partial live | `019f3763` | `03-workspaces.html` | `ChatConversationRepository` via Workspaces | Sim verify |
 | Composer → `performDispatch` | T0 | Partial live | `019f3763` | `04-launch-setup.html` | Live callback wired | E2E verify |
-| Approval → `decide()` | T0 | Partial live | `019f3763` | `06-review-diff.html` | `InboxViewModel` + bridge (no biometric gate — removed 2026-07-07) | E2E verify |
+| Approval → `decide()` | T0 | Partial live | `019f3763` | `06-review-diff.html` | `InboxViewModel` (no biometric gate — removed 2026-07-07) | E2E verify |
 | Follow-up / `performContinueConversation` | T0 | Partial live | `019f3763` | `05-work-thread.html` | Live callback | E2E verify |
 | Settings / policy handoff | T0 | Live | `019f3763` | `10-settings.html` | `SettingsWithLibraryView` sheet | — |
-| Relay E2E harness (Cursor nav) | T0 | **PASS** | `019f3763` | — | `relay-approval-e2e.sh` through live Cursor shell — [`test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md`](../test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md) | — |
-| Physical device governed loop | T0 | Partial | `019f3763` | — | [`test-runs/2026-07-06-tier0-device-proof.md`](../test-runs/2026-07-06-tier0-device-proof.md) — `CursorAppShellExhaustiveTests` 20/20 PASS (`7c5c0b0d`); Face ID + APNs owner-gated | **Yes** |
+| Relay E2E harness (Workspaces nav) | T0 | Historical PASS (proof file missing) | `019f3763` | — | Prefer `scripts/relay-regression.sh` (`LANCER_DAEMON_E2E=1` + `LANCER_DESTINATION=review`). Old Cursor-shell proof path was never committed. | — |
+| Physical device governed loop | T0 | Partial | `019f3763` | — | Historical device notes in `test-runs/2026-07-08-*` / `2026-07-09-*`; Face ID **removed** 2026-07-07; APNs owner-gated | **Yes** |
 
 ---
 
@@ -54,7 +57,7 @@ Freeze Tier 2 until these pass.
 | Auto Bug Replay | V1 | Wireframed | `019f2ebf` | `05-work-thread.html` | — | — |
 | Mobile QA Annotation | V1 | Not started | `019f2ebf` | `05-work-thread.html` | Headline differentiator | — |
 | Error Autopsy | V1 | Wireframed | `019f2ebf` | `05-work-thread.html` | — | — |
-| Away Digest as Home | V1 | Partial | `019f2ebf` | `02-home.html` | `CursorHomeView` not wired | — |
+| Away Digest as Home | V1 | Partial / historical | `019f2ebf` | `02-home.html` | Pre-revert `CursorHomeView` target; retarget to Workspaces or mark deferred | — |
 | Git / PR / Merge Actions | V1 | Mock only | `019f2ebf` | `08-ship-history.html` | PR detail mock | — |
 | Contextual Command Cards | V1 | Wireframed | `019f2ebf` | `05-work-thread.html` | — | — |
 | Changed Files Review (free-text V1) | V1 | Wireframed | `019f2ebf` | `06-review-diff.html` | Hunk-threading Post-MVP | — |
@@ -65,25 +68,28 @@ Freeze Tier 2 until these pass.
 | Provider Capability Badges | V1 | Wireframed | `019f2ebf` | `03-workspaces.html` | Time permitting | — |
 | Governance: policy engine + audit + drift | V1 | **Shipped** | `019f2f6d` | `10-settings.html` | `lancerd` + Settings | — |
 | Governance: risk-tiered biometric gate | V1 | **Removed 2026-07-07** (permanent — not V1 scope) | `019f2f6d` | `06-review-diff.html` | `BiometricGate`/`ApprovalDecisionAuth` deleted, commit `9e18d679` | — |
-| Workspaces (repo-first IA) | V1 | Partial | master §5 | `03-workspaces.html` | Decided repo-first: [ADR](../architecture/2026-07-06-repo-first-workspaces-adr.md); `CursorWorkspaceDetailSheet` shipped (`7c5c0b0d`) | — |
-| Onboarding / Pairing | V1 | Shipped + mock shell | `019f2ebf` | `01-onboarding.html` | Resequence D1–D3 pending | — |
-| Settings (native grouped list) | V1 | Shipped | `019f2ebf` | `10-settings.html` | Real Settings wired in live shell; relay clear-invalid-pairings action added (`7c5c0b0d`) | — |
+| Workspaces (repo-first IA) | V1 | Partial | master §5 | `03-workspaces.html` | Decided repo-first: [ADR](../architecture/2026-07-06-repo-first-workspaces-adr.md); production surface is `WorkspacesView` | — |
+| Onboarding / Pairing | V1 | Shipped | `019f2ebf` | `01-onboarding.html` | Resequence D1–D3 pending | — |
+| Settings (native grouped list) | V1 | Shipped | `019f2ebf` | `10-settings.html` | Real Settings wired from Workspaces | — |
 | LancerMac thin companion | V1 | Shipped | master §5 | — | Phase A+B; keep thin | — |
-| 3-root IA (Home / Workspaces / Settings) | V1 | Partial | master §2 | `lancer-workflows-2026-07-05/` | Cursor shell (`CursorAppShell`); legacy sidebar deprecated | — |
+| Workspaces production root | V1 | **Shipped** | 2026-07-11 reversal | `docs/design/cursor-reference/` | `AppRoot.readyRoot` → `WorkspacesView`; retired CursorStyle / `CursorAppShell` | — |
 
 ---
 
-## 3. Tier 1 Cursor shell (mock / live surfaces)
+## 3. Tier 1 Workspaces surfaces (historical CursorStyle rows marked)
+
+> **Historical (pre-`6b97da65`):** many rows below named `CursorAppShell` / `LANCER_CURSOR_ROUTE`.
+> Retarget verification to Workspaces + `LANCER_DESTINATION`; keep rows as coverage intent.
 
 | Feature | Tier | Status | Source | Wireframe | Evidence | Owner? |
 |---------|------|--------|--------|-----------|----------|--------|
 | Onboarding flow (5 steps) | T1 | Mock + UI tests | gap matrix | `01-onboarding.html` | 4 UITests | — |
-| Workspaces → thread → work thread | T1 | Mock + partial live | gap matrix | `03`, `05` | 8 UITests | — |
-| Approval review sheet | T1 | Mock + live callback | gap matrix | `06-review-diff.html` | 4 UITests + live test; `LANCER_CURSOR_ROUTE=reviewDiff` seam (`7c5c0b0d`) | — |
+| Workspaces → thread → work thread | T1 | Partial live | gap matrix | `03`, `05` | Workspaces production path | — |
+| Approval review sheet | T1 | Partial live | gap matrix | `06-review-diff.html` | Use `LANCER_DESTINATION=review` (historical seam was `LANCER_CURSOR_ROUTE=reviewDiff`) | — |
 | PR detail + inline diff | T1 | Mock | gap matrix | `06-review-diff.html` | 1 UITest | — |
 | Search overlay | T1 | Mock | gap matrix | `08-ship-history.html` | 1 UITest | — |
-| Profile drawer + settings sheet | T1 | Mock + live handoff | gap matrix | `10-settings.html` | 3 UITests | — |
-| Composer chain (run-on, model) | T1 | **PASS** | gap matrix | `04-launch-setup.html` | `CursorAppShellExhaustiveTests` 20/20 PASS — composer + review + work thread chain (`7c5c0b0d`) | — |
+| Profile drawer + settings sheet | T1 | Live handoff | gap matrix | `10-settings.html` | From Workspaces | — |
+| Composer chain (run-on, model) | T1 | Partial | gap matrix | `04-launch-setup.html` | Historical `CursorAppShellExhaustiveTests` — retarget or rewrite for Workspaces | — |
 | Connection health ladder | T1 | Planned | `2026-07-06-competitor-borrow` | `03-workspaces.html` | Orca pattern — P0 borrow | — |
 | Approval banner above composer | T1 | Planned | competitor borrow | `05-work-thread.html` | T3 pattern — P0 | — |
 

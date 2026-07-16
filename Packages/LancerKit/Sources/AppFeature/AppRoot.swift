@@ -153,8 +153,12 @@ public struct AppRoot: View {
     @State private var relayQuestionIngest: RelayQuestionIngest?
     /// Derived + user-added workspace repos for the Workspaces shell.
     @State private var workspaceDataStore: WorkspaceDataStore?
+    /// Phase 1 interactive SSH terminal presentation.
+    @State private var terminalCoordinator: TerminalSessionCoordinator?
     /// First-run onboarding gate — once true, `readyRoot` is shown thereafter.
-    @AppStorage("lancer.hasSeenOnboarding") private var hasSeenOnboarding = false
+    /// Launch arg `-onboardingSeen YES` registers into UserDefaults automatically;
+    /// UITests also set `LANCER_SKIP_CURSOR_ONBOARDING`.
+    @AppStorage("onboardingSeen") private var onboardingSeen = false
     #if DEBUG
     /// Prevents child destination hooks from racing the deterministic UITest reset.
     @State private var isUITestSeedReady: Bool
@@ -240,12 +244,16 @@ public struct AppRoot: View {
                 )
             }
             _workspaceDataStore = State(initialValue: workspaceStore)
+            _terminalCoordinator = State(initialValue: TerminalSessionCoordinator(
+                relayFleetStore: fleetStore
+            ))
         } catch {
             _environment = State(initialValue: .failure(error.localizedDescription))
             _shellLiveBridge = State(initialValue: nil)
             _relayApprovalIngest = State(initialValue: nil)
             _relayQuestionIngest = State(initialValue: nil)
             _workspaceDataStore = State(initialValue: nil)
+            _terminalCoordinator = State(initialValue: nil)
         }
     }
 
@@ -276,12 +284,13 @@ public struct AppRoot: View {
     }
 
     /// Shows the 2-screen first-run gate until dismissed; DEBUG deep-links
-    /// (`LANCER_DESTINATION`) skip it so UITests still land on Workspaces.
+    /// (`LANCER_DESTINATION`) and the UITest seam (`LANCER_SKIP_CURSOR_ONBOARDING=1`)
+    /// skip it so tests still land on Workspaces.
     @ViewBuilder
     private var gatedRoot: some View {
         if shouldShowOnboarding {
             OnboardingGateView {
-                hasSeenOnboarding = true
+                onboardingSeen = true
             }
             .environment(relayFleetStore)
         } else {
@@ -290,17 +299,20 @@ public struct AppRoot: View {
     }
 
     private var shouldShowOnboarding: Bool {
+        if onboardingSeen { return false }
         #if DEBUG
-        if ProcessInfo.processInfo.environment["LANCER_DESTINATION"] != nil {
+        let env = ProcessInfo.processInfo.environment
+        if env["LANCER_DESTINATION"] != nil || env["LANCER_SKIP_CURSOR_ONBOARDING"] == "1" {
             return false
         }
         #endif
-        return !hasSeenOnboarding
+        return true
     }
+
 
     @ViewBuilder
     private var readyRoot: some View {
-        if let shellLiveBridge, let relayApprovalIngest, let relayQuestionIngest, let workspaceDataStore {
+        if let shellLiveBridge, let relayApprovalIngest, let relayQuestionIngest, let workspaceDataStore, let terminalCoordinator {
             NavigationStack {
                 WorkspacesView()
             }
@@ -309,6 +321,20 @@ public struct AppRoot: View {
             .environment(relayApprovalIngest)
             .environment(relayQuestionIngest)
             .environment(workspaceDataStore)
+            .environment(terminalCoordinator)
+            .fullScreenCover(
+                isPresented: Binding(
+                    get: { terminalCoordinator.presentedModel != nil },
+                    set: { presented in
+                        if !presented { terminalCoordinator.dismissTerminal() }
+                    }
+                ),
+                onDismiss: { terminalCoordinator.dismissTerminal() }
+            ) {
+                if let model = terminalCoordinator.presentedModel {
+                    LiveTerminalView(model: model)
+                }
+            }
             .task {
                 relayApprovalIngest.start()
                 relayQuestionIngest.start()

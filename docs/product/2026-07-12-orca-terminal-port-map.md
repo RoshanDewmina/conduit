@@ -1,5 +1,7 @@
 # Orca terminal → Lancer port map (2026-07-12)
 
+**Last updated: 2026-07-15.**
+
 Owner ask: "look at how Orca handles the terminal feature, then add full terminal support."
 Method per AGENTS.md borrow-don't-reinvent (precedent: 2026-07-09 chat-ui port map).
 Source: local clone `research-repos/orca` (MIT — portable with attribution comments;
@@ -42,18 +44,25 @@ that makes multi-client attach cheap.
 
 ## Port plan (phased; each phase independently shippable)
 
-**Phase 1 — re-wire what exists (days).** Entry points in the Cursor shell: Machine detail →
-"Terminal" + thread ⋯ menu → "Open terminal at this cwd". Lancer's existing SSH block terminal
-as-is. Gate: open terminal on the paired machine from the phone, run vim/htop, survive
-app background. (This alone is "full terminal support" v0 — it worked in 2026-06 builds.)
+**Phase 1 — re-wire what exists.** *(superseded 2026-07-16 — owner: use Orca 1:1)*
 
-**Phase 2 — daemon-owned terminal sessions (the real Orca lesson).** Move PTY ownership from
-the phone-held SSH session into `lancerd` (it already survives disconnects for agent runs):
-`terminal.create/attach/input/resize` RPCs over the existing E2E relay; daemon keeps a
-serialized-screen mirror for O(1) attach snapshots (port headless-emulator concept — Go side
-can use a vt10x-style emulator) + a self-compacting output log. Phone and Mac attach to the
-same session; reconnect is instant. This also gives "type into the agent's PTY" (take-over)
-for locally-launched agents.
+**Phase 2 — daemon-owned terminal sessions (the real Orca lesson) — IN PROGRESS / shipping.**
+Move PTY ownership from the phone-held SSH session into `lancerd`:
+`terminal.create/attach/input/resize/subscribe` RPCs over the existing E2E relay;
+daemon keeps a scrollback ring for attach snapshots (Orca headless-emulator concept,
+simplified) + Orca `terminal-stream-protocol` frames (base64 over relay). Phone and Mac
+attach to the same session; reconnect restores snapshot then live output.
+
+> **Status 2026-07-16:** Owner directed "let go of what we have and use orca
+> implementation 1:1". Phase 1 SSH `LiveTerminalModel` removed. Shipped on
+> `cursor/desktop-history-and-terminal-3510`:
+> - Go `daemon/lancerd/terminal` Host/Session (creack/pty) + tombstones
+> - Relay RPCs: `terminalCreate/Send/Resize/Close/Subscribe` + `terminalStream`
+> - iOS `RelayTerminalModel` + SwiftTerm view, direct-input accessory bar
+> - Entry: Trusted Machines → Open Terminal; thread ⋯ → open at cwd
+> Remaining vs full Orca: headless xterm SerializeAddon (we use ring buffer),
+> history-manager cold restore, pause/resume/background thinning, agent-pane
+> launchAgent sharing.
 
 **Phase 3 — mobile input UX kit.** Accessory key bar (esc/ctrl/tab/arrows), direct-input
 default with buffered fallback, dictation routing, tap-to-open paths (route into thread/file

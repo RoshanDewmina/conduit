@@ -1,9 +1,22 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-15 (integration/2026-07-15-daily-drive merged to master @ `65bed890`;
-the 2026-07-12 block below is superseded history, kept for context — see `plans/orchestrator-state.md`).
-**Active branch:** `master` (`65bed890`) — re-check `git rev-parse HEAD` / `gh pr list` before citing
-anything here.
+**Last updated:** 2026-07-15 night. Master still `ba73c130`; a large night session shipped
+**18 open PRs (#120–#137)** consolidated in `integration/2026-07-15-night` — none merged yet.
+**Active branch:** `master` (`ba73c130`), but the reviewable tip is `integration/2026-07-15-night`.
+Re-check `git rev-parse HEAD` / `gh pr list` before citing anything here.
+
+> **2026-07-15 night in one line:** two stalled lanes finished (desktop-decrypt fix #127
+> live-proven on device-paired sim; Siri M1 #125), the owner's composer-drawer→in-place-morph
+> fix (#120), two waves of Cursor/Claude-app feature parity (#121–#124, #129–#135 incl. the
+> **Emergency Stop UI**, publish gate B11b), first-run onboarding (#130), mid-run feedback +
+> permission pill (#131), Codex's oracle skill + a **mandatory `docs/CHANGELOG.md` rule**
+> (#126), an aggressive **docs stale-purge** (32 deletions / 17 fixes, #128), B4 verified +
+> B6 reconciled (#136) + C6 security triage (#137, 0 actionable). The night build was
+> installed on the owner's iPhone and **paired live (daemon log 22:07:44)**. Full report +
+> step-by-step whole-app test script for a fresh agent:
+> [`test-runs/2026-07-15-night-full-app-test-plan.md`](test-runs/2026-07-15-night-full-app-test-plan.md).
+> Remaining: merge the 18 PRs; run the device test plan §3/§4/§4b (Tier 0 loop, Emergency
+> Stop, push-while-closed); App Store Connect setup (owner-only).
 
 > **2026-07-15 in one line:** five fixes landed and merged to master via
 > `integration/2026-07-15-daily-drive`: relay generation-guard for the cross-reconnect
@@ -13,22 +26,21 @@ anything here.
 > an Agents-continuity fix for false unreachable alarms + blank observed-session adopts
 > (`fix/s2-agents-continuity`, `00485128`), a per-dispatch "Full tools" opt-out of the strict
 > MCP config (`feat/s4-fulltools-toggle`, `77da7612`), and a stacked-sheet/duplicate-turn +
-> concurrent-send dispatch-race fix (`4bbb86eb`, `95c6b06d`). **Evidence and a caveat:** the
-> relay generation-guard fix is proven **10/10 on the iOS Simulator** (six re-proof attempts,
-> full log in [`test-runs/2026-07-15-reconnect-10x-sim/README.md`](test-runs/2026-07-15-reconnect-10x-sim/README.md);
-> the first five attempts each failed on a *different* bug — cascading relay rejection,
-> external Claude-account quota exhaustion, an XCUITest AX-query flake — before the sixth
-> ("v6") ran clean 10/10) — it is **not yet re-proven on a physical device**. ⚠️ **A safety
+> concurrent-send dispatch-race fix (`4bbb86eb`, `95c6b06d`). **Evidence and a caveat:** a
+> **10/10 sim proof** for the relay generation-guard reconnect fix was claimed 2026-07-15 but
+> its evidence bundle was never committed (integrity gap); re-prove or restore before citing
+> — it is **not yet re-proven on a physical device**. ⚠️ **A safety
 > incident during that testing orphaned the owner's real phone pairing**: an isolated-daemon
 > test invoked `lancerd pair --help`, which the binary doesn't recognize and silently ran
 > `pair` for real against the default (unset `LANCER_STATE_DIR`) state dir — i.e. the owner's
 > real `~/.lancer` — dropping the resident daemon's live relay session. The owner's phone
 > needs to **re-pair** before any further device work; the only on-disk backup
 > (`relay-pairing.json.owner-backup-KEEP`) is stale (2026-07-12) and is not a safe restore
-> point. Separately, a **desktop-Claude-Code-sessions merge into the All Repos list** was
-> discussed for tonight but **has not landed on master**: branch `fix/desktop-session-decrypt`
-> exists but is still at the master tip with zero commits ahead (`git log` confirmed
-> 2026-07-15) — treat it as not-yet-started, not in-flight-with-progress.
+> point. Separately, the **desktop-session "Decryption failed" fix** (`fix/desktop-session-decrypt`)
+> is DONE as of 2026-07-15 night: root cause was `SessionMessage.Role` missing `.thinking`;
+> fixed + 3 regression tests + live-proven on a paired sim against the production relay
+> (DesktopSessionDecryptUITests PASSED) — **PR #127 open**, part of the
+> `integration/2026-07-15-night` stack (PRs #120–#127, see `docs/CHANGELOG.md`).
 >
 > **2026-07-12 in one line (historical, superseded by the above):** owner P0 "multiple
 > command-center rows" fixed end-to-end (#95 app bucketing · #96 daemon cwd hygiene +
@@ -85,7 +97,7 @@ Dogfood log by mid-Aug is the go/no-go input (downgrade path: TestFlight-only).
 
 **Execution model + process (owner, 07-10):** [`ENGINEERING_PROCESS.md`](ENGINEERING_PROCESS.md)
 — Cursor CLI (Grok 4.5 high / Composer 2.5) codes, Sonnet 5 high is fallback + sensitive paths,
-Fable orchestrates via [`plans/2026-07-10-fable-orchestrator-PASTE.md`](plans/2026-07-10-fable-orchestrator-PASTE.md)
+Fable orchestrates via [`plans/orchestrator-state.md`](plans/orchestrator-state.md)
 + the `swarm-orchestrator` skill.
 
 ## Tier 0 / device evidence (current)
@@ -96,7 +108,7 @@ Fable orchestrates via [`plans/2026-07-10-fable-orchestrator-PASTE.md`](plans/20
 | APNs lock-screen approve (5c) | Historical PASS on `732071a7`; re-proof PENDING | same + [`test-runs/2026-07-08-5c-root-cause.md`](test-runs/2026-07-08-5c-root-cause.md) |
 | Owner checklist | [`test-runs/2026-07-07-tier0-owner-checklist.md`](test-runs/2026-07-07-tier0-owner-checklist.md) | — |
 | Phone dogfood notes | [`test-runs/2026-07-09-phone-dogfood-results.md`](test-runs/2026-07-09-phone-dogfood-results.md) | — |
-| Reconnect 10x (relay generation-guard) | **PASS 10/10 on Simulator** (`integration/2026-07-15-daily-drive` @ `4bbb86eb`, 6th attempt "v6"); **physical-device re-proof still PENDING**, and blocked until the owner re-pairs their phone (safety incident above) | [`test-runs/2026-07-15-reconnect-10x-sim/README.md`](test-runs/2026-07-15-reconnect-10x-sim/README.md) |
+| Reconnect 10x (relay generation-guard) | **10/10 sim proof claimed 2026-07-15 but its evidence bundle was never committed (integrity gap); re-prove or restore before citing.** Physical-device re-proof still PENDING, blocked until the owner re-pairs their phone (safety incident above) | — (missing `test-runs/2026-07-15-reconnect-10x-sim/`) |
 
 ## Open P0 / P1 (correctness)
 
@@ -126,7 +138,7 @@ Fable orchestrates via [`plans/2026-07-10-fable-orchestrator-PASTE.md`](plans/20
 | Device loop / owner test | [`LIVE_LOOP_RUNBOOK.md`](LIVE_LOOP_RUNBOOK.md), [`product/OWNER_RELAY_TEST_GUIDE.md`](product/OWNER_RELAY_TEST_GUIDE.md) |
 | Daemon contract / adapters | [`agent-contract.md`](agent-contract.md), [`adapter-spi.md`](adapter-spi.md), [`lancerd-resident.md`](lancerd-resident.md) |
 | ADRs / threat model | [`architecture/`](architecture/), [`security/`](security/), [`SECURITY-REVIEW.md`](SECURITY-REVIEW.md) |
-| Launch collateral (frozen) | [`PUBLISH_READINESS_CHECKLIST.md`](PUBLISH_READINESS_CHECKLIST.md), [`legal/`](legal/), [`distribution/`](distribution/), [`app-store-metadata.md`](app-store-metadata.md) |
+| Launch collateral (frozen) | [`PUBLISH_READINESS_CHECKLIST.md`](PUBLISH_READINESS_CHECKLIST.md), [`legal/`](legal/), [`distribution/`](distribution/) (ASC metadata lives under `distribution/APP_STORE_CONNECT_METADATA.md`) |
 | Hook install artifacts (FUNCTIONAL — referenced by `daemon/lancerd/install.go`/`hook_install.go`; never delete) | `lancer-hook.sh`, `codex-lancer-hook.sh`, `claude-settings-hook.json`, `codex-hooks.json`, `opencode-lancer-gate-plugin.js`, `policy.example.yaml`, `opencode-hook-fixtures/` |
 
 ## Branch / worktree state (2026-07-10)

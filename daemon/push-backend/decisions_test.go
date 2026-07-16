@@ -212,6 +212,37 @@ func TestDecisionRelayDedupeByApprovalID(t *testing.T) {
 	}
 }
 
+// A force-quit lock-screen path may POST contentHash first; a warm AppRoot drain
+// can re-POST the same approvalId without one. Replace must keep the non-empty hash.
+func TestDecisionRelayReplacePreservesContentHash(t *testing.T) {
+	resetDecisionsForTest()
+	resetRegistryForTest()
+	const tok = "rt-hash-keep"
+	seedRelayToken(t, "sess-A", tok)
+	const wantHash = "c5fca73ef15566810d568ca87f42cf1d917e78ce9c51d9b641a6d783c4c5c7b3"
+
+	body1, _ := json.Marshal(map[string]string{
+		"approvalId": "appr-1", "sessionId": "sess-A", "decision": "approve",
+		"contentHash": wantHash,
+	})
+	if rec := postDecision(t, body1, tok); rec.Code != http.StatusNoContent {
+		t.Fatalf("first post: status = %d, want 204", rec.Code)
+	}
+	body2, _ := json.Marshal(map[string]string{
+		"approvalId": "appr-1", "sessionId": "sess-A", "decision": "approve",
+	})
+	if rec := postDecision(t, body2, tok); rec.Code != http.StatusNoContent {
+		t.Fatalf("second post: status = %d, want 204", rec.Code)
+	}
+	got := pollDecisions(t, "sess-A", tok)
+	if len(got) != 1 {
+		t.Fatalf("got %d records, want 1", len(got))
+	}
+	if got[0].ContentHash != wantHash {
+		t.Fatalf("contentHash = %q, want preserved %q", got[0].ContentHash, wantHash)
+	}
+}
+
 func TestDecisionRelayPollRejectsMissingSession(t *testing.T) {
 	resetDecisionsForTest()
 	rec := httptest.NewRecorder()

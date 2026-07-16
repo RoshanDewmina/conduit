@@ -11,6 +11,8 @@ struct FileTreeView: View {
     @State private var searchText = ""
     @State private var isLoadingRoot = true
     @State private var loadError: String?
+    /// Path → expand failure message (kept while the folder row stays expanded).
+    @State private var expandErrorByPath: [String: String] = [:]
 
     private var displayed: [ReviewTreeNode] {
         ReviewTreeMerge.filter(nodes: roots, query: searchText)
@@ -65,45 +67,63 @@ struct FileTreeView: View {
     }
 
     private func treeRow(_ node: ReviewTreeNode, depth: Int) -> some View {
-        Button {
-            if node.isDir {
-                Task { await toggleExpand(node) }
-            } else {
-                onSelectFile(node.path)
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Color.clear.frame(width: CGFloat(depth) * 14)
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
                 if node.isDir {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(node.isExpanded ? 90 : 0))
-                        .frame(width: 14)
+                    Task { await toggleExpand(node) }
                 } else {
-                    Color.clear.frame(width: 14)
+                    onSelectFile(node.path)
                 }
-                Image(systemName: node.isDir ? "folder.fill" : "doc.text")
-                    .font(.system(size: 14))
-                    .foregroundStyle(node.isDir ? Color.accentColor : Color.secondary)
-                Text(node.name)
-                    .font(.system(size: 15))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Spacer()
-                if node.isLoading {
-                    ProgressView()
-                        .controlSize(.small)
+            } label: {
+                HStack(spacing: 8) {
+                    Color.clear.frame(width: CGFloat(depth) * 14)
+                    if node.isDir {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(node.isExpanded ? 90 : 0))
+                            .frame(width: 14)
+                    } else {
+                        Color.clear.frame(width: 14)
+                    }
+                    Image(systemName: node.isDir ? "folder.fill" : "doc.text")
+                        .font(.system(size: 14))
+                        .foregroundStyle(node.isDir ? Color.accentColor : Color.secondary)
+                    Text(node.name)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Spacer()
+                    if node.isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(node.isDir
+                ? "\(node.isExpanded ? "Collapse" : "Expand") folder \(node.name)"
+                : "File \(node.name)"))
+
+            if let expandError = expandErrorByPath[node.path] {
+                HStack(alignment: .top, spacing: 8) {
+                    Color.clear.frame(width: CGFloat(depth) * 14 + 14)
+                    InlineRetryBanner(
+                        title: "Couldn’t expand folder",
+                        message: expandError,
+                        retryTitle: "Retry",
+                        accessibilityRetryLabel: "Retry expanding \(node.name)"
+                    ) {
+                        Task { await retryExpand(node) }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(node.isDir
-            ? "\(node.isExpanded ? "Collapse" : "Expand") folder \(node.name)"
-            : "File \(node.name)"))
     }
 
     private func flatten(_ nodes: [ReviewTreeNode], depth: Int) -> [(node: ReviewTreeNode, depth: Int)] {
@@ -134,14 +154,25 @@ struct FileTreeView: View {
             _ = ReviewTreeMerge.updateNode(path: node.path, in: &roots) { n in
                 n.isExpanded = false
             }
+            expandErrorByPath.removeValue(forKey: node.path)
             return
         }
         if node.children != nil {
             _ = ReviewTreeMerge.updateNode(path: node.path, in: &roots) { n in
                 n.isExpanded = true
             }
+            expandErrorByPath.removeValue(forKey: node.path)
             return
         }
+        await fetchChildren(for: node)
+    }
+
+    private func retryExpand(_ node: ReviewTreeNode) async {
+        await fetchChildren(for: node)
+    }
+
+    private func fetchChildren(for node: ReviewTreeNode) async {
+        expandErrorByPath.removeValue(forKey: node.path)
         _ = ReviewTreeMerge.updateNode(path: node.path, in: &roots) { n in
             n.isLoading = true
             n.isExpanded = true
@@ -149,11 +180,17 @@ struct FileTreeView: View {
         do {
             let entries = try await dataSource.tree(conversationID: conversationID, path: node.path)
             ReviewTreeMerge.mergeChildren(path: node.path, entries: entries, into: &roots)
+            expandErrorByPath.removeValue(forKey: node.path)
         } catch {
             _ = ReviewTreeMerge.updateNode(path: node.path, in: &roots) { n in
                 n.isLoading = false
-                n.isExpanded = false
+                // Keep expanded so the inline error stays visible with Retry.
+                n.isExpanded = true
+                if n.children == nil {
+                    n.children = []
+                }
             }
+            expandErrorByPath[node.path] = error.localizedDescription
         }
     }
 }

@@ -4,6 +4,12 @@
 docs and the Jul 21 validation gate. It does not change architecture or backend scope.
 Agents: read this before citing any strategy doc dated before 2026-07-10.
 
+**Last updated: 2026-07-15.** Frontend note: the 07-10 "keep W0.A" decision below was **reversed
+the next day** (owner, 2026-07-11 PM) — production root is the Codex **Workspaces** shell
+(`AppRoot.readyRoot` → `NavigationStack { WorkspacesView() }`; see `ARCHITECTURE.md` §4.1 and
+`docs/AGENT_READ_FIRST.md`). Treat W0.A / CursorStyle paragraphs as historical Phase-0 narrative,
+not current frontend truth.
+
 ---
 
 ## How this was decided
@@ -24,11 +30,10 @@ Owner Q&A, 2026-07-10. Key admissions, verbatim in spirit:
 5. **The fork, decided: personal daily-driver first.** Not a startup yet. Not a portfolio piece.
    Success metric for the next 60 days is binary: *did the owner dispatch and review real work
    through Lancer today?*
-6. **Rebuild path, decided (owner, later in session, supersedes the earlier "hybrid" answer):
-   keep the current frontend.** The W0.A shell on `feat/chat-overhaul-w0a` is "pretty good, just
-   needs finesse." The scorched-wipe worktree (`feat/frontend-scorched-wipe`, uncommitted) is
-   **abandoned — do not resume it**. The scorched-wipe HANDOFF doc was superseded by this doc
-   and deleted in the 07-10 purge; no agent may delete frontend chrome without a fresh owner ask.
+6. **Rebuild path, decided 2026-07-10 (historical — superseded 2026-07-11):** keep-then-finesse
+   the then-current W0.A CursorStyle shell; abandon scorched-wipe. **Superseded same day PM /
+   next day:** owner reversed to the Codex Workspaces shell (`6b97da65`); W0.A CursorStyle is
+   retired. Do not resume wipe work or reintroduce CursorStyle without a fresh owner ask.
 
 ---
 
@@ -153,10 +158,9 @@ team tier · Away Launch Composer contract chips.
 
 ## Phased roadmap
 
-- **Phase 0 — git hygiene (a day).** Land the in-flight W0.A work on `feat/chat-overhaul-w0a`
-  (commit or stash-pop deliberately); remove the wipe worktree (`git worktree remove`, delete
-  `feat/frontend-scorched-wipe`) or park it clearly as abandoned; mark the 07-10 wipe HANDOFF
-  superseded; `build_sim` green on the kept frontend.
+- **Phase 0 — git hygiene (DONE 2026-07-11; frontend then reversed same day).** Landed then-in-flight
+  W0.A work, removed wipe worktree; owner then restored Codex **Workspaces** as production
+  (`6b97da65`). Current frontend truth: `ARCHITECTURE.md` §4.1 / `AGENT_READ_FIRST.md`.
 - **Phase 1 — dogfood MVP (weeks 1–2).** The 6 MVP pieces; re-prove Tier 0 + 5c on tip; owner
   starts the daily log. Fix only what the log surfaces.
 - **Phase 2 — hands-free + trust surfaces (weeks 3–4).** The wedge made visible: Siri Phase 1
