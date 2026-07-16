@@ -127,11 +127,10 @@ public struct KeychainAIKeyStore: AIKeyStoring {
 
 // MARK: - Root view
 
-/// Frontend rebuild Section 1: a thin composition root that launches straight
-/// into the Cursor-style Workspaces screen (owner override — no tab bar).
-/// `AppEnvironment` is still constructed here (engines survive the wipe and
-/// later milestones wire into it), but nothing below M1 scope — pairing,
-/// chat, approvals — is rendered yet.
+/// Thin composition root: first-run onboarding gate, then the Workspaces
+/// shell (owner override — no tab bar). `AppEnvironment` is constructed here
+/// so engines survive view recreation; pairing / chat / approvals wire in via
+/// environment objects on `readyRoot`.
 public struct AppRoot: View {
     @State private var environment: AppEnvironmentResult
     /// M2: relay pairing / trusted-machines fleet state, hydrated from the
@@ -154,6 +153,8 @@ public struct AppRoot: View {
     @State private var relayQuestionIngest: RelayQuestionIngest?
     /// Derived + user-added workspace repos for the Workspaces shell.
     @State private var workspaceDataStore: WorkspaceDataStore?
+    /// First-run onboarding gate — once true, `readyRoot` is shown thereafter.
+    @AppStorage("lancer.hasSeenOnboarding") private var hasSeenOnboarding = false
     #if DEBUG
     /// Prevents child destination hooks from racing the deterministic UITest reset.
     @State private var isUITestSeedReady: Bool
@@ -259,7 +260,7 @@ public struct AppRoot: View {
         case .ready(let env):
             #if DEBUG
             if isUITestSeedReady {
-                readyRoot
+                gatedRoot
             } else {
                 ProgressView()
                     .task {
@@ -269,9 +270,32 @@ public struct AppRoot: View {
                     }
             }
             #else
-            readyRoot
+            gatedRoot
             #endif
         }
+    }
+
+    /// Shows the 2-screen first-run gate until dismissed; DEBUG deep-links
+    /// (`LANCER_DESTINATION`) skip it so UITests still land on Workspaces.
+    @ViewBuilder
+    private var gatedRoot: some View {
+        if shouldShowOnboarding {
+            OnboardingGateView {
+                hasSeenOnboarding = true
+            }
+            .environment(relayFleetStore)
+        } else {
+            readyRoot
+        }
+    }
+
+    private var shouldShowOnboarding: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LANCER_DESTINATION"] != nil {
+            return false
+        }
+        #endif
+        return !hasSeenOnboarding
     }
 
     @ViewBuilder
