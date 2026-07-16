@@ -11,7 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
-- 17:35 Cursor Grok — All Repos/thread list paints local cache immediately (no blank spinner awaiting relay); host sync + observed sessions refresh in background (`fix/repos-chats-instant-load`)
+- 18:15 Cursor Composer — session-hop doc sync: GAP_LIST/DOGFOOD_READY/orchestrator aligned to master `62b4424d` + verified pair/launch PASS (`docs/session-hop-doc-sync`)
 - 17:32 Cursor Composer — fix LancerDProtocolTests ISO8601 decode: fractional-second tolerant test decoder for real Claude transcript fixtures (`fix/iso8601-protocol-tests`, PR #148)
 - 17:30 Cursor Composer — proof receipts open from ⋯ menu on "Worked Ns" row; no inline Proof card under every turn (`fix/proof-under-menu`)
 - 17:22 Cursor Grok — dogfood smoke: phone `"Hi"` launched after auth-preflight fix (PR #145); DOGFOOD_SMOKE → PASS launch (`docs/dogfood-auth-smoke-pass`)

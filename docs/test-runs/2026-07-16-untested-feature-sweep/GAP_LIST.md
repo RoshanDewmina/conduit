@@ -1,10 +1,9 @@
-# Untested-feature live sweep — Phase 4 GAP LIST (Wave 1 code merged; merge→master + dogfood)
+# Untested-feature live sweep — Phase 4 GAP LIST (merged to master; dogfood in progress)
 
 **Date:** 2026-07-16  
-**Tip:** `integration/2026-07-16-untested-sweep` @ `b8bb778c` (FX merges land at ancestor `7707e4fa`)  
-**Worktree:** `.worktrees/untested-sweep-2026-07-16`  
+**Tip:** `origin/master` @ `62b4424dc39df78d1a823bc33d7b597829ddc0e6` (`62b4424d`, PR #149)  
 **Evidence root:** `docs/test-runs/2026-07-16-untested-feature-sweep/`  
-**Session chain:** Claude `941bc90d` → Cursor C3/F-final → Claude Fable `3ddbf98e` (Wave 1) → Cursor Grok continuation (merge + gates) → owner-ordered merge→master + phone dogfood (~16:29 ET).
+**Session chain:** Claude `941bc90d` → Cursor C3/F-final → Claude Fable `3ddbf98e` (Wave 1) → Cursor `fb903282` (merge #140–#149 + phone dogfood) → session-hop sync `2758f384`.
 
 ---
 
@@ -17,18 +16,23 @@ Live XCUITest + isolated-daemon lanes exercised 24 previously-untested surfaces 
 1. **F1 (`4e45dbaa`)** — first-send approval silently dropped when relay re-pair was mid-flight; `sendApproval` now bounded-retries.
 2. **F4 (`1f08c3c6` / `ec425b40`)** — approve recorded but CLI never launched; resume path now launches on approve. **C3 live-proved** a real `claude` run + `474f104 sweep edit` commit after approve.
 
-**Wave 1 code (2026-07-16 ~16:10 ET)** merged into tip after unit gates (`go test ./...` green; `swift test` 781+62+13):
+**Wave 1 + follow-ons on `origin/master` (VERIFIED via #140–#149):**
 
-3. **FX7 (`a7749650` → merge `543566ba`)** — client treats sync `needsApproval` as awaiting-approval + polls same runID (unblocks #7 UI chain).
-4. **FX5 (`a8a91761` → merge `2a872e1e`)** — pairing Connect pinned above number pad (#5).
-5. **Lane P (`4382f1b8`+`7b4d4695` → merge `7707e4fa`)** — relay audit tail + coarse permission mode; YAML rules stay SSH-gated (#2/#3 product decision implemented).
+3. **FX7 (`a7749650` → merge `543566ba`)** — client treats sync `needsApproval` as awaiting-approval + polls same runID (unblocks #7 UI chain). **On master** via #140.
+4. **FX5 (`a8a91761` → merge `2a872e1e`)** — pairing Connect pinned above number pad (#5). **On master** via #140.
+5. **Lane P (`4382f1b8`+`7b4d4695` → merge `7707e4fa`)** — relay audit tail + coarse permission mode; YAML rules stay SSH-gated (#2/#3). **On master** via #140.
+6. **FX10 (`5a3fce93`)** — background-tasks pill relay mirror. **On master** via #141; #10 **code FIXED**; live re-proof owed.
+7. **#144** Policy stale SSH error — merged `ebc336f6`.
+8. **#145** auth-preflight cold probe — merged `e7f06059`; phone `"Hi"` launch **PASS** (audit @ 21:20:25Z).
+9. **#147** Proof under menu — merged `34d1f2de`; phone install claimed SUCCEEDED.
+10. **#149** All Repos instant cache paint — merged `6b05372c`; tip `62b4424d`; phone install claimed SUCCEEDED.
 
 ### Top product gaps still open
 
 | Pri | Gap | Verdict source |
 |---|---|---|
 | P0/P1 | **#7/#8/#9/#17/#23 live re-proof owed** — C4 harness never saw daemon `paired with phone`; FX7 path not observed (`awaitingCard=false`, `terminalRetry=true`). **Not disproven** — pairing gate failure, not product FAIL. | LC4 PARTIAL (harness) |
-| P0 | **#2 Policy relay** — mode picker loads (**PARTIAL**); stale SSH error copy remains on screen until relay settles | LC4 → fix in flight (`fix/policy-stale-ssh-error`) |
+| P0 | **#2 Policy relay** — mode picker loads (**PARTIAL** live); stale SSH error **code-fixed** (#144 `ebc336f6`); phone UI re-proof owed | LC4 + #144 |
 | P0 | **#3 Audit relay** — **PASS** live (`auditLoaded=true`, `auditSSHError=false`) | LC4 |
 | P1 | **Background-tasks pill (#10)** — code-fixed on `origin/master` via FX10 (`5a3fce93`); C4 FAIL was pre-FX10 tip; **live re-proof still owed** on owner phone | LC4 + FX10 |
 | P1 | **#5 Connect occlusion** — code FIXED (FX5); keypad screenshot proof still owed in C4 | code FIXED; visual C4 |
@@ -41,11 +45,10 @@ Onboarding gate · composer dispatch picker · inline approval card · pending-a
 
 ### C3 / F-final / Wave 1 status
 
-C3 + F-final **completed** (`LC3-report.md`, `LF-final-report.md`). Wave 1 **merged + unit-gated**.
+C3 + F-final **completed** (`LC3-report.md`, `LF-final-report.md`). Wave 1 + FX10 + UX fixes **on `origin/master`** (#140–#149).
 **Lane C4 partial** (`LC4-report.md`, `screenshots/LC4-*.png`) — pairing harness blocked #7 chain
-(not product-disproven); Audit **PASS**; Policy **PARTIAL** (picker + stale SSH error); FX5 **PASS**.
-#10 code-fixed on master (FX10 `5a3fce93`); live re-proof owed. C4 retry needs single-session harness
-+ daemon `paired with phone` gate.
+(**still live-owed** — not product-disproven); Audit **PASS**; Policy **PARTIAL** (picker; #144 merged); FX5 **PASS**.
+#10 **code FIXED** on master (FX10 `5a3fce93`); live re-proof owed. Owner phone: pair **confirmed**, launch smoke **PASS** post-#145; full 10-step checklist not fully evidenced.
 
 ---
 
@@ -84,28 +87,33 @@ Best available verdict per candidate. Prefer A2/C2/D2/C3/F-final/LB over earlier
 
 ---
 
-## Fixes landed this sweep (on `integration/2026-07-16-untested-sweep`)
+## Fixes landed this sweep (on `origin/master` @ `62b4424d`)
 
 | Fix | Commit | Status |
 |---|---|---|
-| F1 approval delivery retry | `065481d9` → merge `4e45dbaa` | Merged; live-proven by C2/D2/C3 |
-| F4 approve→launch resume | `ec425b40` → merge `1f08c3c6` | Merged; unit + **C3 live CLI + git commit** |
-| Pairing timeout 8s→30s | `d1f8559a` | Merged into tip |
+| F1 approval delivery retry | `065481d9` → merge `4e45dbaa` | On master (#140); live-proven by C2/D2/C3 |
+| F4 approve→launch resume | `ec425b40` → merge `1f08c3c6` | On master (#140); unit + **C3 live CLI + git commit** |
+| Pairing timeout 8s→30s | `d1f8559a` | On master |
 | F2 addrepo truncation | — | **Drop** (false bug narrative) |
 | F3 pairing disagreement | doc branch `36310671` | No product fix; env artifact — confirmed by F-final terminal PASS |
-| FX7 needsApproval → awaiting | `a7749650` → merge `543566ba` | Merged; unit-gated; **C4 live owed** |
-| FX5 Connect above keypad | `a8a91761` → merge `2a872e1e` | Merged; **C4 screenshot owed** |
-| Lane P policy/audit relay | `4382f1b8`+`7b4d4695` → merge `7707e4fa` | Merged; unit-gated; **C4 live owed** |
-| Drop sentry Package.resolved pin | `faeb80c9` | Merged (FX7 contamination cleanup) |
+| FX7 needsApproval → awaiting | `a7749650` → merge `543566ba` | On master (#140); **C4 #7 live owed** |
+| FX5 Connect above keypad | `a8a91761` → merge `2a872e1e` | On master (#140); C4 screenshot PASS |
+| Lane P policy/audit relay | `4382f1b8`+`7b4d4695` → merge `7707e4fa` | On master (#140); Audit PASS live |
+| Drop sentry Package.resolved pin | `faeb80c9` | On master |
+| FX10 background-tasks pill | `5a3fce93` | On master (#141); #10 code FIXED; live owed |
+| Policy stale SSH error | `ebc336f6` (#144) | On master; phone UI re-proof owed |
+| Auth-preflight cold probe | `e7f06059` (#145) | On master; launch smoke **PASS** |
+| Proof under menu | `34d1f2de` (#147) | On master; UX **CLAIMED-UNVERIFIED** |
+| All Repos cache paint | `6b05372c` (#149) | On master @ tip; UX **CLAIMED-UNVERIFIED** |
 
 ---
 
 ## Remaining work (ordered)
 
-1. **Merge-to-master + push** — owner-ordered 2026-07-16 ~16:29 ET (supersedes prior C4-wait autonomy stop). In progress this session.
-2. **Owner phone dogfood** — install tip on UDID `557A7877-…`, re-pair if needed, run `DOGFOOD_READY.md` §4 smoke → write `DOGFOOD_SMOKE.md`.
-3. **Lane C4 live sim re-test** (parallel, Simurgh `lease-197`): #7 chain (#8/#9/#17/#23) + #2/#3 Policy/Audit over relay + FX5 keypad screenshot + #10/#14 recheck + #1/#11/#18 harness retries. Code FIXED for #2/#3/#5/#7; live still owed.
-4. **#10/#14 product diagnosis** if C4 still fails pill/chip hydration (`fx10-bg-tasks` worktree in flight — do not merge until green).
+1. ~~**Merge-to-master + push**~~ — **DONE** (#140–#149 merged; tip `62b4424d`).
+2. **Owner phone dogfood** — install @ `62b4424d` **claimed SUCCEEDED**; pair **confirmed**; launch smoke **PASS** post-#145. Full `DOGFOOD_READY.md` §4 checklist (approve + follow-up + Policy/Audit UI screenshots) **not fully evidenced**.
+3. **Lane C4 live sim re-test**: #7 chain (#8/#9/#17/#23) **still live-owed** — harness never got `paired with phone`; FX7 awaiting-card not observed. Also #10/#14 recheck + #1/#11/#18 harness retries.
+4. **Publish / TestFlight** — not started (`docs/PUBLISH_READINESS_CHECKLIST.md`).
 
 ---
 
