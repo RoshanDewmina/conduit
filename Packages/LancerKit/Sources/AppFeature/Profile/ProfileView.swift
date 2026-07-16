@@ -173,7 +173,11 @@ public struct ProfileView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("profile.row.settings")
 
-                ProfileRow(systemImage: "questionmark.circle", title: "Help", accessory: .externalLink)
+                Link(destination: URL(string: "https://github.com/RoshanDewmina/conduit/issues")!) {
+                    ProfileRow(systemImage: "questionmark.circle", title: "Help", accessory: .externalLink)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("profile.row.help")
             }
         }
     }

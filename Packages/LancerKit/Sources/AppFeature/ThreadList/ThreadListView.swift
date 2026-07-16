@@ -304,15 +304,6 @@ public struct ThreadListView: View {
                 .foregroundStyle(.secondary)
 
             Spacer()
-
-            Circle()
-                .fill(Color(.tertiarySystemFill))
-                .frame(width: 34, height: 34)
-                .overlay(
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                )
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)

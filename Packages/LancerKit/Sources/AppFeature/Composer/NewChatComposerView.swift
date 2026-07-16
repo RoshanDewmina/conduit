@@ -371,21 +371,18 @@ public struct NewChatComposerView: View {
                 .disabled(isUploadingAttachments)
                 .accessibilityLabel(Text("Send"))
                 .accessibilityIdentifier("composer.send")
-            } else {
-                Button(action: {}) {
-                    Circle()
-                        .fill(Color(.tertiarySystemFill))
-                        .frame(width: 34, height: 34)
-                        .overlay(
-                        Image(systemName: trimmedDraft.isEmpty ? "mic.fill" : "arrow.up")
+            } else if !trimmedDraft.isEmpty {
+                // Draft present but send blocked (no repo / upload in flight / errors).
+                // No decorative mic — empty draft shows no trailing control.
+                Circle()
+                    .fill(Color(.tertiarySystemFill))
+                    .frame(width: 34, height: 34)
+                    .overlay(
+                        Image(systemName: "arrow.up")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.secondary)
                     )
-                }
-                .buttonStyle(.plain)
-                .disabled(true)
-                .accessibilityLabel(Text("Send"))
-                .accessibilityIdentifier("composer.send")
+                    .accessibilityHidden(true)
             }
         }
     }
