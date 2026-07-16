@@ -518,6 +518,28 @@ public enum WorkspaceRepoCatalog {
         return groups
     }
 
+    /// Group by repo display title. Callers should pass newest-first items so
+    /// first-seen order yields newest-activity groups; items keep input order.
+    public static func groupByRepo<T>(
+        _ items: [T],
+        title: KeyPath<T, String>
+    ) -> [(title: String, items: [T])] {
+        guard !items.isEmpty else { return [] }
+
+        var buckets: [String: [T]] = [:]
+        var order: [String] = []
+        for item in items {
+            let key = item[keyPath: title]
+            if buckets[key] == nil {
+                order.append(key)
+                buckets[key] = [item]
+            } else {
+                buckets[key]!.append(item)
+            }
+        }
+        return order.map { (title: $0, items: buckets[$0]!) }
+    }
+
     public static func statusKind(conversation: ChatConversation, lastTurn: ChatTurn?) -> ThreadStatusKind {
         if let lastTurn {
             switch lastTurn.status {

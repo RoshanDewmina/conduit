@@ -411,6 +411,27 @@ struct WorkspaceRepoCatalogTests {
         #expect(WorkspaceRepoCatalog.groupByRecency([], now: now, calendar: calendar).isEmpty)
     }
 
+    @Test("groupByRepo preserves first-seen group order and item order")
+    func groupByRepo() {
+        struct Row: Hashable {
+            let id: String
+            let repo: String
+        }
+        let items = [
+            Row(id: "1", repo: "alpha"),
+            Row(id: "2", repo: "beta"),
+            Row(id: "3", repo: "alpha"),
+            Row(id: "4", repo: "gamma"),
+            Row(id: "5", repo: "beta"),
+        ]
+        let groups = WorkspaceRepoCatalog.groupByRepo(items, title: \.repo)
+        #expect(groups.map(\.title) == ["alpha", "beta", "gamma"])
+        #expect(groups[0].items.map(\.id) == ["1", "3"])
+        #expect(groups[1].items.map(\.id) == ["2", "5"])
+        #expect(groups[2].items.map(\.id) == ["4"])
+        #expect(WorkspaceRepoCatalog.groupByRepo([Row](), title: \.repo).isEmpty)
+    }
+
     @Test("isAbsoluteSendTarget rejects relative and empty cwd")
     func isAbsoluteSendTarget() {
         #expect(WorkspaceRepoCatalog.isAbsoluteSendTarget("/Users/dev/r"))
