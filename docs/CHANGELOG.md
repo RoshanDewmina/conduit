@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 09:48 Cursor Grok — RepoPickerView: Add Repo sheet (Workspaces pattern) + select-after-add so composer "Add a repo first" is no longer a dead end (`fix/composer-addrepo-deadend`)
 - 06:27 Cursor Grok — fix pairing UX: Remove no longer races NavigationLink (alert vanished / stuck offline host); MachineDetail Remove; keep pairing-sheet errors sticky across socket close; brief paired confirmation before dismiss (`cursor/desktop-history-and-terminal-3510`)
 - 06:02 Cursor Grok (orchestrator) — daily-use workflow audit on `integration/2026-07-15-night` @ b17b6172: sim L1 PASS, L2–L4 evidence, GAP_LIST + L6 BLOCKED (phone orphaned); docs only (`docs/test-runs/2026-07-16-daily-use-audit/`)
 - 07:55 Cursor Grok — replace Phase 1 phone-SSH terminal with Orca 1:1 daemon-owned PTY: `lancerd/terminal` Host+Session (creack/pty), relay `terminalCreate/Send/Resize/Close/Subscribe` + Orca stream frames, iOS `RelayTerminalModel` over E2E; deleted SSH LiveTerminalModel/password/host-setup (`cursor/desktop-history-and-terminal-3510`)
