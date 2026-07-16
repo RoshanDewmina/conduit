@@ -51,8 +51,8 @@ func TestParseClaudeAuthStatusJSON(t *testing.T) {
 
 func TestClaudeAuthProductionTimeouts(t *testing.T) {
 	t.Parallel()
-	if claudeAuthProbeTimeout != 20*time.Second {
-		t.Fatalf("probe timeout=%v want 20s (covers ~15s cold claude auth status)", claudeAuthProbeTimeout)
+	if claudeAuthProbeTimeout != 35*time.Second {
+		t.Fatalf("probe timeout=%v want 35s (covers launchd cold ~13s + headroom)", claudeAuthProbeTimeout)
 	}
 	if claudeFirstOutputTimeout != 45*time.Second {
 		t.Fatalf("TTFO=%v want 45s", claudeFirstOutputTimeout)

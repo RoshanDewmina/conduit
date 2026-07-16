@@ -70,6 +70,26 @@ func TestLookPathInResolvesAgainstEnvNotProcess(t *testing.T) {
 	}
 }
 
+func TestLookPathInExcludingSkipsShimDir(t *testing.T) {
+	shimDir := t.TempDir()
+	realDir := t.TempDir()
+	if err := writeExecutable(shimDir + "/claude"); err != nil {
+		t.Fatal(err)
+	}
+	realBin := realDir + "/claude"
+	if err := writeExecutable(realBin); err != nil {
+		t.Fatal(err)
+	}
+	// Shim appears first on PATH — excluding it must yield the real binary.
+	env := []string{"PATH=" + shimDir + ":" + realDir}
+	if got := lookPathInExcluding("claude", env, shimDir); got != realBin {
+		t.Fatalf("lookPathInExcluding = %q, want %q", got, realBin)
+	}
+	if got := lookPathIn("claude", env); got != shimDir+"/claude" {
+		t.Fatalf("lookPathIn without exclude = %q, want shim", got)
+	}
+}
+
 func writeExecutable(path string) error {
 	return os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755)
 }

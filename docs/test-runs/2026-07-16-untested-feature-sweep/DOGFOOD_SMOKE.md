@@ -1,38 +1,86 @@
-# Dogfood smoke — owner iPhone (2026-07-16)
+# Dogfood smoke — owner iPhone (2026-07-16 post-merge)
 
-**Written:** 2026-07-16 ~16:50 ET  
-**`origin/master`:** `9ff3e6b4` (PR #140 + #141 + #142 docs)  
-**FX10 included:** YES (`5a3fce93` ancestor)  
-**.app path:** `/tmp/lancer-device-dogfood-dd/Build/Products/Debug-iphoneos/Lancer.app`  
-**Device:** `557A7877-F729-5031-9606-0E04F2B67822` (Roshan's iPhone)
+**Audience:** Roshan (owner phone dogfood)  
+**Updated:** 2026-07-16 ~17:20 ET (auth-preflight fix landed on host; phone send retry owed)  
+**Build:** app still `origin/master` @ `ec3565f7` (FX7 + FX5 + Lane P + FX10); **host `lancerd`** rebuilt from `fix/auth-preflight-cold-probe` and reinstalled  
+**Device:** Roshan's iPhone `557A7877-F729-5031-9606-0E04F2B67822`  
+**App:** Reinstalled ~16:34 ET (`dev.lancer.mobile`); brought to foreground ~17:19 via `devicectl`
 
 ---
 
-## Results
+## Result: **AUTH GREEN / phone smoke BLOCKED on owner tap**
 
-| Step | Status | Notes |
+| Gate | Status | Evidence |
 |---|---|---|
-| 0. Install FX10 tip | **PASS** | `xcodebuild` BUILD SUCCEEDED; `devicectl install` SUCCEEDED (`dev.lancer.mobile`); launched |
-| 1. Pair | **BLOCKED → owner tap** | Fresh production code **`347051`** (minted after install; prior `300552` expired unused). `confirmedAt` null. C4 uses `/tmp/sweep-C4` — safe. |
-| 2. Send low-risk turn | **BLOCKED** on pair | |
-| 3. Approve if prompted | **BLOCKED** on pair | |
-| 4. No stale "Couldn't get a reply" | **BLOCKED** on pair | |
-| 5. Background-tasks pill (FX10) | **live owed** | Code FIXED; needs Bash turn after pair |
+| Production daemon | OK | Reloaded ~17:17 ET; plist now has Homebrew `PATH`; doctor 12 OK, relay **confirmed** |
+| Phone paired | **PASS** (kept) | Code **149884** @ 17:02:56; **no remint**; doctor still `paired with relay wss://conduit-push.fly.dev (confirmed)` after reload |
+| Auth preflight | **PASS** | Host RPC `agent.conversations.append` → audit `conversation-append-launched` **allow** @ `2026-07-16T21:19:07Z` (no auth-preflight deny) |
+| Smoke send→approve (phone) | **BLOCKED** | Physical idb cannot attach (`FBDeviceSet: []`); needs owner send on phone |
+| No stale "Couldn't get a reply" | **HOST PROVEN** / phone owed | Host launch succeeded; phone UI not driven |
 
 ---
 
-## Owner — exact 3 steps (code **347051**, ~5 min TTL)
+## Root cause (17:05 deny)
 
-1. If this code expired: on Mac run `~/.lancer/bin/lancerd pair` and note the new 6-digit code (never `pair --help`).
-2. On iPhone: **Profile → Trusted Machines → Add a machine → Pair over relay** → enter the code → tap **Connect**.
-3. Confirm: `grep "paired with phone" ~/.lancer/lancerd.stderr.log | tail -1` is **after** your Connect; phone shows Mac **Connected**.
+Launchd cold `claude auth status --json` measured **~13s** under a gui LaunchAgent vs production probe budget **20s**. Interactive shell was logged-in and fast (~1s); resident deny was `errClaudeAuthUnavailable` (timeout), audited as `conversation-append-auth-preflight` deny — not a real logout.
 
-Then smoke: Workspaces → `List files in the current directory, then stop.` → Approve if asked → confirm no stale **Couldn't get a reply**. Optional: Bash turn → check background-tasks pill.
+Code: `claude_auth.go` (`claudeAuthProbeTimeout`, `claudeAuthPreflight` / `ensureClaudeAuth` → `dispatch.go` conversation-append path).
+
+## Fix applied (host)
+
+1. Probe timeout **20s → 35s**
+2. Boot-time background auth cache warm (`resident.go`)
+3. Resolve real `claude` excluding `~/.lancer/bin` shim (`resolveClaudeAuthBin` / `lookPathInExcluding`)
+4. `lancerd install` writes Homebrew-first `PATH` into launchd plist (preserves `APPROVAL_RELAY_SECRET`)
+5. Reinstalled + reloaded LaunchAgent — **pairing kept**, no remint
 
 ---
 
-## Ground truth
+## Pair log (unchanged)
 
-- Relay: `wss://conduit-push.fly.dev`
-- Doctor earlier: resident OK; pairing unconfirmed until step 2
-- Do **not** bare-pair a sweep daemon without `LANCER_STATE_DIR`
+- Code **149884** paired **2026/07/16 17:02:56**
+- Post-reload doctor: relay pairing **confirmed** on `wss://conduit-push.fly.dev`
+
+---
+
+## Smoke log
+
+| # | Step | Result |
+|---|---|---|
+| 1 | Pair | **PASS** (149884; kept across daemon reload) |
+| 2a | Host auth/launch proof | **PASS** — `conversation-append-launched allow` @ 21:19:07Z for `Reply with exactly: auth-preflight-ok…` |
+| 2b | Phone send | **BLOCKED** — owner tap: Workspaces → Claude → send low-risk prompt |
+| 3 | Approve | **OWED** if ask card appears |
+| 4 | Follow-up | **OWED** after phone send |
+
+**Prior deny (historical):**
+```json
+{"timestamp":"2026-07-16T21:05:24Z","action":"conversation-append-auth-preflight","agent":"claudeCode","kind":"dispatch","command":"Hi","effect":"deny","rule":"default:ask"}
+```
+
+**Host proof after fix:**
+```json
+{"timestamp":"2026-07-16T21:19:07Z","action":"conversation-append-launched","agent":"claudeCode","kind":"dispatch","command":"Reply with exactly: auth-preflight-ok. Do not run any tools.","effect":"allow","rule":"default:ask"}
+```
+
+---
+
+## Owner phone retry (now)
+
+1. Confirm Trusted Machines still **Connected** (do **not** remint unless doctor shows unpaired).
+2. Send: `List files in the current directory, then stop.`
+3. Approve if asked.
+4. Pass bar: audit `conversation-append-launched` (not auth-preflight deny); no **Couldn't get a reply — No connected machine**.
+
+```bash
+tail -f ~/.lancer/audit.log ~/.lancer/lancerd.stderr.log
+```
+
+---
+
+## Prior mint history
+
+| Code | Mint (ET) | Outcome |
+|---|---|---|
+| 758455 | 16:53 | Expired; no pair |
+| **149884** | ~16:58 | **Paired 17:02:56** (still the live identity) |

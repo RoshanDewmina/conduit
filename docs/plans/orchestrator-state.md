@@ -1,5 +1,14 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-16 ~17:20 ET — auth-preflight fixed on host; phone smoke needs owner send
+
+- **Root cause:** launchd cold `claude auth status` ~13s vs 20s probe budget → `conversation-append-auth-preflight` deny on `"Hi"` @ 21:05:24Z while interactive Claude was logged in.
+- **Fix branch:** `fix/auth-preflight-cold-probe` — timeout 35s + boot warm + shim-excluding resolve + launchd PATH in plist; `go test ./...` green; host installed+reloaded.
+- **Auth proof:** audit `conversation-append-launched allow` @ 21:19:07Z (RPC); `agent.status` `loggedIn:true`.
+- **Pair:** code **149884** kept (no remint); doctor relay **confirmed** after reload.
+- **Smoke:** phone send still **BLOCKED** on owner tap (idb cannot drive physical UDID); app foregrounded via `devicectl`.
+- **App binary:** still master `ec3565f7` on phone — daemon-only fix.
+
 ## ⚡ 2026-07-16 ~17:05 ET — Lane C4 PARTIAL (pairing harness blocked; Audit PASS, FX5 PASS)
 
 Sweep tip `671047a7` (C4 run). Evidence: `LC4-report.md` + `screenshots/LC4-*.png`. Daemon never

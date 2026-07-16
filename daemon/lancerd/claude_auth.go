@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -34,9 +35,11 @@ const (
 	claudeAuthUnavailableMsg   = "auth status unavailable — retry"
 )
 
-// claudeAuthProbeTimeout covers measured ~15s cold `claude auth status`.
-// Var so tests can shorten; production default is 20s.
-var claudeAuthProbeTimeout = 20 * time.Second
+// claudeAuthProbeTimeout covers launchd cold `claude auth status` (measured
+// ~13s under gui LaunchAgent; interactive warm is ~1–2s). 20s was too tight
+// for dogfood send-after-pair (2026-07-16 auth-preflight deny). Var so tests
+// can shorten; production default is 35s.
+var claudeAuthProbeTimeout = 35 * time.Second
 
 var (
 	errClaudeNotLoggedIn     = errors.New(claudeNotLoggedInMessage)
@@ -132,10 +135,7 @@ func claudeAuthProbe(runner claudeAuthCommandRunner, env []string, timeout time.
 	if timeout <= 0 {
 		timeout = claudeAuthProbeTimeout
 	}
-	bin := "claude"
-	if resolved := lookPathIn("claude", env); resolved != "" {
-		bin = resolved
-	}
+	bin := resolveClaudeAuthBin(env)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	out, err := runner(ctx, bin, []string{"auth", "status", "--json"}, env)
@@ -329,12 +329,23 @@ func invalidateClaudeAuthCache() {
 	globalClaudeAuthCache.invalidate()
 }
 
+// resolveClaudeAuthBin prefers the real vendor CLI, never the Lancer shim in
+// ~/.lancer/bin (shim would dial the daemon / hang the preflight). Falls back
+// to common absolute install paths when PATH resolution misses.
 func resolveClaudeAuthBin(env []string) string {
-	bin := "claude"
-	if resolved := lookPathIn("claude", env); resolved != "" {
-		bin = resolved
+	exclude := ""
+	if home, err := os.UserHomeDir(); err == nil {
+		exclude = filepath.Join(home, ".lancer", "bin")
 	}
-	return bin
+	if resolved := lookPathInExcluding("claude", env, exclude); resolved != "" {
+		return resolved
+	}
+	for _, candidate := range []string{"/opt/homebrew/bin/claude", "/usr/local/bin/claude"} {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return candidate
+		}
+	}
+	return "claude"
 }
 
 // claudeAuthProbeSingleflight runs one probe per key; concurrent callers share.
