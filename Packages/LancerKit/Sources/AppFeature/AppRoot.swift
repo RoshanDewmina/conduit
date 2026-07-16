@@ -245,9 +245,7 @@ public struct AppRoot: View {
             }
             _workspaceDataStore = State(initialValue: workspaceStore)
             _terminalCoordinator = State(initialValue: TerminalSessionCoordinator(
-                hostRepo: env.hostRepo,
-                keyStore: env.keyStore,
-                hostKeyStore: env.hostKeyStore
+                relayFleetStore: fleetStore
             ))
         } catch {
             _environment = State(initialValue: .failure(error.localizedDescription))
@@ -329,17 +327,7 @@ public struct AppRoot: View {
             ) {
                 if let model = terminalCoordinator.presentedModel {
                     LiveTerminalView(model: model)
-                        .environment(terminalCoordinator)
                 }
-            }
-            .sheet(
-                item: Binding(
-                    get: { terminalCoordinator.passwordPromptHost },
-                    set: { terminalCoordinator.passwordPromptHost = $0 }
-                )
-            ) { prompt in
-                TerminalPasswordSheet(prompt: prompt)
-                    .environment(terminalCoordinator)
             }
             .task {
                 relayApprovalIngest.start()

@@ -1,14 +1,15 @@
 #if os(iOS)
 import SwiftUI
-import LancerCore
 import TerminalEngine
 
+/// Interactive terminal surface for daemon-owned PTYs (Orca-style).
+/// Direct keystroke input is the default (Orca mobile-terminal-direct-input).
 public struct LiveTerminalView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var model: LiveTerminalModel
+    @State private var model: RelayTerminalModel
     @State private var ctrlLatched = false
 
-    public init(model: LiveTerminalModel) {
+    public init(model: RelayTerminalModel) {
         _model = State(initialValue: model)
     }
 
@@ -23,12 +24,7 @@ public struct LiveTerminalView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { accessoryRail }
         .task { await model.start() }
         .onDisappear { model.stop() }
-        .sheet(isPresented: hostKeySheetPresented) {
-            hostKeyTrustSheet
-        }
     }
-
-    // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 10) {
@@ -43,7 +39,9 @@ public struct LiveTerminalView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
 
-            statusDot
+            Circle()
+                .fill(statusColor)
+                .frame(width: 9, height: 9)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(model.title)
@@ -58,19 +56,8 @@ public struct LiveTerminalView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(theme.background)
-        .background(Color.black.opacity(0.18))
         .overlay(Rectangle().fill(theme.foreground.opacity(0.08)).frame(height: 0.5), alignment: .bottom)
     }
-
-    private var statusDot: some View {
-        Circle()
-            .fill(statusColor)
-            .frame(width: 9, height: 9)
-            .opacity(model.status == .connecting ? 0.6 : 1)
-            .animation(model.status == .connecting ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default, value: model.status)
-    }
-
-    // MARK: - Terminal surface
 
     private var terminalSurface: some View {
         ZStack {
@@ -86,13 +73,13 @@ public struct LiveTerminalView: View {
             )
 
             switch model.status {
-            case .connecting where model.pendingHostKeyFingerprint == nil:
+            case .connecting:
                 statusOverlay(ProgressView().tint(theme.foreground), text: "Connecting…")
             case .failed(let message):
                 statusOverlay(Image(systemName: "exclamationmark.triangle"), text: message)
             case .closed:
                 statusOverlay(Image(systemName: "bolt.slash"), text: "Session closed")
-            case .connecting, .connected:
+            case .connected:
                 EmptyView()
             }
         }
@@ -113,61 +100,44 @@ public struct LiveTerminalView: View {
         .padding(40)
     }
 
-    // MARK: - Keyboard accessory rail
-
+    /// Orca mobile accessory bar: Esc / Tab / Ctrl latch / arrows.
     private var accessoryRail: some View {
-        TerminalAccessoryRail(ctrlLatched: $ctrlLatched) { bytes in
-            model.send(bytes)
+        HStack(spacing: 8) {
+            key("Esc") { model.send([0x1b]) }
+            key("Tab") { model.send([0x09]) }
+            Button {
+                ctrlLatched.toggle()
+            } label: {
+                Text("Ctrl")
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(ctrlLatched ? theme.background : theme.foreground)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(ctrlLatched ? theme.foreground : theme.foreground.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            Spacer(minLength: 0)
+            key("↑") { model.send([0x1b, 0x5b, 0x41]) }
+            key("↓") { model.send([0x1b, 0x5b, 0x42]) }
+            key("←") { model.send([0x1b, 0x5b, 0x44]) }
+            key("→") { model.send([0x1b, 0x5b, 0x43]) }
         }
-        .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(Color.black.opacity(0.25))
     }
 
-    // MARK: - Host key TOFU
-
-    private var hostKeySheetPresented: Binding<Bool> {
-        Binding(
-            get: { model.pendingHostKeyFingerprint != nil },
-            set: { if !$0 { model.rejectHostKey() } }
-        )
-    }
-
-    private var hostKeyTrustSheet: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Unknown host key")
-                    .font(.headline)
-                Text("Verify this fingerprint before trusting:")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text(model.pendingHostKeyFingerprint ?? "")
-                    .font(.system(.body, design: .monospaced))
-                    .textSelection(.enabled)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
-                Spacer()
-            }
-            .padding(20)
-            .navigationTitle("Trust host?")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { model.rejectHostKey() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Trust") {
-                        Task { await model.trustHostKey() }
-                    }
-                }
-            }
+    private func key(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(theme.foreground)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(theme.foreground.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
         }
-        .presentationDetents([.medium])
+        .buttonStyle(.plain)
     }
-
-    // MARK: - Helpers
 
     private func consumeCtrlLatch(_ bytes: [UInt8]) -> [UInt8] {
         guard ctrlLatched, let first = bytes.first else { return bytes }
@@ -182,70 +152,19 @@ public struct LiveTerminalView: View {
     private var statusColor: Color {
         switch model.status {
         case .connecting: return .yellow
-        case .connected:  return .green
-        case .failed:     return .red
-        case .closed:     return .gray
+        case .connected: return .green
+        case .failed: return .red
+        case .closed: return .gray
         }
     }
 
     private var statusLabel: String {
-        if model.pendingHostKeyFingerprint != nil {
-            return "verify host key…"
-        }
         switch model.status {
-        case .connecting:        return "connecting…"
-        case .connected:         return "connected"
-        case .failed(let msg):   return msg
-        case .closed:            return "closed"
+        case .connecting: return "connecting…"
+        case .connected: return "connected"
+        case .failed(let msg): return msg
+        case .closed: return "closed"
         }
-    }
-}
-
-// MARK: - Minimal accessory rail (no DesignSystem)
-
-private struct TerminalAccessoryRail: View {
-    @Binding var ctrlLatched: Bool
-    let onBytes: ([UInt8]) -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                keyButton("Esc", bytes: [0x1b])
-                keyButton("Tab", bytes: [0x09])
-                ctrlButton
-                keyButton("↑", bytes: [0x1b, 0x5b, 0x41])
-                keyButton("↓", bytes: [0x1b, 0x5b, 0x42])
-                keyButton("←", bytes: [0x1b, 0x5b, 0x44])
-                keyButton("→", bytes: [0x1b, 0x5b, 0x43])
-            }
-            .padding(.horizontal, 4)
-        }
-    }
-
-    private var ctrlButton: some View {
-        Button {
-            ctrlLatched.toggle()
-        } label: {
-            Text("Ctrl")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(ctrlLatched ? Color.accentColor : Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func keyButton(_ title: String, bytes: [UInt8]) -> some View {
-        Button {
-            onBytes(bytes)
-        } label: {
-            Text(title)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
     }
 }
 #endif

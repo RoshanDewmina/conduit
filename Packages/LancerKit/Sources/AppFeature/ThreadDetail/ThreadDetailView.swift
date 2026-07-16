@@ -648,17 +648,11 @@ struct ThreadDetailView: View {
 
     private func openTerminalAtCWD() {
         guard let startupCommand = TerminalShellCommand.cdToWorkingDirectory(thread.cwd) else { return }
-        Task {
-            let hosts = (try? await terminalCoordinator.allHosts()) ?? []
-            if let machine = relayFleetStore.firstConnectedMachine,
-               let host = MachineDetailView.resolveHost(for: machine, from: hosts) {
-                terminalCoordinator.openTerminal(host: host, startupCommand: startupCommand)
-            } else if let host = hosts.first {
-                terminalCoordinator.openTerminal(host: host, startupCommand: startupCommand)
-            } else {
-                terminalCoordinator.lastErrorMessage = "No SSH host configured. Add one from Trusted Machines."
-            }
-        }
+        let cwd = thread.cwd.trimmingCharacters(in: .whitespacesAndNewlines)
+        terminalCoordinator.openOnFirstConnectedMachine(
+            cwd: cwd.isEmpty ? nil : cwd,
+            startupCommand: startupCommand
+        )
     }
 }
 

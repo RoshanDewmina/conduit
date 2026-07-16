@@ -76,6 +76,11 @@ public final class E2ERelayBridge: ObservableObject {
     private let repoTreeGate = E2ERelayRPCSerializationGate()
     private let repoFileGate = E2ERelayRPCSerializationGate()
     private var attachmentPutContinuation: CheckedContinuation<AttachmentPutResult, Error>?
+    private var terminalCreateContinuation: CheckedContinuation<TerminalCreateResponse, Error>?
+    private var terminalSendContinuation: CheckedContinuation<TerminalSendResponse, Error>?
+    private var terminalResizeContinuation: CheckedContinuation<TerminalResizeResponse, Error>?
+    private var terminalCloseContinuation: CheckedContinuation<TerminalCloseResponse, Error>?
+    private var terminalSubscribeContinuation: CheckedContinuation<TerminalSubscribeResponse, Error>?
 #if DEBUG
     var boundedRPCWaitTimeoutOverride: Duration?
     /// Test-only: shorten the append result wait (production is 20s, matching
@@ -1482,10 +1487,161 @@ public final class E2ERelayBridge: ObservableObject {
             }
             attachmentPutContinuation = nil
 
+        case "terminalCreateResult":
+            resumeTerminal(TerminalCreateResponse.self, payload: message.payload, into: &terminalCreateContinuation)
+        case "terminalSendResult":
+            resumeTerminal(TerminalSendResponse.self, payload: message.payload, into: &terminalSendContinuation)
+        case "terminalResizeResult":
+            resumeTerminal(TerminalResizeResponse.self, payload: message.payload, into: &terminalResizeContinuation)
+        case "terminalCloseResult":
+            resumeTerminal(TerminalCloseResponse.self, payload: message.payload, into: &terminalCloseContinuation)
+        case "terminalSubscribeResult":
+            resumeTerminal(TerminalSubscribeResponse.self, payload: message.payload, into: &terminalSubscribeContinuation)
+        case "terminalStream":
+            guard let env = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<TerminalStreamEnvelope>.self, from: message.payload
+            ) else { return }
+            NotificationCenter.default.post(
+                name: .lancerE2ETerminalStream,
+                object: nil,
+                userInfo: ["envelope": env.payload, "machineID": self.machineID]
+            )
+
         default:
             break
         }
     }
+
+    private func resumeTerminal<T: Decodable>(
+        _ type: T.Type,
+        payload: Data,
+        into continuation: inout CheckedContinuation<T, Error>?
+    ) {
+        let envelope = try? JSONDecoder().decode(
+            E2ERelayMessage.RelayInnerEnvelope<T>.self, from: payload
+        )
+        if let response = envelope?.payload {
+            continuation?.resume(returning: response)
+        } else {
+            continuation?.resume(throwing: E2EError.decryptFailed)
+        }
+        continuation = nil
+    }
+
+    // MARK: - Orca-style terminal RPCs (daemon-owned PTY)
+
+    public func relayTerminalCreate(_ request: TerminalCreateRequest) async throws -> TerminalCreateResponse {
+        guard isActive else { throw E2EError.notPaired }
+        try await relayClient.send(type: "terminalCreate", payload: request)
+        terminalCreateContinuation?.resume(throwing: E2EError.superseded)
+        terminalCreateContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.terminalCreateContinuation?.resume(throwing: E2EError.timedOut)
+            self.terminalCreateContinuation = nil
+        }
+        defer { timeout.cancel() }
+        let response = try await withCheckedThrowingContinuation { (c: CheckedContinuation<TerminalCreateResponse, Error>) in
+            self.terminalCreateContinuation = c
+        }
+        if let err = response.error, !err.isEmpty {
+            throw RelayFSError.host(err)
+        }
+        guard response.terminal != nil else {
+            throw RelayFSError.host("terminal.create returned no handle")
+        }
+        return response
+    }
+
+    public func relayTerminalSend(handle: String, text: String) async throws -> TerminalSendResponse {
+        guard isActive else { throw E2EError.notPaired }
+        try await relayClient.send(type: "terminalSend", payload: TerminalSendRequest(handle: handle, text: text))
+        terminalSendContinuation?.resume(throwing: E2EError.superseded)
+        terminalSendContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.terminalSendContinuation?.resume(throwing: E2EError.timedOut)
+            self.terminalSendContinuation = nil
+        }
+        defer { timeout.cancel() }
+        let response = try await withCheckedThrowingContinuation { (c: CheckedContinuation<TerminalSendResponse, Error>) in
+            self.terminalSendContinuation = c
+        }
+        if let err = response.error, !err.isEmpty {
+            throw RelayFSError.host(err)
+        }
+        return response
+    }
+
+    public func relayTerminalResize(handle: String, cols: Int, rows: Int) async throws -> TerminalResizeResponse {
+        guard isActive else { throw E2EError.notPaired }
+        try await relayClient.send(
+            type: "terminalResize",
+            payload: TerminalResizeRequest(handle: handle, cols: cols, rows: rows, mode: "mobile-fit")
+        )
+        terminalResizeContinuation?.resume(throwing: E2EError.superseded)
+        terminalResizeContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.terminalResizeContinuation?.resume(throwing: E2EError.timedOut)
+            self.terminalResizeContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.terminalResizeContinuation = c
+        }
+    }
+
+    public func relayTerminalClose(handle: String) async throws -> TerminalCloseResponse {
+        guard isActive else { throw E2EError.notPaired }
+        try await relayClient.send(type: "terminalClose", payload: TerminalCloseRequest(handle: handle))
+        terminalCloseContinuation?.resume(throwing: E2EError.superseded)
+        terminalCloseContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.terminalCloseContinuation?.resume(throwing: E2EError.timedOut)
+            self.terminalCloseContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.terminalCloseContinuation = c
+        }
+    }
+
+    public func relayTerminalSubscribe(handle: String, clientId: String) async throws -> TerminalSubscribeResponse {
+        guard isActive else { throw E2EError.notPaired }
+        try await relayClient.send(
+            type: "terminalSubscribe",
+            payload: TerminalSubscribeRequest(
+                handle: handle,
+                client: .init(id: clientId, type: "mobile")
+            )
+        )
+        terminalSubscribeContinuation?.resume(throwing: E2EError.superseded)
+        terminalSubscribeContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.terminalSubscribeContinuation?.resume(throwing: E2EError.timedOut)
+            self.terminalSubscribeContinuation = nil
+        }
+        defer { timeout.cancel() }
+        let response = try await withCheckedThrowingContinuation { (c: CheckedContinuation<TerminalSubscribeResponse, Error>) in
+            self.terminalSubscribeContinuation = c
+        }
+        if let err = response.error, !err.isEmpty {
+            throw RelayFSError.host(err)
+        }
+        return response
+    }
+}
+
+extension Notification.Name {
+    public static let lancerE2ETerminalStream = Notification.Name("lancerE2ETerminalStream")
 }
 
 /// A directory listing returned by the daemon's `fsList` over the relay. Keys

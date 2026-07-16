@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 07:55 Cursor Grok — replace Phase 1 phone-SSH terminal with Orca 1:1 daemon-owned PTY: `lancerd/terminal` Host+Session (creack/pty), relay `terminalCreate/Send/Resize/Close/Subscribe` + Orca stream frames, iOS `RelayTerminalModel` over E2E; deleted SSH LiveTerminalModel/password/host-setup (`cursor/desktop-history-and-terminal-3510`)
 - 07:45 Cursor Grok — desktop past-session open now prefers `attachObservedSession` + ledger fetch (full history) over the 200-line tail `agent.sessions.transcript` path; fallback retained; ShellLiveBridge regression test (`cursor/desktop-history-and-terminal-3510`)
 - 07:30 Cursor Composer — Phase 1 interactive SSH terminal: LiveTerminalModel/View (SwiftTerm + inline accessory rail + TOFU host-key sheet), TerminalSessionCoordinator, SSHHostSetupSheet, MachineDetailView; wired Trusted Machines → detail, thread ⋯ → open at cwd, AppRoot fullScreenCover + password prompt; DEBUG `LANCER_DESTINATION=terminal` (`cursor/desktop-history-and-terminal-3510`)
 

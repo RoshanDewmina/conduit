@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os/exec"
+	"sync"
 
 	"lancer/lancerd/policy"
 )
@@ -23,6 +24,9 @@ type relayClient interface {
 type e2eRouter struct {
 	client relayClient
 	server *server
+
+	termClientMu sync.Mutex
+	termClient   *relayTerminalClient
 }
 
 func newE2ERouter(client *e2eRelayClient, srv *server) *e2eRouter {
@@ -200,6 +204,9 @@ func (r *e2eRouter) sendStatusUpdate(agent string, model string, sessions int, s
 // handleMessage processes incoming E2E messages from the phone.
 // It is set as the client's messageHandler on construction.
 func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
+	if r.handleTerminalMessage(msgType, payload) {
+		return
+	}
 	switch msgType {
 	case "approvalResponse":
 		var decision struct {

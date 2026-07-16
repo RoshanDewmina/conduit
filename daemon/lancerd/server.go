@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"lancer/lancerd/policy"
+	"lancer/lancerd/terminal"
 )
 
 const maxFrameBytes = 16 * 1024 * 1024
@@ -233,6 +234,9 @@ type server struct {
 	// attachments reassembles attachment.put chunks (attachment_rpc.go).
 	attachmentsOnce sync.Once
 	attachments     *attachmentUploadHub
+	// termHost owns interactive PTY sessions (Orca-style daemon-owned terminal).
+	termOnce sync.Once
+	termHost *terminal.Host
 }
 
 type loopState struct {
