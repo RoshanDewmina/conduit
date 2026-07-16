@@ -39,6 +39,25 @@ public struct RelayPairingSheet: View {
 
     private var isCodeExpired: Bool { client.pairingState == .codeExpired }
 
+    /// True while the relay handshake or peer wait is in flight — drives the
+    /// ProgressView + disabled Connect button (audit item 11).
+    private var isConnecting: Bool {
+        switch client.connectionState {
+        case .connecting, .reconnecting:
+            return true
+        case .connected, .disconnected:
+            break
+        }
+        return client.pairingState == .waitingForPeer
+    }
+
+    private var connectingStatusLabel: String {
+        if client.pairingState == .waitingForPeer {
+            return "Waiting for your Mac…"
+        }
+        return "Connecting…"
+    }
+
     public var body: some View {
         NavigationStack {
             Form {
@@ -71,6 +90,14 @@ public struct RelayPairingSheet: View {
 
                     if client.connectionState != .disconnected || pairingFailureReason != nil || isCodeExpired {
                         Section("Status") {
+                            if isConnecting {
+                                HStack(spacing: 10) {
+                                    ProgressView()
+                                    Text(connectingStatusLabel)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .accessibilityIdentifier("relay-pairing.connecting")
+                            }
                             LabeledContent("Relay", value: "\(client.connectionState)")
                             LabeledContent("Pairing", value: "\(client.pairingState)")
                             if client.pairingState == .waitingForPeer, let expiresAt = client.pairingExpiresAt {
@@ -93,7 +120,10 @@ public struct RelayPairingSheet: View {
 
                     Section {
                         Button("Connect") { connect() }
-                            .disabled(pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).count != 6)
+                            .disabled(
+                                isConnecting
+                                    || pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).count != 6
+                            )
                         if client.pairingState == .paired {
                             Button("Disconnect", role: .destructive) { client.disconnect() }
                         }

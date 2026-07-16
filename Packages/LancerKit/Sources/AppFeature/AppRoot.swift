@@ -154,6 +154,9 @@ public struct AppRoot: View {
     @State private var relayQuestionIngest: RelayQuestionIngest?
     /// Derived + user-added workspace repos for the Workspaces shell.
     @State private var workspaceDataStore: WorkspaceDataStore?
+    /// First-run welcome gate. Launch arg `-onboardingSeen YES` registers into
+    /// UserDefaults automatically; UITests also set `LANCER_SKIP_CURSOR_ONBOARDING`.
+    @AppStorage("onboardingSeen") private var onboardingSeen = false
     #if DEBUG
     /// Prevents child destination hooks from racing the deterministic UITest reset.
     @State private var isUITestSeedReady: Bool
@@ -274,11 +277,32 @@ public struct AppRoot: View {
         }
     }
 
+    /// Show the minimal first-run screen until the user finishes or skips.
+    /// `-onboardingSeen YES` is honored via `@AppStorage`; the env skip is the
+    /// Cursor-era UITest seam (`LANCER_SKIP_CURSOR_ONBOARDING=1`).
+    private var shouldShowFirstRunOnboarding: Bool {
+        if onboardingSeen { return false }
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["LANCER_SKIP_CURSOR_ONBOARDING"] == "1" {
+            return false
+        }
+        #endif
+        return true
+    }
+
     @ViewBuilder
     private var readyRoot: some View {
         if let shellLiveBridge, let relayApprovalIngest, let relayQuestionIngest, let workspaceDataStore {
-            NavigationStack {
-                WorkspacesView()
+            Group {
+                if shouldShowFirstRunOnboarding {
+                    FirstRunOnboardingView {
+                        onboardingSeen = true
+                    }
+                } else {
+                    NavigationStack {
+                        WorkspacesView()
+                    }
+                }
             }
             .environment(relayFleetStore)
             .environment(shellLiveBridge)
