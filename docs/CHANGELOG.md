@@ -17,3 +17,4 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 - 20:50 Claude Fable + Cursor Grok — composer now morphs in place from the home pill instead of presenting a drawer (owner video feedback) (PR #120)
 - Claude Fable + Cursor Grok — desktop-session "Decryption failed" fix: SessionMessage.Role decodes thinking + unknown vendor roles; 3 regression tests; live-proven on paired sim (fix/desktop-session-decrypt, PR pending)
 - Codex 019f6841 — audited Cursor research bundle, corrected publish-oracle audit, consolidated prompt/history skills to ~/.agents/skills (report: ~/Downloads/2026-07-15-codex-work-report.md)
+- 22:12 Claude Fable — full-app test plan + session report (test-runs/2026-07-15-night-full-app-test-plan.md); STATUS_LEDGER refreshed to the 18-PR night state; device build installed + paired live on owner iPhone (#136 B6 tests, #137 C6 triage merged into the night stack)
