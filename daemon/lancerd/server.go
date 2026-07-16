@@ -302,6 +302,15 @@ func newServer(home string) *server {
 	// launchConversationTurn) deliver their ApprovalEvent through the same
 	// chokepoint a mid-run PreToolUse escalation uses — see deliverApprovalEvent.
 	s.dispatcher.deliverApproval = s.deliverApprovalEvent
+	// launchConversationTurn's "ask" branch resumes asynchronously once its
+	// delivered approval is decided (resumeConversationLaunchOnApproval); when
+	// that resumed launch does NOT reach "started" (auth-preflight failure,
+	// unsupported-attachment error, emergency stop, etc.), something has to
+	// persist that outcome onto the conversation ledger — the ORIGINAL
+	// synchronous agent.conversations.append RPC call already returned
+	// "needsApproval" to the caller long before this resolves, so there is no
+	// live response to update. See finalizeAsyncConversationLaunch.
+	s.dispatcher.onConversationLaunchResolved = s.finalizeAsyncConversationLaunch
 	// Launch escalation is relaxed only for agents whose per-action hook is
 	// verifiably wired (Claude today); everything else stays fail-closed.
 	s.dispatcher.hookWired = hookWiredForAgent(home)
@@ -360,6 +369,30 @@ func (s *server) deliverApprovalEvent(event ApprovalEvent) <-chan hookDecision {
 		s.e2e.sendApproval(event)
 	}
 	return ch
+}
+
+// finalizeAsyncConversationLaunch persists a NON-started outcome from
+// dispatcher.resumeConversationLaunchOnApproval onto the conversation ledger
+// and cleans up any worktree the (never-launched) turn had reserved — the
+// same bookkeeping conversationsAppend already does inline for a synchronous
+// non-"started" launchResult (conversation_rpc.go), needed here too because
+// this outcome resolves long after that original RPC call already returned
+// "needsApproval" to its caller. A "started" result needs none of this: the
+// ordinary run-status emit/persist plumbing (wrapEmitForRun →
+// server.emitNotification → persistConversationEvent) already covers it
+// identically to any other dispatch, so the dispatcher only calls this for
+// the non-started case.
+func (s *server) finalizeAsyncConversationLaunch(runID string, result dispatchResult, worktreePath, worktreeRepoRoot string) {
+	if s.conversations != nil {
+		if err := s.conversations.appendRunStatus(runID, result.Status, nil, result.Message); err != nil {
+			log.Printf("finalizeAsyncConversationLaunch: appendRunStatus failed for %s (%s): %v", runID, result.Status, err)
+		}
+	}
+	if worktreePath != "" {
+		if _, err := s.removeManagedWorktree(worktreeRepoRoot, worktreePath); err != nil {
+			log.Printf("finalizeAsyncConversationLaunch: removeManagedWorktree failed for %s: %v", runID, err)
+		}
+	}
 }
 
 // applyDecision resolves a pending approval and persists the outcome IDENTICALLY
