@@ -15,15 +15,30 @@ struct ThreadListRow: View {
                 .padding(.top, 7)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(thread.title)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(thread.title)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 0)
+
+                    if let added = thread.addedLines, let removed = thread.removedLines,
+                       added > 0 || removed > 0 {
+                        chatDiffStatText(added: added, removed: removed)
+                            .font(.system(size: 13, design: .monospaced))
+                    }
+                }
+
+                if let preview = thread.previewSnippet, !preview.isEmpty {
+                    Text(preview)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
 
                 statusLine
             }
-
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -31,6 +46,7 @@ struct ThreadListRow: View {
     }
 
     private var dotColor: Color {
+        if thread.unread { return .blue }
         switch thread.statusKind {
         case .working: return .orange
         case .completed: return Color(.systemGray3)
@@ -64,6 +80,10 @@ struct ThreadListRow: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
                 .italic(thread.statusKind == .idle)
+
+            Text("· \(ThreadListMetadata.relativeActivity(thread.lastActivityAt))")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
 
             if showsRepoName, let repoName = thread.repoName {
                 Text("· \(repoName)")
