@@ -129,6 +129,8 @@ struct ChatUserBubble: View {
     let text: String
     var attachments: [ConversationAttachmentReference] = []
     var previewCache: AttachmentPreviewCaching?
+    /// Mid-run feedback that is locally queued until the agent finishes.
+    var isQueued: Bool = false
 
     private var displayText: String {
         AttachmentDisplayText.cleanPrompt(text)
@@ -143,17 +145,28 @@ struct ChatUserBubble: View {
                         .frame(maxWidth: 280, alignment: .trailing)
                 }
                 if !displayText.isEmpty {
-                    Text(displayText)
-                        .font(.system(size: 16))
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(Color(.secondarySystemFill))
-                        )
-                        .textSelection(.enabled)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(displayText)
+                            .font(.system(size: 16))
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .fill(Color(.secondarySystemFill))
+                            )
+                            .textSelection(.enabled)
+                        if isQueued {
+                            Text("Queued")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(Color(.tertiarySystemFill)))
+                                .accessibilityLabel(Text("Queued"))
+                        }
+                    }
                 }
             }
         }
@@ -257,41 +270,6 @@ struct ChatOutlinePillLabel: View {
     }
 }
 
-/// Decorative docked "Follow up…" bar (+ / placeholder / mic) for historical threads.
-struct ChatFollowUpPlaceholderBar: View {
-    var placeholder: String = "Follow up…"
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .strokeBorder(Color(.separator), lineWidth: 1)
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                )
-
-            Text(placeholder)
-                .font(.system(size: 16))
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "mic.fill")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Capsule().fill(Color(.secondarySystemBackground)))
-        .overlay(Capsule().strokeBorder(Color(.separator).opacity(0.6), lineWidth: 0.5))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Follow up"))
-    }
-}
-
 /// Live follow-up composer styled like Cursor's docked bar; keeps TextField + send path.
 struct ChatFollowUpComposerBar: View {
     @Binding var text: String
@@ -339,12 +317,6 @@ struct ChatFollowUpComposerBar: View {
                 }
                 .disabled(!canSend || isDisabled)
                 .accessibilityLabel(Text("Send"))
-            } else {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .accessibilityHidden(true)
             }
         }
         .padding(.horizontal, 10)

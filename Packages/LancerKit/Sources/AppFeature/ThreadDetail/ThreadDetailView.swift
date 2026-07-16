@@ -228,6 +228,14 @@ struct ThreadDetailView: View {
                                 .accessibilityIdentifier("thread-detail-pending-followup")
                             }
 
+                            ForEach(bridge.queuedFeedback.items) { item in
+                                ChatUserBubble(
+                                    text: item.text,
+                                    attachments: item.attachments,
+                                    isQueued: true
+                                )
+                            }
+
                             if let machineID = pendingApprovalMachineID, let pendingApproval {
                                 ChatPendingApprovalCard(approval: pendingApproval, machineID: machineID)
                             }
@@ -303,18 +311,30 @@ struct ThreadDetailView: View {
                         isBackgroundTasksPresented = true
                     }
                 }
+                HStack {
+                    ChatPermissionModePill()
+                    Spacer(minLength: 0)
+                }
                 ChatFollowUpComposerBar(
                     text: $followUpText,
                     isFocused: $isFollowUpFocused,
-                    isDisabled: thread.cwd.isEmpty || isSendingFollowUp,
-                    canSend: !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    placeholder: bridge.isSendInFlight ? "Add feedback…" : "Follow up…",
+                    isDisabled: thread.cwd.isEmpty,
+                    canSend: !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        && !thread.cwd.isEmpty,
                     onSend: {
                         let prompt = followUpText
                         followUpText = ""
                         handleSend(prompt, thread.cwd)
                     }
                 )
-                .disabled(thread.cwd.isEmpty || isSendingFollowUp)
+                if !bridge.queuedFeedback.isEmpty {
+                    Text("Will send when the agent finishes")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("mid-run-feedback-caption")
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
@@ -518,14 +538,16 @@ struct ThreadDetailView: View {
             prompt: prompt
         )
         queuedReviewComments.removeAll()
-        // Dispatch inline and stay on this screen — no sheet/navigation.
-        // Every follow-up used to open a full-screen LiveThreadView on top
-        // of the thread the owner was already looking at (2026-07-15 report).
+        // Mid-run: bridge enqueues and returns immediately — don't paint the
+        // inline "Working…" row for queued guidance.
+        let enqueueOnly = bridge.isSendInFlight
         followUpDispatchGeneration += 1
         let generation = followUpDispatchGeneration
-        pendingFollowUpPrompt = composed
-        followUpError = nil
-        isSendingFollowUp = true
+        if !enqueueOnly {
+            pendingFollowUpPrompt = composed
+            followUpError = nil
+            isSendingFollowUp = true
+        }
         Task {
             await bridge.sendFollowUp(
                 prompt: composed,
@@ -534,6 +556,7 @@ struct ThreadDetailView: View {
                 attachments: attachments
             )
             guard generation == followUpDispatchGeneration else { return }
+            if enqueueOnly { return }
             isSendingFollowUp = false
             if case .failed(let message) = bridge.sendState {
                 followUpError = message

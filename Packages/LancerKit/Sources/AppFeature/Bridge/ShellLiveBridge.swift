@@ -127,7 +127,8 @@ public final class ShellLiveBridge {
     private var isSendDispatchInFlight = false
 
     /// True while a send/follow-up is still awaiting a terminal turn
-    /// (including degraded unreachable polling). Composer must stay disabled.
+    /// (including degraded unreachable polling). Mid-run feedback may still
+    /// be typed and enqueued; the bridge flushes the queue when this flips false.
     public var isSendInFlight: Bool {
         switch sendState {
         case .working, .streaming, .degraded:
@@ -135,6 +136,44 @@ public final class ShellLiveBridge {
         case .idle, .adoptedNoHistory, .completed, .failed:
             return false
         }
+    }
+
+    /// Follow-ups typed while a turn is still in flight (FIFO). Survives view
+    /// re-entry within the session; cleared by `resetForNewThread`.
+    public private(set) var queuedFeedback: MidRunFeedbackQueue = MidRunFeedbackQueue()
+
+    /// Enqueues mid-run guidance. Visible in the transcript as a pending user
+    /// turn until the bridge flushes it after the current turn goes terminal.
+    @discardableResult
+    public func enqueueFeedback(
+        prompt: String,
+        conversationID: String,
+        cwd: String,
+        attachments: [ConversationAttachmentReference] = []
+    ) -> MidRunFeedbackItem {
+        let item = MidRunFeedbackItem(
+            text: prompt,
+            conversationID: conversationID,
+            cwd: cwd,
+            attachments: attachments
+        )
+        var queue = queuedFeedback
+        queue.enqueue(item)
+        queuedFeedback = queue
+        return item
+    }
+
+    /// Pops and sends the next queued follow-up when the agent is idle.
+    private func flushNextQueuedFeedback() async {
+        var queue = queuedFeedback
+        guard let next = queue.flushNext(agentInFlight: isSendInFlight) else { return }
+        queuedFeedback = queue
+        await sendFollowUp(
+            prompt: next.text,
+            conversationID: next.conversationID,
+            cwd: next.cwd,
+            attachments: next.attachments
+        )
     }
 
     // MARK: - Test seams (@testable)
@@ -259,6 +298,7 @@ public final class ShellLiveBridge {
         lastAttempt = nil
         pendingObservedContinue = nil
         boundObservedContinue = nil
+        queuedFeedback = MidRunFeedbackQueue()
     }
 
     /// Re-dispatches `lastAttempt` without inventing a brand-new conversation
@@ -445,6 +485,7 @@ public final class ShellLiveBridge {
             inFlightRunID = started.runID
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
+            await flushNextQueuedFeedback()
         case .blocked(let message):
             // Blocked reasons from startConversation (policy / approval /
             // budget / transport) are surfaced via `.failed` — not silent.
@@ -452,6 +493,7 @@ public final class ShellLiveBridge {
             inFlightAttachments = []
             inFlightRunID = nil
             sendState = .failed(message)
+            await flushNextQueuedFeedback()
         }
     }
 
@@ -706,8 +748,8 @@ public final class ShellLiveBridge {
     ///   timeout: false `.failed("Timed out…")` while the host turn was still
     ///   `.running`, so a follow-up raced a live run (conflict / transport
     ///   blip) or Retry started a brand-new conversation instead of continuing.
-    /// - Composer now keys off `isSendInFlight` (working/streaming/degraded)
-    ///   so follow-up can't fire mid-run / mid-degrade.
+    /// - Mid-run typing enqueues locally (`queuedFeedback`) and flushes when
+    ///   the current turn reaches a terminal state — Claude-mobile parity.
     public func sendFollowUp(
         prompt: String,
         conversationID: String,
@@ -715,7 +757,16 @@ public final class ShellLiveBridge {
         attachments: [ConversationAttachmentReference] = [],
         clientTurnId: String? = nil
     ) async {
-        guard !isSendInFlight, !isSendDispatchInFlight else { return }
+        if isSendInFlight {
+            _ = enqueueFeedback(
+                prompt: prompt,
+                conversationID: conversationID,
+                cwd: cwd,
+                attachments: attachments
+            )
+            return
+        }
+        guard !isSendDispatchInFlight else { return }
         isSendDispatchInFlight = true
         testSendDispatchGateClaimCount += 1
         defer { isSendDispatchInFlight = false }
@@ -732,6 +783,7 @@ public final class ShellLiveBridge {
                 pendingObservedContinue = nil
                 boundObservedContinue = nil
                 sendState = .failed("No connected machine. Pair one in Settings → Trusted Machines.")
+                await flushNextQueuedFeedback()
                 return
             }
             guard epoch == sessionEpoch else { return }
@@ -740,12 +792,14 @@ public final class ShellLiveBridge {
             boundObservedContinue = target
             lastAttempt = .observedContinue(prompt: prompt, cwd: cwd, target: target)
             await sendObservedContinue(prompt: prompt, cwd: cwd, target: target, machine: machine)
+            await flushNextQueuedFeedback()
             return
         }
 
         guard let machine = await waitForConnectedMachine() else {
             guard epoch == sessionEpoch else { return }
             sendState = .failed("No connected machine. Pair one in Settings → Trusted Machines.")
+            await flushNextQueuedFeedback()
             return
         }
         guard epoch == sessionEpoch else { return }
@@ -799,12 +853,14 @@ public final class ShellLiveBridge {
             inFlightRunID = started.runID
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
+            await flushNextQueuedFeedback()
         case .blocked(let message):
             // Surface blocked reason in the UI (same `.failed` path as send).
             inFlightPrompt = nil
             inFlightAttachments = []
             inFlightRunID = nil
             sendState = .failed(message)
+            await flushNextQueuedFeedback()
         }
     }
 
