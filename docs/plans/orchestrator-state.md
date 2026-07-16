@@ -1,5 +1,15 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-16 ~16:20 ET — Wave 1 MERGED + Simurgh preflight green; Lane C4 IN FLIGHT
+
+**Sweep tip:** `integration/2026-07-16-untested-sweep` @ `7707e4fa` (`.worktrees/untested-sweep-2026-07-16`).
+
+- **Wave 1 MERGED @ `7707e4fa`:** FX7 (`543566ba` needsApproval→awaiting) + FX5 (`2a872e1e` Connect above keypad) + Lane P (`7707e4fa` relay audit tail + coarse permission mode). Sentry `Package.resolved` pin stripped (`faeb80c9`).
+- **Unit gates green on tip:** `go test ./...` ok (lancerd/policy/terminal); `swift test` 781+62+13.
+- **Simurgh wave-1/2 @ `85f3907`:** daemon UP; `simurgh doctor` all ok; `simurgh exec lease-196 -- echo ok` → `ok`. Route long xcodebuild via `simurgh exec <lease> -- …`; isolate daemons with `LANCER_STATE_DIR` only (keep passwd `HOME`).
+- **Lane C4 IN FLIGHT:** live sim re-test post-Wave-1 — #7/#8/#9/#17/#23 + #2/#3 Policy/Audit over relay + FX5 keypad screenshot + #10/#14 recheck + #1/#11/#18 harness retries if time. Evidence → `LC4-report.md`.
+- **Owner re-pair still owed** (incident from C3 bare `lancerd pair`; L6 device pass owner-gated).
+
 ## ⚡ FULL-APP NIGHT TEST — 2026-07-15 ~22:40 ET
 
 **Workspace:** `master` @ `ba73c130` (not on integration checkout). Reviewable tip still
