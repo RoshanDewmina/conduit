@@ -24,7 +24,7 @@ Area-specific detail lives in `.claude/rules/` and loads only when you open a ma
 Project **skills** are in `.claude/skills/` (invoke with the `Skill` tool): start a non-trivial
 task with `lancer-context-onboarding`; gate "done" with `lancer-verification-gate`; touching
 `daemon/lancerd/dispatch.go` → `vendor-cli-adapter-audit`; parallel work → `lancer-parallel-handoff`;
-owner asks "what's next?" / wants a paste-ready brief → `agent-next-prompt`; new/fuzzy feature →
+owner asks "what's next?" / wants a paste-ready brief → global `prompt-crafting` (`agent-brief` mode); new/fuzzy feature →
 `agent-feature-loop`; tool-hop or dying context → `agent-session-handoff`.
 
 ## Execution model — Fable orchestrates, Cursor CLI codes, Sonnet 5 is fallback + sensitive paths

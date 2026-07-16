@@ -38,10 +38,15 @@ Three layers: the **iOS app** (`Packages/LancerKit/`), the **`lancerd`** residen
 
 ## Working rules
 
+- **Changelog is mandatory.** Any session that lands a change (commit, PR, deploy, doc/config
+  edit) appends one line per landed unit to `docs/CHANGELOG.md` (format at the top of that
+  file) BEFORE reporting done. This is the owner's at-a-glance record of what agents did —
+  skipping it is an incomplete task.
+
 - **Treat the working code + recent verified commits as source of truth** over any older doc, plan, or conversation. When code and a doc disagree, fix one of them in the same change.
 - **`git status` changes are other agents' / the owner's work** — do not revert them unless asked.
 - **Verify before claiming done.** LancerKit Swift change → `cd Packages/LancerKit && swift build` (+ `swift test` if behavior changed). iOS UI / app-shell / strict-concurrency risk → the **XcodeBuildMCP app-target** build (plain `swift build` skips `#if os(iOS)` code). Daemon change → `go test ./...` **from `daemon/lancerd`** (not the repo root). See the `lancer-verification-gate` skill.
-- **Cold-start / next prompt.** Prefer Plan.md + Status.md + one Goal + Done-when over pasting prior chat transcripts. When the owner asks what to do next, use `agent-next-prompt` (emits a single paste-ready brief). New/fuzzy features → `agent-feature-loop`. Tool-hop or dying context → `agent-session-handoff`.
+- **Cold-start / next prompt.** Prefer Plan.md + Status.md + one Goal + Done-when over pasting prior chat transcripts. When the owner asks what to do next, use the global `prompt-crafting` skill in `agent-brief` mode (emits a single paste-ready brief). New/fuzzy features → `agent-feature-loop`. Tool-hop or dying context → `agent-session-handoff`.
 - **Distrust another agent's or tool's self-report by default, not just your own.** A prior transcript, PR description, or doc saying "done"/"merged"/"verified" is a claim, not a fact — re-check it against the live repo (`git log`, `git status`, `gh pr list`, the actual file) before relying on it or repeating it forward into a new session. The 2026-07-06 cross-platform conversation audit found this was the single most repeated, most expensive failure mode across Claude Code, Codex, and Cursor this week — including inside the audit's own first draft, which repeated a stale claim across three sessions before an independent pass caught it.
 - **Worktree/branch merges must diff or rebase against the current tip, never whole-file `cp`.** A whole-file copy across worktrees silently destroyed an uncommitted edit that existed only on `main` (2026-07-03).
 - **No dead code / back-compat shims / speculative abstractions** (`agent-contract.md` §3). Delete cleanly.
@@ -62,11 +67,12 @@ Three layers: the **iOS app** (`Packages/LancerKit/`), the **`lancerd`** residen
 ## Project skills
 
 Claude Code: `.claude/skills/` (see `.claude/skills/README.md`). Codex: `~/.codex/skills/` (`$name`).
-Both ported from the same set: `lancer-context-onboarding`, `lancer-verification-gate`,
-`lancer-parallel-handoff`, `vendor-cli-adapter-audit`, `agent-session-history-reader`,
-`lancer-ia-board-workflow`. Claude-only (not yet ported to Codex): `lancer-design-handoff`,
-`lancer-dead-view-sweep`, `lancer-onboarding-smoke`, `agent-next-prompt`,
-`agent-feature-loop`, `agent-session-handoff`.
+Both ported from the same project set: `lancer-context-onboarding`, `lancer-verification-gate`,
+`lancer-parallel-handoff`, `vendor-cli-adapter-audit`, `lancer-ia-board-workflow`. Shared global
+skills such as `prompt-crafting` and `agent-session-history-reader` live canonically under
+`~/.agents/skills/` and are symlinked into Claude and Codex. Claude-only project skills (not yet
+ported to Codex): `lancer-design-handoff`, `lancer-dead-view-sweep`,
+`lancer-onboarding-smoke`, `agent-feature-loop`, `agent-session-handoff`.
 
 ## Simulator provisioning (Simurgh)
 
