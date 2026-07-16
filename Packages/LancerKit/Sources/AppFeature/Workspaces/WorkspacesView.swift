@@ -16,6 +16,8 @@ public struct WorkspacesView: View {
     @State private var isAddRepoPresented = false
     @State private var isSearchPresented = false
     @State private var activeLiveThread: LiveThreadIdentifier?
+    @Namespace private var composerMorphNamespace
+    private let composerMorphSpring = Animation.spring(response: 0.32, dampingFraction: 0.86)
     #if DEBUG
     @Environment(RelayApprovalIngest.self) private var relayApprovalIngest
     @State private var isSettingsPresented = false
@@ -34,7 +36,7 @@ public struct WorkspacesView: View {
     private var repos: [WorkspaceRepo] { workspaceData.repos }
 
     public var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             Color(.systemGroupedBackground)
                 .ignoresSafeArea()
 
@@ -120,21 +122,45 @@ public struct WorkspacesView: View {
                             )
                         }
                     }
-                    .padding(.bottom, 90)
+                    .padding(.bottom, 16)
                 }
             }
 
-            Button {
-                isComposerPresented = true
-            } label: {
-                composer
+            if isComposerPresented {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .onTapGesture {
+                        collapseComposer(animated: true)
+                    }
+                    .accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("New Chat"))
-            .accessibilityIdentifier("cursor-composer-tap")
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Group {
+                if isComposerPresented {
+                    inlineExpandedComposer
+                        .matchedGeometryEffect(id: "workspacesComposer", in: composerMorphNamespace)
+                        .transition(.identity)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                } else {
+                    Button {
+                        expandComposer()
+                    } label: {
+                        composer
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("New Chat"))
+                    .accessibilityIdentifier("cursor-composer-tap")
+                    .matchedGeometryEffect(id: "workspacesComposer", in: composerMorphNamespace)
+                    .transition(.identity)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+                }
+            }
+        }
+        .animation(composerMorphSpring, value: isComposerPresented)
         .task {
             await workspaceData.refresh()
         }
@@ -145,20 +171,6 @@ public struct WorkspacesView: View {
         .sheet(isPresented: $isProfilePresented) {
             ProfileView()
                 .environment(relayFleetStore)
-        }
-        .sheet(isPresented: $isComposerPresented) {
-            #if DEBUG
-            NewChatComposerView(
-                initiallyShowsRepoPicker: isComposerRepoPickerPresented,
-                initialRepo: repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) },
-                onSend: handleSend
-            )
-            #else
-            NewChatComposerView(
-                initialRepo: repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) },
-                onSend: handleSend
-            )
-            #endif
         }
         .sheet(isPresented: $isAddRepoPresented) {
             AddRepoView { name, cwd in
@@ -274,16 +286,57 @@ public struct WorkspacesView: View {
     private func handleSend(_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference] = []) {
         guard WorkspaceRepoCatalog.isAbsoluteSendTarget(cwd) else { return }
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
-        // Explicitly dismiss the composer sheet rather than leaving it to
-        // stack with the live-thread sheet — both are separate `.sheet`
-        // modifiers on this same view, so without this the composer's
-        // `TextEditor` (still showing the just-sent prompt) can remain
-        // enumerable by the accessibility tree during its dismiss animation
-        // at the same time the live thread's prompt bubble renders, reading
-        // as a duplicate turn to AX-tree-based tests even with no visual
-        // double-paint (found in the 2026-07-15 reconnect re-proof).
-        isComposerPresented = false
+        // Collapse the inline composer immediately (no spring) before the
+        // live-thread sheet presents — otherwise the composer's TextEditor
+        // (still showing the just-sent prompt) remains enumerable by the
+        // accessibility tree during its morph-out at the same time the live
+        // thread's prompt bubble renders, reading as a duplicate turn to
+        // AX-tree-based tests (found in the 2026-07-15 reconnect re-proof).
+        collapseComposer(animated: false)
         activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized, attachments: attachments)
+    }
+
+    private func expandComposer() {
+        withAnimation(composerMorphSpring) {
+            isComposerPresented = true
+        }
+    }
+
+    private func collapseComposer(animated: Bool) {
+        #if DEBUG
+        isComposerRepoPickerPresented = false
+        #endif
+        if animated {
+            withAnimation(composerMorphSpring) {
+                isComposerPresented = false
+            }
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                isComposerPresented = false
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var inlineExpandedComposer: some View {
+        #if DEBUG
+        NewChatComposerView(
+            initiallyShowsRepoPicker: isComposerRepoPickerPresented,
+            initialRepo: repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) },
+            hostStyle: .inline,
+            onCollapse: { collapseComposer(animated: true) },
+            onSend: handleSend
+        )
+        #else
+        NewChatComposerView(
+            initialRepo: repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) },
+            hostStyle: .inline,
+            onCollapse: { collapseComposer(animated: true) },
+            onSend: handleSend
+        )
+        #endif
     }
 
     private var topBar: some View {
@@ -315,7 +368,7 @@ public struct WorkspacesView: View {
                 .accessibilityLabel(Text("Search"))
 
                 Button {
-                    isComposerPresented = true
+                    expandComposer()
                 } label: {
                     circleButton(systemImage: "plus")
                 }
