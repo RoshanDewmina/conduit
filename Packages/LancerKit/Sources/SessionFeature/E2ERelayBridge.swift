@@ -51,6 +51,7 @@ public final class E2ERelayBridge: ObservableObject {
     /// which only ever have one dispatch/list/etc. in flight at a time).
     private var pendingDecisionAcks: [String: CheckedContinuation<Bool, Never>] = [:]
     private var statusQueryContinuation: CheckedContinuation<AgentStatusSnapshot, Error>?
+    private var emergencyStopContinuation: CheckedContinuation<EmergencyStopResult, Error>?
     private var conversationsListContinuation: CheckedContinuation<ConversationListResponse, Error>?
     private var conversationsFetchContinuation: CheckedContinuation<ConversationFetchResponse, Error>?
     private var conversationsAppendContinuation: CheckedContinuation<ConversationAppendResponse, Error>?
@@ -188,6 +189,10 @@ public final class E2ERelayBridge: ObservableObject {
         repoTreeContinuation = nil
         repoFileContinuation?.resume(throwing: E2EError.notPaired)
         repoFileContinuation = nil
+        emergencyStopContinuation?.resume(throwing: E2EError.notPaired)
+        emergencyStopContinuation = nil
+        statusQueryContinuation?.resume(throwing: E2EError.notPaired)
+        statusQueryContinuation = nil
         repoTurnDiffGate.cancelAll()
         repoSessionDiffGate.cancelAll()
         repoFileDiffGate.cancelAll()
@@ -406,6 +411,27 @@ public final class E2ERelayBridge: ObservableObject {
             return true
         } catch {
             return false
+        }
+    }
+
+    /// Atomic fleet emergency stop over the relay — mirrors
+    /// `DaemonChannel.emergencyStop` / SSH `agent.emergencyStop`. Awaits
+    /// `emergencyStopResult` with the stopped-run count.
+    public func sendEmergencyStop() async throws -> EmergencyStopResult {
+        guard isActive else { throw E2EError.notPaired }
+        struct Empty: Codable, Sendable {}
+        try await relayClient.send(type: "agentEmergencyStop", payload: Empty())
+        emergencyStopContinuation?.resume(throwing: E2EError.superseded)
+        emergencyStopContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.emergencyStopContinuation?.resume(throwing: E2EError.timedOut)
+            self.emergencyStopContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.emergencyStopContinuation = c
         }
     }
 
@@ -1242,6 +1268,17 @@ public final class E2ERelayBridge: ObservableObject {
                 statusQueryContinuation?.resume(throwing: E2EError.decryptFailed)
             }
             statusQueryContinuation = nil
+
+        case "emergencyStopResult":
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<EmergencyStopResult>.self, from: message.payload
+            )
+            if let result = envelope?.payload {
+                emergencyStopContinuation?.resume(returning: result)
+            } else {
+                emergencyStopContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            emergencyStopContinuation = nil
 
         case "agentArtifact":
             guard let env = try? JSONDecoder().decode(

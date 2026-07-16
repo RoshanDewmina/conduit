@@ -12,6 +12,11 @@ public struct AppSettingsView: View {
     /// and must not wrap another stack or add a sheet Close button.
     private let embedsInParentNavigation: Bool
 
+    @State private var confirmingEmergencyStop = false
+    @State private var isStopping = false
+    @State private var emergencyStopError: String?
+    @State private var lastStoppedRuns: Int?
+
     public init(embedsInParentNavigation: Bool = false) {
         self.embedsInParentNavigation = embedsInParentNavigation
     }
@@ -34,12 +39,25 @@ public struct AppSettingsView: View {
                 }
             }
         }
+        .confirmationDialog(
+            AppSettingsCopy.emergencyStopConfirmTitle,
+            isPresented: $confirmingEmergencyStop,
+            titleVisibility: .visible
+        ) {
+            Button(AppSettingsCopy.emergencyStopConfirmAction, role: .destructive) {
+                Task { await performEmergencyStop() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(AppSettingsCopy.emergencyStopConfirmMessage)
+        }
     }
 
     private var settingsList: some View {
         List {
             connectionsSection
             policyGovernanceSection
+            emergencyStopSection
         }
         .accessibilityIdentifier("cursor.settings")
     }
@@ -62,15 +80,85 @@ public struct AppSettingsView: View {
 
     private var policyGovernanceSection: some View {
         Section(AppSettingsCopy.policyGovernanceTitle) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(AppSettingsCopy.policyGovernanceTitle)
-                    .font(.body)
-                Text(AppSettingsCopy.policyGovernanceDetail)
+            NavigationLink {
+                PolicyEditorView()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(AppSettingsCopy.policyRowTitle)
+                    Text(AppSettingsCopy.policyRowDetail)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityIdentifier("cursor.settings.row.policy")
+
+            NavigationLink {
+                AuditFeedView()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(AppSettingsCopy.auditRowTitle)
+                    Text(AppSettingsCopy.auditRowDetail)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityIdentifier("cursor.settings.row.audit")
+        }
+    }
+
+    private var emergencyStopSection: some View {
+        Section {
+            Button(role: .destructive) {
+                emergencyStopError = nil
+                confirmingEmergencyStop = true
+            } label: {
+                HStack {
+                    if isStopping {
+                        ProgressView()
+                    }
+                    Text(AppSettingsCopy.emergencyStopButtonTitle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .disabled(isStopping)
+            .accessibilityIdentifier("cursor.settings.emergency-stop")
+
+            if let lastStoppedRuns {
+                Text("Stopped \(lastStoppedRuns) run\(lastStoppedRuns == 1 ? "" : "s"). New launches are blocked on the host until re-enabled.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("cursor.settings.emergency-stop.result")
             }
-            .accessibilityIdentifier("cursor.settings.policy-deferred")
-            .accessibilityElement(children: .combine)
+            if let emergencyStopError {
+                Text(emergencyStopError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("cursor.settings.emergency-stop.error")
+            }
+        } header: {
+            Text(AppSettingsCopy.emergencyStopSectionTitle)
+                .foregroundStyle(.red)
+        } footer: {
+            Text("Stops all runs and blocks new launches until re-enabled. Requires a connected host (SSH or relay).")
+        }
+    }
+
+    @MainActor
+    private func performEmergencyStop() async {
+        isStopping = true
+        emergencyStopError = nil
+        lastStoppedRuns = nil
+        defer { isStopping = false }
+        do {
+            let result = try await GovernanceHostActions.emergencyStop(relayFleetStore: relayFleetStore)
+            // Fail-closed: only surface success fields from a decoded RPC result.
+            guard result.emergencyStopped else {
+                emergencyStopError = "Host did not confirm emergency stop."
+                return
+            }
+            lastStoppedRuns = result.stoppedRuns
+        } catch {
+            emergencyStopError = error.localizedDescription
         }
     }
 }
