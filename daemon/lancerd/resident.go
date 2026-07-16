@@ -41,6 +41,11 @@ func runDaemon() error {
 	ensureClaudeHookWiredOnBoot()              // so plain dispatches launch immediately (hook still gates tools)
 	r.core.startScheduler(make(chan struct{})) // fires due schedules for the process lifetime
 
+	// Warm Claude auth cache in the background so the first phone send after
+	// daemon start / pair does not pay a cold `claude auth status` probe inside
+	// the launch-critical path (2026-07-16 dogfood: conversation-append-auth-preflight deny).
+	globalClaudeAuthCache.triggerBackgroundRefresh(agentLaunchEnvironment())
+
 	// Wire E2E relay if a pairing config exists.
 	r.wireRelayFromPairing()
 

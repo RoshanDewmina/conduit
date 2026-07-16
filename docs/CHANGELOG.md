@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 17:20 Cursor Grok — fix Claude auth-preflight cold deny under launchd: probe 20s→35s, boot cache warm, skip shim bin, install PATH into plist; host conversation-append launched after reload (pair 149884 kept) (`fix/auth-preflight-cold-probe`)
 - 17:10 Cursor Composer — PolicyEditorView clears stale SSH error when relay mode picker loads; LC4 evidence + GAP_LIST/orchestrator sync (`fix/policy-stale-ssh-error`)
 - 16:50 Cursor Grok — FX10 on master (`fbc85191` via PR #141); device rebuild+reinstall SUCCEEDED; DOGFOOD_SMOKE BLOCKED on pair code 347051; GAP #10 FIXED (code)/live owed
 - 16:40 Cursor Grok — fold FX10 (`5a3fce93`) into master after PR #140: background-tasks pill via relay artifact mirror; rebuild+reinstall phone; GAP_LIST #10 → FIXED (code) / live owed (`docs/dogfood-smoke-2026-07-16`)

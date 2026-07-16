@@ -901,6 +901,13 @@ func agentLaunchEnvironment() []string {
 // process's own PATH), returning the absolute path or "" if not found. Used so a
 // launchd-spawned daemon with a minimal inherited PATH can still locate agent CLIs.
 func lookPathIn(name string, env []string) string {
+	return lookPathInExcluding(name, env, "")
+}
+
+// lookPathInExcluding is lookPathIn that skips any candidate whose directory
+// equals excludeDir (used to ignore ~/.lancer/bin shim wrappers during auth
+// preflight — those wrappers dial the daemon and must not run the probe).
+func lookPathInExcluding(name string, env []string, excludeDir string) string {
 	var pathValue string
 	for _, e := range env {
 		if strings.HasPrefix(e, "PATH=") {
@@ -908,8 +915,12 @@ func lookPathIn(name string, env []string) string {
 			break
 		}
 	}
+	excludeDir = filepath.Clean(excludeDir)
 	for _, dir := range strings.Split(pathValue, ":") {
 		if dir == "" {
+			continue
+		}
+		if excludeDir != "" && filepath.Clean(dir) == excludeDir {
 			continue
 		}
 		candidate := filepath.Join(dir, name)

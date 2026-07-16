@@ -180,12 +180,36 @@ func installLaunchd(binary, home string) error {
 	// authenticate to push-backend's Tier-1 /approval endpoint; without it the
 	// backend 401s and approval push notifications silently never reach the
 	// phone (Finding: 2026-06-22 device test, recurred 2026-07-01 device test).
+	//
+	// PATH must include Homebrew/local bins: launchd's default PATH is
+	// /usr/bin:/bin:/usr/sbin:/sbin, which cannot find `claude`/`codex`. The
+	// daemon also augments PATH in-process (agentLaunchEnvironment), but
+	// writing it into the plist keeps doctor/LookPath and child tools honest.
+	// Do NOT put ~/.lancer/bin first — that directory holds shim wrappers that
+	// dial the daemon (auth preflight must use the real vendor CLI).
 	relaySecret := strings.TrimSpace(os.Getenv("APPROVAL_RELAY_SECRET"))
-	envBlock := ""
+	if relaySecret == "" {
+		relaySecret = readLaunchdRelaySecret(plistPath)
+	}
+	pathValue := strings.Join([]string{
+		"/opt/homebrew/bin",
+		"/usr/local/bin",
+		filepath.Join(home, ".local", "bin"),
+		"/usr/bin",
+		"/bin",
+		"/usr/sbin",
+		"/sbin",
+	}, ":")
+
+	envEntries := []string{
+		fmt.Sprintf("    <key>PATH</key><string>%s</string>", escapePlistString(pathValue)),
+	}
 	if relaySecret != "" {
-		envBlock = fmt.Sprintf("  <key>EnvironmentVariables</key>\n  <dict>\n    <key>APPROVAL_RELAY_SECRET</key><string>%s</string>\n  </dict>\n", escapePlistString(relaySecret))
+		envEntries = append(envEntries,
+			fmt.Sprintf("    <key>APPROVAL_RELAY_SECRET</key><string>%s</string>", escapePlistString(relaySecret)))
 	} else {
-		fmt.Fprintln(os.Stderr, "warning: APPROVAL_RELAY_SECRET is not set in this shell's environment.")
+		fmt.Fprintln(os.Stderr, "warning: APPROVAL_RELAY_SECRET is not set in this shell's environment")
+		fmt.Fprintln(os.Stderr, "  and was not found in the existing launchd plist.")
 		fmt.Fprintln(os.Stderr, "  Without it, the daemon's launchd job will have no way to authenticate to")
 		fmt.Fprintln(os.Stderr, "  push-backend's /approval endpoint — approval push notifications will")
 		fmt.Fprintln(os.Stderr, "  silently never reach your phone (only visible as HTTP 401 in")
@@ -196,6 +220,7 @@ func installLaunchd(binary, home string) error {
 		fmt.Fprintf(os.Stderr, "  launchctl unload %s 2>/dev/null || true\n", plistPath)
 		fmt.Fprintf(os.Stderr, "  launchctl load %s\n", plistPath)
 	}
+	envBlock := "  <key>EnvironmentVariables</key>\n  <dict>\n" + strings.Join(envEntries, "\n") + "\n  </dict>\n"
 
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -222,6 +247,34 @@ func installLaunchd(binary, home string) error {
 	fmt.Fprintf(os.Stderr, "  launchctl unload %s 2>/dev/null || true\n", plistPath)
 	fmt.Fprintf(os.Stderr, "  launchctl load %s\n", plistPath)
 	return nil
+}
+
+// readLaunchdRelaySecret extracts APPROVAL_RELAY_SECRET from an existing plist
+// so re-running `lancerd install` without the secret in the shell does not wipe it.
+func readLaunchdRelaySecret(plistPath string) string {
+	data, err := os.ReadFile(plistPath)
+	if err != nil {
+		return ""
+	}
+	const key = "<key>APPROVAL_RELAY_SECRET</key><string>"
+	s := string(data)
+	i := strings.Index(s, key)
+	if i < 0 {
+		return ""
+	}
+	rest := s[i+len(key):]
+	j := strings.Index(rest, "</string>")
+	if j < 0 {
+		return ""
+	}
+	// Values were XML-escaped on write; reverse the common entities for reuse.
+	raw := rest[:j]
+	raw = strings.ReplaceAll(raw, "&lt;", "<")
+	raw = strings.ReplaceAll(raw, "&gt;", ">")
+	raw = strings.ReplaceAll(raw, "&quot;", "\"")
+	raw = strings.ReplaceAll(raw, "&apos;", "'")
+	raw = strings.ReplaceAll(raw, "&amp;", "&")
+	return raw
 }
 
 // escapePlistString XML-escapes a value for safe embedding inside a plist
