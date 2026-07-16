@@ -5,6 +5,13 @@ import SessionFeature
 import SSHTransport
 import LancerCore
 
+/// How the composer is hosted. `.sheet` keeps detent / drag-handle chrome for
+/// ThreadList and other sheet call sites; `.inline` is the Workspaces in-place morph.
+public enum ComposerHostStyle: Sendable {
+    case sheet
+    case inline
+}
+
 /// New Chat composer — repo picker uses the real workspace list; send
 /// requires a selected repo cwd (never a guessed `~/name`). Attachments
 /// upload via `attachment.put` before the prompt is dispatched.
@@ -29,6 +36,9 @@ public struct NewChatComposerView: View {
         FullToolsSelection.default
     private let initiallyShowsRepoPicker: Bool
     private let lockRepo: Bool
+    private let hostStyle: ComposerHostStyle
+    /// Inline host only — swipe-down / explicit collapse (sheet uses `dismiss`).
+    private let onCollapse: (() -> Void)?
     /// Hands (clean prompt, cwd, attachment refs) to the presenting view.
     /// Cwd is always the selected repo's real path — missing selection blocks send.
     private let onSend: (_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference]) -> Void
@@ -58,9 +68,13 @@ public struct NewChatComposerView: View {
         initiallyShowsRepoPicker: Bool = false,
         initialRepo: WorkspaceRepo? = nil,
         lockRepo: Bool = false,
+        hostStyle: ComposerHostStyle = .sheet,
+        onCollapse: (() -> Void)? = nil,
         onSend: @escaping (_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference]) -> Void
     ) {
         self.initiallyShowsRepoPicker = initiallyShowsRepoPicker
+        self.hostStyle = hostStyle
+        self.onCollapse = onCollapse
         self.onSend = onSend
         // A follow-up composer inside a thread is pinned to that thread's
         // folder — offering the picker there silently retargeted sends
@@ -70,10 +84,75 @@ public struct NewChatComposerView: View {
     }
 
     public var body: some View {
+        cardContent
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .padding(.horizontal, hostStyle == .sheet ? 8 : 0)
+            .padding(.top, hostStyle == .sheet ? 6 : 0)
+            .modifier(ComposerSheetChromeModifier(
+                enabled: hostStyle == .sheet,
+                height: composerHeight
+            ))
+            .onAppear {
+                if selectedRepo == nil {
+                    selectedRepo = workspaceData.repos.first
+                }
+                if initiallyShowsRepoPicker {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        isRepoPickerPresented = true
+                    }
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        isTextFieldFocused = true
+                    }
+                }
+            }
+            .onDisappear {
+                isTextFieldFocused = false
+            }
+            .sheet(isPresented: $isRepoPickerPresented) {
+                RepoPickerView(
+                    repos: workspaceData.repos,
+                    selectedCwd: selectedRepo?.cwd,
+                    onSelect: { repo in
+                        selectedRepo = repo
+                    }
+                )
+            }
+            .sheet(isPresented: $isModelPickerPresented) {
+                ModelPickerView(selected: selectedModel) { model in
+                    selectedModelSlug = model.rawValue
+                }
+            }
+            .sheet(isPresented: $isVendorPickerPresented) {
+                VendorPickerView(
+                    selected: selectedVendor,
+                    installed: relayFleetStore.firstConnectedMachine?.installedAgentVendors
+                ) { vendor in
+                    selectedVendorSlug = vendor.rawValue
+                }
+            }
+            .sheet(isPresented: $isContextPresented) {
+                ContextAttachView(attachments: $attachments)
+            }
+            .task {
+                await refreshInstalledVendorsIfNeeded()
+            }
+    }
+
+    private var cardContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            dragHandle
-                .padding(.top, 8)
-                .padding(.bottom, 6)
+            if hostStyle == .sheet {
+                dragHandle
+                    .padding(.top, 8)
+                    .padding(.bottom, 6)
+            } else {
+                Color.clear
+                    .frame(height: 20)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                    .gesture(collapseDragGesture)
+            }
 
             selectorRow
                 .padding(.horizontal, 16)
@@ -102,55 +181,6 @@ public struct NewChatComposerView: View {
             Spacer(minLength: 0)
                 .frame(height: 14)
         }
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .padding(.horizontal, 8)
-        .padding(.top, 6)
-        .presentationDetents([.height(composerHeight)])
-        .presentationDragIndicator(.hidden)
-        .presentationBackground(.clear)
-        .onAppear {
-            if selectedRepo == nil {
-                selectedRepo = workspaceData.repos.first
-            }
-            if initiallyShowsRepoPicker {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    isRepoPickerPresented = true
-                }
-            } else {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    isTextFieldFocused = true
-                }
-            }
-        }
-        .sheet(isPresented: $isRepoPickerPresented) {
-            RepoPickerView(
-                repos: workspaceData.repos,
-                selectedCwd: selectedRepo?.cwd,
-                onSelect: { repo in
-                    selectedRepo = repo
-                }
-            )
-        }
-        .sheet(isPresented: $isModelPickerPresented) {
-            ModelPickerView(selected: selectedModel) { model in
-                selectedModelSlug = model.rawValue
-            }
-        }
-        .sheet(isPresented: $isVendorPickerPresented) {
-            VendorPickerView(
-                selected: selectedVendor,
-                installed: relayFleetStore.firstConnectedMachine?.installedAgentVendors
-            ) { vendor in
-                selectedVendorSlug = vendor.rawValue
-            }
-        }
-        .sheet(isPresented: $isContextPresented) {
-            ContextAttachView(attachments: $attachments)
-        }
-        .task {
-            await refreshInstalledVendorsIfNeeded()
-        }
     }
 
     private var dragHandle: some View {
@@ -158,6 +188,15 @@ public struct NewChatComposerView: View {
             .fill(Color(.tertiaryLabel))
             .frame(width: 36, height: 5)
             .frame(maxWidth: .infinity)
+    }
+
+    private var collapseDragGesture: some Gesture {
+        DragGesture(minimumDistance: 24, coordinateSpace: .local)
+            .onEnded { value in
+                guard value.translation.height > 72 else { return }
+                isTextFieldFocused = false
+                onCollapse?()
+            }
     }
 
     private var selectorRow: some View {
@@ -428,17 +467,17 @@ public struct NewChatComposerView: View {
         }
 
         let cleanPrompt = prompt
-        // Clear the bound TextEditor state before requesting dismiss —
-        // `dismiss()` on a `.sheet(isPresented:)` only requests an async
-        // teardown, so without this the composer's TextEditor can still show
-        // the just-sent prompt (and be enumerable by the accessibility tree)
-        // during the dismiss transition, racing the live-thread sheet's own
-        // presentation of the same prompt as a bubble (found in the
-        // 2026-07-15 reconnect re-proof — reads as a duplicate turn to
-        // AX-tree-based tests with no visual double-paint).
+        // Clear the bound TextEditor before collapsing — sheet `dismiss()` is
+        // async, and the inline host unmounts on the same turn as live-thread
+        // presentation. Leaving the just-sent prompt enumerable races the
+        // live-thread bubble in AX-tree tests (2026-07-15 reconnect re-proof).
         draftText = ""
+        isTextFieldFocused = false
         onSend(cleanPrompt, cwd, refs)
-        dismiss()
+        // Inline: parent collapses immediately in onSend (no spring). Sheet: dismiss.
+        if hostStyle == .sheet {
+            dismiss()
+        }
     }
 
     private func publishDrafts(_ drafts: inout [AttachmentDraft]) {
@@ -511,6 +550,24 @@ public struct NewChatComposerView: View {
             relayFleetStore.setInstalledAgentVendors(vendors, for: machine.id)
         } catch {
             // Leave installedAgentVendors nil → picker shows full catalog.
+        }
+    }
+}
+
+/// Sheet-only presentation chrome. No-ops when the composer is hosted inline.
+private struct ComposerSheetChromeModifier: ViewModifier {
+    let enabled: Bool
+    let height: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .presentationDetents([.height(height)])
+                .presentationDragIndicator(.hidden)
+                .presentationBackground(.clear)
+        } else {
+            content
         }
     }
 }
