@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 17:32 Cursor Composer — fix LancerDProtocolTests ISO8601 decode: fractional-second tolerant test decoder for real Claude transcript fixtures (`fix/iso8601-protocol-tests`, PR #148)
 - 17:30 Cursor Composer — proof receipts open from ⋯ menu on "Worked Ns" row; no inline Proof card under every turn (`fix/proof-under-menu`)
 - 17:22 Cursor Grok — dogfood smoke: phone `"Hi"` launched after auth-preflight fix (PR #145); DOGFOOD_SMOKE → PASS launch (`docs/dogfood-auth-smoke-pass`)
 - 17:20 Cursor Grok — fix Claude auth-preflight cold deny under launchd: probe 20s→35s, boot cache warm, skip shim bin, install PATH into plist; host conversation-append launched after reload (pair 149884 kept) (`fix/auth-preflight-cold-probe`)

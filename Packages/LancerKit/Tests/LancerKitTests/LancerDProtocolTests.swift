@@ -425,6 +425,26 @@ struct LancerDProtocolTests {
         #expect(AttachmentContentDigest.isValid(decoded.contentDigest ?? ""))
     }
 
+    // Go `time.Time` / Claude transcript timestamps include fractional seconds;
+    // Swift's `.iso8601` dateDecodingStrategy rejects them.
+    private static func protocolJSONDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let raw = try container.decode(String.self)
+            let withFraction = ISO8601DateFormatter()
+            withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = withFraction.date(from: raw) { return date }
+            let plain = ISO8601DateFormatter()
+            plain.formatOptions = [.withInternetDateTime]
+            if let date = plain.date(from: raw) { return date }
+            throw DecodingError.dataCorruptedError(
+                in: container, debugDescription: "Invalid ISO8601 date: \(raw)"
+            )
+        }
+        return decoder
+    }
+
     // MARK: - sessionsTranscriptResult / SessionMessage.Role tolerance
     //
     // Regression for the "Decryption failed" desktop-session-resume bug: a real
@@ -441,9 +461,7 @@ struct LancerDProtocolTests {
 
     @Test func sessionMessageRoleDecodesThinking() throws {
         let json = Data(#"{"role":"thinking","text":"planning the edit","timestamp":"2026-07-15T10:00:00.123Z"}"#.utf8)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(SessionMessage.self, from: json)
+        let decoded = try Self.protocolJSONDecoder().decode(SessionMessage.self, from: json)
         #expect(decoded.role == .thinking)
         #expect(decoded.text == "planning the edit")
     }
@@ -472,9 +490,7 @@ struct LancerDProtocolTests {
             {"role":"toolResult","text":"ok","timestamp":"2026-07-03T15:24:06.000Z"}
         ],"nextLine":139,"resetRequired":false}}
         """#.utf8)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let envelope = try decoder.decode(
+        let envelope = try Self.protocolJSONDecoder().decode(
             E2ERelayMessage.RelayInnerEnvelope<SessionsTranscriptResult>.self, from: json
         )
         #expect(envelope.payload.messages.count == 5)
