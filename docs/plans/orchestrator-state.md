@@ -1,5 +1,14 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-16 ~16:50 ET — master `fbc85191` includes FX10; phone reinstalled; smoke BLOCKED on pair
+
+- **`origin/master`:** `fbc85191` (PR #140 sweep + PR #141 FX10 `5a3fce93` + dogfood docs).
+- **FX10:** YES on master — relay artifact mirror for background-tasks pill.
+- **Phone install:** SUCCEEDED — `/tmp/lancer-device-dogfood-dd/Build/Products/Debug-iphoneos/Lancer.app` on `557A7877-…`; app launched.
+- **Re-pair:** code **`347051`** minted post-install; **unconfirmed** — owner must Connect on phone (`DOGFOOD_SMOKE.md`).
+- **Smoke:** pair/send/approve **BLOCKED** on owner tap; GAP #10 FIXED (code) / live owed.
+- **C4:** may still hold Simurgh `lease-197` (isolated `/tmp/sweep-C4`) — do not steal.
+
 ## ⚡ 2026-07-16 ~16:40 ET — master has sweep (#140); folding FX10 + phone reinstall
 
 - **`origin/master` (pre-FX10 push):** `99fd4526` (PR #140 = sweep tip `fe450949`).
