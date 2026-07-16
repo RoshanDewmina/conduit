@@ -192,14 +192,19 @@ struct ToolCallChipView: View {
     }
 }
 
-/// Renders a turn's ordered transcript items (prose between tool chips / thinking).
+/// Renders a turn's ordered transcript items (prose between tool chips / thinking),
+/// plus optional post-turn activity summary and inline todo checklist card.
 struct TurnTranscriptItemsView: View {
     let items: [TurnTranscriptItem]
     var emptyFallback: String? = "(no reply text)"
+    /// When non-nil (completed/failed turn), appends the compact activity row.
+    var activitySummary: TurnActivitySummary? = nil
 
     var body: some View {
-        let grouped = TurnTranscriptAssembler.groupedForDisplay(items)
-        if grouped.isEmpty {
+        let todoState = TurnTranscriptAssembler.latestTodoChecklist(from: items)
+        let displayItems = Self.itemsExcludingTodoChips(items, when: todoState != nil)
+        let grouped = TurnTranscriptAssembler.groupedForDisplay(displayItems)
+        if grouped.isEmpty && todoState == nil && activitySummary == nil {
             if let emptyFallback {
                 ChatMarkdownBody(markdown: emptyFallback)
             }
@@ -215,7 +220,27 @@ struct TurnTranscriptItemsView: View {
                         ToolCallChipView(chips: chips)
                     }
                 }
+                if let todoState {
+                    TodoChecklistCard(state: todoState)
+                }
+                if let activitySummary {
+                    TurnActivitySummaryRow(summary: activitySummary)
+                }
             }
+        }
+    }
+
+    /// Drop TodoWrite chips from the fold list when we render `TodoChecklistCard`.
+    private static func itemsExcludingTodoChips(
+        _ items: [TurnTranscriptItem],
+        when shouldFilter: Bool
+    ) -> [TurnTranscriptItem] {
+        guard shouldFilter else { return items }
+        return items.filter { item in
+            if case .toolChip(let chip) = item {
+                return !TurnTranscriptAssembler.isTodoToolChip(chip)
+            }
+            return true
         }
     }
 }

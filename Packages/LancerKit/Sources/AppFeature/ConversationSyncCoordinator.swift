@@ -403,7 +403,67 @@ public enum TurnTranscriptAssembler: Sendable {
         return String(decoding: utf8[..<end], as: UTF8.self) + "…"
     }
 
+    /// Post-turn compact activity line (Cursor-style "Worked 59s · Edited N…").
+    public static func activitySummary(
+        from items: [TurnTranscriptItem],
+        startedAt: Date,
+        completedAt: Date
+    ) -> TurnActivitySummary {
+        let chips = items.compactMap { item -> ToolChipItem? in
+            if case .toolChip(let chip) = item { return chip }
+            return nil
+        }
+        var edited = 0
+        var explored = 0
+        var searches = 0
+        for chip in chips {
+            switch toolActivityKind(chip.name) {
+            case .edit: edited += 1
+            case .explore: explored += 1
+            case .search: searches += 1
+            case .other: break
+            }
+        }
+        let diff = aggregatedDiff(chips: chips)
+        let seconds = max(0, Int(completedAt.timeIntervalSince(startedAt)))
+        return TurnActivitySummary(
+            durationSeconds: seconds,
+            editedFileCount: edited,
+            exploredCount: explored,
+            searchCount: searches,
+            added: diff?.added,
+            removed: diff?.removed
+        )
+    }
+
+    /// Latest TodoWrite/todo checklist in the turn, if a parseable payload exists.
+    public static func latestTodoChecklist(from items: [TurnTranscriptItem]) -> TodoChecklistState? {
+        TodoPayloadParser.latestChecklist(from: items)
+    }
+
+    /// Whether a tool chip should render as the todo card instead of a fold chip.
+    public static func isTodoToolChip(_ chip: ToolChipItem) -> Bool {
+        TodoPayloadParser.isTodoTool(name: chip.name)
+    }
+
     // MARK: - Private helpers
+
+    private enum ToolActivityKind {
+        case edit, explore, search, other
+    }
+
+    private static func toolActivityKind(_ name: String) -> ToolActivityKind {
+        switch normalizeToolName(name) {
+        case "edit", "write", "strreplace", "applypatch", "apply_patch":
+            return .edit
+        case "read", "readfile", "read_file":
+            return .explore
+        case "grep", "glob", "search", "semanticsearch", "semantic_search", "rg", "findall":
+            return .search
+        default:
+            return .other
+        }
+    }
 
     private struct ToolResultBits {
         var text: String?

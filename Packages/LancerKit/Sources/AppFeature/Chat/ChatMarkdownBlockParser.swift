@@ -1,9 +1,10 @@
 import Foundation
 
-/// One top-level segment of an assistant message: prose (markdown) or a fenced code block.
+/// One top-level segment of an assistant message: prose, fenced code, or a GFM table.
 public enum ChatMarkdownBlock: Equatable, Sendable {
     case prose(String)
     case codeFence(language: String?, code: String)
+    case table(ChatMarkdownTable)
 }
 
 /// Splits markdown into prose vs fenced code so fences can render with monospace + copy UI.
@@ -98,7 +99,11 @@ public enum ChatMarkdownBlockParser: Sendable {
         let full = NSRange(location: 0, length: ns.length)
         let matches = regex.matches(in: source, options: [], range: full)
 
-        guard !matches.isEmpty else { return [.prose(source)] }
+        guard !matches.isEmpty else {
+            var blocks: [ChatMarkdownBlock] = []
+            appendProse(source, to: &blocks)
+            return blocks
+        }
 
         var blocks: [ChatMarkdownBlock] = []
         var cursor = 0
@@ -132,6 +137,15 @@ public enum ChatMarkdownBlockParser: Sendable {
     private static func appendProse(_ raw: String, to blocks: inout [ChatMarkdownBlock]) {
         let trimmed = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\n"))
         guard !trimmed.isEmpty else { return }
-        blocks.append(.prose(trimmed))
+        for segment in ChatMarkdownTableParser.split(trimmed) {
+            switch segment {
+            case .prose(let text):
+                let prose = text.trimmingCharacters(in: CharacterSet(charactersIn: "\n"))
+                guard !prose.isEmpty else { continue }
+                blocks.append(.prose(prose))
+            case .table(let table):
+                blocks.append(.table(table))
+            }
+        }
     }
 }
