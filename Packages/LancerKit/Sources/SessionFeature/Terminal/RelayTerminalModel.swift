@@ -1,6 +1,7 @@
 #if os(iOS)
 import Foundation
 import Observation
+import LancerCore
 import TerminalEngine
 import SSHTransport
 
@@ -116,17 +117,17 @@ public final class RelayTerminalModel {
             object: nil,
             queue: .main
         ) { [weak self] note in
-            guard let self else { return }
-            Task { @MainActor in
-                self.handleStreamNotification(note)
+            let envelope = note.userInfo?["envelope"] as? TerminalStreamEnvelope
+            let machineID = note.userInfo?["machineID"] as? RelayMachineID
+            Task { @MainActor [weak self] in
+                guard let self, let envelope, let machineID else { return }
+                self.handleStream(envelope: envelope, machineID: machineID)
             }
         }
     }
 
-    private func handleStreamNotification(_ note: Notification) {
-        guard let envelope = note.userInfo?["envelope"] as? TerminalStreamEnvelope,
-              let machineID = note.userInfo?["machineID"] as? RelayMachineID,
-              machineID == bridge.machineID,
+    private func handleStream(envelope: TerminalStreamEnvelope, machineID: RelayMachineID) {
+        guard machineID == bridge.machineID,
               let frameData = Data(base64Encoded: envelope.frame),
               let frame = TerminalStreamCodec.decode(frameData)
         else { return }

@@ -1512,7 +1512,7 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
-    private func resumeTerminal<T: Decodable>(
+    private func resumeTerminal<T: Codable & Sendable>(
         _ type: T.Type,
         payload: Data,
         into continuation: inout CheckedContinuation<T, Error>?
