@@ -1,5 +1,13 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-16 ~18:15 ET — session-hop sync: master `62b4424d`; pair confirmed; launch PASS
+
+- **Tip:** `origin/master` `62b4424d` (PR #149). Sweep #140–#143, auth #145, Proof #147, ISO #148, Repos #149 all merged.
+- **Phone:** paired on relay slot ending `…9884` (no remint); last `paired with phone` through 17:43 ET; `lancerd doctor` relay **confirmed**.
+- **Smoke:** `"Hi"` launch **PASS** post-#145 (`conversation-append-launched allow` @ 21:20:25Z). Full 10-step checklist (approve + follow-up + Policy/Audit UI) **not fully evidenced**.
+- **Open:** Lane C4 #7 chain live re-proof; #10/#14 live re-proof; publish/TestFlight.
+- **Docs:** `SESSION_HOP_REPORT.md` canonical; `GAP_LIST`/`DOGFOOD_READY` refreshed this session.
+
 ## ⚡ 2026-07-16 ~17:22 ET — auth-preflight FIXED + phone Hi launched (PR #145)
 
 - **Merged:** PR #145 → `origin/master` `1a51329b` (probe 35s, boot warm, shim-excluding resolve, launchd PATH).
