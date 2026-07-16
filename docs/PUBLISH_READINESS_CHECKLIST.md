@@ -1,9 +1,7 @@
 # Lancer — Publish Readiness Checklist (single source of truth)
 
-> Reconciled 2026-07-06 against the current Tier 0 live Cursor shell state.
-> Supersedes the status claims in the purged `docs/_archive/remaining-work.md` (2026-05-28, stale: says "free team"),
-> and reconciles `ship-gate-owner-steps.md` + purged `docs/_archive/PRODUCTION_READINESS_PLAN.md` + `validation-playbook.md`.
-> When those disagree, **this file + `ARCHITECTURE.md` (§0.1 / §4.1) + `docs/STATUS_LEDGER.md` win.**
+> Reconciled 2026-07-15 against the Workspaces production root + Tier 0 live-loop state.
+> When older archives disagree, **this file + `ARCHITECTURE.md` (§0.1 / §4.1) + `docs/STATUS_LEDGER.md` win.**
 > (`LANCER_PROJECT_DOSSIER.md` and `docs/_archive/` were **purged 2026-07-06** — superseded by `ARCHITECTURE.md` §0.1.)
 
 Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated (one human action away)
@@ -20,15 +18,14 @@ Legend: ✅ done/verified · 🔶 partial · ❌ not started · ⏸ owner-gated 
 | agent-runner (Go) | ✅ pass | `go test ./...` exit 0 |
 | Chat persistence + FTS search | ✅ v10 migrations, `ChatConversationRepository` with 18 tests | `ChatConversationRepositoryTests.swift` |
 | Chat artifact cards + detail views | ✅ 7 card types, detail panels, 14 rendering tests | `ChatArtifactCards.swift`, `ChatArtifactDetailView.swift` |
-| **Cursor shell (production UI)** | 🔶 **STALE row** — `CursorAppShell`/`AppFeature/CursorStyle/` and the `LANCER_CURSOR_SHELL*` flags were removed by commit `6b97da65` (2026-07-11 "revert(ios): restore Codex Workspaces shell as the frontend"); confirmed zero matches in the tree 2026-07-15. Current production root is `AppFeature/Workspaces/WorkspacesView.swift`, DEBUG-gated by `LANCER_DESTINATION`. | see `ARCHITECTURE.md` §0.1/§4.1 correction notes, `docs/STATUS_LEDGER.md` 2026-07-11 "frontend reversal" |
-| **Cursor shell live bridge (2026-07-06)** | ✅ pairing, workspaces, dispatch, approval, continue wired through `CursorShellLiveBridge` | `docs/test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md` |
+| **Workspaces (production UI)** | ✅ `AppFeature/Workspaces/WorkspacesView.swift` is `AppRoot.readyRoot`; DEBUG via `LANCER_DESTINATION`. Retired CursorStyle / `LANCER_CURSOR_SHELL*` removed `6b97da65`. | `ARCHITECTURE.md` §0.1/§4.1, `docs/STATUS_LEDGER.md` 2026-07-11 frontend reversal |
 | **Live relay dispatch (2026-06-19)** | ✅ phone→relay→daemon dispatch proven live (opencode "Hi" → `dispatch-launched`) | PATH fix in launchd plist; `agentRunContinue` chain verified end-to-end |
 | **Push backend (canonical, cut over 2026-07-13)** | ✅ Fly **`conduit-push`** (`conduit-push.fly.dev`, always-on `iad`) — `/health` 200; relay route live; APNs secret names wired; `APPROVAL_RELAY_SECRET` enforced (401 on unauth). The retired Cloud Run endpoint returns 404. | Fly app `conduit-push` |
 | Fleet thread routing | ✅ `FleetThreadMapper` with 4 tests | maps host/agent/cwd to conversation |
-| Relay regression script | ✅ `scripts/relay-regression.sh` created | repeatable localhost approval loop |
-| **Full live governed-approvals loop** | ✅ **proven on simulator** after fixing 2 bugs | `docs/test-runs/2026-07-06-tier-0-live-cursor-shell-proof.md`; `ARCHITECTURE.md` §0.1 |
+| Relay regression script | ✅ `scripts/relay-regression.sh` created | repeatable localhost approval loop (`LANCER_DAEMON_E2E=1` + `LANCER_DESTINATION=review`) |
+| **Full live governed-approvals loop** | 🔶 **simulator path proven historically**; tip re-proof + device still open (see B10 / C2) | `scripts/relay-regression.sh`; `ARCHITECTURE.md` §0.1 |
 | **App-closed physical-device approval loop** | ⏸ **Historical PASS 2026-07-08 evening; current tip re-proof PENDING** | Evening force-quit + lock Approve/Reject reached host audit after #52 + `732071a7` — [`docs/test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md) (`79137ae4…` / `461bc3e0…`). Morning FAIL (same day) is historical: [`docs/test-runs/2026-07-08-tier0-device-proof-results.md`](test-runs/2026-07-08-tier0-device-proof-results.md). Tip has moved (`b18f519d`+); Layer 0 CLOSED only after fresh proof in [`docs/test-runs/2026-07-09-tier0-device-proof-results.md`](test-runs/2026-07-09-tier0-device-proof-results.md). |
-| **Governance in Settings** | ✅ merged | Policy/audit/secrets/drift/doctor/usage under Settings → Policy & Governance (Cursor shell); no separate Control root |
+| **Governance in Settings** | ✅ merged | Policy/audit/secrets/drift/doctor/usage under Settings → Policy & Governance; no separate Control root |
 | **TestFlight** | ✅ uploaded | Build uploaded; release remains gated on beta validation/App Review/owner store operations |
 | Visual consistency, light+dark | ✅ | polish batch 1 |
 
@@ -44,12 +41,12 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 - [x] **B2 — Make the live app↔daemon relay repeatable.** ✅ `scripts/relay-regression.sh` created. Run it to verify the loop.
 - [ ] **B3 — Green *app-target* build/archive on this cleanup branch.** Requires Xcode (watchOS runtime gate). SPM passes, but full Xcode scheme catches strict-concurrency breaks SPM misses.
 - [ ] **B4 — Rebuild/repackage lancerd from Go source.** `scripts/release-lancerd.sh` must emit the Go build.
-- [ ] **B5 — Finish the 16 remaining pixel-polish items.** Track in `docs/KNOWN_ISSUES.md` (previously `docs/superpowers/specs/2026-06-12-lancer-pixel-perfect-polish-plan.md`, purged 2026-07-06).
+- [ ] **B5 — Finish remaining pixel polish.** Polish list being re-derived by the 2026-07-15 states/a11y audit; tracked in `docs/CHANGELOG.md` PRs. (The old "16 pixel-polish items in KNOWN_ISSUES.md" claim was a phantom — that enumerated list does not exist.)
 - [ ] **B6 — Reconcile the push-backend WIP.** Divergent security design parked in stash.
 - [ ] **B7 — Feature-wiring audit.** Confirm policy editor, audit feed, usage dashboard, composer reachable from real navigation.
 - [ ] **B8 — Empty/error/loading + a11y sweep.** Every surface: empty/loading/error states, Dynamic Type, VoiceOver, light+dark.
 - [x] **B9 — Cross-device conversation sync: add `CKDatabaseSubscription` for background pull.** ✅ DONE 2026-07-03. `CloudSync.ensureDatabaseSubscriptionExists` registers a `CKDatabaseSubscription` (idempotent, `shouldSendContentAvailable`); `ConversationSyncEngine.start()` registers it after the first sync (best-effort — entitlement issues fall back to the pre-existing foreground-only behavior); `AppDelegate.didReceiveRemoteNotification` now distinguishes a CloudKit push from an APNs approval push and routes to `ConversationSyncEngine.handleRemoteNotification(subscriptionID:)`. Registration + routing are code-complete and unit-tested; actual silent-push delivery is still unverified on hardware — see C7.
-- [ ] **B10 — Prove Tier 0 through the live Cursor shell.** `LANCER_CURSOR_SHELL_LIVE=1` must complete pair → dispatch → approve/deny → follow-up against the real daemon/relay path. The shell is merged and partially wired; seeded `LANCER_CURSOR_SHELL=1` coverage is not sufficient for external beta.
+- [ ] **B10 — Prove Tier 0 through the live Workspaces shell.** Launch with `LANCER_DAEMON_E2E=1` + `LANCER_DESTINATION=review` (see `scripts/relay-regression.sh:70–78`) and complete pair → dispatch → approve/deny → follow-up against the real daemon/relay path. Do **not** use retired `LANCER_CURSOR_SHELL*` flags.
 - [x] **B11a — `BiometricGate` no-passcode fail-open.** ✅ Moot as of 2026-07-07 — Face ID/biometric
   gating was removed from the app entirely (permanent product decision), so there is no gate left to
   fail open. See `docs/legal/SECURITY_ARCHITECTURE.md` §5.1.
@@ -62,7 +59,7 @@ UUID case mismatch dropped every phone decision. Both fixed, regression-tested.
 ## C. Tests that REMAIN (not yet covered)
 
 - [ ] **C1 — Live E2E on a real *remote* host.** Only localhost-sim subset done. Needs a real SSH host. ⏸ owner-gated.
-- [ ] **C2 — Physical-device APNs, app *closed* (checkpoint 5c).** **Historical PASS** 2026-07-08 evening on tip `732071a7` — [`docs/test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md) (Approve `79137ae4…`, Reject `461bc3e0…`) after #52 delivery + content-hash/race fixes. Morning FAIL same day is historical (`docs/test-runs/2026-07-08-tier0-device-proof-results.md`). **Current tip re-proof: still PENDING as of master `65bed890` (2026-07-15)** — the relay generation-guard reconnect fix now has a clean **10/10 Simulator** re-proof ([`docs/test-runs/2026-07-15-reconnect-10x-sim/README.md`](test-runs/2026-07-15-reconnect-10x-sim/README.md)) but **no physical-device re-proof yet**, and is additionally blocked right now because a 2026-07-15 test-harness mistake orphaned the owner's real phone pairing (see `docs/STATUS_LEDGER.md` "2026-07-15 in one line") — the owner must re-pair before this can be re-run on device.
+- [ ] **C2 — Physical-device APNs, app *closed* (checkpoint 5c).** **Historical PASS** 2026-07-08 evening on tip `732071a7` — [`docs/test-runs/2026-07-08-tier0-5c-retest-results.md`](test-runs/2026-07-08-tier0-5c-retest-results.md) (Approve `79137ae4…`, Reject `461bc3e0…`) after #52 delivery + content-hash/race fixes. Morning FAIL same day is historical (`docs/test-runs/2026-07-08-tier0-device-proof-results.md`). **Current tip re-proof: still PENDING as of master `65bed890` (2026-07-15)** — a **10/10 Simulator** reconnect proof was claimed 2026-07-15 but its evidence bundle was never committed (integrity gap); re-prove or restore before citing. **No physical-device re-proof yet**, and is additionally blocked right now because a 2026-07-15 test-harness mistake orphaned the owner's real phone pairing (see `docs/STATUS_LEDGER.md` "2026-07-15 in one line") — the owner must re-pair before this can be re-run on device.
 - [ ] **C3 — Expand the app-target UI suite.** Add: onboarding completeness, StoreKit IAP purchase, approve-from-lockscreen tests.
 - [ ] **C4 — Reconnect / session-loss hardening as tests.** Background, network switch, daemon restart. Partial: daemon-restart durability for the conversation ledger specifically was live-verified 2026-07-03 (9 real conversations across 3 vendors, full turn/event/vendor-session data, survived a complete `lancerd` process restart byte-for-byte; dispatch resumed working immediately after) — see `ARCHITECTURE.md` §0.1 / §11.2. iOS-side background/network-switch/reconnect behavior remains untested.
 - [ ] **C5 — StoreKit IAP purchase verified in TestFlight** (sandbox account). ⏸ owner-gated.

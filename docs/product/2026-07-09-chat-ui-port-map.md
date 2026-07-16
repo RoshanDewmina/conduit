@@ -1,11 +1,18 @@
 # Chat UI port map — Orca / Happier / Omnara → Lancer
 
-Date: 2026-07-09. Companion to `docs/plans/2026-07-09-chat-interface-parity-plan.md` (gap list).
-Sources studied read-only in `research-repos/{orca,happier,omnara}`; all competitor paths below are
-relative to those clone roots. Our targets: `Packages/LancerKit/Sources/AppFeature/CursorStyle/`
-(`CursorWorkThreadView.swift`, `CursorTranscriptMapper.swift`, `CursorThreadTranscriptModel.swift`,
-`CursorShellLiveBridge.swift`), models in `Sources/LancerCore/ChatConversation.swift`
-(`ChatTurn`/`ChatEvent`/`ChatArtifact`), GRDB mirror in `Sources/PersistenceKit/ChatConversationRepository.swift`.
+Date: 2026-07-09. **Last updated: 2026-07-15.**
+Companion plan `docs/plans/2026-07-09-chat-interface-parity-plan.md` is missing from the tree
+(git history only). Sources studied read-only in `research-repos/{orca,happier,omnara}`; all
+competitor paths below are relative to those clone roots.
+
+> **Frontend targets (historical, pre-`6b97da65`):** paths under
+> `Packages/LancerKit/Sources/AppFeature/CursorStyle/` (`CursorWorkThreadView.swift`,
+> `CursorTranscriptMapper.swift`, `CursorThreadTranscriptModel.swift`,
+> `CursorShellLiveBridge.swift`) were removed with the CursorStyle shell. **Port intents in this
+> doc remain valid** — re-home them onto the current Workspaces / chat surfaces
+> (`AppFeature/Workspaces/`, related SessionFeature/LancerCore chat types) when implementing.
+> Models in `Sources/LancerCore/ChatConversation.swift` (`ChatTurn`/`ChatEvent`/`ChatArtifact`)
+> and GRDB mirror in `Sources/PersistenceKit/ChatConversationRepository.swift` are still current.
 
 **Licenses.** Orca: MIT — patterns and code portable with attribution. Omnara: Apache-2.0 —
 portable with attribution + NOTICE (note its README marks the codebase deprecated; the code is

@@ -129,13 +129,16 @@ cd daemon/lancerd && LANCERD_BINARY=./lancerd ../../scripts/validation/resident-
 
 ---
 
-## PHASE 3 — Cursor shell approval loop on the simulator
+## PHASE 3 — Workspaces approval loop on the simulator
 
 This is the proven path; use it to confirm your environment before going to device. The repeatable harness:
 ```bash
 ./scripts/relay-regression.sh
 ```
-What it does: builds the app, installs to the booted sim, launches with `LANCER_CURSOR_SHELL_LIVE=1`, seeds a localhost host, screenshots `before-approval`, waits for you to tap **Approve** on the Review surface, screenshots `after-approval`.
+What it does: builds the app, installs to the booted sim, launches with `LANCER_DAEMON_E2E=1` +
+`LANCER_DESTINATION=review` (Workspaces review surface — see `scripts/relay-regression.sh:70–78`),
+seeds a localhost host, screenshots `before-approval`, waits for you to tap **Approve** on the
+Review surface, screenshots `after-approval`. Do **not** use retired `LANCER_CURSOR_SHELL*` flags.
 
 Manual equivalent (if you want to drive it yourself):
 ```bash
@@ -143,7 +146,7 @@ xcrun simctl boot "iPhone 17 Pro" 2>/dev/null || true
 PW="$(security find-generic-password -s lancer-localhost-ssh -w)"
 xcrun simctl install booted /tmp/lancer-dd/Build/Products/Debug-iphonesimulator/Lancer.app
 xcrun simctl terminate booted dev.lancer.mobile 2>/dev/null; sleep 2
-env SIMCTL_CHILD_LANCER_CURSOR_SHELL_LIVE=1 SIMCTL_CHILD_LANCER_DESTINATION=review \
+env SIMCTL_CHILD_LANCER_DAEMON_E2E=1 SIMCTL_CHILD_LANCER_DESTINATION=review \
     SIMCTL_CHILD_LANCER_TEST_HOST=127.0.0.1 SIMCTL_CHILD_LANCER_TEST_USER="$USER" \
     SIMCTL_CHILD_LANCER_TEST_PW="$PW" SIMCTL_CHILD_LANCER_TEST_PORT=22 \
     xcrun simctl launch booted dev.lancer.mobile
@@ -334,8 +337,9 @@ After a run, report: which phases passed (with checkpoint evidence — audit tai
 You are executing Lancer's live-loop bring-up. Repo: /Users/roshansilva/Documents/command-center.
 
 FIRST: invoke the `lancer-context-onboarding` skill, then read docs/LIVE_LOOP_RUNBOOK.md in full and
-ARCHITECTURE.md §0.1 + §4.1. The app home is the **Cursor shell** (Home / Workspaces / Settings), not a tab bar. `lancerd` is the
-Go source under daemon/lancerd (the shipped prebuilt binary is stale — rebuild it).
+ARCHITECTURE.md §0.1 + §4.1. The app home is **Workspaces** (`AppRoot.readyRoot` →
+`NavigationStack { WorkspacesView() }`), not a tab bar; DEBUG deep-links use `LANCER_DESTINATION`.
+`lancerd` is the Go source under daemon/lancerd (the shipped prebuilt binary is stale — rebuild it).
 
 GOAL: bring up and prove the governed-approval loop end-to-end per the runbook's phases, pausing at each
 🛑 CHECKPOINT so the owner can inspect. Drive Phases 1–4 yourself (build, daemon, SSH loop on the

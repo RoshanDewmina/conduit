@@ -69,10 +69,11 @@ Three rules keep the codebase honest:
 
 ## Status
 
-> **Current direction (2026-07-06):** the app shell is the **Cursor-style 3-root IA** (Home /
-> Workspaces / Settings) under `AppFeature/CursorStyle/`. `LANCER_CURSOR_SHELL=1` (mock) and
-> `LANCER_CURSOR_SHELL_LIVE=1` (live bridge) are the DEBUG launch seams. Legacy sidebar / Command
-> Home is **deprecated**. Read [`ARCHITECTURE.md` §0.1 (current-state snapshot)](./ARCHITECTURE.md)
+> **Current direction (2026-07-15):** the app home is **Workspaces**
+> (`AppFeature/Workspaces/WorkspacesView.swift` via `AppRoot.readyRoot` →
+> `NavigationStack { WorkspacesView() }`). DEBUG deep-links use `LANCER_DESTINATION`.
+> Legacy sidebar / Command Home and the retired CursorStyle / `LANCER_CURSOR_SHELL*` shell are
+> **gone** — do not cite them. Read [`ARCHITECTURE.md` §0.1 (current-state snapshot)](./ARCHITECTURE.md)
 > and §4.1 for the authoritative picture; the milestone table below is historical milestone history.
 
 | M  | Title             | Status |
@@ -91,7 +92,7 @@ Three rules keep the codebase honest:
 | M11 | Temporal wall    | 🚧 Phase 0+1+UX landed 2026-05-27; Phase 2 pending |
 | M12 | Live Block I/O   | 🚧 core implementation landed 2026-05-28; real-host TUI validation pending |
 
-Last updated 2026-07-06. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the product and module
+Last updated 2026-07-15. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the product and module
 architecture, [`docs/PUBLISH_READINESS_CHECKLIST.md`](./docs/PUBLISH_READINESS_CHECKLIST.md) for
 launch gates, and [`docs/KNOWN_ISSUES.md`](./docs/KNOWN_ISSUES.md) for the current audit tracker.
 

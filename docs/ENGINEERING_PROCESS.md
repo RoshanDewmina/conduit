@@ -1,8 +1,11 @@
 # Lancer engineering process — feature → merged (2026-07-10)
 
+**Last updated: 2026-07-15.**
+
 How every feature gets built. Applies to humans and agents. Companion:
-[`plans/2026-07-10-fable-orchestrator-PASTE.md`](plans/2026-07-10-fable-orchestrator-PASTE.md)
-(who does each step) and the `swarm-orchestrator` skill (generic mechanics).
+[`plans/orchestrator-state.md`](plans/orchestrator-state.md)
+(living session state) and the `swarm-orchestrator` skill (generic mechanics).
+(Point-in-time Fable paste briefs were purged 2026-07-15 — git history only.)
 
 ## Model routing (owner policy, 2026-07-10 — supersedes prior CLAUDE.md tiers)
 

@@ -10,8 +10,9 @@ Claude-specific execution model and tooling.
 
 For product truth read `ARCHITECTURE.md` **§0.1**
 (current-state snapshot: implemented / partial / planned / deprecated) and **§4.1** (navigation):
-the app home is the **Cursor shell** (3-root: Home / Workspaces / Settings), **not** a tab bar
-(`enum Tab` in `AppRoot.swift` is vestigial). `docs/LANCER_PROJECT_DOSSIER.md` is archived — don't cite it.
+the app home is **Workspaces** (`AppRoot.readyRoot` → `NavigationStack { WorkspacesView() }`),
+**not** a tab bar (`enum Tab` in `AppRoot.swift` is vestigial). DEBUG deep-links use
+`LANCER_DESTINATION`. `docs/LANCER_PROJECT_DOSSIER.md` is archived — don't cite it.
 
 ## Path-scoped rules & skills
 
@@ -30,8 +31,8 @@ owner asks "what's next?" / wants a paste-ready brief → `agent-next-prompt`; n
 ## Execution model — Fable orchestrates, Cursor CLI codes, Sonnet 5 is fallback + sensitive paths
 
 **Owner's standing directive (2026-07-10, supersedes 2026-07-06 tiers):** full policy in
-[`docs/ENGINEERING_PROCESS.md`](docs/ENGINEERING_PROCESS.md); orchestrator brief in
-[`docs/plans/2026-07-10-fable-orchestrator-PASTE.md`](docs/plans/2026-07-10-fable-orchestrator-PASTE.md)
+[`docs/ENGINEERING_PROCESS.md`](docs/ENGINEERING_PROCESS.md); living orchestrator state in
+[`docs/plans/orchestrator-state.md`](docs/plans/orchestrator-state.md)
 (+ `swarm-orchestrator` skill). opencode/deepseek remain retired. Summary:
 
 1. **Fable 5 (main session) orchestrates**: specs, decomposition, routing, arbitration,
