@@ -97,6 +97,7 @@ skills-lock.json
 # Lancer project skills so a clean checkout / teammate / fresh machine gets them.
 .claude/skills/*
 !.claude/skills/README.md
+!.claude/skills/agent-oracle-harness
 !.claude/skills/lancer-*
 !.claude/skills/agent-session-history-reader
 !.claude/skills/vendor-cli-adapter-audit
