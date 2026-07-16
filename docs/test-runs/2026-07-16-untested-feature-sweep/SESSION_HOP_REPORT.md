@@ -1,7 +1,7 @@
 # SESSION HOP REPORT — Lancer untested-feature sweep → dogfood (2026-07-16)
 
 **Audience:** Owner + next agent  
-**Written:** 2026-07-16 ~18:15 ET · **amended ~18:20 ET** with verbatim session-message grounding  
+**Written:** 2026-07-16 ~18:15 ET · **amended ~18:20 ET** with verbatim session-message grounding · **amended ~19:20 ET** with full Simurgh §2.4 (LE/LC3/C4 + wave commits + `~/bin` hot-swap)  
 **Method:** Session-history index + transcript mining of **actual USER/ASSISTANT text** (Claude JSONL + Cursor agent-transcripts + escalation brief), then **double-checked** against live `git fetch`, `gh pr list`, on-disk evidence, `lancerd doctor`, and audit/daemon logs.  
 **Label key:** **VERIFIED** (live git/PR/file/log) · **CLAIMED-UNVERIFIED** (transcript/doc only) · **CONTRADICTED** (claim vs live evidence disagree)
 
@@ -153,11 +153,41 @@ sequenceDiagram
 |---|---|
 | Path | `~/.cursor/projects/Users-roshansilva-Documents-simurgh/agent-transcripts/21bfc5b7-883f-4024-8258-e1e54f17445f/21bfc5b7-883f-4024-8258-e1e54f17445f.jsonl` (+ `subagents/`) |
 | Window | ~14:11–14:33 ET (parent); subagents longer |
-| Role | Fix `simurgh exec` friction discovered by Lancer sweep |
+| Repo | `/Users/roshansilva/Documents/simurgh` (local tip **VERIFIED** `85f3907`) |
+| Role | Fix `simurgh exec` friction discovered by Lancer sweep so leased sim builds stop fighting the lease tool |
 
-**Claimed done:** Wave-1 usable exec (caller paths, lease keepalive, passwd `$HOME`); wave-2 fan-out (busy/hold, MCP home, docs).
+#### Why Simurgh was touched (Lancer sweep dogfood)
 
-**Actually landed (VERIFIED local Simurgh tip at report time):** `85f3907` — `fix(bench): P0 sidecars, report timing, xcodebuildmcp harness` (and related day's commits on that repo). Lancer docs claim Simurgh wave-1/2 @ `85f3907` in orchestrator ⚡ ~16:20 — **VERIFIED** tip string matches local Simurgh HEAD subject family.
+Same-day Lancer untested-feature lanes hit hard Simurgh friction (evidence in sweep reports, not this transcript):
+
+1. **LE reclaim mid-run** (`LE-report.md`) — lane bypassed `simurgh exec` and ran bare `xcodebuild`; `lease-187` (30m TTL) was reclaimed under build-slot pressure while `xcodebuild test-without-building` was still running; device vanished from `simctl` with no caller warning.
+2. **`-derivedDataPath` collision** (`LE-report.md`) — `simurgh exec … -- xcodebuild … -derivedDataPath <caller>` failed immediately (`option '-derivedDataPath' may only be provided once`) because `runExec` unconditionally prepended lease isolation flags. Forced the unsafe bare-xcodebuild + manual `simurgh renew` loop.
+3. **HOME pin / wrong `.simurgh`** (`LC3-report.md`) — sweep daemons set polluted `$HOME` for `LANCER_STATE_DIR` isolation; lease metadata landed under `/tmp/sweep-C3/home/.simurgh` instead of passwd-home `~/.simurgh`; lease had to be re-acquired with correct HOME.
+4. **TTL friction** (`LA`/`LA2` + mid-sweep commit) — default lease TTL **30m → 60m** (`2fe3a2b`) so concurrent sweep lanes stop expiring mid cold `build-for-testing`.
+
+#### Wave commits (local Simurgh; **do not push** — ahead of `origin/master`)
+
+| Commit | Subject | What it fixed |
+|---|---|---|
+| `2fe3a2b` | `feat(broker): raise default lease TTL 30m -> 60m` | Mid-sweep TTL (landed before wave-1 session) |
+| `c11fb11` | `fix(exec): merge xcodebuild flags, auto-renew, pin passwd home` | Wave-1: skip-if-present DD/SwiftPM/resultBundle; replace+warn `-destination`; exec auto-renew TTL/3; passwd-home pin + HOME-mismatch fail-closed/doctor |
+| `b1305a7` | `feat(lease): hold/unhold, shared passwd home, bulk release guard` | Wave-2: busy/hold, MCP home alignment, bulk release guard |
+| `85f3907` | `fix(bench): P0 sidecars, report timing, xcodebuildmcp harness` | Same-day tip (bench P0); Lancer orchestrator ⚡ ~16:20 cites this tip — **VERIFIED** |
+
+**Claimed done (session):** Wave-1 usable exec (caller paths, lease keepalive, passwd home); wave-2 fan-out (busy/hold, MCP home, docs/AGENTS `simurgh exec` mandate).
+
+**Actually landed (VERIFIED):** the four commits above on local Simurgh HEAD `85f3907`. Wave-1 also **hot-swapped** the live CLI: `go build -o /tmp/simurgh-wave1 ./cmd/simurgh` → backup `~/bin/simurgh.bak-pre-wave1` → install to **`~/bin/simurgh`** (mtime ~14:37 ET; `cp` hit exit 137 on identical hash — **`mv` from `/tmp` worked**); daemon **not** restarted (CLI still reported reachable). `which simurgh` → `/Users/roshansilva/bin/simurgh`.
+
+#### How C4 used the fixed `simurgh exec`
+
+Post-wave C4 (`LC4-report.md`, `lease-197` / iPhone 17 Pro): `simurgh exec lease-197 -- xcodebuild …` **worked**; caller `-derivedDataPath` **merged cleanly** (no duplicate-flag fail). Cold `build-for-testing` ~25 min + test ~15 min completed under exec auto-renew; lease released on harness exit. (C4's remaining FAIL was harness pairing settle — daemon never `paired with phone` — not a Simurgh exec regression.)
+
+#### Lessons (Simurgh-specific)
+
+- Always route long `xcodebuild` through `simurgh exec <lease-id> -- …` so flag-merge + auto-renew apply; bare xcodebuild invites mid-run reclaim (LE).
+- Isolate sweep **Lancer** state with `LANCER_STATE_DIR` only — do **not** pollute `$HOME` for Simurgh lease metadata (LC3); rely on passwd-home pin / `SIMURGH_HOME` override.
+- After local Simurgh wave commits, hot-swap `~/bin/simurgh` (or equivalent PATH binary) so concurrent Lancer lanes pick up the fix without waiting on a push.
+- Prefer physical-device dogfood for production pair; use Simurgh only when sim work appears — and then `simurgh exec`, never bare.
 
 ### 2.5 Cursor parent `fb903282-2d06-4471-9542-5aaafbbe41e1` — merge → dogfood → UX follow-ons
 
