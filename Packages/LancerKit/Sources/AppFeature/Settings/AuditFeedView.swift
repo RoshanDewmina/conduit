@@ -2,10 +2,13 @@
 import SwiftUI
 import LancerCore
 
-/// Read-only audit tail over `DaemonChannel.tailAudit` (`agent.audit.tail`).
+/// Read-only audit tail. SSH `DaemonChannel.tailAudit` (`agent.audit.tail`)
+/// first, falling back to the relay `agentAuditTail` mirror for a relay-only
+/// pairing (no SSH session) — same fallback shape as emergency stop.
 public struct AuditFeedView: View {
     private let limit: Int
 
+    @Environment(RelayFleetStore.self) private var relayFleetStore
     @State private var entries: [AuditLogEntry] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -62,7 +65,7 @@ public struct AuditFeedView: View {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            entries = try await GovernanceHostActions.tailAudit(limit: limit)
+            entries = try await GovernanceHostActions.tailAudit(limit: limit, relayFleetStore: relayFleetStore)
         } catch {
             entries = []
             errorMessage = error.localizedDescription

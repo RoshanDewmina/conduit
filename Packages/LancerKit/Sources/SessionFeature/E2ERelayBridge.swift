@@ -52,6 +52,9 @@ public final class E2ERelayBridge: ObservableObject {
     private var pendingDecisionAcks: [String: CheckedContinuation<Bool, Never>] = [:]
     private var statusQueryContinuation: CheckedContinuation<AgentStatusSnapshot, Error>?
     private var emergencyStopContinuation: CheckedContinuation<EmergencyStopResult, Error>?
+    private var auditTailContinuation: CheckedContinuation<[AuditLogEntry], Error>?
+    private var permissionModeGetContinuation: CheckedContinuation<PermissionModeGetResult, Error>?
+    private var permissionModeSetContinuation: CheckedContinuation<PermissionModeSetResult, Error>?
     private var conversationsListContinuation: CheckedContinuation<ConversationListResponse, Error>?
     private var conversationsFetchContinuation: CheckedContinuation<ConversationFetchResponse, Error>?
     private var conversationsAppendContinuation: CheckedContinuation<ConversationAppendResponse, Error>?
@@ -198,6 +201,12 @@ public final class E2ERelayBridge: ObservableObject {
         emergencyStopContinuation = nil
         statusQueryContinuation?.resume(throwing: E2EError.notPaired)
         statusQueryContinuation = nil
+        auditTailContinuation?.resume(throwing: E2EError.notPaired)
+        auditTailContinuation = nil
+        permissionModeGetContinuation?.resume(throwing: E2EError.notPaired)
+        permissionModeGetContinuation = nil
+        permissionModeSetContinuation?.resume(throwing: E2EError.notPaired)
+        permissionModeSetContinuation = nil
         repoTurnDiffGate.cancelAll()
         repoSessionDiffGate.cancelAll()
         repoFileDiffGate.cancelAll()
@@ -463,6 +472,73 @@ public final class E2ERelayBridge: ObservableObject {
         defer { timeout.cancel() }
         return try await withCheckedThrowingContinuation { c in
             self.statusQueryContinuation = c
+        }
+    }
+
+    /// Read-only audit-log tail mirror for a relay-only phone (no SSH
+    /// `DaemonChannel`) — mirrors `DaemonChannel.tailAudit` / SSH `agent.audit.tail`.
+    /// Bounded 15s wait, matching the other relay read RPCs (project #111 rule:
+    /// never an unbounded wait).
+    public func sendAuditTail(limit: Int = 100) async throws -> [AuditLogEntry] {
+        guard isActive else { throw E2EError.notPaired }
+        struct AuditTailParams: Codable, Sendable { let limit: Int }
+        try await relayClient.send(type: "agentAuditTail", payload: AuditTailParams(limit: limit))
+        auditTailContinuation?.resume(throwing: E2EError.superseded)
+        auditTailContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.auditTailContinuation?.resume(throwing: E2EError.timedOut)
+            self.auditTailContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.auditTailContinuation = c
+        }
+    }
+
+    /// Reads the global policy's coarse decision mode (deny/ask/allow) over the
+    /// relay — mirrors the `default` field `DaemonChannel.fetchPolicy` / SSH
+    /// `agent.policy.get` returns, without round-tripping the full rules YAML.
+    /// Bounded 15s wait.
+    public func sendPermissionModeGet() async throws -> PermissionModeGetResult {
+        guard isActive else { throw E2EError.notPaired }
+        struct Empty: Codable, Sendable {}
+        try await relayClient.send(type: "agentPermissionModeGet", payload: Empty())
+        permissionModeGetContinuation?.resume(throwing: E2EError.superseded)
+        permissionModeGetContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.permissionModeGetContinuation?.resume(throwing: E2EError.timedOut)
+            self.permissionModeGetContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.permissionModeGetContinuation = c
+        }
+    }
+
+    /// Writes ONLY the global policy's coarse decision mode (deny/ask/allow)
+    /// over the relay — never the full rules YAML from a relay-only phone (see
+    /// `docs/product/2026-07-16-policy-audit-relay-port-map.md`). The daemon
+    /// validates the mode and fails closed (leaves the policy file untouched,
+    /// `ok == false`) on anything else. Bounded 15s wait.
+    public func sendPermissionModeSet(_ mode: PermissionMode) async throws -> PermissionModeSetResult {
+        guard isActive else { throw E2EError.notPaired }
+        struct SetParams: Codable, Sendable { let mode: String }
+        try await relayClient.send(type: "agentPermissionModeSet", payload: SetParams(mode: mode.rawValue))
+        permissionModeSetContinuation?.resume(throwing: E2EError.superseded)
+        permissionModeSetContinuation = nil
+        let timeout = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard let self, !Task.isCancelled else { return }
+            self.permissionModeSetContinuation?.resume(throwing: E2EError.timedOut)
+            self.permissionModeSetContinuation = nil
+        }
+        defer { timeout.cancel() }
+        return try await withCheckedThrowingContinuation { c in
+            self.permissionModeSetContinuation = c
         }
     }
 
@@ -1284,6 +1360,44 @@ public final class E2ERelayBridge: ObservableObject {
                 emergencyStopContinuation?.resume(throwing: E2EError.decryptFailed)
             }
             emergencyStopContinuation = nil
+
+        case "agentAuditTailResult":
+            struct AuditTailPayload: Codable, Sendable { let entries: [AuditLogEntry]; let error: String? }
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<AuditTailPayload>.self, from: message.payload
+            )
+            if let payload = envelope?.payload {
+                if let err = payload.error, !err.isEmpty {
+                    auditTailContinuation?.resume(throwing: RelayFSError.host(err))
+                } else {
+                    auditTailContinuation?.resume(returning: payload.entries)
+                }
+            } else {
+                auditTailContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            auditTailContinuation = nil
+
+        case "agentPermissionModeGetResult":
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<PermissionModeGetResult>.self, from: message.payload
+            )
+            if let result = envelope?.payload {
+                permissionModeGetContinuation?.resume(returning: result)
+            } else {
+                permissionModeGetContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            permissionModeGetContinuation = nil
+
+        case "agentPermissionModeSetResult":
+            let envelope = try? JSONDecoder().decode(
+                E2ERelayMessage.RelayInnerEnvelope<PermissionModeSetResult>.self, from: message.payload
+            )
+            if let result = envelope?.payload {
+                permissionModeSetContinuation?.resume(returning: result)
+            } else {
+                permissionModeSetContinuation?.resume(throwing: E2EError.decryptFailed)
+            }
+            permissionModeSetContinuation = nil
 
         case "agentArtifact":
             guard let env = try? JSONDecoder().decode(

@@ -149,6 +149,73 @@ func (e *policyEngine) getPolicyYAML(cwd string) (string, error) {
 	return policy.MarshalYAML(policy.DefaultDocument())
 }
 
+// validPermissionMode reports whether mode is one of the three coarse policy
+// effects (deny/ask/allow) — the only values a relay-only phone may set via
+// agentPermissionModeSet. Anything else (including policy.ParseEffect's
+// fail-open "ask" normalization) is rejected outright so a malformed or
+// unexpected client value never silently becomes "ask".
+func validPermissionMode(mode string) bool {
+	switch policy.Effect(mode) {
+	case policy.EffectDeny, policy.EffectAsk, policy.EffectAllow:
+		return true
+	default:
+		return false
+	}
+}
+
+// getPermissionMode returns the current global policy's coarse Default effect
+// (deny/ask/allow). Read-only mirror of the same file agent.policy.get reads
+// via getPolicyDocuments — no new business logic, just the Default field.
+func (e *policyEngine) getPermissionMode() string {
+	e.ensureMigrated()
+	if doc, err := policy.LoadFile(policy.GlobalPolicyPath(e.home)); err == nil && doc.Default != "" {
+		return doc.Default
+	}
+	return string(policy.EffectAsk)
+}
+
+// setPermissionMode writes ONLY the coarse Default effect on the global policy
+// document, preserving any existing rules untouched. Used by the relay
+// agentPermissionModeSet mirror so a relay-only phone can change the default
+// decision mode without round-tripping full policy YAML (see
+// docs/product/2026-07-16-policy-audit-relay-port-map.md). Rejects anything
+// but deny/ask/allow and leaves the file untouched on rejection (fail-closed).
+func (e *policyEngine) setPermissionMode(mode string) error {
+	if !validPermissionMode(mode) {
+		return fmt.Errorf("invalid permission mode %q: must be one of deny, ask, allow", mode)
+	}
+	doc, err := policy.LoadFile(policy.GlobalPolicyPath(e.home))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		doc = policy.DefaultDocument()
+	}
+	doc.Default = mode
+	if err := policy.SaveFile(policy.GlobalPolicyPath(e.home), doc); err != nil {
+		return err
+	}
+	return e.reload("")
+}
+
+// setPermissionModeAudited is the server-level entry point for the relay
+// agentPermissionModeSet arm: applies the coarse-mode write, then records it
+// to the audit log the same way every other governance mutation does
+// (s.audit.append), with actor set to identify the relay-phone origin.
+func (s *server) setPermissionModeAudited(mode, actor string) error {
+	if err := s.policy.setPermissionMode(mode); err != nil {
+		return err
+	}
+	s.auditEntry(AuditEntry{
+		Action: "policy-mode-set",
+		Agent:  actor,
+		Kind:   "policy",
+		Rule:   "default",
+		Effect: mode,
+	})
+	return nil
+}
+
 func (s *server) simulatePolicy(yamlText string, periodDays int) policy.SimulationResult {
 	doc, err := policy.ParseDocument(yamlText)
 	if err != nil {
