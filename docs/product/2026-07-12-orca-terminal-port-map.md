@@ -44,10 +44,16 @@ that makes multi-client attach cheap.
 
 ## Port plan (phased; each phase independently shippable)
 
-**Phase 1 — re-wire what exists (days).** Entry points in the Workspaces shell: Machine detail →
+**Phase 1 — re-wire what exists.** Entry points in the Workspaces shell: Machine detail →
 "Terminal" + thread ⋯ menu → "Open terminal at this cwd". Lancer's existing SSH block terminal
 as-is. Gate: open terminal on the paired machine from the phone, run vim/htop, survive
 app background. (This alone is "full terminal support" v0 — it worked in 2026-06 builds.)
+
+> **Status 2026-07-16:** Phase 1 **shipped** on `cursor/desktop-history-and-terminal-3510`
+> as a slim SwiftTerm surface (`LiveTerminalView`/`LiveTerminalModel`) — not the deleted
+> block `SessionView` — with Trusted Machines → MachineDetail → Open Terminal, thread ⋯
+> "Open terminal at this cwd", AppRoot fullScreenCover, TOFU + password sheet, and
+> `SSHHostSetupSheet` when no Host is saved. Phase 2/3 still open.
 
 **Phase 2 — daemon-owned terminal sessions (the real Orca lesson).** Move PTY ownership from
 the phone-held SSH session into `lancerd` (it already survives disconnects for agent runs):

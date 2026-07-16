@@ -154,6 +154,8 @@ public struct AppRoot: View {
     @State private var relayQuestionIngest: RelayQuestionIngest?
     /// Derived + user-added workspace repos for the Workspaces shell.
     @State private var workspaceDataStore: WorkspaceDataStore?
+    /// Phase 1 interactive SSH terminal presentation.
+    @State private var terminalCoordinator: TerminalSessionCoordinator?
     /// First-run welcome gate. Launch arg `-onboardingSeen YES` registers into
     /// UserDefaults automatically; UITests also set `LANCER_SKIP_CURSOR_ONBOARDING`.
     @AppStorage("onboardingSeen") private var onboardingSeen = false
@@ -242,12 +244,18 @@ public struct AppRoot: View {
                 )
             }
             _workspaceDataStore = State(initialValue: workspaceStore)
+            _terminalCoordinator = State(initialValue: TerminalSessionCoordinator(
+                hostRepo: env.hostRepo,
+                keyStore: env.keyStore,
+                hostKeyStore: env.hostKeyStore
+            ))
         } catch {
             _environment = State(initialValue: .failure(error.localizedDescription))
             _shellLiveBridge = State(initialValue: nil)
             _relayApprovalIngest = State(initialValue: nil)
             _relayQuestionIngest = State(initialValue: nil)
             _workspaceDataStore = State(initialValue: nil)
+            _terminalCoordinator = State(initialValue: nil)
         }
     }
 
@@ -292,7 +300,7 @@ public struct AppRoot: View {
 
     @ViewBuilder
     private var readyRoot: some View {
-        if let shellLiveBridge, let relayApprovalIngest, let relayQuestionIngest, let workspaceDataStore {
+        if let shellLiveBridge, let relayApprovalIngest, let relayQuestionIngest, let workspaceDataStore, let terminalCoordinator {
             Group {
                 if shouldShowFirstRunOnboarding {
                     FirstRunOnboardingView {
@@ -309,6 +317,30 @@ public struct AppRoot: View {
             .environment(relayApprovalIngest)
             .environment(relayQuestionIngest)
             .environment(workspaceDataStore)
+            .environment(terminalCoordinator)
+            .fullScreenCover(
+                isPresented: Binding(
+                    get: { terminalCoordinator.presentedModel != nil },
+                    set: { presented in
+                        if !presented { terminalCoordinator.dismissTerminal() }
+                    }
+                ),
+                onDismiss: { terminalCoordinator.dismissTerminal() }
+            ) {
+                if let model = terminalCoordinator.presentedModel {
+                    LiveTerminalView(model: model)
+                        .environment(terminalCoordinator)
+                }
+            }
+            .sheet(
+                item: Binding(
+                    get: { terminalCoordinator.passwordPromptHost },
+                    set: { terminalCoordinator.passwordPromptHost = $0 }
+                )
+            ) { prompt in
+                TerminalPasswordSheet(prompt: prompt)
+                    .environment(terminalCoordinator)
+            }
             .task {
                 relayApprovalIngest.start()
                 relayQuestionIngest.start()

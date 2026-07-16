@@ -193,12 +193,17 @@ public final class ShellLiveBridge {
     /// can count/gate dispatch without a live relay connection.
     var testTransportOverride: ConversationTransport?
     var testSessionEpoch: UInt64 { sessionEpoch }
-    /// When set, `adoptArmedObservedContinue` uses this instead of the live RPC.
+    /// When set, `adoptArmedObservedContinue`'s tail-transcript fallback uses
+    /// this instead of the live `agent.sessions.transcript` RPC.
     var testRelayFetchTranscript: (@MainActor (String, Int) async throws -> (
         messages: [SessionMessage],
         nextLine: Int,
         resetRequired: Bool
     ))?
+    /// When set, adopt prefers this over live `relayAttachObservedSession`.
+    /// Return a response with a non-empty `error` (or throw) to force the
+    /// tail-transcript fallback path in tests.
+    var testRelayAttachObservedSession: (@MainActor (String, String, String) async throws -> ConversationAttachObservedSessionResponse)?
 
     func testArmLastAttempt(_ attempt: LastSendAttempt) {
         lastAttempt = attempt
@@ -346,9 +351,17 @@ public final class ShellLiveBridge {
     }
 
     /// Adopts an armed observed session without sending: resolves a connected
-    /// machine, hydrates the host transcript into `transcriptTurns`, and leaves
+    /// machine, hydrates history into `transcriptTurns`, and leaves
     /// `sendState` idle so the follow-up composer is active. The first typed
     /// follow-up consumes `pendingObservedContinue` via `send`.
+    ///
+    /// Prefer `attachObservedSession` + ledger fetch — the live
+    /// `agent.sessions.transcript` RPC is intentionally tail-capped
+    /// (`maxObservedTailLines`) for streaming payloads, which made past
+    /// desktop sessions open with only recent messages. Attach imports the
+    /// full vendor transcript into the host ledger; fetch-on-open pages it
+    /// onto the phone. Falls back to the tail transcript RPC only when
+    /// attach/refresh fails (session gone, transport blip).
     public func adoptArmedObservedContinue(fallbackCwd: String) async {
         guard let target = pendingObservedContinue else {
             sendState = .failed("No observed session to open.")
@@ -372,6 +385,76 @@ public final class ShellLiveBridge {
         pendingObservedContinue = resolved
         boundObservedContinue = resolved
 
+        if await adoptViaAttachObservedSession(resolved: resolved, machine: machine, epoch: epoch) {
+            return
+        }
+        guard epoch == sessionEpoch else { return }
+        await adoptViaTailTranscript(resolved: resolved, machine: machine, epoch: epoch)
+    }
+
+    /// Full-history path: `attachObservedSession` → `refreshConversation` →
+    /// local turns. Returns `true` when hydration succeeded (including empty
+    /// history). Keeps `boundObservedContinue` so follow-ups still use
+    /// `agent.observedSession.continue`.
+    private func adoptViaAttachObservedSession(
+        resolved: ObservedContinueTarget,
+        machine: RelayFleetStore.Machine,
+        epoch: UInt64
+    ) async -> Bool {
+        do {
+            let attach: ConversationAttachObservedSessionResponse
+            if let override = testRelayAttachObservedSession {
+                attach = try await override(resolved.vendor, resolved.sessionId, resolved.cwd)
+            } else {
+                attach = try await machine.bridge.relayAttachObservedSession(
+                    ConversationAttachObservedSessionRequest(
+                        provider: resolved.vendor,
+                        sessionId: resolved.sessionId,
+                        cwd: resolved.cwd
+                    )
+                )
+            }
+            guard epoch == sessionEpoch else { return true }
+            if let error = attach.error, !error.isEmpty {
+                return false
+            }
+            let conversationID = attach.conversationId
+            guard !conversationID.isEmpty else { return false }
+
+            let transport = testTransportOverride ?? Self.transport(for: machine.bridge)
+            // Partial page-cap still leaves usable merged turns — treat as success.
+            _ = try? await conversationSyncCoordinator.refreshConversation(
+                conversationID: conversationID,
+                transport: transport
+            )
+            guard epoch == sessionEpoch else { return true }
+
+            let turns = (try? await chatRepo.turns(conversationID: conversationID)) ?? []
+            // Attach wrote events on the host but local mirror is still empty —
+            // refresh likely failed; fall through to the tail transcript so the
+            // user still sees *something* rather than a blank thread.
+            if turns.isEmpty && (attach.importedEvents > 0 || attach.lastSeq > 0) {
+                return false
+            }
+            activeConversationID = conversationID
+            transcriptTurns = turns
+            inFlightPrompt = nil
+            inFlightAttachments = []
+            inFlightRunID = nil
+            sendState = turns.isEmpty ? .adoptedNoHistory : .idle
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Legacy live-view path: single tail-window `agent.sessions.transcript`
+    /// fetch (capped on the daemon). Used only when attach/refresh fails.
+    private func adoptViaTailTranscript(
+        resolved: ObservedContinueTarget,
+        machine: RelayFleetStore.Machine,
+        epoch: UInt64
+    ) async {
         do {
             let result: (messages: [SessionMessage], nextLine: Int, resetRequired: Bool)
             if let override = testRelayFetchTranscript {

@@ -9,6 +9,11 @@ re-deriving it from git archaeology. Do not rewrite or delete old lines.
 
 Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
+## 2026-07-16
+
+- 07:45 Cursor Grok — desktop past-session open now prefers `attachObservedSession` + ledger fetch (full history) over the 200-line tail `agent.sessions.transcript` path; fallback retained; ShellLiveBridge regression test (`cursor/desktop-history-and-terminal-3510`)
+- 07:30 Cursor Composer — Phase 1 interactive SSH terminal: LiveTerminalModel/View (SwiftTerm + inline accessory rail + TOFU host-key sheet), TerminalSessionCoordinator, SSHHostSetupSheet, MachineDetailView; wired Trusted Machines → detail, thread ⋯ → open at cwd, AppRoot fullScreenCover + password prompt; DEBUG `LANCER_DESTINATION=terminal` (`cursor/desktop-history-and-terminal-3510`)
+
 ## 2026-07-15
 
 - 21:20 Claude Fable (orchestrator) + Codex 019f6841 — landed risk-tiered agent-oracle-harness skill, corrected publish audit, prompt-skill rerouting; added this changelog + rule (docs/codex-oracle-skill)

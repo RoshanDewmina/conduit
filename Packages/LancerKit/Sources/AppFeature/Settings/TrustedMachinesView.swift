@@ -165,14 +165,18 @@ public struct TrustedMachinesView: View {
     @ViewBuilder
     private func machineRow(_ machine: RelayFleetStore.Machine) -> some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(machine.record.displayName)
-                Text(String(machine.id.uuidString.prefix(8)))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(store.connectionState(for: machine.id)?.description ?? "Connecting…")
-                    .font(.caption)
-                    .foregroundStyle(store.isConnected(machine.id) ? .green : .secondary)
+            NavigationLink {
+                MachineDetailView(machine: machine)
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(machine.record.displayName)
+                    Text(String(machine.id.uuidString.prefix(8)))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(store.connectionState(for: machine.id)?.description ?? "Connecting…")
+                        .font(.caption)
+                        .foregroundStyle(store.isConnected(machine.id) ? .green : .secondary)
+                }
             }
             Spacer()
             Button("Remove", role: .destructive) {
