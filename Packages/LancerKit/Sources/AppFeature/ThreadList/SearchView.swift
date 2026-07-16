@@ -9,6 +9,9 @@ public struct SearchView: View {
     @State private var searchText = ""
     @State private var selectedFilterCwd: String? = nil
     @State private var results: [ThreadListItem] = []
+    @State private var isSearching = false
+    @State private var searchError: String?
+    @State private var searchGeneration: UInt64 = 0
 
     public init() {}
 
@@ -53,17 +56,61 @@ public struct SearchView: View {
 
             Divider()
 
-            if filteredResults.isEmpty {
-                Text(searchText.isEmpty ? "No threads yet" : "No matching threads")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
+            if let catalogError = workspaceData.fetchPhase.failureMessage {
+                InlineRetryBanner(
+                    title: "Couldn’t refresh threads",
+                    message: catalogError,
+                    retryTitle: "Retry",
+                    accessibilityRetryLabel: "Retry thread catalog refresh"
+                ) {
+                    Task {
+                        await workspaceData.refresh()
+                        await runSearch()
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+            }
+
+            if let searchError {
+                InlineRetryBanner(
+                    title: "Search failed",
+                    message: searchError,
+                    retryTitle: "Retry",
+                    accessibilityRetryLabel: "Retry search"
+                ) {
+                    Task { await runSearch() }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+            }
+
+            if workspaceData.showsInitialLoading
+                || (isSearching && filteredResults.isEmpty && searchError == nil)
+            {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
                     .padding(.top, 24)
+                Spacer(minLength: 0)
+            } else if filteredResults.isEmpty {
+                if searchError == nil {
+                    Text(searchText.isEmpty ? "No threads yet" : "No matching threads")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 24)
+                }
                 Spacer(minLength: 0)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
+                        if isSearching {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
                         ForEach(filteredResults) { thread in
                             NavigationLink {
                                 ThreadDetailView(thread: thread)
@@ -96,7 +143,23 @@ public struct SearchView: View {
     }
 
     private func runSearch() async {
-        results = await workspaceData.search(searchText)
+        searchGeneration += 1
+        let token = searchGeneration
+        isSearching = true
+        defer {
+            if token == searchGeneration {
+                isSearching = false
+            }
+        }
+        switch await workspaceData.search(searchText) {
+        case .success(let items):
+            guard token == searchGeneration else { return }
+            results = items
+            searchError = nil
+        case .failure(let message):
+            guard token == searchGeneration else { return }
+            searchError = message
+        }
     }
 
     private var searchField: some View {
