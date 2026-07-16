@@ -135,18 +135,6 @@ public struct RelayPairingSheet: View {
                                 .accessibilityIdentifier("relay-pairing.error")
                         }
                     }
-
-                    Section {
-                        Button("Connect") { connect() }
-                            .disabled(
-                                isConnecting
-                                    || client.pairingState == .paired
-                                    || pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).count != 6
-                            )
-                        if client.pairingState == .paired {
-                            Button("Disconnect", role: .destructive) { client.disconnect() }
-                        }
-                    }
                 }
             }
             .navigationTitle("Pair a Machine")
@@ -155,8 +143,12 @@ public struct RelayPairingSheet: View {
                     Button("Close") { dismiss() }
                 }
             }
-            // Keep the Connect button reachable above the number pad.
             .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !isAtCap {
+                    pairingActionBar
+                }
+            }
         }
         .interactiveDismissDisabled(isConnecting || client.pairingState == .paired)
         .onChange(of: client.pairingState) { _, newValue in
@@ -184,6 +176,25 @@ public struct RelayPairingSheet: View {
                 client.disconnect()
             }
         }
+    }
+
+    @ViewBuilder
+    private var pairingActionBar: some View {
+        VStack(spacing: 12) {
+            Button("Connect") { connect() }
+                .frame(maxWidth: .infinity)
+                .disabled(
+                    isConnecting
+                        || client.pairingState == .paired
+                        || pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).count != 6
+                )
+            if client.pairingState == .paired {
+                Button("Disconnect", role: .destructive) { client.disconnect() }
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding()
+        .background(.bar)
     }
 
     /// Live TTL countdown for an unconfirmed pairing code, driven by
