@@ -160,51 +160,58 @@ public struct ReceiptCardView: View {
     #endif
 }
 
-/// One-line collapsed proof chip — the full card expands on tap. Replaces the
-/// full-height Proof card inline in transcripts (owner decision 2026-07-12:
-/// receipts read as a chip; detail on demand).
-public struct ReceiptChipRow: View {
+/// Per-turn proof overflow — opens details on demand; never expands inline in the
+/// transcript (owner decision 2026-07-16: proof under menu, not under every turn).
+struct ProofTurnMenu: View {
     let receipt: ProofReceipt
 
-    @State private var isExpanded = false
+    @State private var showingProofDetails = false
+    @State private var showingProofReel = false
 
-    public init(receipt: ProofReceipt) {
-        self.receipt = receipt
-    }
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    var body: some View {
+        Menu {
             Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    isExpanded.toggle()
-                }
+                showingProofDetails = true
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.seal")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                    Text(chipTitle)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                }
+                Label(proofDetailsTitle, systemImage: "checkmark.seal")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Proof: \(chipTitle)"))
-            .accessibilityHint(Text(isExpanded ? "Collapse proof" : "Expand proof"))
-
-            if isExpanded {
-                ReceiptCardView(receipt: receipt)
+            Button {
+                showingProofReel = true
+            } label: {
+                Label("Proof Reel", systemImage: "film")
             }
+            .disabled(!canOpenProofReel)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.tertiary)
+                .frame(minWidth: 28, minHeight: 28)
+                .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(Text("Proof menu"))
+        .accessibilityHint(Text("View proof details or Proof Reel"))
+        .accessibilityIdentifier("proof-menu")
+        .sheet(isPresented: $showingProofDetails) {
+            NavigationStack {
+                ReceiptCardView(receipt: receipt)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .navigationTitle("Proof")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showingProofDetails = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showingProofReel) {
+            ProofReelView(receipt: receipt)
+        }
     }
 
-    private var chipTitle: String {
+    private var proofDetailsTitle: String {
         var parts = ["Proof", receipt.status]
         if let duration = ProofReelModel.durationText(
             startedAt: receipt.startedAt, endedAt: receipt.endedAt
@@ -212,6 +219,10 @@ public struct ReceiptChipRow: View {
             parts.append(duration)
         }
         return parts.joined(separator: " · ")
+    }
+
+    private var canOpenProofReel: Bool {
+        !ProofReelModel.stops(from: receipt).isEmpty
     }
 }
 

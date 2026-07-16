@@ -564,9 +564,6 @@ public struct LiveThreadView: View {
         } else {
             VStack(alignment: .leading, spacing: 12) {
                 turnTranscriptBody(turn)
-                if let receipt = receiptsByRunID[turn.runID] {
-                    ReceiptChipRow(receipt: receipt)
-                }
                 if let diff = turnDiffByTurnID[turn.id], diff.hasChanges {
                     TurnDiffCard(summary: diff) {
                         reviewPresentation = ReviewPresentation(scope: .turn(turn.id))
@@ -578,6 +575,7 @@ public struct LiveThreadView: View {
 
     @ViewBuilder
     private func turnTranscriptBody(_ turn: LancerCore.ChatTurn) -> some View {
+        let receipt = receiptsByRunID[turn.runID]
         let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
         let artifactChips = (toolArtifactsByTurnID[turn.id] ?? []).map(ToolChipItem.init(artifact:))
         let merged = mergeToolArtifacts(into: eventItems, artifacts: artifactChips)
@@ -590,10 +588,16 @@ public struct LiveThreadView: View {
             TurnTranscriptItemsView(
                 items: merged,
                 emptyFallback: LiveThreadTranscript.assistantFallback(for: turn),
-                activitySummary: activitySummary(for: turn, items: merged)
+                activitySummary: activitySummary(for: turn, items: merged),
+                receipt: receipt
             )
         } else if let body = LiveThreadTranscript.assistantFallback(for: turn) {
-            ChatMarkdownBody(markdown: body)
+            VStack(alignment: .leading, spacing: 12) {
+                ChatMarkdownBody(markdown: body)
+                if let summary = activitySummary(for: turn, items: []) {
+                    TurnActivitySummaryRow(summary: summary, receipt: receipt)
+                }
+            }
         }
     }
 
@@ -803,9 +807,6 @@ public struct LiveThreadView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     turnTranscriptBody(turn)
                         .onAppear { streamingPacer.reset(to: turn.assistantText) }
-                    if let receipt = receiptsByRunID[turn.runID] {
-                        ReceiptChipRow(receipt: receipt)
-                    }
                     if let diff = turnDiffByTurnID[turn.id], diff.hasChanges {
                         TurnDiffCard(summary: diff) {
                             reviewPresentation = ReviewPresentation(scope: .turn(turn.id))

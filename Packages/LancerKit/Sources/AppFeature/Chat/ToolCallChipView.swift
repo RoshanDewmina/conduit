@@ -199,6 +199,8 @@ struct TurnTranscriptItemsView: View {
     var emptyFallback: String? = "(no reply text)"
     /// When non-nil (completed/failed turn), appends the compact activity row.
     var activitySummary: TurnActivitySummary? = nil
+    /// When non-nil, proof opens from the activity row menu (never inline).
+    var receipt: ProofReceipt? = nil
 
     var body: some View {
         let todoState = TurnTranscriptAssembler.latestTodoChecklist(from: items)
@@ -224,7 +226,7 @@ struct TurnTranscriptItemsView: View {
                     TodoChecklistCard(state: todoState)
                 }
                 if let activitySummary {
-                    TurnActivitySummaryRow(summary: activitySummary)
+                    TurnActivitySummaryRow(summary: activitySummary, receipt: receipt)
                 }
             }
         }
