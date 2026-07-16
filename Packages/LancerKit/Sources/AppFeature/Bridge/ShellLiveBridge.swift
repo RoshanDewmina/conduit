@@ -27,6 +27,8 @@ public final class ShellLiveBridge {
         case adoptedNoHistory
         /// Run in flight, no assistant text yet.
         case working
+        /// Sync returned needsApproval; daemon will resume under the same runID.
+        case awaitingApproval(String)
         /// Run in flight with accumulating `assistantText` from host refresh.
         case streaming(LancerCore.ChatTurn)
         case completed(LancerCore.ChatTurn)
@@ -39,6 +41,8 @@ public final class ShellLiveBridge {
             switch (lhs, rhs) {
             case (.idle, .idle), (.working, .working), (.adoptedNoHistory, .adoptedNoHistory):
                 return true
+            case (.awaitingApproval(let l), .awaitingApproval(let r)):
+                return l == r
             case (.streaming(let l), .streaming(let r)),
                  (.completed(let l), .completed(let r)):
                 return l.id == r.id && l.status == r.status && l.assistantText == r.assistantText
@@ -131,7 +135,7 @@ public final class ShellLiveBridge {
     /// be typed and enqueued; the bridge flushes the queue when this flips false.
     public var isSendInFlight: Bool {
         switch sendState {
-        case .working, .streaming, .degraded:
+        case .working, .awaitingApproval, .streaming, .degraded:
             return true
         case .idle, .adoptedNoHistory, .completed, .failed:
             return false
@@ -193,12 +197,17 @@ public final class ShellLiveBridge {
     /// can count/gate dispatch without a live relay connection.
     var testTransportOverride: ConversationTransport?
     var testSessionEpoch: UInt64 { sessionEpoch }
-    /// When set, `adoptArmedObservedContinue` uses this instead of the live RPC.
+    /// When set, `adoptArmedObservedContinue`'s tail-transcript fallback uses
+    /// this instead of the live `agent.sessions.transcript` RPC.
     var testRelayFetchTranscript: (@MainActor (String, Int) async throws -> (
         messages: [SessionMessage],
         nextLine: Int,
         resetRequired: Bool
     ))?
+    /// When set, adopt prefers this over live `relayAttachObservedSession`.
+    /// Return a response with a non-empty `error` (or throw) to force the
+    /// tail-transcript fallback path in tests.
+    var testRelayAttachObservedSession: (@MainActor (String, String, String) async throws -> ConversationAttachObservedSessionResponse)?
 
     func testArmLastAttempt(_ attempt: LastSendAttempt) {
         lastAttempt = attempt
@@ -214,6 +223,15 @@ public final class ShellLiveBridge {
         transport: ConversationTransport
     ) async {
         await pollUntilTerminal(runID: runID, conversationID: conversationID, transport: transport)
+    }
+
+    func testSetSendState(_ state: SendState) {
+        sendState = state
+    }
+
+    func testSetInFlight(runID: String?, prompt: String?) {
+        inFlightRunID = runID
+        inFlightPrompt = prompt
     }
 
     /// Composer can send when a Lancer conversation is active or an observed
@@ -346,9 +364,17 @@ public final class ShellLiveBridge {
     }
 
     /// Adopts an armed observed session without sending: resolves a connected
-    /// machine, hydrates the host transcript into `transcriptTurns`, and leaves
+    /// machine, hydrates history into `transcriptTurns`, and leaves
     /// `sendState` idle so the follow-up composer is active. The first typed
     /// follow-up consumes `pendingObservedContinue` via `send`.
+    ///
+    /// Prefer `attachObservedSession` + ledger fetch — the live
+    /// `agent.sessions.transcript` RPC is intentionally tail-capped
+    /// (`maxObservedTailLines`) for streaming payloads, which made past
+    /// desktop sessions open with only recent messages. Attach imports the
+    /// full vendor transcript into the host ledger; fetch-on-open pages it
+    /// onto the phone. Falls back to the tail transcript RPC only when
+    /// attach/refresh fails (session gone, transport blip).
     public func adoptArmedObservedContinue(fallbackCwd: String) async {
         guard let target = pendingObservedContinue else {
             sendState = .failed("No observed session to open.")
@@ -372,6 +398,76 @@ public final class ShellLiveBridge {
         pendingObservedContinue = resolved
         boundObservedContinue = resolved
 
+        if await adoptViaAttachObservedSession(resolved: resolved, machine: machine, epoch: epoch) {
+            return
+        }
+        guard epoch == sessionEpoch else { return }
+        await adoptViaTailTranscript(resolved: resolved, machine: machine, epoch: epoch)
+    }
+
+    /// Full-history path: `attachObservedSession` → `refreshConversation` →
+    /// local turns. Returns `true` when hydration succeeded (including empty
+    /// history). Keeps `boundObservedContinue` so follow-ups still use
+    /// `agent.observedSession.continue`.
+    private func adoptViaAttachObservedSession(
+        resolved: ObservedContinueTarget,
+        machine: RelayFleetStore.Machine,
+        epoch: UInt64
+    ) async -> Bool {
+        do {
+            let attach: ConversationAttachObservedSessionResponse
+            if let override = testRelayAttachObservedSession {
+                attach = try await override(resolved.vendor, resolved.sessionId, resolved.cwd)
+            } else {
+                attach = try await machine.bridge.relayAttachObservedSession(
+                    ConversationAttachObservedSessionRequest(
+                        provider: resolved.vendor,
+                        sessionId: resolved.sessionId,
+                        cwd: resolved.cwd
+                    )
+                )
+            }
+            guard epoch == sessionEpoch else { return true }
+            if let error = attach.error, !error.isEmpty {
+                return false
+            }
+            let conversationID = attach.conversationId
+            guard !conversationID.isEmpty else { return false }
+
+            let transport = testTransportOverride ?? Self.transport(for: machine.bridge)
+            // Partial page-cap still leaves usable merged turns — treat as success.
+            _ = try? await conversationSyncCoordinator.refreshConversation(
+                conversationID: conversationID,
+                transport: transport
+            )
+            guard epoch == sessionEpoch else { return true }
+
+            let turns = (try? await chatRepo.turns(conversationID: conversationID)) ?? []
+            // Attach wrote events on the host but local mirror is still empty —
+            // refresh likely failed; fall through to the tail transcript so the
+            // user still sees *something* rather than a blank thread.
+            if turns.isEmpty && (attach.importedEvents > 0 || attach.lastSeq > 0) {
+                return false
+            }
+            activeConversationID = conversationID
+            transcriptTurns = turns
+            inFlightPrompt = nil
+            inFlightAttachments = []
+            inFlightRunID = nil
+            sendState = turns.isEmpty ? .adoptedNoHistory : .idle
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Legacy live-view path: single tail-window `agent.sessions.transcript`
+    /// fetch (capped on the daemon). Used only when attach/refresh fails.
+    private func adoptViaTailTranscript(
+        resolved: ObservedContinueTarget,
+        machine: RelayFleetStore.Machine,
+        epoch: UInt64
+    ) async {
         do {
             let result: (messages: [SessionMessage], nextLine: Int, resetRequired: Bool)
             if let override = testRelayFetchTranscript {
@@ -483,6 +579,13 @@ public final class ShellLiveBridge {
         case .started(let started):
             activeConversationID = started.conversationID
             inFlightRunID = started.runID
+            await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
+            await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
+            await flushNextQueuedFeedback()
+        case .awaitingApproval(let started, let message):
+            activeConversationID = started.conversationID
+            inFlightRunID = started.runID
+            sendState = .awaitingApproval(message)
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
             await flushNextQueuedFeedback()
@@ -854,6 +957,13 @@ public final class ShellLiveBridge {
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
             await flushNextQueuedFeedback()
+        case .awaitingApproval(let started, let message):
+            activeConversationID = started.conversationID
+            inFlightRunID = started.runID
+            sendState = .awaitingApproval(message)
+            await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
+            await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
+            await flushNextQueuedFeedback()
         case .blocked(let message):
             // Surface blocked reason in the UI (same `.failed` path as send).
             inFlightPrompt = nil
@@ -931,18 +1041,32 @@ public final class ShellLiveBridge {
                     inFlightAttachments = []
                     inFlightRunID = nil
                     guard epoch == sessionEpoch else { return }
-                    sendState = .failed(turn.errorMessage ?? "Run failed")
+                    let failMessage: String
+                    if case .awaitingApproval = sendState {
+                        failMessage = turn.errorMessage ?? "Approval denied — the run did not start."
+                    } else {
+                        failMessage = turn.errorMessage ?? "Run failed"
+                    }
+                    sendState = .failed(failMessage)
                     await refreshTranscript(conversationID: conversationID, epoch: epoch)
                     return
                 case .running:
                     await refreshTranscript(conversationID: conversationID, epoch: epoch)
                     guard epoch == sessionEpoch else { return }
                     if !tracker.isDegraded {
-                        switch LivePollPolicy.runningPublish(assistantText: turn.assistantText) {
-                        case .working:
-                            sendState = .working
-                        case .streaming:
-                            sendState = .streaming(turn)
+                        // Host maps needsApproval → `.running`; keep the honest
+                        // awaiting card until text streams or the turn terminates.
+                        if case .awaitingApproval = sendState {
+                            if !turn.assistantText.isEmpty {
+                                sendState = .streaming(turn)
+                            }
+                        } else {
+                            switch LivePollPolicy.runningPublish(assistantText: turn.assistantText) {
+                            case .working:
+                                sendState = .working
+                            case .streaming:
+                                sendState = .streaming(turn)
+                            }
                         }
                     }
                 }
@@ -974,10 +1098,14 @@ public final class ShellLiveBridge {
     /// Without this, opening a live thread immediately after launch/relaunch
     /// races ahead of reconnection and dead-ends on "No connected machine"
     /// with no auto-retry (found 2026-07-10 sim dogfood: `firstConnectedMachine`
-    /// was read once, synchronously, at call time). Skips the wait entirely
-    /// when no machine is paired at all, so the true no-host path still fails
-    /// fast instead of stalling for `timeout`.
-    private func waitForConnectedMachine(timeout: TimeInterval = 8) async -> RelayFleetStore.Machine? {
+    /// was read once, synchronously, at call time). Default timeout is 30s —
+    /// a 2026-07-16 daily-use audit measured auto-pair completion at ~21s from
+    /// launch under the same conditions, so the previous 8s default raced the
+    /// first send and surfaced a spurious "No connected machine" even though
+    /// the pair finished moments later. Skips the wait entirely when no
+    /// machine is paired at all, so the true no-host path still fails fast
+    /// instead of stalling for `timeout`.
+    private func waitForConnectedMachine(timeout: TimeInterval = 30) async -> RelayFleetStore.Machine? {
         let deadline = Date().addingTimeInterval(timeout)
         while !isHydrated, Date() < deadline {
             try? await Task.sleep(nanoseconds: 100_000_000)
@@ -997,6 +1125,12 @@ public final class ShellLiveBridge {
             fetch: { try await bridge.relayFetchConversation($0) },
             archive: { try await bridge.relayArchiveConversation($0) }
         )
+    }
+
+    /// Focuses a paired machine so `LiveThreadView` can render that machine's
+    /// pending-approval card without sending a new turn (home-banner entry).
+    public func focusMachineForPendingApproval(_ id: RelayMachineID) {
+        activeMachineID = id
     }
 
     #if DEBUG

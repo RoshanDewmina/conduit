@@ -7,6 +7,7 @@ import LancerCore
 public struct AppSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(RelayFleetStore.self) private var relayFleetStore
+    @Environment(TerminalSessionCoordinator.self) private var terminalCoordinator
 
     /// When true, this view is pushed inside a parent `NavigationStack` (Profile)
     /// and must not wrap another stack or add a sheet Close button.
@@ -67,6 +68,7 @@ public struct AppSettingsView: View {
             NavigationLink {
                 TrustedMachinesView(embedsInParentNavigation: true)
                     .environment(relayFleetStore)
+                    .environment(terminalCoordinator)
             } label: {
                 Label {
                     Text("Trusted machines")

@@ -20,6 +20,7 @@ public struct WorkspacesView: View {
     private let composerMorphSpring = Animation.spring(response: 0.32, dampingFraction: 0.86)
     #if DEBUG
     @Environment(RelayApprovalIngest.self) private var relayApprovalIngest
+    @Environment(TerminalSessionCoordinator.self) private var terminalCoordinator
     @State private var isSettingsPresented = false
     @State private var isComposerRepoPickerPresented = false
     @State private var isRepoPickerDirectPresented = false
@@ -53,6 +54,14 @@ public struct WorkspacesView: View {
 
                 ScrollView {
                     VStack(spacing: 0) {
+                        PendingApprovalsBanner { machineID, approval in
+                            shellLiveBridge.focusMachineForPendingApproval(machineID)
+                            let cwd = approval.cwd.isEmpty
+                                ? (repos.first?.cwd ?? "")
+                                : approval.cwd
+                            activeLiveThread = LiveThreadIdentifier(prompt: "", cwd: cwd)
+                        }
+
                         NavigationLink {
                             ThreadListView(workspace: .allRepos)
                         } label: {
@@ -171,6 +180,7 @@ public struct WorkspacesView: View {
         .sheet(isPresented: $isProfilePresented) {
             ProfileView()
                 .environment(relayFleetStore)
+                .environment(terminalCoordinator)
         }
         .sheet(isPresented: $isAddRepoPresented) {
             AddRepoView { name, cwd in
@@ -185,6 +195,7 @@ public struct WorkspacesView: View {
         .sheet(isPresented: $isSettingsPresented) {
             AppSettingsView()
                 .environment(relayFleetStore)
+                .environment(terminalCoordinator)
         }
         .sheet(isPresented: $isRepoPickerDirectPresented) {
             RepoPickerView(repos: repos, selectedCwd: repos.first?.cwd, onSelect: { _ in })
@@ -193,8 +204,11 @@ public struct WorkspacesView: View {
             ContextAttachView()
         }
         .sheet(isPresented: $isTrustedMachinesDirectPresented) {
-            TrustedMachinesView()
-                .environment(relayFleetStore)
+            NavigationStack {
+                TrustedMachinesView(embedsInParentNavigation: true)
+            }
+            .environment(relayFleetStore)
+            .environment(terminalCoordinator)
         }
         .sheet(isPresented: $isAttachmentPreviewDirectPresented) {
             AttachmentPreviewDemoView()
@@ -276,6 +290,18 @@ public struct WorkspacesView: View {
                 activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: cwd)
             case "search":
                 isSearchPresented = true
+            case "terminal":
+                Task {
+                    // Hydration + autoPair run in AppRoot.task; wait before opening.
+                    var connected = relayFleetStore.firstConnectedMachine
+                    let deadline = Date().addingTimeInterval(30)
+                    while connected == nil, Date() < deadline {
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        connected = relayFleetStore.firstConnectedMachine
+                    }
+                    let startup = ProcessInfo.processInfo.environment["LANCER_TERMINAL_STARTUP_COMMAND"]
+                    await terminalCoordinator.openOnFirstConnectedMachine(startupCommand: startup)
+                }
             default:
                 break
             }

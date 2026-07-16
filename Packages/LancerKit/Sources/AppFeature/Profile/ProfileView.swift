@@ -6,6 +6,7 @@ import SwiftUI
 public struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(RelayFleetStore.self) private var relayFleetStore
+    @Environment(TerminalSessionCoordinator.self) private var terminalCoordinator
     @State private var isTrustedMachinesPresented = false
 
     public init() {}
@@ -29,9 +30,6 @@ public struct ProfileView: View {
                             .padding(.horizontal, 20)
                             .padding(.top, 28)
 
-                        usagePlaceholderSection
-                            .padding(.top, 24)
-
                         connectionsSection
                             .padding(.top, 28)
 
@@ -50,8 +48,11 @@ public struct ProfileView: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $isTrustedMachinesPresented) {
-            TrustedMachinesView()
-                .environment(relayFleetStore)
+            NavigationStack {
+                TrustedMachinesView(embedsInParentNavigation: true)
+            }
+            .environment(relayFleetStore)
+            .environment(terminalCoordinator)
         }
     }
 
@@ -124,22 +125,6 @@ public struct ProfileView: View {
         return "\(usable) paired machines"
     }
 
-    private var usagePlaceholderSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ProfileSectionHeader(title: "Usage")
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Not available yet")
-                    .font(.title3.bold())
-                    .padding(.horizontal, 20)
-                Text("Token usage, streaks, and plan details will show here when billing is wired.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 20)
-            }
-        }
-    }
-
     private var connectionsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             ProfileSectionHeader(title: "Connections")
@@ -167,6 +152,7 @@ public struct ProfileView: View {
                 NavigationLink {
                     AppSettingsView(embedsInParentNavigation: true)
                         .environment(relayFleetStore)
+                        .environment(terminalCoordinator)
                 } label: {
                     ProfileRow(systemImage: "gearshape", title: "Settings", accessory: .chevron)
                 }

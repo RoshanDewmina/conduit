@@ -147,6 +147,30 @@ public struct PolicyYAMLResult: Codable, Sendable {
     public let yaml: String
 }
 
+/// The three coarse policy-decision modes a relay-only phone may read/set —
+/// mirrors the daemon's `policy.Effect` (deny/ask/allow), i.e. the global
+/// policy document's `default` field. Never a full rules-file round-trip; see
+/// `agentPermissionModeGet`/`agentPermissionModeSet` in `e2e_router.go` and
+/// `docs/product/2026-07-16-policy-audit-relay-port-map.md`.
+public enum PermissionMode: String, Codable, Sendable, CaseIterable {
+    case deny
+    case ask
+    case allow
+}
+
+/// Result of relay `agentPermissionModeGet`.
+public struct PermissionModeGetResult: Codable, Sendable {
+    public let mode: String
+}
+
+/// Result of relay `agentPermissionModeSet`. `ok == false` means the daemon
+/// rejected the mode (invalid value) and left the policy file untouched.
+public struct PermissionModeSetResult: Codable, Sendable {
+    public let ok: Bool
+    public let mode: String?
+    public let error: String?
+}
+
 public struct PolicyGetResult: Codable, Sendable {
     public let documents: [PolicyDocument]?
     public let `default`: String?

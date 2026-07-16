@@ -1486,6 +1486,27 @@ type dispatcher struct {
 	// but never become a first-class QuestionEvent — no server wired yet, same
 	// fail-safe-no-op convention as bindVendorSession/onRunTerminal being nil.
 	onQuestion func(event QuestionEvent)
+	// deliverApproval routes a launch-time policy "ask" gate's ApprovalEvent
+	// through the server's real delivery chokepoint (approvals store + durable
+	// queue + E2E relay) so it actually reaches the phone as a decidable card,
+	// instead of the event being constructed and then discarded. Nil ⇒ no
+	// server wired yet (e.g. a dispatcher built directly in tests) — the
+	// "ask" branch still returns dispatchResult{Status:"needsApproval"}, it
+	// just can't deliver a card, same as before this field existed.
+	deliverApproval func(ApprovalEvent) <-chan hookDecision
+	// onConversationLaunchResolved fires once for every conversation-append
+	// launch-gate "ask" whose async decision resolved to something other than
+	// "started" — i.e. an approve that then failed to actually launch (denied
+	// by a later step, an auth-preflight error, etc.) — so the caller can
+	// persist that outcome onto the conversation ledger and clean up any
+	// worktree it created, exactly like conversationsAppend's synchronous path
+	// already does for an inline (non-"ask") result. A plain approve→launch
+	// that starts successfully does NOT call this: the ordinary emit/ledger
+	// plumbing (wrapEmitForRun → persistConversationEvent) already covers a
+	// "started" run identically to any other dispatch. Nil ⇒ no server wired
+	// (tests) — the resume goroutine still runs the launch, it just can't
+	// report a non-started outcome back to the ledger.
+	onConversationLaunchResolved func(runID string, result dispatchResult, worktreePath, worktreeRepoRoot string)
 	// claudeAuthPreflight gates Claude Code launches. Nil ⇒ package default
 	// (claudeAuthPreflight) unless tests disable it via
 	// claudeAuthPreflightDisabledForTest. loggedIn:false and probe failures
@@ -1530,6 +1551,26 @@ func (d *dispatcher) emitAudit(e AuditEntry) {
 	if d.audit != nil {
 		d.audit(e)
 	}
+}
+
+// deliverLaunchApproval routes a launch-time policy "ask" gate's constructed
+// ApprovalEvent through deliverApproval (server.deliverApprovalEvent) so it
+// actually reaches the phone as a decidable card, and returns the decision
+// channel so a caller that can actually DO something once the human decides
+// (see launchConversationTurn's "ask" branch / resumeConversationLaunch) can
+// wait on it. Callers that have nothing to resume (dispatch/continueRun/
+// resumeObservedSession's "ask" branches — no vendor process ever launches
+// for those until a NEW dispatch call re-evaluates policy, so there is
+// nothing to continue here) may simply ignore the returned channel; the
+// decision is still recorded regardless of whether anything reads it
+// (applyDecision/resolve() do that unconditionally). Nil-safe: a dispatcher
+// with no server wired (tests) just skips delivery, matching pre-fix
+// behavior, and returns a nil channel.
+func (d *dispatcher) deliverLaunchApproval(event ApprovalEvent) <-chan hookDecision {
+	if d.deliverApproval != nil {
+		return d.deliverApproval(event)
+	}
+	return nil
 }
 
 // wrapEmitForRun wraps the dispatcher's shared emit sink for one launched
@@ -2209,6 +2250,7 @@ func (d *dispatcher) dispatch(p dispatchParams, evalFn policyEvalFunc, audit fun
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
 		audit(AuditEntry{Action: "dispatch-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
+		d.deliverLaunchApproval(event)
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
@@ -2385,6 +2427,7 @@ func (d *dispatcher) continueRun(runID, prompt string, fb continueFallback, eval
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
 		audit(AuditEntry{Action: "continue-needs-approval", Agent: agent, Kind: "dispatch", Command: prompt, Effect: "ask", Rule: rule})
+		d.deliverLaunchApproval(event)
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
@@ -2490,6 +2533,7 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
 		audit(AuditEntry{Action: "observed-continue-needs-approval", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
+		d.deliverLaunchApproval(event)
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
@@ -2597,9 +2641,78 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		return dispatchResult{Status: "denied", Decision: "deny", Rule: rule}
 	case "ask":
 		audit(AuditEntry{Action: "conversation-append-needs-approval", Agent: p.Agent, Kind: "dispatch", Command: p.Prompt, Effect: "ask", Rule: rule})
+		ch := d.deliverLaunchApproval(event)
+		// THE MISSING LINK (see LC2-report.md): a delivered+decided approval is
+		// worthless if nothing ever resumes the launch it was gating. Every
+		// other "ask" branch in this file (dispatch/continueRun/
+		// resumeObservedSession) has the same shape, but only
+		// launchConversationTurn's caller (conversationsAppend) has no
+		// alternative path back in — a mid-run PreToolUse escalation's hook
+		// HTTP connection blocks in place and resumes the ALREADY-RUNNING
+		// process on decision, but here no process has been launched yet, so
+		// there is nothing for a phone-side "Retry" tap to do except restart
+        // this whole ask-gate from scratch (the observed infinite loop). Wait
+		// for the decision in the background and, on approve, actually run
+		// the launch this "ask" gated — using the exact same continuation
+		// (completeConversationLaunch) the allow-path below falls through to,
+		// so an approved conversation-append launches with identical
+		// argv/attachment/auth handling to an auto-allowed one.
+		if ch != nil {
+			go d.resumeConversationLaunchOnApproval(runID, p, rule, ch, audit)
+		}
 		return dispatchResult{Status: "needsApproval", Decision: "ask", Rule: rule}
 	}
 
+	return d.completeConversationLaunch(runID, p, rule, audit)
+}
+
+// resumeConversationLaunchOnApproval is the continuation half of
+// launchConversationTurn's "ask" branch: it blocks (in its own goroutine, not
+// the caller's) on the approval decision channel deliverLaunchApproval
+// returned, and — only for an actual approve/approveAlways decision — runs
+// the SAME completeConversationLaunch steps (attachment resolution, auth
+// preflight, argv build, process launch) that an auto-allowed turn runs
+// inline. A deny (or the phone never deciding at all — the channel simply
+// never fires and this goroutine parks harmlessly until process exit,
+// mirroring the mid-run hook path's own "block until an explicit human
+// decision arrives, however long that takes" contract) does nothing further:
+// applyDecision/resolve() already recorded a deny's audit entry.
+//
+// alreadyLaunched guards the one race this design introduces: if a phone
+// gives up on this pending card and drives a brand-new
+// agent.conversations.append call for the same turn instead (a fresh runID,
+// per conversationsAppend's clientTurnId-replay contract), and only THEN taps
+// approve on the original stale card, this goroutine must not launch a SECOND
+// process for a runID nothing else is waiting on. d.runs is empty for this
+// runID until a launch actually starts, so any non-empty entry here (from a
+// previous decision already having resumed it, e.g. resolve() firing twice —
+// resolve() itself is a single delete-under-lock chokepoint, so that cannot
+// happen — or plain defense in depth) means skip.
+func (d *dispatcher) resumeConversationLaunchOnApproval(runID string, p conversationLaunchParams, rule string, ch <-chan hookDecision, audit func(AuditEntry)) {
+	dec := <-ch
+	if dec.decision != "approve" && dec.decision != "approveAlways" {
+		return
+	}
+	d.mu.Lock()
+	_, alreadyLaunched := d.runs[runID]
+	d.mu.Unlock()
+	if alreadyLaunched {
+		return
+	}
+	result := d.completeConversationLaunch(runID, p, rule, audit)
+	if d.onConversationLaunchResolved != nil && result.Status != "started" {
+		d.onConversationLaunchResolved(runID, result, p.worktreePath, p.worktreeRepoRoot)
+	}
+}
+
+// completeConversationLaunch is launchConversationTurn's post-policy-gate
+// continuation (steps 3-6 of that function's doc comment): attachment
+// resolution, Claude auth preflight, the ephemeral vendor prompt/argv build,
+// and the actual process launch. Split out so an "ask" gate's async approval
+// (resumeConversationLaunchOnApproval) can run through the IDENTICAL launch
+// path an inline "allow" falls through to — one implementation of "what does
+// launching this conversation turn actually mean", not two that could drift.
+func (d *dispatcher) completeConversationLaunch(runID string, p conversationLaunchParams, rule string, audit func(AuditEntry)) dispatchResult {
 	// Adapter scope: path manifest only for audited Claude Code. Other agents
 	// with attachments fail closed with a path-free unsupported error — no
 	// launch and no path in argv/ps.

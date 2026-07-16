@@ -179,6 +179,10 @@ struct ShellLiveBridgeTests {
         let bridge = makeBridge(repo: repo, relayFleetStore: store)
         bridge.markHydrated()
         bridge.armObservedContinue(vendor: "claudeCode", sessionId: "sess-empty", cwd: "/proj")
+        // Force the legacy tail-transcript path (attach unavailable in this stub).
+        bridge.testRelayAttachObservedSession = { _, _, _ in
+            ConversationAttachObservedSessionResponse(error: "forced-fallback")
+        }
         bridge.testRelayFetchTranscript = { sessionId, _ in
             #expect(sessionId == "sess-empty")
             return (messages: [], nextLine: 0, resetRequired: false)
@@ -203,6 +207,9 @@ struct ShellLiveBridgeTests {
         let bridge = makeBridge(repo: repo, relayFleetStore: store)
         bridge.markHydrated()
         bridge.armObservedContinue(vendor: "claudeCode", sessionId: "sess-hist", cwd: "/proj")
+        bridge.testRelayAttachObservedSession = { _, _, _ in
+            ConversationAttachObservedSessionResponse(error: "forced-fallback")
+        }
         bridge.testRelayFetchTranscript = { _, _ in
             (
                 messages: [
@@ -219,6 +226,122 @@ struct ShellLiveBridgeTests {
         #expect(bridge.sendState == .idle)
         #expect(bridge.transcriptTurns.count == 1)
         #expect(bridge.activeConversationID == "observed:sess-hist")
+    }
+
+    @Test("adopt prefers attachObservedSession and hydrates ledger turns, not the tail transcript")
+    func adoptPrefersAttachObservedSessionFullHistory() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conversationID = "conv-attached-full"
+        _ = try await repo.upsertConversationMirror(
+            ChatConversation(
+                id: conversationID,
+                title: "Desktop session",
+                agentID: "claudeCode",
+                hostName: "Mac",
+                hostID: nil,
+                cwd: "/proj"
+            ),
+            lastHostSeq: 4,
+            syncState: .synced
+        )
+        // Seed two turns so refresh stub can return empty while local mirror
+        // already holds the full history (attach already imported on host).
+        _ = try await repo.upsertTurnMirror(
+            ChatTurn(
+                id: "turn-1",
+                conversationID: conversationID,
+                ordinal: 0,
+                prompt: "first",
+                runID: "run-1",
+                status: .completed,
+                assistantText: "one"
+            ),
+            vendorSessionID: "sess-full",
+            hostSeqStart: 1,
+            hostSeqEnd: 2
+        )
+        _ = try await repo.upsertTurnMirror(
+            ChatTurn(
+                id: "turn-2",
+                conversationID: conversationID,
+                ordinal: 1,
+                prompt: "second",
+                runID: "run-2",
+                status: .completed,
+                assistantText: "two"
+            ),
+            vendorSessionID: "sess-full",
+            hostSeqStart: 3,
+            hostSeqEnd: 4
+        )
+
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        _ = makeConnectedMachine(into: store)
+        let bridge = makeBridge(repo: repo, relayFleetStore: store)
+        bridge.markHydrated()
+        bridge.armObservedContinue(vendor: "claudeCode", sessionId: "sess-full", cwd: "/proj")
+
+        var attachCalled = false
+        var transcriptCalled = false
+        bridge.testRelayAttachObservedSession = { vendor, sessionId, cwd in
+            attachCalled = true
+            #expect(vendor == "claudeCode")
+            #expect(sessionId == "sess-full")
+            #expect(cwd == "/proj")
+            return ConversationAttachObservedSessionResponse(
+                conversationId: conversationID,
+                importedEvents: 4,
+                lastSeq: 4,
+                alreadyAttached: false
+            )
+        }
+        bridge.testTransportOverride = ConversationTransport(
+            append: { _ in ConversationAppendResponse(status: "started", conversationId: conversationID) },
+            fetch: { req in
+                #expect(req.conversationId == conversationID)
+                return ConversationFetchResponse(
+                    conversation: ConversationSummary(
+                        id: conversationID,
+                        title: "Desktop session",
+                        provider: "claudeCode",
+                        agentID: "claudeCode",
+                        hostName: "Mac",
+                        cwd: "/proj",
+                        state: "active",
+                        source: "observed",
+                        createdAt: "2026-07-16T00:00:00Z",
+                        updatedAt: "2026-07-16T00:00:00Z",
+                        lastActivityAt: "2026-07-16T00:00:00Z",
+                        lastSeq: 4,
+                        lastTurnStatus: "completed"
+                    ),
+                    nextSeq: 4,
+                    hasMore: false
+                )
+            },
+            archive: { req in ConversationArchiveResponse(ok: true, conversationId: req.conversationId) }
+        )
+        bridge.testRelayFetchTranscript = { _, _ in
+            transcriptCalled = true
+            // Tail would only return one turn — must not be used when attach works.
+            return (
+                messages: [SessionMessage(role: .user, text: "tail-only")],
+                nextLine: 1,
+                resetRequired: false
+            )
+        }
+
+        await bridge.adoptArmedObservedContinue(fallbackCwd: "/proj")
+
+        #expect(attachCalled)
+        #expect(!transcriptCalled, "full-history attach must not fall back to tail transcript")
+        #expect(bridge.sendState == .idle)
+        #expect(bridge.activeConversationID == conversationID)
+        #expect(bridge.transcriptTurns.count == 2)
+        #expect(bridge.transcriptTurns.map(\.prompt) == ["first", "second"])
+        #expect(bridge.boundObservedContinue?.sessionId == "sess-full")
+        #expect(bridge.canAcceptFollowUp)
     }
 
     /// Regression for the 10x reconnect re-proof duplicate-prompt-bubble bug:
@@ -455,6 +578,220 @@ struct ShellLiveBridgeTests {
         // 3 append calls. Without the Bug 2 fix, the second `send()` would
         // also have reached dispatch, doubling this to 6.
         #expect(await appendCallCount.value == 3)
+    }
+
+    @Test("needsApproval send enters awaitingApproval with runID and keeps polling")
+    func needsApprovalSendEntersAwaitingApproval() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conversationID = "conv-await"
+        let runID = "run-await"
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        _ = makeConnectedMachine(into: store)
+        let bridge = makeBridge(repo: repo, relayFleetStore: store)
+        bridge.markHydrated()
+
+        let holdEntered = AsyncGate()
+        let allowWrite = AsyncGate()
+        bridge.testPostTranscriptFetchHold = {
+            await holdEntered.open()
+            await allowWrite.wait()
+        }
+
+        bridge.testTransportOverride = ConversationTransport(
+            append: { _ in
+                ConversationAppendResponse(
+                    status: "needsApproval",
+                    conversationId: conversationID,
+                    turnId: "turn-await",
+                    runId: runID,
+                    nextSeq: 1
+                )
+            },
+            fetch: { _ in
+                struct TestRefreshError: Error {}
+                throw TestRefreshError()
+            },
+            archive: { req in
+                ConversationArchiveResponse(ok: true, conversationId: req.conversationId)
+            }
+        )
+
+        let sendTask = Task { @MainActor in
+            await bridge.send(prompt: "rm -rf /", cwd: "/proj", clientTurnId: "client-await")
+        }
+
+        await holdEntered.wait()
+
+        guard case .awaitingApproval(let message) = bridge.sendState else {
+            Issue.record("expected .awaitingApproval, got \(bridge.sendState)")
+            await allowWrite.open()
+            bridge.resetForNewThread()
+            await sendTask.value
+            return
+        }
+        #expect(message.contains("approval"))
+        #expect(bridge.inFlightRunID == runID)
+        #expect(bridge.activeConversationID == conversationID)
+        #expect(bridge.isSendInFlight)
+
+        // Leave the turn running — poll must keep awaitingApproval (not flip to
+        // .working / .failed). Then cancel so the test finishes.
+        await allowWrite.open()
+        try await Task.sleep(nanoseconds: 50_000_000)
+        guard case .awaitingApproval = bridge.sendState else {
+            Issue.record("expected still .awaitingApproval while running, got \(bridge.sendState)")
+            bridge.resetForNewThread()
+            await sendTask.value
+            return
+        }
+
+        bridge.resetForNewThread()
+        await sendTask.value
+    }
+
+    @Test("awaitingApproval poll completion flips to completed")
+    func awaitingApprovalPollCompletionGoesCompleted() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conversationID = "conv-await-done"
+        let runID = "run-await-done"
+
+        _ = try await repo.upsertConversationMirror(
+            ChatConversation(
+                id: conversationID,
+                title: "T",
+                agentID: "claudeCode",
+                hostName: "h",
+                hostID: nil,
+                cwd: "/proj"
+            ),
+            lastHostSeq: 1,
+            syncState: .synced
+        )
+        _ = try await repo.upsertTurnMirror(
+            ChatTurn(
+                id: "turn-await-done",
+                conversationID: conversationID,
+                ordinal: 0,
+                prompt: "hello",
+                runID: runID,
+                status: .completed,
+                assistantText: "done after approve"
+            ),
+            vendorSessionID: nil,
+            hostSeqStart: nil,
+            hostSeqEnd: nil
+        )
+
+        let bridge = makeBridge(repo: repo)
+        // Simulate the pre-poll awaiting card the send path would have set.
+        bridge.testSetSendState(.awaitingApproval("Awaiting your approval — check the Inbox."))
+        bridge.testSetInFlight(runID: runID, prompt: "hello")
+
+        let transport = ConversationTransport(
+            append: { _ in
+                ConversationAppendResponse(status: "started", conversationId: conversationID)
+            },
+            fetch: { _ in
+                struct TestRefreshError: Error {}
+                throw TestRefreshError()
+            },
+            archive: { req in
+                ConversationArchiveResponse(ok: true, conversationId: req.conversationId)
+            }
+        )
+
+        await bridge.testPollUntilTerminal(
+            runID: runID,
+            conversationID: conversationID,
+            transport: transport
+        )
+
+        guard case .completed(let turn) = bridge.sendState else {
+            Issue.record("expected .completed, got \(bridge.sendState)")
+            return
+        }
+        #expect(turn.runID == runID)
+        #expect(turn.assistantText == "done after approve")
+        #expect(bridge.inFlightRunID == nil)
+    }
+
+    @Test("awaitingApproval poll deny flips to failed with honest message")
+    func awaitingApprovalPollDenyGoesFailed() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conversationID = "conv-await-deny"
+        let runID = "run-await-deny"
+
+        _ = try await repo.upsertConversationMirror(
+            ChatConversation(
+                id: conversationID,
+                title: "T",
+                agentID: "claudeCode",
+                hostName: "h",
+                hostID: nil,
+                cwd: "/proj"
+            ),
+            lastHostSeq: 1,
+            syncState: .synced
+        )
+        _ = try await repo.upsertTurnMirror(
+            ChatTurn(
+                id: "turn-await-deny",
+                conversationID: conversationID,
+                ordinal: 0,
+                prompt: "rm -rf /",
+                runID: runID,
+                status: .failed,
+                errorMessage: "Approval denied"
+            ),
+            vendorSessionID: nil,
+            hostSeqStart: nil,
+            hostSeqEnd: nil
+        )
+
+        let bridge = makeBridge(repo: repo)
+        bridge.testSetSendState(.awaitingApproval("Awaiting your approval — check the Inbox."))
+        bridge.testSetInFlight(runID: runID, prompt: "rm -rf /")
+
+        let transport = ConversationTransport(
+            append: { _ in
+                ConversationAppendResponse(status: "started", conversationId: conversationID)
+            },
+            fetch: { _ in
+                struct TestRefreshError: Error {}
+                throw TestRefreshError()
+            },
+            archive: { req in
+                ConversationArchiveResponse(ok: true, conversationId: req.conversationId)
+            }
+        )
+
+        await bridge.testPollUntilTerminal(
+            runID: runID,
+            conversationID: conversationID,
+            transport: transport
+        )
+
+        guard case .failed(let message) = bridge.sendState else {
+            Issue.record("expected .failed, got \(bridge.sendState)")
+            return
+        }
+        #expect(message == "Approval denied")
+        #expect(bridge.inFlightRunID == nil)
+
+        // Negative check: an unresolved awaiting state is NOT `.failed`.
+        // If the deny path never resolved, this expectation would fail —
+        // proving the test detects the bug it guards.
+        let unresolved = ShellLiveBridge.SendState.awaitingApproval(
+            "Awaiting your approval — check the Inbox."
+        )
+        #expect({
+            if case .failed = unresolved { return true }
+            return false
+        }() == false)
+        #expect(unresolved != bridge.sendState)
     }
 }
 

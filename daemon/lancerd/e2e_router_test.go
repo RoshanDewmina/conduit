@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -24,7 +25,20 @@ type fakeRelayClient struct {
 	paired bool
 }
 
-func (f *fakeRelayClient) isPaired() bool { return f.paired }
+func (f *fakeRelayClient) isPaired() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.paired
+}
+
+// setPaired flips paired under the same lock isPaired reads through — used
+// by tests that simulate pairing completing shortly after an initial
+// not-paired send attempt (concurrently with a background retry goroutine).
+func (f *fakeRelayClient) setPaired(v bool) {
+	f.mu.Lock()
+	f.paired = v
+	f.mu.Unlock()
+}
 
 func (f *fakeRelayClient) stop() {}
 
@@ -896,14 +910,36 @@ func TestE2ERouterHandleApprovalResponseAckFailure(t *testing.T) {
 // logs when an approval is dropped because the relay is unpaired.
 func TestE2ERouterSendApproval(t *testing.T) {
 	t.Run("unpaired logs and does not send", func(t *testing.T) {
+		// sendApproval now spawns a bounded background retry (see
+		// TestE2ERouterSendApprovalSurvivesFirstSendRace) when the first
+		// attempt finds the client unpaired. Shrink the retry window so the
+		// goroutine gives up quickly, and wait on approvalRetryDoneForTest
+		// (a real synchronization point) rather than time.Sleep — a sleep
+		// gives the race detector no happens-before edge against the
+		// goroutine's own log/sendMessage calls, so it (correctly) flags a
+		// sleep-then-read as racy no matter how generous the margin.
+		origInitial, origMax, origWindow := e2eApprovalRetryInitialDelay, e2eApprovalRetryMaxDelay, e2eApprovalRetryWindow
+		e2eApprovalRetryInitialDelay = time.Millisecond
+		e2eApprovalRetryMaxDelay = time.Millisecond
+		e2eApprovalRetryWindow = 5 * time.Millisecond
+		t.Cleanup(func() {
+			e2eApprovalRetryInitialDelay, e2eApprovalRetryMaxDelay, e2eApprovalRetryWindow = origInitial, origMax, origWindow
+		})
+
 		var buf bytes.Buffer
 		orig := log.Writer()
 		log.SetOutput(&buf)
 		t.Cleanup(func() { log.SetOutput(orig) })
 
 		client := &fakeRelayClient{paired: false}
-		router := &e2eRouter{client: client}
+		router := &e2eRouter{client: client, approvalRetryDoneForTest: make(chan string, 1)}
 		router.sendApproval(ApprovalEvent{ApprovalID: "appr-drop"})
+
+		select {
+		case <-router.approvalRetryDoneForTest:
+		case <-time.After(2 * time.Second):
+			t.Fatal("background retry goroutine never finished")
+		}
 
 		if msgType, _ := client.lastMessage(); msgType != "" {
 			t.Fatalf("expected no message sent while unpaired, got %q", msgType)
@@ -1098,5 +1134,317 @@ func TestE2ERouterResendsPendingApprovalsOnPair(t *testing.T) {
 	router.resendPendingApprovals()
 	if n := len(client.messages); n != 1 {
 		t.Fatalf("expected 1 re-send after resolving one of two, got %d", n)
+	}
+}
+
+// TestE2ERouterSendApprovalSurvivesFirstSendRace reproduces the 2026-07-16
+// live-repro bug (docs/test-runs/2026-07-16-untested-feature-sweep/LC-report.md,
+// "Why every dispatch blocked — precise root cause"): a conversation-append
+// that needs approval is evaluated in the narrow window right after the
+// daemon reports "e2e: paired with phone" but before the relay session it
+// actually depends on (post a relay identity change / re-pair, per
+// resident.go's startRelayWatch->connectRelay) has finished its own handshake
+// — i.e. sendApproval sees isPaired()==false even though pairing is, from the
+// phone's perspective, already settled.
+//
+// Before the fix, sendApproval dropped the event unconditionally on that one
+// false reading and returned — the only remaining path back to the phone was
+// an unrelated FUTURE peer_joined firing resendPendingApprovals, which in the
+// live repro's daemon4.log took ~2 minutes (09:48:57 connected -> 09:50:55
+// paired) while the phone had already rendered a terminal, non-recoverable
+// error. This test asserts the approval is delivered once the client pairs
+// WITHOUT ever calling resendPendingApprovals/pairedHandler directly — i.e.
+// sendApproval's own retry, not the peer_joined backstop, must be what
+// recovers it.
+func TestE2ERouterSendApprovalSurvivesFirstSendRace(t *testing.T) {
+	origInitial, origMax, origWindow := e2eApprovalRetryInitialDelay, e2eApprovalRetryMaxDelay, e2eApprovalRetryWindow
+	e2eApprovalRetryInitialDelay = 5 * time.Millisecond
+	e2eApprovalRetryMaxDelay = 20 * time.Millisecond
+	e2eApprovalRetryWindow = 500 * time.Millisecond
+	t.Cleanup(func() {
+		e2eApprovalRetryInitialDelay, e2eApprovalRetryMaxDelay, e2eApprovalRetryWindow = origInitial, origMax, origWindow
+	})
+
+	// Client starts NOT paired — simulating a conversation-append arriving
+	// while the relay session is mid-(re)connect (e.g. right after a relay
+	// identity change tore down an already-paired session).
+	client := &fakeRelayClient{paired: false}
+	router := &e2eRouter{client: client, approvalRetryDoneForTest: make(chan string, 1)}
+
+	ev := ApprovalEvent{ApprovalID: "appr-race", Agent: "claude", Kind: "command", Command: "git commit"}
+	router.sendApproval(ev)
+
+	// Immediately after the call: dropped, nothing sent — matches the
+	// pre-fix synchronous behavior (sendApproval must still return promptly;
+	// launchConversationTurn's caller returns dispatchResult{needsApproval}
+	// to the phone before any human could decide either way).
+	if msgType, _ := client.lastMessage(); msgType != "" {
+		t.Fatalf("expected no message sent while still unpaired, got %q", msgType)
+	}
+
+	// Pairing completes shortly after — e.g. the re-dialed relay session
+	// finishes its peer_joined handshake — well within the retry window but
+	// with NO peer_joined/resendPendingApprovals ever invoked in this test.
+	time.Sleep(30 * time.Millisecond)
+	client.setPaired(true)
+
+	select {
+	case <-router.approvalRetryDoneForTest:
+	case <-time.After(2 * time.Second):
+		t.Fatal("background retry goroutine never finished")
+	}
+
+	msgType, data := client.lastMessage()
+	if msgType != "approval" {
+		t.Fatalf("approval %s was never delivered after pairing completed (last message type = %q)", ev.ApprovalID, msgType)
+	}
+	var env struct {
+		Type    string `json:"type"`
+		Payload struct {
+			ApprovalID string `json:"approvalID"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Type != "approvalPending" || env.Payload.ApprovalID != "appr-race" {
+		t.Fatalf("unexpected envelope: %+v", env)
+	}
+	// The retry recovered the initial not-paired drop — no
+	// resendPendingApprovals/pairedHandler was ever invoked in this test.
+}
+
+// TestE2ERouterAuditTail verifies agentAuditTail mirrors the SSH agent.audit.tail
+// RPC by reading the same audit log via s.audit.tail — same entries, same shape.
+func TestE2ERouterAuditTail(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	if err := srv.audit.append(AuditEntry{Action: "auto-allow", Agent: "claude", Kind: "command", Effect: "allow"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.audit.append(AuditEntry{Action: "escalate", Agent: "codex", Kind: "patch", Effect: "ask"}); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]interface{}{"limit": 10})
+	router.handleMessage("agentAuditTail", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "agentAuditTailResult" {
+		t.Fatalf("expected agentAuditTailResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string `json:"type"`
+		Payload struct {
+			Entries []AuditEntry `json:"entries"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if len(env.Payload.Entries) != 2 {
+		t.Fatalf("expected 2 audit entries, got %d: %+v", len(env.Payload.Entries), env.Payload.Entries)
+	}
+
+	// Cross-check against the direct SSH-path reader to prove it's the same source.
+	sshEntries, err := srv.audit.tail(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sshEntries) != len(env.Payload.Entries) {
+		t.Fatalf("relay and SSH audit.tail disagree: relay=%d ssh=%d", len(env.Payload.Entries), len(sshEntries))
+	}
+}
+
+// TestE2ERouterAuditTailClampsLimit verifies an oversized or non-positive limit
+// is clamped to the 500-entry cap rather than passed through unbounded.
+func TestE2ERouterAuditTailClampsLimit(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]interface{}{"limit": 999999})
+	router.handleMessage("agentAuditTail", payload)
+
+	msgType, _ := client.lastMessage()
+	if msgType != "agentAuditTailResult" {
+		t.Fatalf("expected agentAuditTailResult, got %q", msgType)
+	}
+	// No entries exist yet, so this just proves the handler didn't reject the
+	// oversized limit outright; the clamp itself is exercised by inspection of
+	// e2e_router.go's `if limit <= 0 || limit > 500 { limit = 500 }` guard.
+}
+
+// TestE2ERouterPermissionModeGet verifies agentPermissionModeGet reads the
+// global policy's coarse Default effect.
+func TestE2ERouterPermissionModeGet(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	if err := policy.SaveFile(policy.GlobalPolicyPath(home), policy.Document{Default: string(policy.EffectAllow)}); err != nil {
+		t.Fatal(err)
+	}
+	srv.policy.reload("")
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	router.handleMessage("agentPermissionModeGet", nil)
+
+	msgType, data := client.lastMessage()
+	if msgType != "agentPermissionModeGetResult" {
+		t.Fatalf("expected agentPermissionModeGetResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string `json:"type"`
+		Payload struct {
+			Mode string `json:"mode"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Payload.Mode != "allow" {
+		t.Fatalf("expected mode=allow, got %q", env.Payload.Mode)
+	}
+}
+
+// TestE2ERouterPermissionModeSet verifies agentPermissionModeSet writes ONLY the
+// Default field, persists it to policy.yaml, records an audit entry, and
+// replies with ok=true.
+func TestE2ERouterPermissionModeSet(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	// Seed a document with existing rules to prove they survive the mode set.
+	seedRules := []policy.Rule{{ID: "deny-credential", Effect: "deny", Kind: "credential"}}
+	if err := policy.SaveFile(policy.GlobalPolicyPath(home), policy.Document{Default: string(policy.EffectAsk), Rules: seedRules}); err != nil {
+		t.Fatal(err)
+	}
+	srv.policy.reload("")
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]string{"mode": "allow"})
+	router.handleMessage("agentPermissionModeSet", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "agentPermissionModeSetResult" {
+		t.Fatalf("expected agentPermissionModeSetResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string                 `json:"type"`
+		Payload map[string]interface{} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Payload["ok"] != true {
+		t.Fatalf("expected ok=true, got %#v", env.Payload)
+	}
+
+	// The write must have landed on disk with rules preserved.
+	doc, err := policy.LoadFile(policy.GlobalPolicyPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Default != "allow" {
+		t.Fatalf("policy.yaml Default = %q, want allow", doc.Default)
+	}
+	if len(doc.Rules) != 1 || doc.Rules[0].ID != "deny-credential" {
+		t.Fatalf("expected existing rules preserved, got %+v", doc.Rules)
+	}
+
+	// The set must have been audited.
+	entries, err := srv.audit.tail(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range entries {
+		if e.Action == "policy-mode-set" && e.Effect == "allow" && e.Agent == "relay-phone" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected an audited policy-mode-set entry, got %+v", entries)
+	}
+}
+
+// TestE2ERouterPermissionModeSetRejectsInvalidMode is the required negative
+// test: an invalid mode value must be rejected AND must not modify the policy
+// file on disk (fail-closed).
+func TestE2ERouterPermissionModeSetRejectsInvalidMode(t *testing.T) {
+	home := t.TempDir()
+	srv := newServer(home)
+	defer srv.poller.stopForTest()
+
+	original := policy.Document{Default: string(policy.EffectAsk), Rules: []policy.Rule{{ID: "deny-credential", Effect: "deny", Kind: "credential"}}}
+	if err := policy.SaveFile(policy.GlobalPolicyPath(home), original); err != nil {
+		t.Fatal(err)
+	}
+	srv.policy.reload("")
+
+	before, err := os.ReadFile(policy.GlobalPolicyPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	client := &fakeRelayClient{paired: true}
+	router := newE2ERouter(nil, srv)
+	router.client = client
+
+	payload, _ := json.Marshal(map[string]string{"mode": "bypassPermissions"})
+	router.handleMessage("agentPermissionModeSet", payload)
+
+	msgType, data := client.lastMessage()
+	if msgType != "agentPermissionModeSetResult" {
+		t.Fatalf("expected agentPermissionModeSetResult, got %q", msgType)
+	}
+	var env struct {
+		Type    string                 `json:"type"`
+		Payload map[string]interface{} `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Payload["ok"] == true {
+		t.Fatalf("expected ok=false for invalid mode, got %#v", env.Payload)
+	}
+	if _, hasErr := env.Payload["error"]; !hasErr {
+		t.Fatalf("expected an error field for invalid mode, got %#v", env.Payload)
+	}
+
+	after, err := os.ReadFile(policy.GlobalPolicyPath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("policy.yaml was modified by a rejected mode set:\nbefore=%s\nafter=%s", before, after)
+	}
+
+	entries, terr := srv.audit.tail(10)
+	if terr != nil {
+		t.Fatal(terr)
+	}
+	for _, e := range entries {
+		if e.Action == "policy-mode-set" {
+			t.Fatalf("expected no policy-mode-set audit entry for a rejected set, got %+v", e)
+		}
 	}
 }

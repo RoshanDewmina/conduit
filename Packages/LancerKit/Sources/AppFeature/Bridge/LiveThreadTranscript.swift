@@ -121,8 +121,9 @@ public enum LiveThreadTranscript: Sendable {
                 if !open {
                     open = true
                 }
-                let label = message.toolName.map { "\($0)\n" } ?? ""
-                let chunk = label + message.text
+                // Text already carries the tool summary (e.g. "Bash: ls -la") from
+                // the daemon adapter — do not also prepend toolName or it doubles.
+                let chunk = message.text
                 if assistantText.isEmpty {
                     assistantText = chunk
                 } else {

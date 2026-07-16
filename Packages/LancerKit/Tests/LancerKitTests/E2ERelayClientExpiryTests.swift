@@ -60,6 +60,24 @@ import Foundation
         }
     }
 
+    @Test("socket close after pairingFailed keeps the failure visible (no flash-to-unpaired)")
+    func disconnectPreservesPairingFailed() {
+        let client = makeClient()
+        client.simulateIncomingFrameForTesting(#"{"type":"error","code":"key_mismatch","message":"key mismatch -- pairing already established with a different key"}"#)
+        guard case .pairingFailed = client.pairingState else {
+            Issue.record("expected .pairingFailed before disconnect, got \(client.pairingState)")
+            return
+        }
+
+        client.simulateDisconnectForTesting()
+
+        guard case .pairingFailed = client.pairingState else {
+            Issue.record("expected .pairingFailed after disconnect, got \(client.pairingState)")
+            return
+        }
+        #expect(client.connectionState == .disconnected)
+    }
+
     @Test("waiting frame decodes expiresAt into pairingExpiresAt")
     func waitingFrameDecodesExpiresAt() {
         let client = makeClient()

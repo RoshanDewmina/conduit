@@ -47,7 +47,9 @@ public struct TrustedMachinesView: View {
         .sheet(isPresented: $isPairingPresented) {
             RelayPairingSheet(existingMachineCount: store.usableMachineCount) { client, record in
                 RelayFleetHydration.addMachine(client: client, record: record, to: store)
-                isPairingPresented = false
+                // Sheet dismisses itself after a brief paired confirmation —
+                // do not set isPairingPresented = false here or the success
+                // state vanishes before the owner can see it.
             }
         }
         .alert(
@@ -164,17 +166,39 @@ public struct TrustedMachinesView: View {
 
     @ViewBuilder
     private func machineRow(_ machine: RelayFleetStore.Machine) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(machine.record.displayName)
-                Text(String(machine.id.uuidString.prefix(8)))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(store.connectionState(for: machine.id)?.description ?? "Connecting…")
-                    .font(.caption)
-                    .foregroundStyle(store.isConnected(machine.id) ? .green : .secondary)
+        // NavigationLink and Remove must not share a List-row hit target.
+        // Owner video 2026-07-16: tapping Remove also pushed MachineDetailView,
+        // which dismissed the confirm alert mid-flight ("disappears too fast")
+        // and left the offline pairing stuck with no Remove on the detail screen.
+        HStack(spacing: 12) {
+            NavigationLink {
+                MachineDetailView(machine: machine)
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(machine.record.displayName)
+                    Text(String(machine.id.uuidString.prefix(8)))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(store.connectionState(for: machine.id)?.description ?? "Connecting…")
+                        .font(.caption)
+                        .foregroundStyle(store.isConnected(machine.id) ? .green : .secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Spacer()
+            .buttonStyle(.plain)
+
+            Button("Remove", role: .destructive) {
+                machinePendingRemoval = machine
+            }
+            .buttonStyle(.borderless)
+            .accessibilityIdentifier("trusted-machines.remove.\(String(machine.id.uuidString.prefix(8)))")
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button("Remove", role: .destructive) {
+                machinePendingRemoval = machine
+            }
+        }
+        .contextMenu {
             Button("Remove", role: .destructive) {
                 machinePendingRemoval = machine
             }

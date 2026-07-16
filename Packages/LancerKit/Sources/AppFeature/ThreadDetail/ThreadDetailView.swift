@@ -12,6 +12,7 @@ struct ThreadDetailView: View {
     @Environment(WorkspaceDataStore.self) private var workspaceData
     @Environment(ShellLiveBridge.self) private var bridge
     @Environment(RelayApprovalIngest.self) private var approvalIngest
+    @Environment(TerminalSessionCoordinator.self) private var terminalCoordinator
     /// Inline follow-up text, typed directly on this thread — mirrors
     /// LiveThreadView's own follow-up bar instead of popping the full New
     /// Chat composer (vendor/model pickers included) as a second sheet on
@@ -594,6 +595,14 @@ struct ThreadDetailView: View {
             Spacer()
 
             Menu {
+                Button {
+                    openTerminalAtCWD()
+                } label: {
+                    Label("Open terminal at this cwd", systemImage: "terminal")
+                }
+                .disabled(thread.cwd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || relayFleetStore.firstConnectedMachine == nil)
+
                 NavigationLink {
                     FlightRecorderTurnListView(thread: thread, turns: turns)
                 } label: {
@@ -635,6 +644,15 @@ struct ThreadDetailView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.primary)
             )
+    }
+
+    private func openTerminalAtCWD() {
+        guard let startupCommand = TerminalShellCommand.cdToWorkingDirectory(thread.cwd) else { return }
+        let cwd = thread.cwd.trimmingCharacters(in: .whitespacesAndNewlines)
+        terminalCoordinator.openOnFirstConnectedMachine(
+            cwd: cwd.isEmpty ? nil : cwd,
+            startupCommand: startupCommand
+        )
     }
 }
 

@@ -268,10 +268,21 @@ func (s *server) conversationsAppend(req conversationAppendRequest) (conversatio
 	launchResult := s.dispatcher.launchConversationTurn(runID, launchParams, s.policyEffect, s.auditEntry)
 
 	if wt.Path != "" {
-		if launchResult.Status == "started" {
+		switch launchResult.Status {
+		case "started":
 			resp.WorktreePath = wt.Path
 			resp.Isolated = true
-		} else {
+		case "needsApproval":
+			// Pending, not terminal: dispatcher.resumeConversationLaunchOnApproval
+			// may still launch into this worktree once the async approval
+			// resolves (see launchConversationTurn) — removing it here would pull
+			// the checkout out from under that later launch. Report it to the
+			// caller so the phone can display the pending isolated location;
+			// finalizeAsyncConversationLaunch removes it if the resume never
+			// reaches "started".
+			resp.WorktreePath = wt.Path
+			resp.Isolated = true
+		default:
 			_, _ = s.removeManagedWorktree(wt.RepoRoot, wt.Path)
 		}
 	}

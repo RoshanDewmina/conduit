@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"lancer/lancerd/policy"
+	"lancer/lancerd/terminal"
 )
 
 const maxFrameBytes = 16 * 1024 * 1024
@@ -147,6 +149,73 @@ func (e *policyEngine) getPolicyYAML(cwd string) (string, error) {
 	return policy.MarshalYAML(policy.DefaultDocument())
 }
 
+// validPermissionMode reports whether mode is one of the three coarse policy
+// effects (deny/ask/allow) — the only values a relay-only phone may set via
+// agentPermissionModeSet. Anything else (including policy.ParseEffect's
+// fail-open "ask" normalization) is rejected outright so a malformed or
+// unexpected client value never silently becomes "ask".
+func validPermissionMode(mode string) bool {
+	switch policy.Effect(mode) {
+	case policy.EffectDeny, policy.EffectAsk, policy.EffectAllow:
+		return true
+	default:
+		return false
+	}
+}
+
+// getPermissionMode returns the current global policy's coarse Default effect
+// (deny/ask/allow). Read-only mirror of the same file agent.policy.get reads
+// via getPolicyDocuments — no new business logic, just the Default field.
+func (e *policyEngine) getPermissionMode() string {
+	e.ensureMigrated()
+	if doc, err := policy.LoadFile(policy.GlobalPolicyPath(e.home)); err == nil && doc.Default != "" {
+		return doc.Default
+	}
+	return string(policy.EffectAsk)
+}
+
+// setPermissionMode writes ONLY the coarse Default effect on the global policy
+// document, preserving any existing rules untouched. Used by the relay
+// agentPermissionModeSet mirror so a relay-only phone can change the default
+// decision mode without round-tripping full policy YAML (see
+// docs/product/2026-07-16-policy-audit-relay-port-map.md). Rejects anything
+// but deny/ask/allow and leaves the file untouched on rejection (fail-closed).
+func (e *policyEngine) setPermissionMode(mode string) error {
+	if !validPermissionMode(mode) {
+		return fmt.Errorf("invalid permission mode %q: must be one of deny, ask, allow", mode)
+	}
+	doc, err := policy.LoadFile(policy.GlobalPolicyPath(e.home))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		doc = policy.DefaultDocument()
+	}
+	doc.Default = mode
+	if err := policy.SaveFile(policy.GlobalPolicyPath(e.home), doc); err != nil {
+		return err
+	}
+	return e.reload("")
+}
+
+// setPermissionModeAudited is the server-level entry point for the relay
+// agentPermissionModeSet arm: applies the coarse-mode write, then records it
+// to the audit log the same way every other governance mutation does
+// (s.audit.append), with actor set to identify the relay-phone origin.
+func (s *server) setPermissionModeAudited(mode, actor string) error {
+	if err := s.policy.setPermissionMode(mode); err != nil {
+		return err
+	}
+	s.auditEntry(AuditEntry{
+		Action: "policy-mode-set",
+		Agent:  actor,
+		Kind:   "policy",
+		Rule:   "default",
+		Effect: mode,
+	})
+	return nil
+}
+
 func (s *server) simulatePolicy(yamlText string, periodDays int) policy.SimulationResult {
 	doc, err := policy.ParseDocument(yamlText)
 	if err != nil {
@@ -198,6 +267,10 @@ type server struct {
 	// stdio-only tests). Removing by ID avoids whole-store snapshot races when
 	// multiple approvals resolve concurrently.
 	approvalRetired func(string) error
+	// notifyApproval durably enqueues + attach-notifies a pending approval
+	// (resident.notifyAttachOrQueue) — the same durability handleHookWithNotify
+	// gets for a mid-run PreToolUse escalation. nil outside the resident daemon.
+	notifyApproval func(ApprovalEvent) error
 	// relayToken is the per-session capability secret minted at session attach
 	// (lancer.device.register), delivered to the app over the DaemonChannel and
 	// presented as `Authorization: Bearer <relayToken>` on the decision relay.
@@ -233,6 +306,9 @@ type server struct {
 	// attachments reassembles attachment.put chunks (attachment_rpc.go).
 	attachmentsOnce sync.Once
 	attachments     *attachmentUploadHub
+	// termHost owns interactive PTY sessions (Orca-style daemon-owned terminal).
+	termOnce sync.Once
+	termHost *terminal.Host
 }
 
 type loopState struct {
@@ -289,6 +365,19 @@ func newServer(home string) *server {
 	s.poller = newDecisionPoller(s.applyDecision)
 	// Run-control actions (pause/resume/stop/budget-exceeded) feed the same audit log.
 	s.dispatcher.audit = s.auditEntry
+	// Launch-time policy "ask" gates (dispatch/continueRun/resumeObservedSession/
+	// launchConversationTurn) deliver their ApprovalEvent through the same
+	// chokepoint a mid-run PreToolUse escalation uses — see deliverApprovalEvent.
+	s.dispatcher.deliverApproval = s.deliverApprovalEvent
+	// launchConversationTurn's "ask" branch resumes asynchronously once its
+	// delivered approval is decided (resumeConversationLaunchOnApproval); when
+	// that resumed launch does NOT reach "started" (auth-preflight failure,
+	// unsupported-attachment error, emergency stop, etc.), something has to
+	// persist that outcome onto the conversation ledger — the ORIGINAL
+	// synchronous agent.conversations.append RPC call already returned
+	// "needsApproval" to the caller long before this resolves, so there is no
+	// live response to update. See finalizeAsyncConversationLaunch.
+	s.dispatcher.onConversationLaunchResolved = s.finalizeAsyncConversationLaunch
 	// Launch escalation is relaxed only for agents whose per-action hook is
 	// verifiably wired (Claude today); everything else stays fail-closed.
 	s.dispatcher.hookWired = hookWiredForAgent(home)
@@ -317,6 +406,59 @@ func (s *server) handleRunTerminal(runID, status string, exitCode int) {
 	}
 	if status == "exited" && exitCode == 0 {
 		_, _ = s.removeManagedWorktree(repoRoot, wtPath)
+	}
+}
+
+// deliverApprovalEvent is the single delivery chokepoint for an ApprovalEvent
+// that needs a decidable phone-side card: register it in the in-memory
+// approvals store (so a later agent.approval.response/poll decision can find
+// it), durably enqueue it (notifyApproval — survives a daemon restart before
+// it's decided), and push it over the E2E relay when a phone is paired.
+// Mirrors exactly what handleHookWithNotify already does for a mid-run
+// PreToolUse escalation (server.go's "Send through E2E relay when paired"
+// block) — reused here so a launch-time policy "ask" gate (dispatch.go's
+// dispatch/continueRun/resumeObservedSession/launchConversationTurn) also
+// produces a real card instead of silently discarding the constructed event.
+// Root cause: those four functions built an ApprovalEvent (with a real
+// ApprovalID/ContentHash) for the "ask" branch but never routed it through
+// approvals.add/notify/e2e.sendApproval — s.approvals.pendingEvents() was
+// always empty for a launch-gate escalation, so it never appeared in
+// resendPendingApprovals() either. Not a pairing-timing race: this dropped
+// the event unconditionally, on every "ask" launch outcome.
+func (s *server) deliverApprovalEvent(event ApprovalEvent) <-chan hookDecision {
+	ch := s.approvals.add(event)
+	if s.notifyApproval != nil {
+		if err := s.notifyApproval(event); err != nil {
+			log.Printf("approval: durable enqueue failed for %s: %v", event.ApprovalID, err)
+		}
+	}
+	if s.e2e != nil {
+		s.e2e.sendApproval(event)
+	}
+	return ch
+}
+
+// finalizeAsyncConversationLaunch persists a NON-started outcome from
+// dispatcher.resumeConversationLaunchOnApproval onto the conversation ledger
+// and cleans up any worktree the (never-launched) turn had reserved — the
+// same bookkeeping conversationsAppend already does inline for a synchronous
+// non-"started" launchResult (conversation_rpc.go), needed here too because
+// this outcome resolves long after that original RPC call already returned
+// "needsApproval" to its caller. A "started" result needs none of this: the
+// ordinary run-status emit/persist plumbing (wrapEmitForRun →
+// server.emitNotification → persistConversationEvent) already covers it
+// identically to any other dispatch, so the dispatcher only calls this for
+// the non-started case.
+func (s *server) finalizeAsyncConversationLaunch(runID string, result dispatchResult, worktreePath, worktreeRepoRoot string) {
+	if s.conversations != nil {
+		if err := s.conversations.appendRunStatus(runID, result.Status, nil, result.Message); err != nil {
+			log.Printf("finalizeAsyncConversationLaunch: appendRunStatus failed for %s (%s): %v", runID, result.Status, err)
+		}
+	}
+	if worktreePath != "" {
+		if _, err := s.removeManagedWorktree(worktreeRepoRoot, worktreePath); err != nil {
+			log.Printf("finalizeAsyncConversationLaunch: removeManagedWorktree failed for %s: %v", runID, err)
+		}
 	}
 }
 
