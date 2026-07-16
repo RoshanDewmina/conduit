@@ -1,9 +1,22 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-15 (integration/2026-07-15-daily-drive merged to master @ `65bed890`;
-the 2026-07-12 block below is superseded history, kept for context — see `plans/orchestrator-state.md`).
-**Active branch:** `master` (`65bed890`) — re-check `git rev-parse HEAD` / `gh pr list` before citing
-anything here.
+**Last updated:** 2026-07-15 night. Master still `ba73c130`; a large night session shipped
+**18 open PRs (#120–#137)** consolidated in `integration/2026-07-15-night` — none merged yet.
+**Active branch:** `master` (`ba73c130`), but the reviewable tip is `integration/2026-07-15-night`.
+Re-check `git rev-parse HEAD` / `gh pr list` before citing anything here.
+
+> **2026-07-15 night in one line:** two stalled lanes finished (desktop-decrypt fix #127
+> live-proven on device-paired sim; Siri M1 #125), the owner's composer-drawer→in-place-morph
+> fix (#120), two waves of Cursor/Claude-app feature parity (#121–#124, #129–#135 incl. the
+> **Emergency Stop UI**, publish gate B11b), first-run onboarding (#130), mid-run feedback +
+> permission pill (#131), Codex's oracle skill + a **mandatory `docs/CHANGELOG.md` rule**
+> (#126), an aggressive **docs stale-purge** (32 deletions / 17 fixes, #128), B4 verified +
+> B6 reconciled (#136) + C6 security triage (#137, 0 actionable). The night build was
+> installed on the owner's iPhone and **paired live (daemon log 22:07:44)**. Full report +
+> step-by-step whole-app test script for a fresh agent:
+> [`test-runs/2026-07-15-night-full-app-test-plan.md`](test-runs/2026-07-15-night-full-app-test-plan.md).
+> Remaining: merge the 18 PRs; run the device test plan §3/§4/§4b (Tier 0 loop, Emergency
+> Stop, push-while-closed); App Store Connect setup (owner-only).
 
 > **2026-07-15 in one line:** five fixes landed and merged to master via
 > `integration/2026-07-15-daily-drive`: relay generation-guard for the cross-reconnect
