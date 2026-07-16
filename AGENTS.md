@@ -38,6 +38,11 @@ Three layers: the **iOS app** (`Packages/LancerKit/`), the **`lancerd`** residen
 
 ## Working rules
 
+- **Changelog is mandatory.** Any session that lands a change (commit, PR, deploy, doc/config
+  edit) appends one line per landed unit to `docs/CHANGELOG.md` (format at the top of that
+  file) BEFORE reporting done. This is the owner's at-a-glance record of what agents did —
+  skipping it is an incomplete task.
+
 - **Treat the working code + recent verified commits as source of truth** over any older doc, plan, or conversation. When code and a doc disagree, fix one of them in the same change.
 - **`git status` changes are other agents' / the owner's work** — do not revert them unless asked.
 - **Verify before claiming done.** LancerKit Swift change → `cd Packages/LancerKit && swift build` (+ `swift test` if behavior changed). iOS UI / app-shell / strict-concurrency risk → the **XcodeBuildMCP app-target** build (plain `swift build` skips `#if os(iOS)` code). Daemon change → `go test ./...` **from `daemon/lancerd`** (not the repo root). See the `lancer-verification-gate` skill.
