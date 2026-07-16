@@ -1,7 +1,7 @@
 # Dogfood smoke — owner iPhone (2026-07-16)
 
 **Written:** 2026-07-16 ~16:50 ET  
-**`origin/master`:** `fbc85191` (PR #140 sweep + PR #141 FX10)  
+**`origin/master`:** `9ff3e6b4` (PR #140 + #141 + #142 docs)  
 **FX10 included:** YES (`5a3fce93` ancestor)  
 **.app path:** `/tmp/lancer-device-dogfood-dd/Build/Products/Debug-iphoneos/Lancer.app`  
 **Device:** `557A7877-F729-5031-9606-0E04F2B67822` (Roshan's iPhone)

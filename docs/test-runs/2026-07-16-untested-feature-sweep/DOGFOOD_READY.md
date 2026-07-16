@@ -204,10 +204,10 @@ xcrun devicectl device install app --device 557A7877-F729-5031-9606-0E04F2B67822
 
 | Field | Value |
 |---|---|
-| **Status** | REINSTALL after FX10 (in progress) |
-| **Built from** | master tip including `5a3fce93` FX10 |
+| **Status** | **SUCCEEDED** (FX10 reinstall) |
+| **Built from** | `origin/master` @ `9ff3e6b4` (includes FX10 `5a3fce93`) |
 | **.app path** | `/tmp/lancer-device-dogfood-dd/Build/Products/Debug-iphoneos/Lancer.app` |
-| **Install** | prior `b8bb778c` SUCCEEDED; FX10 reinstall pending |
+| **Install** | SUCCEEDED on `557A7877-…` via devicectl |
 
 ## Evidence to paste back
 
@@ -223,3 +223,8 @@ When done (PASS or FAIL), write sibling `DOGFOOD_SMOKE.md` and optionally note h
 ## Re-pair (this session)
 
 Production `lancerd pair` minted code **300552** (replaced 310440). Still unconfirmed until phone Connect. See `DOGFOOD_SMOKE.md`.
+
+
+## Build status (FX10 reinstall)
+
+2026-07-16 ~16:50 ET — Rebuilt from master including FX10 `5a3fce93`, `-derivedDataPath /tmp/lancer-device-dogfood-dd`: **BUILD SUCCEEDED**. Installed on `557A7877-F729-5031-9606-0E04F2B67822` — **SUCCEEDED**. Pair: see `DOGFOOD_SMOKE.md` code **347051**.
