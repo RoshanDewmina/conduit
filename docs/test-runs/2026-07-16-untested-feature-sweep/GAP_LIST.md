@@ -27,8 +27,9 @@ Live XCUITest + isolated-daemon lanes exercised 24 previously-untested surfaces 
 
 | Pri | Gap | Verdict source |
 |---|---|---|
-| P0/P1 | **#7/#8/#9/#17/#23 live re-proof owed** — FX7 merged + unit-gated; Lane C4 must re-run the F4 approve→turn chain and confirm review/receipt UI binds | code FIXED; live C4 |
-| P0 | **#2/#3 live re-proof owed** — Lane P relay mirror merged + unit-gated; Settings Policy/Audit over relay-only still needs XCUITest | code FIXED; live C4 |
+| P0/P1 | **#7/#8/#9/#17/#23 live re-proof owed** — C4 run blocked on pairing never settling; FX7 path not observed (`awaitingCard=false`, `terminalRetry=true`) | LC4 FAIL (harness) |
+| P0 | **#2 Policy relay** — mode picker loads (**PARTIAL**); stale SSH error copy remains | LC4 |
+| P0 | **#3 Audit relay** — **PASS** live (`auditLoaded=true`, no SSH error) | LC4 |
 | P1 | **Background-tasks pill never appeared** on a completed Bash turn (no tool chip either) | LD2 + LF-final #10 FAIL |
 | P1 | **#5 Connect occlusion** — code FIXED (FX5); keypad screenshot proof still owed in C4 | code FIXED; visual C4 |
 | P2 | Emergency Stop mechanically reachable but never cleanly PASS under harness timing | LA2 #1 BLOCKED |
@@ -40,7 +41,8 @@ Onboarding gate · composer dispatch picker · inline approval card · pending-a
 
 ### C3 / F-final / Wave 1 status
 
-C3 + F-final **completed** (`LC3-report.md`, `LF-final-report.md`). Wave 1 **merged + unit-gated**; **Lane C4 live sim re-test still owed**.
+C3 + F-final **completed** (`LC3-report.md`, `LF-final-report.md`). Wave 1 **merged + unit-gated**.
+**Lane C4 partial** (`LC4-report.md`) — pairing gate blocked #7 chain; Audit PASS; Policy PARTIAL; FX5 PASS.
 
 ---
 
@@ -51,12 +53,12 @@ Best available verdict per candidate. Prefer A2/C2/D2/C3/F-final/LB over earlier
 | # | Candidate | Best verdict | Lane | Notes |
 |---|---|---|---|---|
 | 1 | Emergency Stop | **BLOCKED** (harness) | LA2 | UI reachable; "No connected host" under re-pair race |
-| 2 | Policy editor | **FIXED** (code) / live owed | Lane P | Relay coarse permission-mode picker; YAML stays SSH |
-| 3 | Audit feed | **FIXED** (code) / live owed | Lane P | `agentAuditTail` relay arm |
+| 2 | Policy editor | **PARTIAL** (live) | Lane P + LC4 | Relay mode picker works; SSH error flash remains |
+| 3 | Audit feed | **PASS** (live) | Lane P + LC4 | `agentAuditTail` over relay |
 | 4 | Pending-approvals banner | **PASS** | LB | |
-| 5 | First-run onboarding | **PASS** (+ Connect **FIXED** code) | LB + FX5 | C4 screenshot still owed |
+| 5 | First-run onboarding | **PASS** (+ Connect **PASS** live) | LB + FX5 + LC4 | `LC4-01-pairing-keypad.png` |
 | 6 | Inline approval card | **PASS** | LB | Real git commit landed |
-| 7 | Review pill → sheet | **FIXED** (code) / live owed | LC3 + FX7 | Was stale needsApproval error; awaiting-approval path merged |
+| 7 | Review pill → sheet | **FAIL** (live) | LC3 + LC4 | Pairing never settled; terminal Retry, no awaiting card |
 | 8 | FileViewerView | **BLOCKED** → retest via C4 | LC3 | Was blocked on #7 UI |
 | 9 | AddCommentSheet | **BLOCKED** → retest via C4 | LC3 | Was blocked on #7 UI |
 | 10 | Background-tasks pill | **FAIL** | LD2 + LF-final | Reconfirmed: turn done, pill absent |

@@ -12,6 +12,18 @@
 - **#10 fx10-bg-tasks:** leave in-flight worktree alone (not green/committed).
 - **Owner re-pair:** still owed if production slot `310440` unconfirmed — only after confirming C4 will not fight the single relay slot (or document owner pairs after sim quiesces).
 
+## ⚡ 2026-07-16 ~17:05 ET — Lane C4 PARTIAL (pairing never settled; Lane P audit PASS)
+
+**Sweep tip:** `integration/2026-07-16-untested-sweep` @ `b8bb778c` (Wave-1 `7707e4fa` + docs).
+
+- **Lane C4 ran** (`LC4-report.md`, Simurgh `lease-197`, ~15 min XCUITest). **Blocked:** daemon never
+  `paired with phone` → #7 chain + pills ungraded live; git repo unchanged.
+- **Lane P partial live proof:** Audit feed **PASS** over relay; Policy mode picker present but stale
+  SSH error copy also visible (**PARTIAL**). **FX5 PASS** (Connect hittable above keypad).
+- **#10/#14 FAIL reconfirmed** (`bgPill=false`, `bashCount=0`). Emergency Stop tapped (**PARTIAL**).
+- **Next:** C4 retry with single-session harness + daemon pairing gate before dispatch; Policy UI
+  error-clearing nit; owner re-pair still owed.
+
 ## ⚡ 2026-07-16 ~16:20 ET — Wave 1 MERGED + Simurgh preflight green; Lane C4 IN FLIGHT
 
 **Sweep tip:** `integration/2026-07-16-untested-sweep` @ `7707e4fa` (`.worktrees/untested-sweep-2026-07-16`).
