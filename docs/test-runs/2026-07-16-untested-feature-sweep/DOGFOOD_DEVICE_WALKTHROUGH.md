@@ -42,7 +42,7 @@ All three turns tonight exited cleanly (`conversation_turns`: 23:27:45Z / 23:41:
 | **WT-D** | **Top-right ⋯ missing on first entry** into a live thread; appears only after backing out and re-entering | P2 | `WT-video-loading-and-menu.mp4`; owner report |
 | **WT-E** | **No APNs push for approvals** (lock-screen test): relay in-app delivery only. Prime suspect: push-backend device-token registry is in-memory and has been redeployed since the 2026-06-23 push-while-closed PASS; needs re-register→push trace on the backend | **P1** | Daemon log 19:42:49/19:43:13 ET (relay sends only, no push confirm); owner observed no lock-screen notification, twice |
 | **WT-F** | `ls -la` risk-scored **High** on the approval card — over-rated for a read-only listing; worth a scoring pass | P3 | `WT-05-approval-card-full-bypass.png` |
-| **WT-G** | **Audit feed renders oldest-first raw log lines** — top of the feed is 2026-07-11; tonight's entries require scrolling to the bottom. Should be newest-first (and ideally structured rows, not raw dump) | P3 | Owner screenshot 7:39 PM (in session chat; feed top shows `2026-07-11T22:07:25Z`) — step 8 stays PASS functionally |
+| **WT-G** | **Audit feed renders oldest-first raw log lines** — top of the feed is 2026-07-11; tonight's entries require scrolling through 5 days of history. Should be newest-first (and ideally structured rows, not raw dump) | P3 | `WT-07-audit-feed-relay.png` (7:50 PM; after one screen of scrolling, still on 2026-07-12) — step 8 stays PASS functionally |
 
 ---
 
@@ -51,6 +51,7 @@ All three turns tonight exited cleanly (`conversation_turns`: 23:27:45Z / 23:41:
 - `screenshots/WT-05-approval-card-full-bypass.png` — approval card (Command `ls -la`, High) with "Full bypass" pill visible (7:27 PM)
 - `screenshots/WT-06-completed-turn-stale-running-chip.png` — stale Running chip + "1 running task" after daemon exit (7:28 PM)
 - `screenshots/WT-video-loading-and-menu.mp4` — return-visit spinner + missing/reappearing ⋯ (7:31 PM, re-encoded 324K)
+- `screenshots/WT-07-audit-feed-relay.png` — Audit feed over relay, oldest-first ordering (7:50 PM)
 - Audit chain (UTC): 23:27:24 launch → 23:27:29 escalate → 23:27:43 approve → 23:41:12 follow-up launch → 23:42:45 launch → 23:42:49 escalate → 23:43:18 approve
 - Turn ledger: `~/.lancer/conversations.sqlite` `conversation_turns` (3 turns, all `exited`, vendor session `d50a2002…` shared across ordinals 1–2)
 
