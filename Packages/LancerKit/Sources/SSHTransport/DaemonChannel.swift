@@ -704,6 +704,14 @@ public actor DaemonChannel {
         return (try? Self.decodeResult(data, as: Wrap.self))?.commands ?? []
     }
 
+    /// Atomic fleet emergency stop — kills running/paused runs and latches the
+    /// daemon so new launches stay blocked until the host process clears the
+    /// latch (no client-visible clear/status RPC today).
+    public func emergencyStop() async throws -> EmergencyStopResult {
+        let data = try await sendRPC(method: "agent.emergencyStop", params: [String: Any]())
+        return try Self.decodeResult(data, as: EmergencyStopResult.self)
+    }
+
     @discardableResult
     public func cancelRun(runId: String) async throws -> Bool {
         let data = try await sendRPC(method: "agent.cancel", params: ["runId": runId])
