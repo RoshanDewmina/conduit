@@ -731,24 +731,39 @@ public final class WorkspaceDataStore {
 
     public func refresh() async {
         // Local rows render immediately; the host sync (which may wait for the
-        // relay to reconnect) runs after, then local rows are re-read so a
-        // cleared "Working" badge lands without blocking the first paint.
-        // The sync must run UNCONDITIONALLY: gating it on a local running
-        // turn meant a fresh install (empty mirror) never backfilled the
-        // host's conversation history at all (owner phone, 2026-07-12).
+        // relay to reconnect) runs in the background, then local rows are
+        // re-read so a cleared "Working" badge lands without blocking first
+        // paint. The sync must run UNCONDITIONALLY: gating it on a local
+        // running turn meant a fresh install (empty mirror) never backfilled
+        // the host's conversation history at all (owner phone, 2026-07-12).
+        //
+        // Mark `.ready` after the first successful local read and return —
+        // never keep callers (All Repos / Workspaces) awaiting an 8s relay
+        // round-trip when SwiftData already has rows (2026-07-16).
         refreshGeneration += 1
         let token = refreshGeneration
-        fetchPhase = .loading
+        if !hasLoadedSuccessfully {
+            fetchPhase = .loading
+        }
         do {
             try await loadLocalRows()
-            if let syncRunningStatuses {
-                await syncRunningStatuses()
-                guard token == refreshGeneration else { return }
-                try await loadLocalRows()
-            }
             guard token == refreshGeneration else { return }
             hasLoadedSuccessfully = true
             fetchPhase = .ready
+            guard let syncRunningStatuses else { return }
+            let sync = syncRunningStatuses
+            Task { @MainActor in
+                await sync()
+                guard token == self.refreshGeneration else { return }
+                do {
+                    try await self.loadLocalRows()
+                    guard token == self.refreshGeneration else { return }
+                    self.fetchPhase = .ready
+                } catch {
+                    guard token == self.refreshGeneration else { return }
+                    self.fetchPhase = .failed(message: error.localizedDescription)
+                }
+            }
         } catch {
             guard token == refreshGeneration else { return }
             fetchPhase = .failed(message: error.localizedDescription)

@@ -204,3 +204,42 @@ struct ThreadListFiltersTests {
         #expect(!loaded.showFailed)
     }
 }
+
+@Suite("ThreadListLoadingPolicy")
+struct ThreadListLoadingPolicyTests {
+    @Test("cached rows never blank-spinner even before bootstrap completes")
+    func cachedRowsSkipBlankSpinner() {
+        #expect(!ThreadListLoadingPolicy.showsBlankInitialLoading(
+            hasAnyThreads: true,
+            hasCompletedInitialBootstrap: false,
+            catalogShowsInitialLoading: true,
+            catalogFailureMessage: nil
+        ))
+    }
+
+    @Test("empty cache shows spinner until bootstrap finishes")
+    func emptyCacheShowsSpinner() {
+        #expect(ThreadListLoadingPolicy.showsBlankInitialLoading(
+            hasAnyThreads: false,
+            hasCompletedInitialBootstrap: false,
+            catalogShowsInitialLoading: false,
+            catalogFailureMessage: nil
+        ))
+        #expect(!ThreadListLoadingPolicy.showsBlankInitialLoading(
+            hasAnyThreads: false,
+            hasCompletedInitialBootstrap: true,
+            catalogShowsInitialLoading: false,
+            catalogFailureMessage: nil
+        ))
+    }
+
+    @Test("catalog failure does not keep a blank spinner")
+    func failureClearsBlankSpinner() {
+        #expect(!ThreadListLoadingPolicy.showsBlankInitialLoading(
+            hasAnyThreads: false,
+            hasCompletedInitialBootstrap: false,
+            catalogShowsInitialLoading: false,
+            catalogFailureMessage: "relay timeout"
+        ))
+    }
+}

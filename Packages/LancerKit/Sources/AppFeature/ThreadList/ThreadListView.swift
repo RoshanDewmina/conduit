@@ -129,12 +129,23 @@ public struct ThreadListView: View {
         !threads.isEmpty || !scopedObservedSessions.isEmpty
     }
 
-    /// First paint only — never treat a failed refresh as an empty list.
+    /// Blank ProgressView only when there is nothing cached to paint.
+    /// Cached ledger / desktop rows must appear instantly; relay refresh and
+    /// `relayListSessions` run in the background without clearing the list.
     private var showsInitialLoading: Bool {
-        !hasCompletedInitialBootstrap
-            || workspaceData.showsInitialLoading
-            || (isObservedSessionsLoading && threads.isEmpty && scopedObservedSessions.isEmpty
-                && workspaceData.fetchPhase.failureMessage == nil)
+        ThreadListLoadingPolicy.showsBlankInitialLoading(
+            hasAnyThreads: hasAnyThreads,
+            hasCompletedInitialBootstrap: hasCompletedInitialBootstrap,
+            catalogShowsInitialLoading: workspaceData.showsInitialLoading,
+            catalogFailureMessage: workspaceData.fetchPhase.failureMessage
+        )
+    }
+
+    /// Subtle top spinner while a background refresh is in flight and rows
+    /// are already visible (never replaces the list with a blank spinner).
+    private var showsSubtleRefreshing: Bool {
+        hasAnyThreads
+            && (isObservedSessionsLoading || workspaceData.fetchPhase.isLoading)
     }
 
     public var body: some View {
@@ -202,6 +213,13 @@ public struct ThreadListView: View {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
+                            if showsSubtleRefreshing {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .accessibilityLabel(Text("Refreshing threads"))
+                            }
                             ForEach(groups, id: \.title) { group in
                                 sectionHeader(group.title)
                                     .padding(.top, group.title == groups.first?.title ? 0 : 20)
@@ -270,9 +288,12 @@ public struct ThreadListView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .task {
+            // Catalog refresh paints local rows first (WorkspaceDataStore marks
+            // `.ready` before the relay sync). Unlock empty/ready UI as soon as
+            // that returns — do not wait on `relayListSessions` for first paint.
             await workspaceData.refresh()
-            await loadObservedSessions()
             hasCompletedInitialBootstrap = true
+            await loadObservedSessions()
         }
         .onChange(of: filterPrefs) { _, newValue in
             ThreadListFilters.save(newValue)
