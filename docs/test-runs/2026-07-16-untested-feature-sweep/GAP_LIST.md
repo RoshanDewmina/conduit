@@ -1,10 +1,10 @@
-# Untested-feature live sweep — Phase 4 GAP LIST (Wave 1 code merged; C4 live owed)
+# Untested-feature live sweep — Phase 4 GAP LIST (Wave 1 code merged; merge→master + dogfood)
 
 **Date:** 2026-07-16  
-**Tip:** `integration/2026-07-16-untested-sweep` @ `7707e4fa`  
+**Tip:** `integration/2026-07-16-untested-sweep` @ `b8bb778c` (FX merges land at ancestor `7707e4fa`)  
 **Worktree:** `.worktrees/untested-sweep-2026-07-16`  
 **Evidence root:** `docs/test-runs/2026-07-16-untested-feature-sweep/`  
-**Session chain:** Claude `941bc90d` → Cursor C3/F-final → Claude Fable `3ddbf98e` (Wave 1) → Cursor Grok continuation (merge + gates).
+**Session chain:** Claude `941bc90d` → Cursor C3/F-final → Claude Fable `3ddbf98e` (Wave 1) → Cursor Grok continuation (merge + gates) → owner-ordered merge→master + phone dogfood (~16:29 ET).
 
 ---
 
@@ -97,10 +97,10 @@ Best available verdict per candidate. Prefer A2/C2/D2/C3/F-final/LB over earlier
 
 ## Remaining work (ordered)
 
-1. **Lane C4 live sim re-test** on tip `7707e4fa`: #7 chain (#8/#9/#17/#23) + #2/#3 Policy/Audit over relay + FX5 keypad screenshot + #10/#14 recheck + #1/#11/#18 harness retries.
-2. **#10/#14 product diagnosis** if C4 still fails pill/chip hydration (not just harness).
-3. **Owner track:** re-pair phone after incident 310440 + device build of latest tip (L6).
-4. **Merge-to-master:** only after C4 evidence + owner confirm (per autonomy stop rules).
+1. **Merge-to-master + push** — owner-ordered 2026-07-16 ~16:29 ET (supersedes prior C4-wait autonomy stop). In progress this session.
+2. **Owner phone dogfood** — install tip on UDID `557A7877-…`, re-pair if needed, run `DOGFOOD_READY.md` §4 smoke → write `DOGFOOD_SMOKE.md`.
+3. **Lane C4 live sim re-test** (parallel, Simurgh `lease-197`): #7 chain (#8/#9/#17/#23) + #2/#3 Policy/Audit over relay + FX5 keypad screenshot + #10/#14 recheck + #1/#11/#18 harness retries. Code FIXED for #2/#3/#5/#7; live still owed.
+4. **#10/#14 product diagnosis** if C4 still fails pill/chip hydration (`fx10-bg-tasks` worktree in flight — do not merge until green).
 
 ---
 

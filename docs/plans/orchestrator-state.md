@@ -1,5 +1,17 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-16 ~16:35 ET — owner ordered merge→master + phone dogfood (supersedes C4-wait autonomy stop)
+
+**Sweep tip:** `integration/2026-07-16-untested-sweep` @ `b8bb778c` (+ docs hygiene commit pending).  
+**Worktree:** `.worktrees/untested-sweep-2026-07-16`.
+
+- **Wave 1 MERGED** (FX7 + FX5 + Lane P) on tip; unit gates previously green (`go test ./...`; `swift test` 781+62+13).
+- **Owner directive (16:29 ET):** push + merge integration → `master`, install latest on physical iPhone, start dogfood. C4 live re-proof may continue in parallel on Simurgh `lease-197` — do not steal that lease; device build uses `/tmp/lancer-device-dogfood-dd`.
+- **Merge-to-master:** IN PROGRESS (this session).
+- **Dogfood:** next after `origin/master` tip confirmed + device install.
+- **#10 fx10-bg-tasks:** leave in-flight worktree alone (not green/committed).
+- **Owner re-pair:** still owed if production slot `310440` unconfirmed — only after confirming C4 will not fight the single relay slot (or document owner pairs after sim quiesces).
+
 ## ⚡ 2026-07-16 ~16:20 ET — Wave 1 MERGED + Simurgh preflight green; Lane C4 IN FLIGHT
 
 **Sweep tip:** `integration/2026-07-16-untested-sweep` @ `7707e4fa` (`.worktrees/untested-sweep-2026-07-16`).
@@ -9,6 +21,7 @@
 - **Simurgh wave-1/2 @ `85f3907`:** daemon UP; `simurgh doctor` all ok; `simurgh exec lease-196 -- echo ok` → `ok`. Route long xcodebuild via `simurgh exec <lease> -- …`; isolate daemons with `LANCER_STATE_DIR` only (keep passwd `HOME`).
 - **Lane C4 IN FLIGHT:** live sim re-test post-Wave-1 — #7/#8/#9/#17/#23 + #2/#3 Policy/Audit over relay + FX5 keypad screenshot + #10/#14 recheck + #1/#11/#18 harness retries if time. Evidence → `LC4-report.md`.
 - **Owner re-pair still owed** (incident from C3 bare `lancerd pair`; L6 device pass owner-gated).
+*(Superseded by 16:35 owner merge+dogfood directive above — C4 may still finish in parallel.)*
 
 ## ⚡ FULL-APP NIGHT TEST — 2026-07-15 ~22:40 ET
 
