@@ -1,5 +1,12 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-16 ~17:22 ET — auth-preflight FIXED + phone Hi launched (PR #145)
+
+- **Merged:** PR #145 → `origin/master` `1a51329b` (probe 35s, boot warm, shim-excluding resolve, launchd PATH).
+- **Host proof:** `conversation-append-launched allow` @ 21:19:07Z.
+- **Phone smoke:** `"Hi"` → `conversation-append-launched allow` @ 21:20:25Z (no auth-preflight deny). Pair **149884** kept.
+- **UI screenshot:** not captured (physical idb unavailable).
+
 ## ⚡ 2026-07-16 ~17:20 ET — auth-preflight fixed on host; phone smoke needs owner send
 
 - **Root cause:** launchd cold `claude auth status` ~13s vs 20s probe budget → `conversation-append-auth-preflight` deny on `"Hi"` @ 21:05:24Z while interactive Claude was logged in.

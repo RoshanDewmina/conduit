@@ -1,22 +1,22 @@
 # Dogfood smoke — owner iPhone (2026-07-16 post-merge)
 
 **Audience:** Roshan (owner phone dogfood)  
-**Updated:** 2026-07-16 ~17:20 ET (auth-preflight fix landed on host; phone send retry owed)  
-**Build:** app still `origin/master` @ `ec3565f7` (FX7 + FX5 + Lane P + FX10); **host `lancerd`** rebuilt from `fix/auth-preflight-cold-probe` and reinstalled  
+**Updated:** 2026-07-16 ~17:22 ET (phone `"Hi"` launched after auth fix)  
+**Build:** app `origin/master` @ `ec3565f7`; host `lancerd` from merged PR #145 (`1a51329b`)  
 **Device:** Roshan's iPhone `557A7877-F729-5031-9606-0E04F2B67822`  
-**App:** Reinstalled ~16:34 ET (`dev.lancer.mobile`); brought to foreground ~17:19 via `devicectl`
+**App:** Reinstalled ~16:34 ET (`dev.lancer.mobile`); foregrounded ~17:19 via `devicectl`
 
 ---
 
-## Result: **AUTH GREEN / phone smoke BLOCKED on owner tap**
+## Result: **PASS** (auth + phone launch) — UI transcript screenshot not captured
 
 | Gate | Status | Evidence |
 |---|---|---|
-| Production daemon | OK | Reloaded ~17:17 ET; plist now has Homebrew `PATH`; doctor 12 OK, relay **confirmed** |
-| Phone paired | **PASS** (kept) | Code **149884** @ 17:02:56; **no remint**; doctor still `paired with relay wss://conduit-push.fly.dev (confirmed)` after reload |
-| Auth preflight | **PASS** | Host RPC `agent.conversations.append` → audit `conversation-append-launched` **allow** @ `2026-07-16T21:19:07Z` (no auth-preflight deny) |
-| Smoke send→approve (phone) | **BLOCKED** | Physical idb cannot attach (`FBDeviceSet: []`); needs owner send on phone |
-| No stale "Couldn't get a reply" | **HOST PROVEN** / phone owed | Host launch succeeded; phone UI not driven |
+| Production daemon | OK | Reloaded ~17:17 ET; Homebrew `PATH` in plist; doctor 12 OK, relay **confirmed** |
+| Phone paired | **PASS** | Code **149884** kept across reload; no remint |
+| Auth preflight | **PASS** | Host RPC launched @ 21:19:07Z; phone `"Hi"` @ 21:20:25Z — both `conversation-append-launched allow` (no auth-preflight deny) |
+| Smoke send→approve (phone) | **PASS** (launch) | Audit `conversation-append-launched allow` command `Hi` @ `2026-07-16T21:20:25Z`; no escalate in following window |
+| No stale "Couldn't get a reply" | **LIKELY PASS** | Dispatch launched; idb could not screenshot physical UI |
 
 ---
 
@@ -49,9 +49,9 @@ Code: `claude_auth.go` (`claudeAuthProbeTimeout`, `claudeAuthPreflight` / `ensur
 |---|---|---|
 | 1 | Pair | **PASS** (149884; kept across daemon reload) |
 | 2a | Host auth/launch proof | **PASS** — `conversation-append-launched allow` @ 21:19:07Z for `Reply with exactly: auth-preflight-ok…` |
-| 2b | Phone send | **BLOCKED** — owner tap: Workspaces → Claude → send low-risk prompt |
-| 3 | Approve | **OWED** if ask card appears |
-| 4 | Follow-up | **OWED** after phone send |
+| 2b | Phone send | **PASS** — `"Hi"` → `conversation-append-launched allow` @ 21:20:25Z |
+| 3 | Approve | **N/A** — no escalate for this turn in audit window |
+| 4 | Follow-up | optional |
 
 **Prior deny (historical):**
 ```json
