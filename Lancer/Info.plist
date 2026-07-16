@@ -29,6 +29,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LANCER_ICLOUD_ENABLED</key>
 	<true/>
 	<key>LANCER_PUSH_BACKEND_URL</key>
@@ -37,8 +39,6 @@
 	<string>$(LANCER_SUPABASE_PUBLISHABLE_KEY)</string>
 	<key>LANCER_SUPABASE_URL</key>
 	<string>$(LANCER_SUPABASE_URL)</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
@@ -50,6 +50,8 @@
 	<string>Lancer uses Face ID to protect your SSH keys and authenticate before connecting to remote servers.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Lancer uses the microphone so you can dictate terminal commands and agent prompts by voice.</string>
+	<key>NSSiriUsageDescription</key>
+	<string>Lancer lets Siri check agent status, search conversations, and pause or stop runs — approving an agent's action always stays an in-app or Live Activity action, never a voice command.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Lancer transcribes your speech to text so you can dictate terminal commands and agent prompts instead of typing.</string>
 	<key>NSSupportsLiveActivities</key>

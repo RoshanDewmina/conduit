@@ -1,27 +1,80 @@
 import AppIntents
 import Foundation
 import IntentsKit
+import NotificationsKit
 import PersistenceKit
 import SessionFeature
 
 /// Wires Siri relevance donations (Phase 2, resurrected in I1) and Spotlight
 /// entity indexing (I2) from a small set of app-lifecycle signals.
-/// Deliberately does NOT reach into `AppRoot`'s reactive state (fleet slots,
-/// relay bridges opening/closing, new conversations) — that would mean
-/// editing the large, heavily-tested `AppRoot.swift` for a proactive-surfacing
-/// nicety, which was out of scope for I1 and stays out of scope here. Instead
-/// this refreshes once at launch and whenever `.lancerSiriSurfaceRefresh` is
-/// posted (callers opt in by posting that notification; nothing currently
-/// does, so this is inert until wired — the donation/indexing *logic* is
-/// real and unit-tested, the trigger cadence is the intentionally-deferred
-/// part, same as I1 left it).
+/// Deliberately does NOT reach into `AppRoot`'s reactive state directly (fleet
+/// slots view model, `CursorAppShell` navigation) — that would mean editing
+/// the large, heavily-tested `AppRoot.swift`/shell files for a
+/// proactive-surfacing nicety, which was out of scope for I1 and stays out of
+/// scope here.
+///
+/// Milestone 1 ("wire what already exists") closes the cadence gap I1 left
+/// open: instead of refreshing only at launch, this also observes the
+/// existing `NotificationCenter` signals that already fire today from real
+/// state changes — relay message handling (`E2ERelayBridge.handleRelayMessage`),
+/// the local-SSH approval/run ingest path (`ApprovalIngest`), conversation
+/// persistence (`ChatConversationRepository`/`ApprovalIngest.postThreadArtifactUpdate`),
+/// and Siri's own open-conversation navigation (`SiriNavigationDispatch`).
+/// None of these notifications are new or repurposed for this — they already
+/// existed and already fired; this only adds a listener so relevance
+/// donations + Spotlight indexing stay fresh without requiring a relaunch or
+/// a manual `.lancerSiriSurfaceRefresh` post.
 @available(iOS 17.0, *)
 enum SiriSurfaceBootstrap {
     static let surfaceRefreshNotification = Notification.Name("dev.lancer.siriSurfaceRefresh")
 
+    /// Real state-change signals mapped to the roadmap's M1 list:
+    /// - relay connect / online status → `lancerE2EStatusUpdate`
+    /// - pending approval → `lancerE2EApprovalReceived` / `lancerE2EApprovalResolved`
+    /// - run start/end → `lancerE2ERunStatus` / `lancerE2ELiveRunStatus`
+    /// - pending question (feeds phrase 9's freshness too) → `lancerE2EQuestionPending`
+    /// - conversation open/activity → `lancerChatArtifactPersisted` (content
+    ///   persisted, fired by both the local-SSH and relay ingest paths) and
+    ///   `.lancerSiriNavigation` (Siri itself opened a conversation).
+    ///
+    /// Named by raw string (not the typed `Notification.Name` constants
+    /// declared in `AppFeature`/`SessionFeature`) because those extensions are
+    /// internal to their own modules — the same reason `ApprovalIngest.swift`
+    /// and `E2ERelayBridge.swift` post with raw string literals themselves.
+    private static let stateChangeNotificationNames: [Notification.Name] = [
+        Notification.Name("lancerE2EApprovalReceived"),
+        Notification.Name("lancerE2EApprovalResolved"),
+        Notification.Name("lancerE2EStatusUpdate"),
+        Notification.Name("lancerE2ERunStatus"),
+        Notification.Name("lancerE2ELiveRunStatus"),
+        Notification.Name("lancerE2EQuestionPending"),
+        Notification.Name("lancerChatArtifactPersisted"),
+    ]
+
     static func install() {
         NotificationCenter.default.addObserver(
             forName: surfaceRefreshNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { await refreshFromCurrentState() }
+        }
+
+        for name in stateChangeNotificationNames {
+            NotificationCenter.default.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { _ in
+                Task { await refreshFromCurrentState() }
+            }
+        }
+
+        // Siri opening a conversation is itself a "conversation open" signal —
+        // refresh so the next phrase (e.g. a follow-up "search" or "open")
+        // sees this conversation as the most recent one.
+        NotificationCenter.default.addObserver(
+            forName: .lancerSiriNavigation,
             object: nil,
             queue: .main
         ) { _ in
