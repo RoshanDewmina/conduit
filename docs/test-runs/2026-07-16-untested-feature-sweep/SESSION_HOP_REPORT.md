@@ -1,9 +1,42 @@
 # SESSION HOP REPORT — Lancer untested-feature sweep → dogfood (2026-07-16)
 
 **Audience:** Owner + next agent  
-**Written:** 2026-07-16 ~18:15 ET  
-**Method:** Session-history index + transcript mining, then **double-checked** against live `git fetch`, `gh pr list`, on-disk evidence, `lancerd doctor`, and audit/daemon logs.  
+**Written:** 2026-07-16 ~18:15 ET · **amended ~18:20 ET** with verbatim session-message grounding  
+**Method:** Session-history index + transcript mining of **actual USER/ASSISTANT text** (Claude JSONL + Cursor agent-transcripts + escalation brief), then **double-checked** against live `git fetch`, `gh pr list`, on-disk evidence, `lancerd doctor`, and audit/daemon logs.  
 **Label key:** **VERIFIED** (live git/PR/file/log) · **CLAIMED-UNVERIFIED** (transcript/doc only) · **CONTRADICTED** (claim vs live evidence disagree)
+
+**Prior draft audit (for the owner):** The first hop-report pass was **git/PR archaeology** — session IDs, merge SHAs, lane scoreboards — **without** a “Initial goals (from actual messages)” section and **without** quoting owner asks. This amendment adds §0 + intent evolution from the JSONL/`user_query` text below.
+
+---
+
+## 0. Initial goals (from actual messages)
+
+Sources mined with `jq`/`python` on JSONL; quotes ≤2 lines; secrets redacted.
+
+| Session | Verbatim owner ask (summary + quote) | Done-when they stated |
+|---|---|---|
+| **Claude `941bc90d…`** (Phase 4 sweep start) | Untested-feature live sweep via swarm-orchestrator. *“Goal: find every Lancer feature/surface that has real code behind it but has never been exercised by a live workflow, then close that gap — one real, realistic workflow per feature, run against a live simulator+daemon+relay stack…”* | *“Done when: one evidence-backed status per untested feature found (PASS with proof, FAIL with repro, or BLOCKED with the concrete blocker) written into … `GAP_LIST.md`-style ranked summary, and `docs/plans/orchestrator-state.md` updated…”* |
+| **Claude `941bc90d…`** (mid + abort) | Mid: *“Logged into a new account… fan out as many subagents as you can and get this done asap”*; readiness ask *“is this ready to be pushed to the app store?”*; last human *“Continue from where you left off.”* | Stop cause (not a new done-bar): agent notifications *“You've hit your session limit · resets 3:10pm (America/Toronto)”* while C3 + F-final were still launching — assistant then *“No response requested.”* |
+| **Escalation brief** `~/Downloads/lancer-fable-sweep-remaining-prompt.md` | **This is the Wave-1 Fable goal.** *“Exact ask: Decompose remaining open GAP_LIST items into exclusive lanes; route Cursor CLI vs Sonnet…; arbitrate product decisions; update orchestrator-state + GAP_LIST… Do not implement product fixes in the Fable session unless a sensitive-path full-diff review requires it.”* | Done bar in brief: each FAIL/BLOCKED closed or laned; *“#7 needsApproval UX fixed (or laned)”*; product call on #2/#3; re-pair/L6 status explicit; orchestrator ⚡ matches verified reality. |
+| **Claude `3ddbf98e…`** (Wave 1) | `/plan` args: *“/Users/roshansilva/Downloads/lancer-fable-sweep-remaining-prompt.md, please use /swarm-ochestrator skill aggressively”*. AskUserQuestion answers: Policy/Audit → *“See how Orca and the other apps haddle this, and then follow exactly what they did”*; re-pair → *“Walk me through it now and then make sure to build the latest version on my phone please”*; #5 Connect → *“Fix it this sweep”*. Later: *“continue”* / *“continue”*. | Same brief done-bar; assistant recorded Wave 1 dispatch (FX7/FX5/Lane R→P) then died on *“API Error: 500 Internal server error…”* (~14:37 ET / `18:37:22Z`) mid FX7/Lane-P closeout. |
+| **Cursor Simurgh `21bfc5b7…`** | *“Goal: Implement Simurgh improve-wave 1 so `simurgh exec` is usable with caller-supplied xcodebuild paths, keeps leases alive for the duration of the child process, and pins Simurgh home to the passwd home (not a polluted `$HOME`).”* | Done-when: no duplicate DD flags; exec auto-renews for child lifetime; `simurghHomeDir` passwd-home + HOME-mismatch fail-closed; `go test` suites green. |
+| **Cursor parent `fb903282…`** | Chronological owner asks: (1) *“Read this claude code conversation, \`3ddbf98e…\`, and then continue working on it please”* → (2) look at Simurgh Cursor convo → (3) *“How long till this is all done and greenlit so i can start using the actual app for testing before we publish?”* → (4) *“Sounds good, fan out subagents and get this done ASAP”* → (5) *“…push and merge everything to master i want a clean workiing and testing slate. Then lets install the latest version on my phone and then start testing”* → (6) UX: *“takes too much time to load… all chats? and the prrof thing on every message is annoying, should be under a menu…”* → (7) *“Can you write a detailed report after seeing all the fable sessions and cursor sessions…”* → (8) *“Did you read the actual messages from the sesssoin? what the initial goal was etc etc?”* | Evolving: first continue Wave 1 → then dogfood/greenlit → merge+phone install → UX polish → retrospective hop report grounded in real messages. |
+
+### Owner intent evolution
+
+```mermaid
+flowchart LR
+  A["Sweep untested features<br/>941bc90d"] --> B["Close remainder GAP_LIST<br/>brief + 3ddbf98e"]
+  B --> C["Merge master + phone install<br/>fb903282"]
+  C --> D["Phone dogfood / greenlit"]
+  D --> E["UX polish<br/>All Repos + Proof menu"]
+  E --> F["Session-hop retrospective"]
+```
+
+1. **Morning — live untested-feature sweep** (`941bc90d`): prove every coded surface with PASS/FAIL/BLOCKED evidence; App Store readiness was an explicit side question mid-session.  
+2. **Afternoon — Fable remainder** (brief → `3ddbf98e`): fix #7/#5, decide #2/#3 via competitors, leave harness-BLOCKED items honest; owner also asked for phone build + re-pair walkthrough.  
+3. **Parallel — Simurgh wave-1** (`21bfc5b7`): make `simurgh exec` stop reclaiming / duplicating flags so Lancer lanes stop fighting the lease tool.  
+4. **Evening — Cursor continuation** (`fb903282`): continue Claude → ASAP fan-out → **clean master slate + install on phone** → dogfood → **All Repos speed + Proof under menu** → hop report → **“did you read the actual messages?”**.
 
 ---
 
@@ -72,7 +105,7 @@ sequenceDiagram
 - F4 merge `1f08c3c6` — approve→resume conversation-append launch  
 - Lane reports under `docs/test-runs/2026-07-16-untested-feature-sweep/` (LA2, LB, LC2, LD2, LE, …)
 
-**Handoff cause:** Session/API limit while launching C3 + F-final (**CLAIMED** in `orchestrator-state.md` ~12:08 ET; **VERIFIED** that those reports were *not* written by this session — they appear only after Cursor continuation).
+**Handoff cause (verbatim):** dual agent failures *“You've hit your session limit · resets 3:10pm (America/Toronto)”* on “Retry terminal and D2 blocked candidates” + “Lane C3 final retry review candidates”; last owner text *“Continue from where you left off.”* → assistant *“No response requested.”* (Reports for C3/F-final appear only after Cursor `2307b174…`.)
 
 ### 2.2 Cursor `2307b174-526d-4655-9fbc-5b6ddff24979` — C3 + F-final closeout
 
@@ -112,7 +145,7 @@ sequenceDiagram
 | Lane P | `4382f1b8` + `7b4d4695` | `7707e4fa` |
 | Sentry cleanup | `faeb80c9` | in tip before #140 |
 
-**Handoff:** Owner asked Cursor to continue this Claude session → parent `fb903282…` @ 16:04 ET.
+**Handoff (verbatim):** Assistant hit *“API Error: 500 Internal server error…”* (`18:37:22Z`); owner typed *“continue”* twice with no further durable closeout in this JSONL. Cursor parent then opened with *“Read this claude code conversation, \`3ddbf98e…\`, and then continue working on it please”*.
 
 ### 2.4 Cursor Simurgh `21bfc5b7-883f-4024-8258-e1e54f17445f` — wave-1/2 same day
 

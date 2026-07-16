@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 18:20 Cursor Composer — SESSION_HOP_REPORT §0: verbatim owner goals from session JSONL/transcripts (amends PR #150 without §0) (`docs/session-hop-goals-section`)
 - 18:15 Cursor Composer — session-hop doc sync: GAP_LIST/DOGFOOD_READY/orchestrator aligned to master `62b4424d` + verified pair/launch PASS (`docs/session-hop-doc-sync`)
 - 17:32 Cursor Composer — fix LancerDProtocolTests ISO8601 decode: fractional-second tolerant test decoder for real Claude transcript fixtures (`fix/iso8601-protocol-tests`, PR #148)
 - 17:30 Cursor Composer — proof receipts open from ⋯ menu on "Worked Ns" row; no inline Proof card under every turn (`fix/proof-under-menu`)
