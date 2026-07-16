@@ -338,3 +338,22 @@ public enum ThreadListFilters {
         defaults.set(prefs.showLastUpdated, forKey: ThreadListFilterPrefs.StorageKey.showLastUpdated)
     }
 }
+
+/// Blank-spinner policy for All Repos / thread list first paint.
+/// Kept free of SwiftUI so macOS unit tests can lock the cache-first rule.
+public enum ThreadListLoadingPolicy {
+    /// Show a full-screen ProgressView only when there are no rows to paint
+    /// yet and the catalog has not finished its first successful local load.
+    public static func showsBlankInitialLoading(
+        hasAnyThreads: Bool,
+        hasCompletedInitialBootstrap: Bool,
+        catalogShowsInitialLoading: Bool,
+        catalogFailureMessage: String?
+    ) -> Bool {
+        if hasAnyThreads { return false }
+        if catalogShowsInitialLoading { return true }
+        if hasCompletedInitialBootstrap { return false }
+        // Still bootstrapping with an empty cache and no failure — spinner.
+        return catalogFailureMessage == nil
+    }
+}
