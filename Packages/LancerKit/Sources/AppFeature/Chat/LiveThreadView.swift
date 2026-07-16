@@ -306,7 +306,7 @@ public struct LiveThreadView: View {
             let phase: LiveStatusSendPhase
             switch newValue {
             case .idle, .adoptedNoHistory: phase = .idle
-            case .working: phase = .working
+            case .working, .awaitingApproval: phase = .working
             case .streaming: phase = .streaming
             case .completed: phase = .completed
             case .failed: phase = .failed
@@ -437,7 +437,7 @@ public struct LiveThreadView: View {
             return turn.id
         case .degraded(_, let turn):
             return turn?.id
-        case .working:
+        case .working, .awaitingApproval:
             // Prefer the bridge's own authoritative in-flight runID over
             // inferring liveness from `ChatTurn.status == .running` —
             // `transcriptTurns` can mirror a turn as `.completed` up to one
@@ -535,7 +535,7 @@ public struct LiveThreadView: View {
             return turn.assistantText
         case .degraded(_, let turn):
             return turn?.assistantText ?? ""
-        case .idle, .adoptedNoHistory, .working, .failed:
+        case .idle, .adoptedNoHistory, .working, .awaitingApproval, .failed:
             return ""
         }
     }
@@ -779,6 +779,9 @@ public struct LiveThreadView: View {
                 }
             }
             .onAppear { streamingPacer.reset() }
+        case .awaitingApproval(let message):
+            awaitingApprovalCard(message)
+                .onAppear { streamingPacer.reset() }
         case .streaming(let turn):
             VStack(alignment: .leading, spacing: 12) {
                 liveToolChips(for: turn)
@@ -965,6 +968,16 @@ public struct LiveThreadView: View {
                 .font(.system(size: 15))
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func awaitingApprovalCard(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            ProgressView()
+            Text(message)
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityIdentifier("awaiting-approval-card")
     }
 
     private func degradedBanner(_ message: String) -> some View {

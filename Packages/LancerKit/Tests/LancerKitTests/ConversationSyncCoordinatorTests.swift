@@ -355,7 +355,7 @@ struct ConversationSyncCoordinatorTests {
         #expect(await coordinator.currentSyncState("conv-1") == .conflict)
     }
 
-    @Test("needsApproval and denied statuses surface as blocked without changing sync state")
+    @Test("needsApproval persists turn and returns awaitingApproval; denied stays blocked")
     func needsApprovalAndDenied() async throws {
         let db = try AppDatabase.inMemory()
         let repo = ChatConversationRepository(db)
@@ -375,17 +375,30 @@ struct ConversationSyncCoordinatorTests {
         #expect(deniedMessage.contains("no-network"))
 
         let approvalTransport = makeTransport(append: { _ in
-            ConversationAppendResponse(status: "needsApproval", conversationId: "conv-2")
+            ConversationAppendResponse(
+                status: "needsApproval",
+                conversationId: "conv-2",
+                turnId: "turn-2",
+                runId: "run-2",
+                nextSeq: 1
+            )
         })
         let approvalOutcome = await coordinator.startConversation(
             agent: "codex", cwd: "/proj", prompt: "rm -rf /", model: nil, budgetUSD: nil,
             hostName: "h", hostID: nil, clientTurnID: "d:2", transport: approvalTransport
         )
-        guard case .blocked(let approvalMessage) = approvalOutcome else {
-            Issue.record("expected .blocked")
+        guard case .awaitingApproval(let started, let approvalMessage) = approvalOutcome else {
+            Issue.record("expected .awaitingApproval, got \(approvalOutcome)")
             return
         }
+        #expect(started.runID == "run-2")
+        #expect(started.conversationID == "conv-2")
+        #expect(started.turnID == "turn-2")
         #expect(approvalMessage.contains("approval"))
+        let turns = try await repo.turns(conversationID: "conv-2")
+        #expect(turns.count == 1)
+        #expect(turns.first?.runID == "run-2")
+        #expect(turns.first?.status == .running)
     }
 
     @Test("a transport failure marks the conversation hostOffline and returns blocked")
