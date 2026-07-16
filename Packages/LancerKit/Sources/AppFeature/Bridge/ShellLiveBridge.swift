@@ -943,6 +943,12 @@ public final class ShellLiveBridge {
         )
     }
 
+    /// Focuses a paired machine so `LiveThreadView` can render that machine's
+    /// pending-approval card without sending a new turn (home-banner entry).
+    public func focusMachineForPendingApproval(_ id: RelayMachineID) {
+        activeMachineID = id
+    }
+
     #if DEBUG
     /// Aligns the live thread with the UITest-hydrated approval machine id.
     public func configureUITestMachineContextIfNeeded() {
