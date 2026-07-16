@@ -134,6 +134,9 @@ public struct ThreadListView: View {
                                     case .ledger(let thread):
                                         NavigationLink {
                                             ThreadDetailView(thread: thread)
+                                                .onAppear {
+                                                    workspaceData.markThreadOpened(thread.id)
+                                                }
                                         } label: {
                                             ThreadListRow(
                                                 thread: thread,
@@ -156,7 +159,8 @@ public struct ThreadListView: View {
                                         } label: {
                                             DesktopSessionListRow(
                                                 session: session,
-                                                showsRepoName: workspace.isAllRepos
+                                                showsRepoName: workspace.isAllRepos,
+                                                isHostConnected: relayFleetStore.firstConnectedMachine != nil
                                             )
                                         }
                                         .buttonStyle(.plain)
@@ -322,6 +326,7 @@ public struct ThreadListView: View {
 private struct DesktopSessionListRow: View {
     let session: ObservedSession
     var showsRepoName: Bool = false
+    var isHostConnected: Bool = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -347,7 +352,11 @@ private struct DesktopSessionListRow: View {
                 }
 
                 HStack(spacing: 4) {
-                    Text(relativeActivity)
+                    Text(isHostConnected ? "Connected" : "Disconnected")
+                        .font(.system(size: 14))
+                        .foregroundStyle(isHostConnected ? .green : .secondary)
+
+                    Text("· \(relativeActivity)")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
 
@@ -368,9 +377,7 @@ private struct DesktopSessionListRow: View {
     }
 
     private var relativeActivity: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: session.lastActivity, relativeTo: .now)
+        ThreadListMetadata.relativeActivity(session.lastActivity)
     }
 }
 

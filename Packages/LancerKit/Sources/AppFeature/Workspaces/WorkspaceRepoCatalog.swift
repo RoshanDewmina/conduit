@@ -30,6 +30,11 @@ public struct ThreadListItem: Identifiable, Hashable, Sendable {
     public let repoName: String?
     public let cwd: String
     public let lastActivityAt: Date
+    /// Session-total +/− from local tool/diff artifacts (same source SessionDiffPill uses).
+    public let addedLines: Int?
+    public let removedLines: Int?
+    public let previewSnippet: String?
+    public let unread: Bool
 
     public init(
         id: String,
@@ -38,7 +43,11 @@ public struct ThreadListItem: Identifiable, Hashable, Sendable {
         statusLabel: String,
         repoName: String?,
         cwd: String,
-        lastActivityAt: Date
+        lastActivityAt: Date,
+        addedLines: Int? = nil,
+        removedLines: Int? = nil,
+        previewSnippet: String? = nil,
+        unread: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -47,6 +56,10 @@ public struct ThreadListItem: Identifiable, Hashable, Sendable {
         self.repoName = repoName
         self.cwd = cwd
         self.lastActivityAt = lastActivityAt
+        self.addedLines = addedLines
+        self.removedLines = removedLines
+        self.previewSnippet = previewSnippet
+        self.unread = unread
     }
 }
 
@@ -411,7 +424,10 @@ public enum WorkspaceRepoCatalog {
     public static func threadItem(
         conversation: ChatConversation,
         lastTurn: ChatTurn?,
-        includeRepoName: Bool
+        includeRepoName: Bool,
+        addedLines: Int? = nil,
+        removedLines: Int? = nil,
+        lastOpenedAt: Date? = nil
     ) -> ThreadListItem {
         let kind = statusKind(conversation: conversation, lastTurn: lastTurn)
         return ThreadListItem(
@@ -421,20 +437,33 @@ public enum WorkspaceRepoCatalog {
             statusLabel: statusLabel(kind),
             repoName: includeRepoName ? displayName(forCwd: conversation.cwd) : nil,
             cwd: normalizeCwd(conversation.cwd),
-            lastActivityAt: conversation.lastActivityAt
+            lastActivityAt: conversation.lastActivityAt,
+            addedLines: addedLines,
+            removedLines: removedLines,
+            previewSnippet: ThreadListMetadata.previewSnippet(lastTurn: lastTurn),
+            unread: ThreadListMetadata.isUnread(
+                lastActivityAt: conversation.lastActivityAt,
+                lastOpenedAt: lastOpenedAt
+            )
         )
     }
 
     public static func threadItems(
         conversations: [ChatConversation],
         lastTurnByConversationID: [String: ChatTurn],
-        includeRepoName: Bool
+        includeRepoName: Bool,
+        diffByConversationID: [String: (added: Int, removed: Int)] = [:],
+        lastOpenedAtByConversationID: [String: Date] = [:]
     ) -> [ThreadListItem] {
         conversations.map {
-            threadItem(
+            let diff = diffByConversationID[$0.id]
+            return threadItem(
                 conversation: $0,
                 lastTurn: lastTurnByConversationID[$0.id],
-                includeRepoName: includeRepoName
+                includeRepoName: includeRepoName,
+                addedLines: diff?.added,
+                removedLines: diff?.removed,
+                lastOpenedAt: lastOpenedAtByConversationID[$0.id]
             )
         }
     }
@@ -606,7 +635,9 @@ public final class AddedRepoStore {
 public final class WorkspaceDataStore {
     public private(set) var conversations: [ChatConversation] = []
     public private(set) var lastTurnByConversationID: [String: ChatTurn] = [:]
+    public private(set) var diffByConversationID: [String: (added: Int, removed: Int)] = [:]
     public let addedRepos: AddedRepoStore
+    public let readReceipts: ConversationReadReceiptStore
 
     private let chatRepo: ChatConversationRepository
     /// Optional host list sync — when any mirrored last-turn is still
@@ -622,9 +653,14 @@ public final class WorkspaceDataStore {
     /// a retryable state instead of silently keeping empty assistant bodies.
     public var refreshThreadFromHost: ((_ conversationID: String) async throws -> Void)?
 
-    public init(chatRepo: ChatConversationRepository, addedRepos: AddedRepoStore = AddedRepoStore()) {
+    public init(
+        chatRepo: ChatConversationRepository,
+        addedRepos: AddedRepoStore = AddedRepoStore(),
+        readReceipts: ConversationReadReceiptStore = ConversationReadReceiptStore()
+    ) {
         self.chatRepo = chatRepo
         self.addedRepos = addedRepos
+        self.readReceipts = readReceipts
     }
 
     public var repos: [WorkspaceRepo] {
@@ -651,13 +687,21 @@ public final class WorkspaceDataStore {
     private func loadLocalRows() async {
         let recent = (try? await chatRepo.recent(limit: 200)) ?? []
         var turns: [String: ChatTurn] = [:]
+        var diffs: [String: (added: Int, removed: Int)] = [:]
         for conversation in recent {
             if let last = try? await chatRepo.turns(conversationID: conversation.id).last {
                 turns[conversation.id] = last
+                // Latest turn's artifacts — same +/− chips SessionDiffPill's
+                // local path derives from (no per-row sessionDiff RPC).
+                if let artifacts = try? await chatRepo.artifacts(turnID: last.id),
+                   let totals = ThreadListMetadata.diffTotals(fromArtifacts: artifacts) {
+                    diffs[conversation.id] = totals
+                }
             }
         }
         conversations = recent
         lastTurnByConversationID = turns
+        diffByConversationID = diffs
     }
 
     public func search(_ query: String) async -> [ThreadListItem] {
@@ -666,11 +710,22 @@ public final class WorkspaceDataStore {
         items.reserveCapacity(results.count)
         for result in results {
             let lastTurn = (try? await chatRepo.turns(conversationID: result.conversation.id))?.last
+            var added: Int?
+            var removed: Int?
+            if let lastTurn,
+               let artifacts = try? await chatRepo.artifacts(turnID: lastTurn.id),
+               let totals = ThreadListMetadata.diffTotals(fromArtifacts: artifacts) {
+                added = totals.added
+                removed = totals.removed
+            }
             items.append(
                 WorkspaceRepoCatalog.threadItem(
                     conversation: result.conversation,
                     lastTurn: lastTurn,
-                    includeRepoName: true
+                    includeRepoName: true,
+                    addedLines: added,
+                    removedLines: removed,
+                    lastOpenedAt: readReceipts.lastOpenedAt(conversationID: result.conversation.id)
                 )
             )
         }
@@ -684,11 +739,23 @@ public final class WorkspaceDataStore {
             conversations: conversations,
             added: addedRepos.repos
         )
+        var opened: [String: Date] = [:]
+        for conversation in filtered {
+            if let at = readReceipts.lastOpenedAt(conversationID: conversation.id) {
+                opened[conversation.id] = at
+            }
+        }
         return WorkspaceRepoCatalog.threadItems(
             conversations: filtered,
             lastTurnByConversationID: lastTurnByConversationID,
-            includeRepoName: allRepos
+            includeRepoName: allRepos,
+            diffByConversationID: diffByConversationID,
+            lastOpenedAtByConversationID: opened
         )
+    }
+
+    public func markThreadOpened(_ conversationID: String) {
+        readReceipts.markOpened(conversationID)
     }
 
     /// All Repos badge — must equal the row count the All Repos tap shows

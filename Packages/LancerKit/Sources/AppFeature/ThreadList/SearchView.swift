@@ -67,6 +67,9 @@ public struct SearchView: View {
                         ForEach(filteredResults) { thread in
                             NavigationLink {
                                 ThreadDetailView(thread: thread)
+                                    .onAppear {
+                                        workspaceData.markThreadOpened(thread.id)
+                                    }
                             } label: {
                                 ThreadListRow(thread: thread, showsRepoName: true)
                             }
