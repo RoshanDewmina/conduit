@@ -41,6 +41,7 @@ struct ThreadDetailView: View {
     /// Bumped on open and each Retry so only the latest load may mutate the banner.
     @State private var transcriptLoadGeneration = 0
     @State private var transcriptLoadGate = TranscriptRefreshLoadGate()
+    @State private var isBackgroundTasksPresented = false
 
     private static let initialWindowSize = 100
     private static let windowExtendStep = 100
@@ -296,6 +297,11 @@ struct ThreadDetailView: View {
                 if !queuedReviewComments.isEmpty {
                     reviewCommentChips
                 }
+                if backgroundTasksRunningCount > 0 {
+                    BackgroundTasksPill(runningCount: backgroundTasksRunningCount) {
+                        isBackgroundTasksPresented = true
+                    }
+                }
                 ChatFollowUpComposerBar(
                     text: $followUpText,
                     isFocused: $isFollowUpFocused,
@@ -314,6 +320,9 @@ struct ThreadDetailView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $isBackgroundTasksPresented) {
+            BackgroundTasksSheet(rows: backgroundTaskRows)
+        }
         .task(id: transcriptLoadGeneration) {
             await loadTurns()
         }
@@ -545,9 +554,13 @@ struct ThreadDetailView: View {
 
             Spacer()
 
-            HStack(spacing: 6) {
+            VStack(spacing: 1) {
                 Text(thread.title)
                     .font(.system(size: 17, weight: .semibold))
+                    .lineLimit(1)
+                Text(thread.repoName ?? WorkspaceRepoCatalog.displayName(forCwd: thread.cwd))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             .padding(.horizontal, 8)
@@ -565,6 +578,26 @@ struct ThreadDetailView: View {
             }
             .accessibilityLabel(Text("Thread options"))
         }
+    }
+
+    private var backgroundTaskRows: [BackgroundTasksPresentation.TaskRow] {
+        var rows: [BackgroundTasksPresentation.TaskRow] = []
+        for turn in turns {
+            let items = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+            rows.append(contentsOf: BackgroundTasksPresentation.rows(
+                items: items,
+                events: eventsByTurnID[turn.id] ?? []
+            ))
+        }
+        var byID: [String: BackgroundTasksPresentation.TaskRow] = [:]
+        for row in rows {
+            byID[row.id] = row
+        }
+        return Array(byID.values)
+    }
+
+    private var backgroundTasksRunningCount: Int {
+        BackgroundTasksPresentation.runningCount(in: backgroundTaskRows)
     }
 
     private func circleButton(systemImage: String) -> some View {

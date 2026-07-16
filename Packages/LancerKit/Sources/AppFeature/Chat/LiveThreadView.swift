@@ -54,6 +54,7 @@ public struct LiveThreadView: View {
     @State private var sessionDiff: RepoDiffSummary?
     @State private var reviewPresentation: ReviewPresentation?
     @State private var queuedReviewComments: [QueuedReviewComment] = []
+    @State private var isBackgroundTasksPresented = false
     @FocusState private var isFollowUpFocused: Bool
     #if DEBUG
     @State private var hasAutoAnsweredQuestion = false
@@ -204,6 +205,12 @@ public struct LiveThreadView: View {
                 }
 
                 VStack(spacing: 0) {
+                    if backgroundTasksRunningCount > 0 {
+                        BackgroundTasksPill(runningCount: backgroundTasksRunningCount) {
+                            isBackgroundTasksPresented = true
+                        }
+                        .padding(.bottom, 6)
+                    }
                     followUpAttachmentChips
                     ChatFollowUpComposerBar(
                         text: $followUpText,
@@ -222,12 +229,26 @@ public struct LiveThreadView: View {
                 }
             }
             .background(Color(.systemBackground))
-            .navigationTitle("Chat")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text(sessionNavTitle)
+                            .font(.system(size: 15, weight: .semibold))
+                            .lineLimit(1)
+                        Text(sessionNavSubtitle)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .sheet(isPresented: $isBackgroundTasksPresented) {
+                BackgroundTasksSheet(rows: backgroundTaskRows)
             }
         }
         .task {
@@ -414,6 +435,43 @@ public struct LiveThreadView: View {
                     hasAssistantArtifacts: hasAssistantArtifacts(for: $0)
                 )
             }
+    }
+
+    /// Session title for nav chrome — first line of the prompt, truncated.
+    private var sessionNavTitle: String {
+        let raw = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return "Chat" }
+        let firstLine = raw.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+            .first
+            .map(String.init) ?? raw
+        if firstLine.count <= 40 { return firstLine }
+        return String(firstLine.prefix(39)) + "…"
+    }
+
+    private var sessionNavSubtitle: String {
+        WorkspaceRepoCatalog.displayName(forCwd: cwd)
+    }
+
+    private var backgroundTaskRows: [BackgroundTasksPresentation.TaskRow] {
+        var rows: [BackgroundTasksPresentation.TaskRow] = []
+        for turn in bridge.transcriptTurns {
+            let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+            let artifacts = toolArtifactsByTurnID[turn.id] ?? []
+            rows.append(contentsOf: BackgroundTasksPresentation.rows(
+                items: eventItems,
+                events: eventsByTurnID[turn.id] ?? [],
+                artifacts: artifacts
+            ))
+        }
+        var byID: [String: BackgroundTasksPresentation.TaskRow] = [:]
+        for row in rows {
+            byID[row.id] = row
+        }
+        return Array(byID.values)
+    }
+
+    private var backgroundTasksRunningCount: Int {
+        BackgroundTasksPresentation.runningCount(in: backgroundTaskRows)
     }
 
     /// User bubble for the live exchange — prefers the mirrored live turn,
