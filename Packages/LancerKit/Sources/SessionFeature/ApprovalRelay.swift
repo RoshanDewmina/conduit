@@ -175,6 +175,12 @@ public final class ApprovalRelay {
             if contentHash == nil || contentHash?.isEmpty == true {
                 contentHash = (try? await approvalRepo.find(id: id))?.contentHash
             }
+            // Refresh the Home Screen PendingApprovalsWidget whenever this
+            // decision actually resolved a gate — the pending count just
+            // dropped and the "newest" summary may have changed.
+            if changed {
+                await approvalRepo.writeApprovalWidgetSnapshot()
+            }
         }
         let hostUUID = UUID(uuidString: hostID) ?? UUID()
         try? await auditRepo.record(
