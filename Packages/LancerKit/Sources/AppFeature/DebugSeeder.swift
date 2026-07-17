@@ -292,5 +292,91 @@ public enum DebugSeeder {
             try? await repo.upsert(approval)
         }
     }
+
+    /// Seeds one rich persisted conversation so every CC-parity chat surface
+    /// (aggregated tool chips, thinking rows, per-turn summary, markdown
+    /// prose) is reachable OFFLINE — the parity screenshot harness cannot
+    /// otherwise exercise them without a live agent turn. Gated on
+    /// `LANCER_SEED_TRANSCRIPT=1`; idempotent via the fixed conversation id.
+    public static func seedTranscriptIfRequested(env: AppEnvironment) async {
+        guard ProcessInfo.processInfo.environment["LANCER_SEED_TRANSCRIPT"] == "1" else { return }
+        guard let db = try? AppDatabase.openShared() else { return }
+        let repo = ChatConversationRepository(db)
+        let convID = "conv-parity-seed"
+        if let turns = try? await repo.turns(conversationID: convID), !turns.isEmpty { return }
+
+        let base = Date(timeIntervalSinceNow: -600)
+        _ = try? await repo.upsertConversationMirror(
+            ChatConversation(
+                id: convID,
+                title: "Parity seed — fix the flaky test",
+                agentID: "claudeCode",
+                hostName: "seed-host",
+                hostID: nil,
+                cwd: "/Users/dev/project"
+            ),
+            lastHostSeq: 12,
+            syncState: .synced
+        )
+        _ = try? await repo.upsertTurnMirror(
+            ChatTurn(
+                id: "turn-parity-1",
+                conversationID: convID,
+                ordinal: 0,
+                prompt: "Fix the flaky test in AuthTests and update the docs.",
+                runID: "run-parity-1",
+                status: .completed,
+                assistantText: "",
+                createdAt: base,
+                completedAt: base.addingTimeInterval(34)
+            ),
+            vendorSessionID: "seed-session",
+            hostSeqStart: 1,
+            hostSeqEnd: 12
+        )
+
+        func chip(_ seq: Int, _ name: String, _ input: String, at offset: TimeInterval) -> ChatEvent {
+            ChatEvent(
+                conversationID: convID, seq: seq, turnID: "turn-parity-1",
+                runID: "run-parity-1", kind: "tool_call", role: nil, stream: nil,
+                text: name,
+                payloadJSON: #"{"name":"\#(name)","toolUseId":"tu-\#(seq)","input":\#(input)}"#,
+                createdAt: base.addingTimeInterval(offset)
+            )
+        }
+        func result(_ seq: Int, forSeq: Int, _ text: String, at offset: TimeInterval) -> ChatEvent {
+            ChatEvent(
+                conversationID: convID, seq: seq, turnID: "turn-parity-1",
+                runID: "run-parity-1", kind: "tool_result", role: nil, stream: nil,
+                text: text,
+                payloadJSON: #"{"toolUseId":"tu-\#(forSeq)","isError":false}"#,
+                createdAt: base.addingTimeInterval(offset)
+            )
+        }
+        let events: [ChatEvent] = [
+            ChatEvent(conversationID: convID, seq: 1, turnID: "turn-parity-1", runID: "run-parity-1",
+                      kind: "thinking", role: nil, stream: nil,
+                      text: "The failure is timing-dependent — the mock clock isn't injected in the retry path, so the assertion races the debounce. I'll pin the clock and rerun.",
+                      payloadJSON: nil, createdAt: base.addingTimeInterval(1)),
+            ChatEvent(conversationID: convID, seq: 2, turnID: "turn-parity-1", runID: "run-parity-1",
+                      kind: "output", role: "assistant", stream: nil,
+                      text: "Looking at the failing test now. **AuthTests.retryBackoff** races a real clock — here's the fix:\n\n```swift\nlet clock = TestClock()\n```\n\nRunning the suite to confirm.",
+                      payloadJSON: nil, createdAt: base.addingTimeInterval(2)),
+            chip(3, "Bash", #"{"command":"swift test --filter AuthTests"}"#, at: 3),
+            result(4, forSeq: 3, "PASS 12/12", at: 8),
+            chip(5, "Bash", #"{"command":"git status"}"#, at: 9),
+            result(6, forSeq: 5, "clean", at: 10),
+            chip(7, "Bash", #"{"command":"git diff --stat"}"#, at: 11),
+            result(8, forSeq: 7, "2 files changed", at: 12),
+            chip(9, "Bash", #"{"command":"swift build"}"#, at: 13),
+            result(10, forSeq: 9, "Build complete!", at: 20),
+            chip(11, "Edit", #"{"file_path":"/Users/dev/project/docs/testing.md","added":6,"removed":2}"#, at: 25),
+            ChatEvent(conversationID: convID, seq: 12, turnID: "turn-parity-1", runID: "run-parity-1",
+                      kind: "output", role: "assistant", stream: nil,
+                      text: "Done — the clock is injected, all 12 tests pass, and the docs now describe the deterministic-time pattern.",
+                      payloadJSON: nil, createdAt: base.addingTimeInterval(30)),
+        ]
+        try? await repo.appendEventsMirror(conversationID: convID, events: events)
+    }
 }
 #endif // os(iOS) && DEBUG

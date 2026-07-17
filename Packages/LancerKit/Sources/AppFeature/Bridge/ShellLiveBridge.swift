@@ -115,7 +115,7 @@ public final class ShellLiveBridge {
 
     /// Live follow of an adopted observed session's vendor transcript, so
     /// desktop-side activity appears while the thread is open. Cancelled by
-    /// `resetForNewThread` (the view's `onDisappear` path).
+    /// `resetForNewThread` (LiveThreadPresentation binding-clear path).
     private var observedFollowTask: Task<Void, Never>?
 
     /// Single-flight gate for `retryLastAttempt` — claimed before any
@@ -170,6 +170,20 @@ public final class ShellLiveBridge {
         queue.enqueue(item)
         queuedFeedback = queue
         return item
+    }
+
+    /// Stops the single in-flight run (`inFlightRunID`) via relay
+    /// `agentRunControl` action `"stop"` — same path as
+    /// `CommandGateway.execute(.cancel(runId:))` / `DaemonChannel.cancelRun`.
+    /// Does **not** call fleet-wide `agentEmergencyStop`. Returns false when
+    /// there is no run ID yet or no connected machine bridge.
+    @discardableResult
+    public func stopCurrentRun() async -> Bool {
+        guard let runID = inFlightRunID else { return false }
+        let machine = activeMachineID.flatMap { relayFleetStore.machine($0) }
+            ?? relayFleetStore.firstConnectedMachine
+        guard let machine else { return false }
+        return await machine.bridge.sendRunControl(runId: runID, action: "stop")
     }
 
     /// Pops and sends the next queued follow-up when the agent is idle.
@@ -306,7 +320,7 @@ public final class ShellLiveBridge {
         self.chatRepo = chatRepo
     }
 
-    /// Clears in-flight UI state when the live sheet dismisses so the next New
+    /// Clears in-flight UI state when the live thread pops so the next New
     /// Chat is not wedged behind a stale `isSendInFlight` / prior transcript.
     /// The host-side run may keep going; list sync keeps its status honest.
     public func resetForNewThread() {

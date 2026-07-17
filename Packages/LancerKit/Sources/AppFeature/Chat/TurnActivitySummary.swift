@@ -25,6 +25,30 @@ public struct TurnActivitySummary: Equatable, Sendable {
         self.removed = removed.map { max(0, $0) }
     }
 
+    /// Build from transcript chips with CC-3 duration (never 0s when dates differ).
+    public static func make(
+        from items: [TurnTranscriptItem],
+        startedAt: Date,
+        completedAt: Date
+    ) -> TurnActivitySummary {
+        let base = TurnTranscriptAssembler.activitySummary(
+            from: items,
+            startedAt: startedAt,
+            completedAt: completedAt
+        )
+        return TurnActivitySummary(
+            durationSeconds: ToolChipGrouping.durationSeconds(
+                startedAt: startedAt,
+                completedAt: completedAt
+            ),
+            editedFileCount: base.editedFileCount,
+            exploredCount: base.exploredCount,
+            searchCount: base.searchCount,
+            added: base.added,
+            removed: base.removed
+        )
+    }
+
     /// Cursor-style single line, e.g. `Worked 59s · Edited 2 files · 3 searches · +38 −38`.
     public var label: String {
         var parts: [String] = ["Worked \(Self.formatDuration(durationSeconds))"]

@@ -54,6 +54,10 @@ type claudeLine struct {
 	Message   *claudeMessage  `json:"message"`
 	AITitle   string          `json:"aiTitle"`
 	Subtype   string          `json:"subtype"`
+	// pr-link harness records (one per turn end while a PR is open).
+	PRNumber     int    `json:"prNumber"`
+	PRUrl        string `json:"prUrl"`
+	PRRepository string `json:"prRepository"`
 }
 
 // parseClaudeTranscript parses the JSONL transcript at path, skipping the first
@@ -92,6 +96,12 @@ func parseClaudeTranscript(path string, sinceLine int) (msgs []SessionMessage, n
 
 	lineNo := len(lines)
 	totalBytes := 0
+	// The harness re-emits an identical pr-link record at every turn end while
+	// a PR is open — collapse runs of the same PR to the first occurrence.
+	// Tracked over the WHOLE file (not just the sinceLine window) so a line's
+	// emit/skip decision is deterministic for any window, which the observed
+	// delta-import's per-turn event counts rely on.
+	lastPRLink := ""
 	for i, raw := range lines {
 		if len(strings.TrimSpace(string(raw))) == 0 {
 			continue
@@ -99,10 +109,21 @@ func parseClaudeTranscript(path string, sinceLine int) (msgs []SessionMessage, n
 		// Capture ai-title from the whole file (including skipped prefix lines)
 		// so attachObservedSession still gets the session title after a tail load.
 		var probe claudeLine
-		if json.Unmarshal(raw, &probe) == nil && probe.Type == "ai-title" && probe.AITitle != "" {
-			aiTitle = probe.AITitle
+		duplicatePRLink := false
+		if json.Unmarshal(raw, &probe) == nil {
+			if probe.Type == "ai-title" && probe.AITitle != "" {
+				aiTitle = probe.AITitle
+			}
+			if probe.Type == "pr-link" {
+				key := fmt.Sprintf("%s#%d", probe.PRUrl, probe.PRNumber)
+				duplicatePRLink = key == lastPRLink
+				lastPRLink = key
+			}
 		}
 		if i+1 <= sinceLine {
+			continue
+		}
+		if duplicatePRLink {
 			continue
 		}
 		msg, ok := parseClaudeLine(raw)
@@ -152,22 +173,33 @@ func parseClaudeLine(raw []byte) ([]SessionMessage, bool) {
 		}
 		return claudeAssistantMessages(l), true
 	case "system":
-		text := l.Subtype
-		if text == "" {
-			text = "system event"
+		// Hook bookkeeping (stop_hook_summary etc.) is harness noise, not
+		// conversation content — it must never render as message text.
+		return nil, true
+	case "pr-link":
+		if l.PRUrl == "" {
+			return nil, true
 		}
-		return []SessionMessage{{Role: "system", Text: text, Timestamp: l.Timestamp}}, true
+		label := fmt.Sprintf("PR #%d", l.PRNumber)
+		if l.PRRepository != "" {
+			label = fmt.Sprintf("PR #%d · %s", l.PRNumber, l.PRRepository)
+		}
+		return []SessionMessage{{
+			Role:      "assistant",
+			Text:      fmt.Sprintf("🔀 [%s](%s)", label, l.PRUrl),
+			Timestamp: l.Timestamp,
+		}}, true
 	case "ai-title", "agent-name", "last-prompt", "queue-operation", "attachment",
-		"summary", "mode", "permission-mode", "bridge-session", "file-history-snapshot":
+		"summary", "mode", "permission-mode", "bridge-session", "file-history-snapshot",
+		"custom-title":
 		return nil, true
 	case "":
 		return nil, true
 	default:
-		text := string(raw)
-		if len(text) > maxMessageTextBytes {
-			text = text[:maxMessageTextBytes]
-		}
-		return []SessionMessage{{Role: "unknown", Text: text, Timestamp: l.Timestamp}}, true
+		// Unknown record types are harness bookkeeping until proven otherwise —
+		// rendering raw JSON as message text is never right (custom-title and
+		// pr-link both leaked this way before being classified).
+		return nil, true
 	}
 }
 

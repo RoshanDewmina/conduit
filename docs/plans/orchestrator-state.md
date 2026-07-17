@@ -1,5 +1,29 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-16 ~21:30 ET — CC-app parity epic started; WT-H/I/J/C fixed + deployed; 3 lanes in flight
+
+- **Owner directive:** copy the Claude Code iOS app's chat design/features 1:1 (frame-by-frame
+  comparison of the same session in both apps). Spec: `docs/product/2026-07-16-claude-code-app-parity-spec.md`
+  (CC-1..CC-10 + verification workflow). Attachments-render-inline (CC-10) + "thorough parity
+  test workflow" added mid-session by owner.
+- **Merged/deployed tonight (phone + daemon, pairing kept all night):** PR #154 (WT-H observed
+  live-follow + delta-import, owner live-proved), PR #155 branch `fix/thread-ux-polish` (WT-J
+  open-at-latest, WT-I pr-link markdown + hook-noise drop, LazyVStack transcript+list, DB-handle
+  reuse, WT-C honest spinner, CC-1 auto-follow scroll `e629b8b5`).
+- **Lanes IN FLIGHT (worktrees off `fix/thread-ux-polish`):**
+  - `lane/p-chips` (.worktrees/p-chips-cc23, Cursor Grok) — CC-2 aggregated tool chips + CC-3
+    real-duration tappable summary + WT-B terminal-chip fix.
+  - `lane/cc10-attachments` (.worktrees/cc10-attachments, Cursor Grok) — inline image thumbnails
+    + video previews in user bubbles.
+  - `lane/cc-parity-harness` (.worktrees/cc-parity-harness, Sonnet) — XCUITest screenshot suite
+    + simurgh-leased runner + VERDICTS.md skeleton (owner's parity test workflow).
+- **Queued next (spec §Lanes):** P-THINK (thought-process sheet) → P-TYPE (serif typography) →
+  P-APPROVE (CC-style approval sheet, SENSITIVE → Sonnet/Fable) → P-COMPOSER/WT-A (real per-chat
+  permission mode + stop button).
+- **Gates:** every lane = build + unit tests, then cross-review, then parity-harness screenshots
+  + owner device eyeball (`ui` risk). Verdicts → `docs/test-runs/2026-07-16-cc-parity/VERDICTS.md`.
+
+
 ## ⚡ 2026-07-16 ~18:15 ET — session-hop sync: master `62b4424d`; pair confirmed; launch PASS
 
 - **Tip:** `origin/master` `62b4424d` (PR #149). Sweep #140–#143, auth #145, Proof #147, ISO #148, Repos #149 all merged.
