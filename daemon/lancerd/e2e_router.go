@@ -567,29 +567,32 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		_ = r.client.sendMessage("agentAuditTailResult", data)
 
 	case "agentPermissionModeGet":
-		// Read-only mirror of the global policy's coarse Default effect
-		// (deny/ask/allow), mirroring agent.policy.get's Default field. No new
-		// business logic — reads the same policy.yaml via policyEngine.
-		mode := r.server.policy.getPermissionMode()
+		// Coarse deny/ask/allow: real cwd → per-cwd override (else document
+		// default); empty/"~" → document default only (Settings unchanged).
+		var p struct {
+			CWD string `json:"cwd"`
+		}
+		_ = json.Unmarshal(payload, &p)
+		mode := r.server.policy.getPermissionMode(p.CWD)
 		payloadOut := map[string]interface{}{"mode": mode}
 		msg := map[string]interface{}{"type": "agentPermissionModeGetResult", "payload": payloadOut}
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("agentPermissionModeGetResult", data)
 
 	case "agentPermissionModeSet":
-		// Writes ONLY the coarse Default effect (deny/ask/allow) on the global
-		// policy document — never full policy YAML from a relay-only phone (see
-		// docs/product/2026-07-16-policy-audit-relay-port-map.md). Fails closed:
-		// an invalid mode is rejected and the policy file is left untouched.
+		// Writes coarse deny/ask/allow. Real cwd → per-cwd override (global
+		// policy.yaml untouched). Empty/"~" → document Default only. Fails
+		// closed: invalid mode rejected, storage left untouched.
 		var p struct {
 			Mode string `json:"mode"`
+			CWD  string `json:"cwd"`
 		}
 		if err := json.Unmarshal(payload, &p); err != nil {
 			log.Printf("e2e: unmarshal agentPermissionModeSet failed: %v", err)
 			return
 		}
 		payloadOut := map[string]interface{}{"ok": false}
-		if err := r.server.setPermissionModeAudited(p.Mode, "relay-phone"); err != nil {
+		if err := r.server.setPermissionModeAudited(p.Mode, "relay-phone", p.CWD); err != nil {
 			payloadOut["error"] = err.Error()
 		} else {
 			payloadOut["ok"] = true

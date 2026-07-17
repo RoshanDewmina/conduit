@@ -2,13 +2,17 @@
 import SwiftUI
 import LancerCore
 
-/// Small tappable capsule that shows / sets permission mode.
+/// Small tappable capsule that shows / sets permission mode for one chat's
+/// repo `cwd` (not the document-level Settings default).
 ///
 /// Local `@AppStorage` is a cache only. Authoritative state is the daemon's
-/// coarse policy default (`deny`/`ask`/`allow`), read/written via
+/// coarse mode for this cwd (`deny`/`ask`/`allow`), read/written via
 /// `GovernanceHostActions` → SSH or relay `agentPermissionModeGet`/`Set`.
 /// Never displays a mode the daemon has not confirmed (fail-closed).
 struct ChatPermissionModePill: View {
+    /// Conversation repo cwd — same value the dispatch / follow-up path uses.
+    let cwd: String
+
     @Environment(RelayFleetStore.self) private var relayFleetStore
     @AppStorage(AutonomySelection.storageKey) private var presetRaw: String =
         AutonomySelection.default.rawValue
@@ -87,6 +91,7 @@ struct ChatPermissionModePill: View {
         do {
             try await GovernanceHostActions.setPermissionMode(
                 option.coarsePermissionMode,
+                cwd: cwd,
                 relayFleetStore: relayFleetStore
             )
             confirmedPreset = option
@@ -106,6 +111,7 @@ struct ChatPermissionModePill: View {
     private func refreshFromDaemon() async {
         do {
             let mode = try await GovernanceHostActions.fetchPermissionMode(
+                cwd: cwd,
                 relayFleetStore: relayFleetStore
             )
             let preferred = AutonomySelection.resolve(presetRaw)
