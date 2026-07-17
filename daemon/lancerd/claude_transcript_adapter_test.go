@@ -56,7 +56,9 @@ func TestParseClaudeTranscriptRolesAndOrder(t *testing.T) {
 		t.Fatalf("nextLine = %d, want %d", nextLine, len(fixtureTranscriptLines()))
 	}
 
-	wantRoles := []string{"user", "assistant", "toolCall", "toolResult", "unknown", "system"}
+	// system records (stop_hook_summary etc.) are harness bookkeeping and are
+	// dropped from transcripts entirely — see parseClaudeLine.
+	wantRoles := []string{"user", "assistant", "toolCall", "toolResult", "unknown"}
 	if len(msgs) != len(wantRoles) {
 		t.Fatalf("got %d messages, want %d: %+v", len(msgs), len(wantRoles), msgs)
 	}
@@ -290,5 +292,66 @@ func TestComputeEditStats(t *testing.T) {
 					c.name, gotAdd, gotRem, c.wantAdd, c.wantRem)
 			}
 		})
+	}
+}
+
+// TestParseClaudeTranscriptPRLinkRendersOnceAsLink proves pr-link harness
+// records render as a single markdown PR link (not raw JSON, WT-I) and that
+// the per-turn duplicate re-emissions collapse deterministically — including
+// under a sinceLine window, which the observed delta-import's per-turn event
+// counts rely on.
+func TestParseClaudeTranscriptPRLinkRendersOnceAsLink(t *testing.T) {
+	dir := t.TempDir()
+	pr153 := `{"type":"pr-link","sessionId":"` + fixtureSessionID + `","prNumber":153,"prUrl":"https://github.com/o/r/pull/153","prRepository":"o/r","timestamp":"2026-07-16T23:47:55Z"}`
+	pr154 := `{"type":"pr-link","sessionId":"` + fixtureSessionID + `","prNumber":154,"prUrl":"https://github.com/o/r/pull/154","prRepository":"o/r","timestamp":"2026-07-17T00:32:46Z"}`
+	lines := []string{
+		`{"type":"user","sessionId":"` + fixtureSessionID + `","message":{"role":"user","content":"open a PR"},"timestamp":"2026-07-16T23:40:00Z"}`,
+		pr153,
+		pr153,
+		`{"type":"assistant","sessionId":"` + fixtureSessionID + `","message":{"role":"assistant","content":[{"type":"text","text":"PR opened."}]},"timestamp":"2026-07-16T23:48:00Z"}`,
+		pr153,
+		pr154,
+		pr154,
+	}
+	path := writeFixture(t, dir, lines, false)
+
+	msgs, _, _, _, err := parseClaudeTranscript(path, 0)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	var prTexts []string
+	for _, m := range msgs {
+		if strings.Contains(m.Text, "pull/") {
+			prTexts = append(prTexts, m.Text)
+		}
+	}
+	if len(prTexts) != 2 {
+		t.Fatalf("pr-link messages = %d, want 2 (one per distinct PR): %v", len(prTexts), prTexts)
+	}
+	if prTexts[0] != "🔀 [PR #153 · o/r](https://github.com/o/r/pull/153)" {
+		t.Fatalf("pr-link text = %q", prTexts[0])
+	}
+	if strings.Contains(prTexts[0], "{") {
+		t.Fatal("pr-link rendered raw JSON")
+	}
+
+	// Windowed re-read must make the same emit/skip decisions per line:
+	// PR 153's first emission (line 2) is outside the window and lines 3/5
+	// stay duplicates, so the window emits zero 153 links and exactly one 154.
+	windowed, _, _, _, err := parseClaudeTranscript(path, 2)
+	if err != nil {
+		t.Fatalf("windowed parse error: %v", err)
+	}
+	count153, count154 := 0, 0
+	for _, m := range windowed {
+		if strings.Contains(m.Text, "pull/153") {
+			count153++
+		}
+		if strings.Contains(m.Text, "pull/154") {
+			count154++
+		}
+	}
+	if count153 != 0 || count154 != 1 {
+		t.Fatalf("windowed read emitted %d pr-153 / %d pr-154 links, want 0/1", count153, count154)
 	}
 }

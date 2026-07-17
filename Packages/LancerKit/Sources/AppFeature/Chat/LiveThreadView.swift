@@ -45,6 +45,10 @@ public struct LiveThreadView: View {
     @State private var toolArtifactsByTurnID: [String: [ChatArtifact]] = [:]
     @State private var showScrollToBottom = false
     @State private var isNearBottom = true
+    /// A freshly opened thread lands at the TOP, so `isNearBottom` is false
+    /// and `scrollToTailIfFollowing` never fires for the initial transcript
+    /// load — the first population must scroll unconditionally (WT-J).
+    @State private var hasPerformedInitialScroll = false
     /// Ephemeral runStatus events from the daemon (G3). Absent → legacy Working….
     @State private var liveRunStatus: LiveRunStatusParams?
     @State private var liveStatusFirstAt: Date?
@@ -161,9 +165,20 @@ public struct LiveThreadView: View {
                     .onChange(of: bridge.sendState) { _, _ in
                         scrollToTailIfFollowing(proxy)
                     }
-                    .onChange(of: bridge.transcriptTurns.count) { _, _ in
-                        scrollToTailIfFollowing(proxy)
+                    .onChange(of: bridge.transcriptTurns.count) { _, newCount in
+                        if !hasPerformedInitialScroll, newCount > 0 {
+                            hasPerformedInitialScroll = true
+                            scrollToTail(proxy)
+                        } else {
+                            scrollToTailIfFollowing(proxy)
+                        }
                         Task { await refreshTranscriptExtras() }
+                    }
+                    .onAppear {
+                        if !hasPerformedInitialScroll, !bridge.transcriptTurns.isEmpty {
+                            hasPerformedInitialScroll = true
+                            scrollToTail(proxy)
+                        }
                     }
                     .onChange(of: bridge.queuedFeedback.count) { _, _ in
                         scrollToTailIfFollowing(proxy)
