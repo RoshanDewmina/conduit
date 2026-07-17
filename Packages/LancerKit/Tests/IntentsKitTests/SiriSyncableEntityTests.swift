@@ -22,8 +22,6 @@ struct SiriSyncableEntityTests {
 
     // MARK: - SyncableEntity conformances
 
-#if swift(>=6.4)
-
 // Generic helper: compile-fails if `E` does not conform to `SyncableEntity`.
 // This is the canonical way to assert a conformance in a Swift test without
 // using an existential (`any SyncableEntity` is valid Swift 6 but accessing
@@ -77,8 +75,6 @@ private func assertSyncableID<E: SyncableEntity>(_ entity: E) -> String {
             }
         }
     }
-
-#endif // swift(>=6.4)
 
     // MARK: - Stable ID invariant
 

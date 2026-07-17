@@ -14,7 +14,8 @@ import Foundation
 //
 // Availability: `IndexedEntityQuery` is @available(macOS 27.0, iOS 27.0,
 // visionOS 27.0) — confirmed against the installed iOS 27 SDK swiftinterface.
-// All conformances below are explicitly availability-gated to match.
+// All conformances below are explicitly availability-gated to match (macOS /
+// watchOS package floors remain below 27; iOS deployment is 27.0).
 // `IndexedEntity` (the base) is iOS 18+ and already conformed in
 // `SiriEntityIndexing.swift` — that earlier conformance is not repeated here.
 //
@@ -28,11 +29,6 @@ import Foundation
 // system callback would race with their own deletion. The lighter-weight
 // `SiriEntityIndexer.refreshPendingApprovals()` (called on every
 // `SiriSurfaceBootstrap.refresh()`) is the right cadence for those.
-
-// Guarded by `#if swift(>=6.4)`, not just `@available(iOS 27.0, *)`: these
-// protocols/types don't exist in the iOS 26 SDK at all, so a toolchain/SDK that
-// predates iOS 27 can't type-check this code regardless of runtime availability.
-#if swift(>=6.4)
 
 // MARK: - ConversationEntityQuery
 
@@ -150,7 +146,5 @@ private func spotlightIndex(
         protectionClass: description.protectionClass
     )
 }
-
-#endif // swift(>=6.4)
 
 #endif

@@ -17,12 +17,10 @@ import SessionFeature
 /// (`StartAgentRunPreparer` rejects SSH hosts with an explicit dialog — see
 /// its header comment for why).
 ///
-/// The deployment target stays iOS 26 (hard constraint — never raise it):
-/// `LongRunningIntent`/`CancellableIntent`/`ProgressReportingIntent` are
-/// iOS-27-only and live behind `@available(iOS 27, *)` below, so the same
-/// binary compiles and runs the iOS-26 `performStandard()` path unchanged on
-/// 26 devices, and only lights up the long-running/progress-reporting path
-/// (Siri's "your agent is working on it" background execution) on 27.
+/// Uses `LongRunningIntent` / `CancellableIntent` / `ProgressReportingIntent`
+/// (iOS 27+) so Siri can show "your agent is working on it" background
+/// execution. The app deployment target is iOS 27.0, so this path is
+/// unconditional.
 @available(iOS 17.0, *)
 public struct StartAgentRunIntent: AppIntent {
     public static let title: LocalizedStringResource = "Start Agent Run"
@@ -58,41 +56,9 @@ public struct StartAgentRunIntent: AppIntent {
     public init() {}
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
-#if swift(>=6.4)
-        if #available(iOS 27.0, *) {
-            return try await performLongRunning()
-        }
-#endif
-        return try await performStandard()
+        try await performLongRunning()
     }
 
-    private func performStandard() async throws -> some IntentResult & ProvidesDialog {
-        switch try await StartAgentRunSupport.prepare(
-            machine: machine,
-            agent: agent,
-            prompt: prompt,
-            workspace: workspace
-        ) {
-        case .dialog(let message):
-            return .result(dialog: IntentDialog(stringLiteral: message))
-        case .ready(let prepared):
-            try await requestConfirmation(
-                actionName: .start,
-                dialog: StartAgentRunSupport.confirmationDialog(for: prepared)
-            )
-            let (result, summary) = await StartAgentRunSupport.dispatch(prepared)
-            switch result {
-            case .started(_, _, let dispatchSummary):
-                let text = summary ?? dispatchSummary
-                return .result(dialog: IntentDialog(stringLiteral: text))
-            case .blocked(let message), .unavailable(let message):
-                return .result(dialog: IntentDialog(stringLiteral: message))
-            }
-        }
-    }
-
-#if swift(>=6.4)
-    @available(iOS 27.0, *)
     private func performLongRunning() async throws -> some IntentResult & ProvidesDialog {
         switch try await StartAgentRunSupport.prepare(
             machine: machine,
@@ -150,14 +116,6 @@ public struct StartAgentRunIntent: AppIntent {
             )
         }
     }
-#endif
 }
 
-// Guarded by `#if swift(>=6.4)`, not just `@available(iOS 27.0, *)`: these
-// protocols don't exist in the iOS 26 SDK at all, so a toolchain/SDK that
-// predates iOS 27 can't type-check this extension regardless of runtime
-// availability — see LancerLiveActivityWidget.swift DynamicIslandWidthReader.
-#if swift(>=6.4)
-@available(iOS 27.0, *)
 extension StartAgentRunIntent: LongRunningIntent, CancellableIntent, ProgressReportingIntent {}
-#endif

@@ -10,9 +10,9 @@ import os.log
 // comment for why (dual-target AppIntent compilation breaks runtime execution
 // lookup even though static Shortcuts discovery still works).
 
-/// Shared start-run validation and dispatch used by `StartAgentRunIntent`
-/// (iOS 26 path and iOS 27 long-running path). Bridges `IntentsKit`'s entity
-/// types to the pure, package-level `StartAgentRunPreparer` (SessionFeature).
+/// Shared start-run validation and dispatch used by `StartAgentRunIntent`.
+/// Bridges `IntentsKit`'s entity types to the pure, package-level
+/// `StartAgentRunPreparer` (SessionFeature).
 @available(iOS 17.0, *)
 enum StartAgentRunSupport {
     private static let logger = Logger(subsystem: "dev.lancer.mobile", category: "StartAgentRunSupport")
