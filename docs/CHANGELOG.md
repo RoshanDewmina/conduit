@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 21:59 Cursor Grok — WT-G Settings→Audit feed: newest-first structured rows (action · command + relative time/agent/effect tint), tap-expand + Copy raw; AuditFeedFormatting + tests (`lane/wt-g-audit`)
 - 21:50 Claude Fable (orchestrator) — CC-parity wave 2 integrated + deployed to phone (`8a600f34`): merged p-composer/p-think/p-type/wt-a-permission/p-approve (5 lanes, gates re-run by hand: build + 41 tests/5 suites incl. approval-wire + autonomy-mapping); WT-A pill now REAL (fail-closed daemon confirm); P-APPROVE full-diff reviewed (decision plumbing identical, file:line chain verified); daemon custom-title/unknown-record leak + Worked-0s timestamps fixed + deployed earlier this hour
 - 21:35 Cursor Grok — WT-A: ChatPermissionModePill pushes AutonomyPreset→coarse deny/ask/allow via GovernanceHostActions (relay SET); hydrates from GET on open; fail-closed revert+error on RPC failure; mapping tests (`lane/wt-a-permission`)
 - 21:45 Cursor Grok — CC-5 typography: assistant `ChatMarkdownBody` prose → system serif + ~1.25× leading (inline/fenced code stays mono); user bubble soft gray fill + 16pt radius (`lane/p-type`)
