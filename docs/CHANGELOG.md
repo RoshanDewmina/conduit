@@ -11,6 +11,8 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-17
 
+- 12:05 Claude Fable (orchestrator) — hook binary isolation: dispatched agent env now pins `LANCERD=` to the dispatching daemon's own executable (pre-set wins), so isolated `LANCER_STATE_DIR` daemons stop gating through the production `~/.lancer/bin/lancerd` (version skew found live by WP5) (`fix/hook-binary-isolation`)
+
 - 11:20 Claude Fable (orchestrator) — WP5 dogfood-gap re-proof at master `f6c22629`: live isolated-sim + isolated-daemon re-proof of GAP #10/#14/C4#7 all PASS (screenshots + audit logs); Emergency Stop confirmed **FAIL** live (host PreToolUse hook process not killed despite "Stopped N runs" UI/audit claim) — see `docs/test-runs/2026-07-17-gap-reproof/evidence-log.md` and updated `docs/test-runs/2026-07-16-untested-feature-sweep/GAP_LIST.md` (`docs/gap-reproof-2026-07-17`)
 - 10:55 Cursor Grok — WT-B live-stream regression: LiveTerminalStateRegressionTests prove in-place host-status delta (no re-entry) flips derived chips/"Running"/background-task count to terminal; ShellLiveBridge iOS-gated so tests hit pure LiveThreadView derivation seam (`test/live-terminal-state-regression`)
 - 10:55 Cursor Grok — WP2 WT-A2: per-chat permission pill scopes to conversation repo cwd (daemon per-cwd override before document default; relay/SSH GET/SET carry cwd; audit `scope=<cwd>`) (`feat/per-chat-autonomy-scope`)
