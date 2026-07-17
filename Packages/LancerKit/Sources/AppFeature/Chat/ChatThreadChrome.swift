@@ -124,11 +124,13 @@ struct ChatCodeFenceBlock: View {
 }
 
 /// Right-aligned quiet user bubble (Cursor reference: muted fill, no accent color).
-/// Attachments render as thumbnails / file cards — never host paths.
+/// Attachments: images/videos inline from local preview/media cache; other files as chips.
+/// Never opens hostPath. Mirrored media without local bytes falls back to the file chip.
 struct ChatUserBubble: View {
     let text: String
     var attachments: [ConversationAttachmentReference] = []
     var previewCache: AttachmentPreviewCaching?
+    var mediaStore: AttachmentLocalMediaCaching?
     /// Mid-run feedback that is locally queued until the agent finishes.
     var isQueued: Bool = false
 
@@ -141,8 +143,12 @@ struct ChatUserBubble: View {
             Spacer(minLength: 48)
             VStack(alignment: .trailing, spacing: 8) {
                 if !attachments.isEmpty {
-                    ChatAttachmentStrip(attachments: attachments, previewCache: previewCache)
-                        .frame(maxWidth: 280, alignment: .trailing)
+                    ChatAttachmentStrip(
+                        attachments: attachments,
+                        previewCache: previewCache,
+                        mediaStore: mediaStore
+                    )
+                    .frame(maxWidth: 280, alignment: .trailing)
                 }
                 if !displayText.isEmpty {
                     VStack(alignment: .trailing, spacing: 4) {

@@ -464,18 +464,13 @@ public struct NewChatComposerView: View {
             guard AttachmentDraftStore.canSend(drafts) else { return }
         }
 
-        // Cache previews from draft bytes before clearing the composer.
+        // Cache image previews + local video bytes before clearing the composer.
         let refs = AttachmentDraftStore.references(from: drafts)
         if !refs.isEmpty {
-            let cache = try? AttachmentPreviewCache()
-            for draft in drafts {
-                guard case .done = draft.state else { continue }
-                if let preview = await AttachmentPreviewCache.makePreviewDataOffMain(
-                    from: draft.data, mimeType: draft.mimeType
-                ) {
-                    try? cache?.storePreview(preview, for: draft.id.uuidString)
-                }
-            }
+            await AttachmentLocalMediaStore.persistSentDrafts(
+                drafts,
+                previewCache: try? AttachmentPreviewCache()
+            )
         }
 
         let cleanPrompt = prompt
