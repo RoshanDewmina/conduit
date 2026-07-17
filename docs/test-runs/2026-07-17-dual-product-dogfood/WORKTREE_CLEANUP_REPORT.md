@@ -88,3 +88,22 @@ Per your answer, this pass only deleted worktrees that were **both** fully merge
 needed either a value judgment (A: read the diff to prove supersession) or contains real
 uncommitted/unmerged work that only you can triage safely (C, D). Group A is a low-risk
 "approve and I'll delete" list if you want the disk space back; Groups C/D need your eyes first.
+
+## Docs cleanup pass
+
+Checked for docs matching your "clearly-superseded" bar: previously-purged docs
+(`docs/LANCER_PROJECT_DOSSIER.md`, `docs/_archive/`, `docs/audit/`, `docs/design-questions/`,
+`docs/superpowers/` — all purged 2026-07-06 per `AGENTS.md`) confirmed still absent, nothing to
+re-purge. Searched every doc for self-marked "superseded/deprecated/archived/stale" language —
+zero hits outside the docs that already carry that framing on purpose (CHANGELOG, orchestrator-
+state, AGENT_READ_FIRST). Checked whether the dated `docs/test-runs/2026-07-1{0,1,2,3,4}-*`
+evidence folders (7 folders, all >3 days old, predating several subsequent rewrites) are
+referenced anywhere live — they aren't, but "unreferenced" isn't "superseded": they're
+point-in-time proof docs, and the project's own convention (the 2026-07-06 purge) only removed
+docs that were actively *misleading* (stale strategy/design docs), not historical evidence.
+
+**Result: nothing met the bar this pass.** I didn't find a doc I could show is actively wrong
+or duplicated elsewhere — only docs that are old, which isn't the same thing. Deleting evidence
+folders on an age heuristic alone risks losing real repro/verdict history for no verified
+reason. If you want a more aggressive sweep (age-based, not supersession-based), that's the
+"canonical docs only" option from earlier — say the word and I'll run it as its own pass.
