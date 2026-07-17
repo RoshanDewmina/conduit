@@ -194,15 +194,21 @@ you tested this fresh or from memory.)*
 - [ ] **Risk scoring sanity check**: a genuinely read-only command (e.g. `ls -la`) should not be
       scored **High** — known miscalibration (WT-F) rated `ls -la` as High. Note whether it's
       still over-scored; this is a scoring-tuning bug, not a security bug. — [P2]
-- [ ] **Live Activity / Dynamic Island**: with a run active, check the lock-screen/Dynamic Island
-      Live Activity updates while the app is backgrounded (not just foregrounded) — this depends
-      on push-token-driven updates (`LiveActivityManager`, ARCHITECTURE §0.1). — [P1]
+- [ ] **Live Activity / Dynamic Island**: ⚠️ **SKIP until the widgets build lands** — as of
+      2026-07-17 the app requests Live Activities (`LiveActivityManager`) but the iOS widget
+      extension that renders them was never built, so NOTHING will appear regardless of daemon
+      state. Not a test failure. The `feat/ios-widgets-live-activity` lane is building the
+      extension; re-run this check after that installs. — [P1]
 - [ ] **Lock-screen push approval (APNs)**: lock the phone, trigger an escalation from another
       thread/session, and check whether an actual APNs push notification arrives on the lock
       screen (not just in-app relay delivery). **Known FAIL as of 2026-07-16 (WT-E):** no push
       arrived twice in a row; the daemon fell back to re-sending the pending approval over relay
       on reconnect, and approval had to happen in-app. Prime suspect: push-backend's in-memory
       device-token registry was wiped by a redeploy since the 2026-06-23 push-while-closed PASS.
+      **Update 2026-07-17:** the prime suspect was addressed — PR #157 made device-token
+      registration persistent (`push-device.json` + boot rehydration) and the fixed daemon
+      binary is deployed and running (11:44). A relay-side approval (`818003a8`) was sent at
+      13:58 with no decision received — banner delivery still unconfirmed by human eyes.
       **PROOF OWED — this is the single most load-bearing check in this whole checklist**, since
       "approve from the lock screen while the app is closed" is the architecture's headline claim
       (`ARCHITECTURE.md` §0.1 "C2 physical-device live loop PASSED (2026-06-23)" — that proof
@@ -211,14 +217,14 @@ you tested this fresh or from memory.)*
       confirm tapping Approve there round-trips to the daemon even from a killed app (the
       "cold-decision gate" fix, ARCHITECTURE §0.1). Depends on the previous check passing first. — [P0]
 - [ ] **Emergency Stop** (Settings → red section at the bottom, `AppSettingsView.swift:131-166`):
-      tap it, confirm the destructive confirmation dialog text, confirm it. **Known confirmed
-      FAIL (2026-07-17 gap-reproof, gap #1):** the app reports "Stopped N runs" and the daemon
-      audit records `run-stopped`, but the actual host-side PreToolUse hook process gating a
-      pending tool-call escalation was observed to stay alive 6+ minutes after the stop (had to
-      be `kill -9`'d manually) — the stop resolves the dispatch-level approval, not the specific
-      in-flight gate process. **Do this test with something you can safely manually kill** (e.g.
-      a `sleep 120` escalation) so you can verify the process really is still running after
-      "Stopped 1 run" — check via `ps` on the host. **PROOF OWED, expect it to still fail.** — [P0]
+      tap it, confirm the destructive confirmation dialog text, confirm it. **History:** the
+      2026-07-17 gap-reproof (gap #1) caught a real FAIL — "Stopped N runs" while the host-side
+      PreToolUse hook process gating a pending escalation survived 6+ minutes — and PR #161
+      (`b8923a46`, merged same day) fixed it: Emergency Stop now denies every pending approval
+      through the same chokepoint as a phone Reject, releasing hook gates. **Your test proves the
+      fix on-device:** dispatch a run that hits an approval gate, leave it pending, Emergency
+      Stop, then `pgrep -f agent-hook` on the Mac — the gate process must exit within seconds,
+      not minutes. **PROOF OWED (fix is code+test-verified, not yet device-proven).** — [P0]
 - [ ] **Policy editor** (Settings → Policy & Governance → Policy): the relay-only picker (Default
       decision: Deny/Ask/Allow) loads without a stale-SSH error flash (`PolicyEditorView.swift`,
       #144 fix). Confirmed PASS on phone 2026-07-16 — re-confirm holds. — [P1]
