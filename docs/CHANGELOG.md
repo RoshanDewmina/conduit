@@ -11,4 +11,5 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-17
 
+- 14:05 Claude Fable (orchestrator) — App-Store push: s27 iOS-27 target raise merged (#167, full gates); rel1 proven ALREADY-MERGED as PR #110 (REL1_REBASE_NOTES.md) — branch deleted not re-applied; TestFlight release script committed (scripts/release-ios-testflight.sh); salvaged reconnect-10x BLOCKED evidence bundle + 07-07 fable research brief (`release-prep docs`)
 - 18:10 Claude Sonnet 5 — reconciled `docs/PUBLISH_READINESS_CHECKLIST.md` against live repo evidence (last reconciled 2026-07-15, had drifted): closed B3 (app-target BUILD SUCCEEDED, PR #164), B7/B11b (Emergency Stop implemented `d68de81e` + live-FAIL/fix via PR #160/#161), updated C2/D3 (pairing confirmed live, APNs daemon fix deployed, only lock-screen owner-check remains), closed D4 as moot (sslip.io superseded by the 2026-07-13 Fly cutover — `conduit-push.fly.dev` verified as the live default in `RelaySettings.swift`/`project.yml`), refreshed §A with the PR #154-#164 chain, and added a new "Path to App Store submission" section (`docs/publish-checklist-reconcile`, doc-only)

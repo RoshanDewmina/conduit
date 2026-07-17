@@ -1,0 +1,1528 @@
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -project /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Lancer.xcodeproj -scheme Lancer -configuration Debug -skipMacroValidation -destination "platform=iOS Simulator,id=095F8B3A-FEA3-4031-A2A5-561755740730" -collect-test-diagnostics never COMPILER_INDEX_STORE_ENABLE=NO ONLY_ACTIVE_ARCH=YES -packageCachePath /Users/roshansilva/Library/Caches/org.swift.swiftpm -derivedDataPath /tmp/s1-reconnect-v2/DerivedData "-only-testing:LancerUITests/ReconnectCycleUITests" build-for-testing
+
+Build settings from command line:
+    COMPILER_INDEX_STORE_ENABLE = NO
+    ONLY_ACTIVE_ARCH = YES
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-system: https://github.com/apple/swift-system.git @ 1.7.2
+  LancerKit: /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Packages/LancerKit
+  Citadel: https://github.com/orlandos-nl/Citadel.git @ 0.12.1
+  GRDB: https://github.com/groue/GRDB.swift.git @ 6.29.3
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.1
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 3.15.1
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  Sentry: https://github.com/getsentry/sentry-cocoa @ 8.58.4
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  BigInt: https://github.com/attaswift/BigInt.git @ 5.7.0
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.101.2
+  swift-log: https://github.com/apple/swift-log.git @ 1.14.0
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-nio-ssh: https://github.com/Wellz26/swift-nio-ssh.git @ 0.3.6
+  SwiftTerm: https://github.com/migueldeicaza/SwiftTerm.git @ 1.13.0
+
+Build Preparation
+Build task concurrency set to 6 via user default IDEBuildOperationMaxNumberOfConcurrentCompileTasks
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (84 targets)
+    Target 'LancerUITests' in project 'Lancer'
+        ➜ Explicit dependency on target 'Lancer' in project 'Lancer'
+    Target 'Lancer' in project 'Lancer'
+        ➜ Explicit dependency on target 'AppFeature-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'IntentsKit-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Sentry-product' in project 'Sentry'
+    Target 'Sentry-product' in project 'Sentry'
+        ➜ Explicit dependency on target 'SentryCppHelper' in project 'Sentry'
+    Target 'SentryCppHelper' in project 'Sentry' (no dependencies)
+    Target 'IntentsKit-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'IntentsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'IntentsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'AppFeature-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AppFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'WorkspacesFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SessionFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'InboxFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'OnboardingFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SettingsFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PreviewKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+    Target 'AppFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'WorkspacesFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SessionFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'InboxFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'OnboardingFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SettingsFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PreviewKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+    Target 'PreviewKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+    Target 'SettingsFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'OnboardingFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+    Target 'InboxFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+    Target 'SessionFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerKit_TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+    Target 'SwiftTerm-product' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm'
+    Target 'SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm'
+    Target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm' (no dependencies)
+    Target 'LancerKit_TerminalEngine' in project 'LancerKit' (no dependencies)
+    Target 'WorkspacesFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+    Target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'GRDB-product' in project 'GRDB'
+        ➜ Explicit dependency on target 'GRDB' in project 'GRDB'
+        ➜ Explicit dependency on target 'GRDB_GRDB' in project 'GRDB'
+    Target 'GRDB' in project 'GRDB'
+        ➜ Explicit dependency on target 'GRDB_GRDB' in project 'GRDB'
+        ➜ Explicit dependency on target 'CSQLite' in project 'GRDB'
+    Target 'CSQLite' in project 'GRDB' (no dependencies)
+    Target 'GRDB_GRDB' in project 'GRDB' (no dependencies)
+    Target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+    Target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+    Target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+    Target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'Citadel' in project 'Citadel'
+        ➜ Explicit dependency on target 'CCitadelBcrypt' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target '_CryptoExtras-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'BigInt-product' in project 'BigInt'
+        ➜ Explicit dependency on target 'Logging-product' in project 'swift-log'
+    Target 'Citadel' in project 'Citadel'
+        ➜ Explicit dependency on target 'CCitadelBcrypt' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target '_CryptoExtras-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'BigInt-product' in project 'BigInt'
+        ➜ Explicit dependency on target 'Logging-product' in project 'swift-log'
+    Target 'Logging-product' in project 'swift-log'
+        ➜ Explicit dependency on target 'Logging' in project 'swift-log'
+    Target 'Logging' in project 'swift-log' (no dependencies)
+    Target 'BigInt-product' in project 'BigInt'
+        ➜ Explicit dependency on target 'BigInt' in project 'BigInt'
+    Target 'BigInt' in project 'BigInt' (no dependencies)
+    Target '_CryptoExtras-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target '_CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto__CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'SwiftASN1-product' in project 'swift-asn1'
+    Target '_CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto__CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'SwiftASN1-product' in project 'swift-asn1'
+    Target 'SwiftASN1-product' in project 'swift-asn1'
+        ➜ Explicit dependency on target 'SwiftASN1' in project 'swift-asn1'
+    Target 'SwiftASN1' in project 'swift-asn1' (no dependencies)
+    Target 'CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+    Target 'swift-crypto_CryptoBoringWrapper' in project 'swift-crypto' (no dependencies)
+    Target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+    Target 'swift-crypto_CCryptoBoringSSLShims' in project 'swift-crypto' (no dependencies)
+    Target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_CCryptoBoringSSL' in project 'swift-crypto'
+    Target 'swift-crypto_CCryptoBoringSSL' in project 'swift-crypto' (no dependencies)
+    Target 'swift-crypto__CryptoExtras' in project 'swift-crypto' (no dependencies)
+    Target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'NIOFoundationCompat-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOConcurrencyHelpers-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'swift-nio_NIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'CNIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'Atomics-product' in project 'swift-atomics'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target '_AtomicsShims' in project 'swift-atomics' (no dependencies)
+    Target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'ContainersPreview' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target '_NIODataStructures' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWASI' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWindows' in project 'swift-nio' (no dependencies)
+    Target 'CNIOLinux' in project 'swift-nio' (no dependencies)
+    Target 'CNIODarwin' in project 'swift-nio' (no dependencies)
+    Target 'CNIOFreeBSD' in project 'swift-nio' (no dependencies)
+    Target 'CNIOOpenBSD' in project 'swift-nio' (no dependencies)
+    Target '_NIOBase64' in project 'swift-nio' (no dependencies)
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'CNIOAtomics' in project 'swift-nio' (no dependencies)
+    Target 'CCitadelBcrypt' in project 'Citadel' (no dependencies)
+    Target 'LancerCore' in project 'LancerKit' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ClangStatCache /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk /tmp/s1-reconnect-v2/DerivedData/SDKStatCaches.noindex/iphonesimulator27.0-24A5355p-802b3160ec225d8f0f354b513c6f7a323243818bda632a4370e1cc7a9fd181c5.sdkstatcache
+    cd /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Lancer.xcodeproj
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -o /tmp/s1-reconnect-v2/DerivedData/SDKStatCaches.noindex/iphonesimulator27.0-24A5355p-802b3160ec225d8f0f354b513c6f7a323243818bda632a4370e1cc7a9fd181c5.sdkstatcache
+
+PruneExplicitPrecompiledModules /tmp/s1-reconnect-v2/DerivedData/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/s1-reconnect-v2/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+** TEST BUILD SUCCEEDED ** [2.249 sec]
+
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -project /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Lancer.xcodeproj -scheme Lancer -configuration Debug -skipMacroValidation -destination "platform=iOS Simulator,id=095F8B3A-FEA3-4031-A2A5-561755740730" -collect-test-diagnostics never COMPILER_INDEX_STORE_ENABLE=NO ONLY_ACTIVE_ARCH=YES -packageCachePath /Users/roshansilva/Library/Caches/org.swift.swiftpm -derivedDataPath /tmp/s1-reconnect-v2/DerivedData "-only-testing:LancerUITests/ReconnectCycleUITests" -resultBundlePath /Users/roshansilva/Library/Developer/XcodeBuildMCP/workspaces/lancer-ios-orchestration-f491ad-be5b3af10bcc/result-bundles/test_sim_2026-07-15T16-47-15-010Z_pid74443_f1daf576.xcresult test-without-building
+
+Build settings from command line:
+    COMPILER_INDEX_STORE_ENABLE = NO
+    ONLY_ACTIVE_ARCH = YES
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-log: https://github.com/apple/swift-log.git @ 1.14.0
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.1
+  swift-nio-ssh: https://github.com/Wellz26/swift-nio-ssh.git @ 0.3.6
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 3.15.1
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  Sentry: https://github.com/getsentry/sentry-cocoa @ 8.58.4
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  SwiftTerm: https://github.com/migueldeicaza/SwiftTerm.git @ 1.13.0
+  BigInt: https://github.com/attaswift/BigInt.git @ 5.7.0
+  GRDB: https://github.com/groue/GRDB.swift.git @ 6.29.3
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.101.2
+  LancerKit: /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Packages/LancerKit
+  Citadel: https://github.com/orlandos-nl/Citadel.git @ 0.12.1
+  swift-system: https://github.com/apple/swift-system.git @ 1.7.2
+
+Writing result bundle at path:
+	/Users/roshansilva/Library/Developer/XcodeBuildMCP/workspaces/lancer-ios-orchestration-f491ad-be5b3af10bcc/result-bundles/test_sim_2026-07-15T16-47-15-010Z_pid74443_f1daf576.xcresult
+
+2026-07-15 12:47:24.730850-0400 LancerUITests-Runner[75256:1205838] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-07-15 12:47:27.245.
+Test Suite 'LancerUITests.xctest' started at 2026-07-15 12:47:27.246.
+Test Suite 'ReconnectCycleUITests' started at 2026-07-15 12:47:27.246.
+Test Case '-[LancerUITests.ReconnectCycleUITests testTenConsecutiveReconnectFirstSendCycles]' started.
+    t =     0.00s Start Test at 2026-07-15 12:47:27.247
+    t =     0.05s Set Up
+    t =     0.05s Terminate dev.lancer.mobile:0
+    t =     0.06s Open dev.lancer.mobile
+    t =     0.06s     Launch dev.lancer.mobile
+2026-07-15 12:47:27.486 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 12:47:27.487 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[75256]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10880c398) and /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x108950310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     0.82s         Setting up automation session
+    t =     2.86s         Wait for dev.lancer.mobile to idle
+    t =     4.45s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =     5.48s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =     5.48s         Checking existence of `"Workspaces" StaticText`
+    t =     5.54s Waiting 15.0s for "Profile" Button to exist
+    t =     6.58s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =     6.58s         Checking existence of `"Profile" Button`
+    t =     6.60s Tap "Profile" Button
+    t =     6.61s     Wait for dev.lancer.mobile to idle
+    t =     6.61s     Find the "Profile" Button
+    t =     6.62s     Check for interrupting elements affecting "Profile" Button
+    t =     6.66s     Synthesize event
+    t =     6.96s     Wait for dev.lancer.mobile to idle
+    t =     7.40s Waiting 10.0s for Button (First Match) to exist
+    t =     8.44s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =     8.44s         Checking existence of `Button (First Match)`
+    t =     8.48s Tap Button (First Match)
+    t =     8.48s     Wait for dev.lancer.mobile to idle
+    t =     8.48s     Find the Button (First Match)
+    t =     8.51s     Check for interrupting elements affecting "Trusted Machines, 1" Button
+    t =     8.53s     Synthesize event
+    t =     8.82s     Wait for dev.lancer.mobile to idle
+    t =     9.28s Waiting 60.0s for "connected" StaticText to exist
+    t =    10.32s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =    10.32s         Checking existence of `"connected" StaticText`
+    t =    10.47s Waiting 5.0s for "Close" Button to exist
+    t =    11.51s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =    11.51s         Checking existence of `"Close" Button`
+    t =    11.55s Tap "Close" Button
+    t =    11.55s     Wait for dev.lancer.mobile to idle
+    t =    11.55s     Find the "Close" Button
+    t =    11.58s     Check for interrupting elements affecting "Close" Button
+    t =    11.61s     Synthesize event
+    t =    11.91s     Wait for dev.lancer.mobile to idle
+    t =    12.26s Waiting 5.0s for "Close" Button to exist
+    t =    13.30s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =    13.31s         Checking existence of `"Close" Button`
+    t =    13.34s Tap "Close" Button
+    t =    13.34s     Wait for dev.lancer.mobile to idle
+    t =    13.34s     Find the "Close" Button
+    t =    13.36s     Check for interrupting elements affecting "xmark" Button
+    t =    13.38s     Synthesize event
+    t =    13.67s     Wait for dev.lancer.mobile to idle
+    t =    14.02s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =    15.05s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    15.06s         Checking existence of `"Workspaces" StaticText`
+    t =    31.10s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =    32.14s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =    32.14s         Checking existence of `"cursor-composer-tap" Button`
+    t =    32.15s Tap "cursor-composer-tap" Button
+    t =    32.15s     Wait for dev.lancer.mobile to idle
+    t =    32.16s     Find the "cursor-composer-tap" Button
+    t =    32.16s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =    32.18s     Synthesize event
+    t =    32.47s     Wait for dev.lancer.mobile to idle
+    t =    33.16s Waiting 10.0s for TextView (First Match) to exist
+    t =    34.19s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =    34.20s         Checking existence of `TextView (First Match)`
+    t =    34.24s Tap TextView (First Match)
+    t =    34.24s     Wait for dev.lancer.mobile to idle
+    t =    34.25s     Find the TextView (First Match)
+    t =    34.26s     Check for interrupting elements affecting TextView
+    t =    34.30s     Synthesize event
+    t =    34.60s     Wait for dev.lancer.mobile to idle
+    t =    35.30s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =    35.35s Type 'Reply with exactly...' into TextView
+    t =    35.35s     Wait for dev.lancer.mobile to idle
+    t =    35.35s     Find the TextView
+    t =    35.37s     Check for interrupting elements affecting TextView
+    t =    35.42s     Synthesize event
+    t =    36.46s     Wait for dev.lancer.mobile to idle
+    t =    36.47s Waiting 5.0s for "composer.send" Button to exist
+    t =    37.49s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =    37.50s         Checking existence of `"composer.send" Button`
+    t =    37.54s Find the "composer.send" Button
+    t =    37.56s Tap "composer.send" Button
+    t =    37.56s     Wait for dev.lancer.mobile to idle
+    t =    37.57s     Find the "composer.send" Button
+    t =    37.59s     Check for interrupting elements affecting "composer.send" Button
+    t =    37.62s     Synthesize event
+    t =    37.91s     Wait for dev.lancer.mobile to idle
+    t =    38.37s Checking existence of `"Retry" Button`
+    t =    38.42s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    38.47s Checking existence of `"reconnect-ok" StaticText`
+    t =    39.52s Checking existence of `"Retry" Button`
+    t =    39.57s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    39.62s Checking existence of `"reconnect-ok" StaticText`
+    t =    40.67s Checking existence of `"Retry" Button`
+    t =    40.72s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    40.77s Checking existence of `"reconnect-ok" StaticText`
+    t =    41.82s Checking existence of `"Retry" Button`
+    t =    41.87s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    41.92s Checking existence of `"reconnect-ok" StaticText`
+    t =    42.97s Checking existence of `"Retry" Button`
+    t =    43.07s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    43.17s Checking existence of `"reconnect-ok" StaticText`
+    t =    43.22s Get number of matches for: Elements matching predicate 'label == "Reply with exactly reconnect-ok. Do not use tools."'
+    t =    43.25s Get number of matches for: Elements matching predicate 'label == "reconnect-ok"'
+    t =    43.27s Checking existence of `"Retry" Button`
+    t =    43.42s Added attachment named 'cycle-01'
+RECONNECT_CYCLE 1 PASS timeToConnected=10.4s timeToFirstToken=5.7s
+    t =    43.42s Terminate dev.lancer.mobile:75446
+    t =    44.49s Open dev.lancer.mobile
+    t =    44.49s     Launch dev.lancer.mobile
+2026-07-15 12:48:11.740 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 12:48:11.741 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    44.71s         Setting up automation session
+    t =    47.06s         Wait for dev.lancer.mobile to idle
+    t =    48.51s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =    49.55s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    49.55s         Checking existence of `"Workspaces" StaticText`
+    t =    49.63s Waiting 15.0s for "Profile" Button to exist
+    t =    50.67s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =    50.67s         Checking existence of `"Profile" Button`
+    t =    50.70s Tap "Profile" Button
+    t =    50.70s     Wait for dev.lancer.mobile to idle
+    t =    50.70s     Find the "Profile" Button
+    t =    50.72s     Check for interrupting elements affecting "Profile" Button
+    t =    50.74s     Synthesize event
+    t =    51.03s     Wait for dev.lancer.mobile to idle
+    t =    51.44s Waiting 10.0s for Button (First Match) to exist
+    t =    52.48s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    52.48s         Checking existence of `Button (First Match)`
+    t =    52.53s Tap Button (First Match)
+    t =    52.53s     Wait for dev.lancer.mobile to idle
+    t =    52.53s     Find the Button (First Match)
+    t =    52.56s     Check for interrupting elements affecting "Trusted Machines, 1" Button
+    t =    52.58s     Synthesize event
+    t =    52.87s     Wait for dev.lancer.mobile to idle
+    t =    53.29s Waiting 60.0s for "connected" StaticText to exist
+    t =    54.33s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =    54.33s         Checking existence of `"connected" StaticText`
+    t =    54.43s Waiting 5.0s for "Close" Button to exist
+    t =    55.46s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =    55.46s         Checking existence of `"Close" Button`
+    t =    55.50s Tap "Close" Button
+    t =    55.50s     Wait for dev.lancer.mobile to idle
+    t =    55.50s     Find the "Close" Button
+    t =    55.52s     Check for interrupting elements affecting "Close" Button
+    t =    55.55s     Synthesize event
+    t =    55.85s     Wait for dev.lancer.mobile to idle
+    t =    56.19s Waiting 5.0s for "Close" Button to exist
+    t =    57.23s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =    57.23s         Checking existence of `"Close" Button`
+    t =    57.26s Tap "Close" Button
+    t =    57.26s     Wait for dev.lancer.mobile to idle
+    t =    57.27s     Find the "Close" Button
+    t =    57.28s     Check for interrupting elements affecting "xmark" Button
+    t =    57.30s     Synthesize event
+    t =    57.59s     Wait for dev.lancer.mobile to idle
+    t =    57.94s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =    58.98s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    58.98s         Checking existence of `"Workspaces" StaticText`
+    t =    75.03s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =    76.04s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =    76.04s         Checking existence of `"cursor-composer-tap" Button`
+    t =    76.07s Tap "cursor-composer-tap" Button
+    t =    76.07s     Wait for dev.lancer.mobile to idle
+    t =    76.07s     Find the "cursor-composer-tap" Button
+    t =    76.08s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =    76.10s     Synthesize event
+    t =    76.38s     Wait for dev.lancer.mobile to idle
+    t =    77.01s Waiting 10.0s for TextView (First Match) to exist
+    t =    78.02s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =    78.02s         Checking existence of `TextView (First Match)`
+    t =    78.04s Tap TextView (First Match)
+    t =    78.04s     Wait for dev.lancer.mobile to idle
+    t =    78.05s     Find the TextView (First Match)
+    t =    78.06s     Check for interrupting elements affecting TextView
+    t =    78.09s     Synthesize event
+    t =    78.38s     Wait for dev.lancer.mobile to idle
+    t =    79.09s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =    79.12s Type 'Reply with exactly...' into TextView
+    t =    79.12s     Wait for dev.lancer.mobile to idle
+    t =    79.12s     Find the TextView
+    t =    79.14s     Check for interrupting elements affecting TextView
+    t =    79.17s     Synthesize event
+    t =    80.20s     Wait for dev.lancer.mobile to idle
+    t =   140.23s App animations complete notification not received, will attempt to continue.
+    t =   140.23s Waiting 5.0s for "composer.send" Button to exist
+    t =   141.26s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =   141.26s         Checking existence of `"composer.send" Button`
+    t =   141.29s Find the "composer.send" Button
+    t =   141.31s Tap "composer.send" Button
+    t =   141.31s     Wait for dev.lancer.mobile to idle
+    t =   201.34s App animations complete notification not received, will attempt to continue.
+    t =   201.34s     Find the "composer.send" Button
+    t =   201.42s     Check for interrupting elements affecting "composer.send" Button
+    t =   201.51s     Synthesize event
+    t =   201.81s     Wait for dev.lancer.mobile to idle
+    t =   261.84s App animations complete notification not received, will attempt to continue.
+    t =   261.84s Checking existence of `"Retry" Button`
+    t =   261.91s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   261.96s Checking existence of `"reconnect-ok" StaticText`
+    t =   262.00s Get number of matches for: Elements matching predicate 'label == "Reply with exactly reconnect-ok. Do not use tools."'
+    t =   262.03s Get number of matches for: Elements matching predicate 'label == "reconnect-ok"'
+    t =   262.06s Checking existence of `"Retry" Button`
+    t =   262.19s Added attachment named 'cycle-02'
+RECONNECT_CYCLE 2 PASS timeToConnected=9.9s timeToFirstToken=120.7s
+    t =   262.19s Terminate dev.lancer.mobile:77243
+    t =   262.20s Unable to monitor animations
+    t =   262.20s Unable to monitor animations
+    t =   262.20s Unable to monitor animations
+    t =   263.24s Open dev.lancer.mobile
+    t =   263.24s     Launch dev.lancer.mobile
+2026-07-15 12:51:50.506 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 12:51:50.506 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   263.47s         Setting up automation session
+    t =   265.90s         Wait for dev.lancer.mobile to idle
+    t =   267.36s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =   268.37s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   268.38s         Checking existence of `"Workspaces" StaticText`
+    t =   268.46s Waiting 15.0s for "Profile" Button to exist
+    t =   269.49s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =   269.49s         Checking existence of `"Profile" Button`
+    t =   269.52s Tap "Profile" Button
+    t =   269.52s     Wait for dev.lancer.mobile to idle
+    t =   269.52s     Find the "Profile" Button
+    t =   269.53s     Check for interrupting elements affecting "Profile" Button
+    t =   269.55s     Synthesize event
+    t =   269.85s     Wait for dev.lancer.mobile to idle
+    t =   270.27s Waiting 10.0s for Button (First Match) to exist
+    t =   271.29s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   271.29s         Checking existence of `Button (First Match)`
+    t =   271.33s Tap Button (First Match)
+    t =   271.33s     Wait for dev.lancer.mobile to idle
+    t =   271.33s     Find the Button (First Match)
+    t =   271.36s     Check for interrupting elements affecting "Trusted Machines, 1" Button
+    t =   271.38s     Synthesize event
+    t =   271.66s     Wait for dev.lancer.mobile to idle
+    t =   272.09s Waiting 60.0s for "connected" StaticText to exist
+    t =   273.11s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =   273.11s         Checking existence of `"connected" StaticText`
+    t =   273.20s Waiting 5.0s for "Close" Button to exist
+    t =   274.21s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   274.21s         Checking existence of `"Close" Button`
+    t =   274.25s Tap "Close" Button
+    t =   274.25s     Wait for dev.lancer.mobile to idle
+    t =   274.25s     Find the "Close" Button
+    t =   274.27s     Check for interrupting elements affecting "Close" Button
+    t =   274.30s     Synthesize event
+    t =   274.60s     Wait for dev.lancer.mobile to idle
+    t =   274.95s Waiting 5.0s for "Close" Button to exist
+    t =   275.97s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   275.97s         Checking existence of `"Close" Button`
+    t =   276.00s Tap "Close" Button
+    t =   276.00s     Wait for dev.lancer.mobile to idle
+    t =   276.01s     Find the "Close" Button
+    t =   276.03s     Check for interrupting elements affecting "xmark" Button
+    t =   276.05s     Synthesize event
+    t =   276.34s     Wait for dev.lancer.mobile to idle
+    t =   276.69s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =   277.70s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   277.70s         Checking existence of `"Workspaces" StaticText`
+    t =   293.75s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =   294.77s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =   294.77s         Checking existence of `"cursor-composer-tap" Button`
+    t =   294.80s Tap "cursor-composer-tap" Button
+    t =   294.80s     Wait for dev.lancer.mobile to idle
+    t =   294.81s     Find the "cursor-composer-tap" Button
+    t =   294.82s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =   294.84s     Synthesize event
+    t =   295.13s     Wait for dev.lancer.mobile to idle
+    t =   295.76s Waiting 10.0s for TextView (First Match) to exist
+    t =   296.79s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =   296.79s         Checking existence of `TextView (First Match)`
+    t =   296.84s Tap TextView (First Match)
+    t =   296.84s     Wait for dev.lancer.mobile to idle
+    t =   296.84s     Find the TextView (First Match)
+    t =   296.86s     Check for interrupting elements affecting TextView
+    t =   296.89s     Synthesize event
+    t =   297.19s     Wait for dev.lancer.mobile to idle
+    t =   297.90s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =   297.94s Type 'Reply with exactly...' into TextView
+    t =   297.94s     Wait for dev.lancer.mobile to idle
+    t =   297.95s     Find the TextView
+    t =   297.97s     Check for interrupting elements affecting TextView
+    t =   298.00s     Synthesize event
+    t =   299.03s     Wait for dev.lancer.mobile to idle
+    t =   299.04s Waiting 5.0s for "composer.send" Button to exist
+    t =   300.06s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =   300.06s         Checking existence of `"composer.send" Button`
+    t =   300.10s Find the "composer.send" Button
+    t =   300.12s Tap "composer.send" Button
+    t =   300.12s     Wait for dev.lancer.mobile to idle
+    t =   300.12s     Find the "composer.send" Button
+    t =   300.14s     Check for interrupting elements affecting "composer.send" Button
+    t =   300.17s     Synthesize event
+    t =   300.46s     Wait for dev.lancer.mobile to idle
+    t =   300.88s Checking existence of `"Retry" Button`
+    t =   300.92s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   300.97s Checking existence of `"reconnect-ok" StaticText`
+    t =   302.02s Checking existence of `"Retry" Button`
+    t =   302.08s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   302.12s Checking existence of `"reconnect-ok" StaticText`
+    t =   303.16s Checking existence of `"Retry" Button`
+    t =   303.21s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   303.26s Checking existence of `"reconnect-ok" StaticText`
+    t =   304.31s Checking existence of `"Retry" Button`
+    t =   304.36s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   304.40s Checking existence of `"reconnect-ok" StaticText`
+    t =   304.44s Get number of matches for: Elements matching predicate 'label == "Reply with exactly reconnect-ok. Do not use tools."'
+    t =   304.47s Get number of matches for: Elements matching predicate 'label == "reconnect-ok"'
+    t =   304.49s Checking existence of `"Retry" Button`
+    t =   304.60s Added attachment named 'cycle-03'
+RECONNECT_CYCLE 3 PASS timeToConnected=10.0s timeToFirstToken=4.3s
+    t =   304.60s Terminate dev.lancer.mobile:85915
+    t =   305.64s Open dev.lancer.mobile
+    t =   305.64s     Launch dev.lancer.mobile
+2026-07-15 12:52:32.899 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 12:52:32.899 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   305.86s         Setting up automation session
+    t =   307.78s         Wait for dev.lancer.mobile to idle
+    t =   309.02s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =   310.04s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   310.04s         Checking existence of `"Workspaces" StaticText`
+    t =   310.11s Waiting 15.0s for "Profile" Button to exist
+    t =   311.14s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =   311.14s         Checking existence of `"Profile" Button`
+    t =   311.17s Tap "Profile" Button
+    t =   311.17s     Wait for dev.lancer.mobile to idle
+    t =   311.17s     Find the "Profile" Button
+    t =   311.18s     Check for interrupting elements affecting "Profile" Button
+    t =   311.20s     Synthesize event
+    t =   311.50s     Wait for dev.lancer.mobile to idle
+    t =   311.86s Waiting 10.0s for Button (First Match) to exist
+    t =   312.87s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   312.87s         Checking existence of `Button (First Match)`
+    t =   312.93s Tap Button (First Match)
+    t =   312.93s     Wait for dev.lancer.mobile to idle
+    t =   312.93s     Find the Button (First Match)
+    t =   312.96s     Check for interrupting elements affecting "Trusted Machines, 1" Button
+    t =   312.97s     Synthesize event
+    t =   313.26s     Wait for dev.lancer.mobile to idle
+    t =   313.63s Waiting 60.0s for "connected" StaticText to exist
+    t =   314.65s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =   314.65s         Checking existence of `"connected" StaticText`
+    t =   314.75s Waiting 5.0s for "Close" Button to exist
+    t =   315.76s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   315.76s         Checking existence of `"Close" Button`
+    t =   315.79s Tap "Close" Button
+    t =   315.79s     Wait for dev.lancer.mobile to idle
+    t =   315.80s     Find the "Close" Button
+    t =   315.82s     Check for interrupting elements affecting "Close" Button
+    t =   315.85s     Synthesize event
+    t =   316.14s     Wait for dev.lancer.mobile to idle
+    t =   316.49s Waiting 5.0s for "Close" Button to exist
+    t =   317.51s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   317.51s         Checking existence of `"Close" Button`
+    t =   317.55s Tap "Close" Button
+    t =   317.55s     Wait for dev.lancer.mobile to idle
+    t =   317.55s     Find the "Close" Button
+    t =   317.57s     Check for interrupting elements affecting "xmark" Button
+    t =   317.59s     Synthesize event
+    t =   317.88s     Wait for dev.lancer.mobile to idle
+    t =   318.24s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =   319.26s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   319.26s         Checking existence of `"Workspaces" StaticText`
+    t =   335.31s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =   336.32s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =   336.32s         Checking existence of `"cursor-composer-tap" Button`
+    t =   336.34s Tap "cursor-composer-tap" Button
+    t =   336.34s     Wait for dev.lancer.mobile to idle
+    t =   336.34s     Find the "cursor-composer-tap" Button
+    t =   336.35s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =   336.37s     Synthesize event
+    t =   336.66s     Wait for dev.lancer.mobile to idle
+    t =   337.17s Waiting 10.0s for TextView (First Match) to exist
+    t =   338.21s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =   338.21s         Checking existence of `TextView (First Match)`
+    t =   338.25s Tap TextView (First Match)
+    t =   338.25s     Wait for dev.lancer.mobile to idle
+    t =   338.25s     Find the TextView (First Match)
+    t =   338.27s     Check for interrupting elements affecting TextView
+    t =   338.31s     Synthesize event
+    t =   338.59s     Wait for dev.lancer.mobile to idle
+    t =   339.31s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =   339.36s Type 'Reply with exactly...' into TextView
+    t =   339.36s     Wait for dev.lancer.mobile to idle
+    t =   339.36s     Find the TextView
+    t =   339.38s     Check for interrupting elements affecting TextView
+    t =   339.41s     Synthesize event
+    t =   340.45s     Wait for dev.lancer.mobile to idle
+    t =   340.45s Waiting 5.0s for "composer.send" Button to exist
+    t =   341.48s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =   341.48s         Checking existence of `"composer.send" Button`
+    t =   341.54s Find the "composer.send" Button
+    t =   341.56s Tap "composer.send" Button
+    t =   341.56s     Wait for dev.lancer.mobile to idle
+    t =   341.56s     Find the "composer.send" Button
+    t =   341.59s     Check for interrupting elements affecting "composer.send" Button
+    t =   341.62s     Synthesize event
+    t =   341.89s     Wait for dev.lancer.mobile to idle
+    t =   342.35s Checking existence of `"Retry" Button`
+    t =   342.40s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   342.45s Checking existence of `"reconnect-ok" StaticText`
+    t =   343.54s Checking existence of `"Retry" Button`
+    t =   343.59s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   343.64s Checking existence of `"reconnect-ok" StaticText`
+    t =   344.69s Checking existence of `"Retry" Button`
+    t =   344.75s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   344.80s Checking existence of `"reconnect-ok" StaticText`
+    t =   345.85s Checking existence of `"Retry" Button`
+    t =   345.90s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   345.95s Checking existence of `"reconnect-ok" StaticText`
+    t =   345.99s Get number of matches for: Elements matching predicate 'label == "Reply with exactly reconnect-ok. Do not use tools."'
+    t =   346.02s Get number of matches for: Elements matching predicate 'label == "reconnect-ok"'
+    t =   346.05s Checking existence of `"Retry" Button`
+    t =   346.16s Added attachment named 'cycle-04'
+RECONNECT_CYCLE 4 PASS timeToConnected=9.1s timeToFirstToken=4.4s
+    t =   346.16s Terminate dev.lancer.mobile:87543
+    t =   347.19s Open dev.lancer.mobile
+    t =   347.19s     Launch dev.lancer.mobile
+2026-07-15 12:53:14.444 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 12:53:14.445 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   347.41s         Setting up automation session
+    t =   349.31s         Wait for dev.lancer.mobile to idle
+    t =   350.54s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =   351.56s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   351.56s         Checking existence of `"Workspaces" StaticText`
+    t =   351.64s Waiting 15.0s for "Profile" Button to exist
+    t =   352.65s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =   352.65s         Checking existence of `"Profile" Button`
+    t =   352.67s Tap "Profile" Button
+    t =   352.67s     Wait for dev.lancer.mobile to idle
+    t =   352.67s     Find the "Profile" Button
+    t =   352.68s     Check for interrupting elements affecting "Profile" Button
+    t =   352.69s     Synthesize event
+    t =   352.98s     Wait for dev.lancer.mobile to idle
+    t =   353.36s Waiting 10.0s for Button (First Match) to exist
+    t =   354.39s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   354.39s         Checking existence of `Button (First Match)`
+    t =   354.45s Tap Button (First Match)
+    t =   354.45s     Wait for dev.lancer.mobile to idle
+    t =   354.45s     Find the Button (First Match)
+    t =   354.48s     Check for interrupting elements affecting "Trusted Machines, 1" Button
+    t =   354.49s     Synthesize event
+    t =   354.78s     Wait for dev.lancer.mobile to idle
+    t =   355.19s Waiting 60.0s for "connected" StaticText to exist
+    t =   356.21s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =   356.21s         Checking existence of `"connected" StaticText`
+    t =   356.31s Waiting 5.0s for "Close" Button to exist
+    t =   357.32s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   357.32s         Checking existence of `"Close" Button`
+    t =   357.36s Tap "Close" Button
+    t =   357.36s     Wait for dev.lancer.mobile to idle
+    t =   357.36s     Find the "Close" Button
+    t =   357.38s     Check for interrupting elements affecting "Close" Button
+    t =   357.41s     Synthesize event
+    t =   357.71s     Wait for dev.lancer.mobile to idle
+    t =   358.06s Waiting 5.0s for "Close" Button to exist
+    t =   359.08s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   359.08s         Checking existence of `"Close" Button`
+    t =   359.12s Tap "Close" Button
+    t =   359.12s     Wait for dev.lancer.mobile to idle
+    t =   359.12s     Find the "Close" Button
+    t =   359.14s     Check for interrupting elements affecting "xmark" Button
+    t =   359.17s     Synthesize event
+    t =   359.46s     Wait for dev.lancer.mobile to idle
+    t =   359.80s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =   360.82s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   360.82s         Checking existence of `"Workspaces" StaticText`
+    t =   376.87s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =   377.89s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =   377.89s         Checking existence of `"cursor-composer-tap" Button`
+    t =   377.92s Tap "cursor-composer-tap" Button
+    t =   377.92s     Wait for dev.lancer.mobile to idle
+    t =   377.93s     Find the "cursor-composer-tap" Button
+    t =   377.94s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =   377.96s     Synthesize event
+    t =   378.25s     Wait for dev.lancer.mobile to idle
+    t =   378.78s Waiting 10.0s for TextView (First Match) to exist
+    t =   379.81s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =   379.81s         Checking existence of `TextView (First Match)`
+    t =   379.85s Tap TextView (First Match)
+    t =   379.85s     Wait for dev.lancer.mobile to idle
+    t =   379.85s     Find the TextView (First Match)
+    t =   379.87s     Check for interrupting elements affecting TextView
+    t =   379.91s     Synthesize event
+    t =   380.20s     Wait for dev.lancer.mobile to idle
+    t =   380.91s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =   380.96s Type 'Reply with exactly...' into TextView
+    t =   380.96s     Wait for dev.lancer.mobile to idle
+    t =   380.96s     Find the TextView
+    t =   380.98s     Check for interrupting elements affecting TextView
+    t =   381.02s     Synthesize event
+    t =   382.05s     Wait for dev.lancer.mobile to idle
+    t =   382.05s Waiting 5.0s for "composer.send" Button to exist
+    t =   383.06s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =   383.06s         Checking existence of `"composer.send" Button`
+    t =   383.09s Find the "composer.send" Button
+    t =   383.11s Tap "composer.send" Button
+    t =   383.11s     Wait for dev.lancer.mobile to idle
+    t =   383.11s     Find the "composer.send" Button
+    t =   383.13s     Check for interrupting elements affecting "composer.send" Button
+    t =   383.16s     Synthesize event
+    t =   383.45s     Wait for dev.lancer.mobile to idle
+    t =   383.88s Checking existence of `"Retry" Button`
+    t =   383.93s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   383.99s Checking existence of `"reconnect-ok" StaticText`
+    t =   385.05s Checking existence of `"Retry" Button`
+    t =   385.11s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   385.16s Checking existence of `"reconnect-ok" StaticText`
+    t =   386.22s Checking existence of `"Retry" Button`
+    t =   386.30s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   386.35s Checking existence of `"reconnect-ok" StaticText`
+    t =   387.41s Checking existence of `"Retry" Button`
+    t =   387.49s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   387.55s Checking existence of `"reconnect-ok" StaticText`
+    t =   388.62s Checking existence of `"Retry" Button`
+    t =   388.70s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   388.76s Checking existence of `"reconnect-ok" StaticText`
+    t =   388.81s Get number of matches for: Elements matching predicate 'label == "Reply with exactly reconnect-ok. Do not use tools."'
+    t =   388.85s Get number of matches for: Elements matching predicate 'label == "reconnect-ok"'
+    t =   388.87s Checking existence of `"Retry" Button`
+    t =   389.00s Added attachment named 'cycle-05'
+RECONNECT_CYCLE 5 PASS timeToConnected=9.1s timeToFirstToken=5.7s
+    t =   389.00s Terminate dev.lancer.mobile:89245
+    t =   390.05s Open dev.lancer.mobile
+    t =   390.05s     Launch dev.lancer.mobile
+2026-07-15 12:53:57.314 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 12:53:57.314 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   390.28s         Setting up automation session
+    t =   392.32s         Wait for dev.lancer.mobile to idle
+    t =   393.59s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =   394.62s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   394.62s         Checking existence of `"Workspaces" StaticText`
+    t =   394.70s Waiting 15.0s for "Profile" Button to exist
+    t =   395.73s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =   395.73s         Checking existence of `"Profile" Button`
+    t =   395.74s Tap "Profile" Button
+    t =   395.74s     Wait for dev.lancer.mobile to idle
+    t =   395.74s     Find the "Profile" Button
+    t =   395.75s     Check for interrupting elements affecting "Profile" Button
+    t =   395.77s     Synthesize event
+    t =   396.06s     Wait for dev.lancer.mobile to idle
+    t =   396.43s Waiting 10.0s for Button (First Match) to exist
+    t =   397.46s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   397.46s         Checking existence of `Button (First Match)`
+    t =   397.52s Tap Button (First Match)
+    t =   397.52s     Wait for dev.lancer.mobile to idle
+    t =   397.52s     Find the Button (First Match)
+    t =   397.55s     Check for interrupting elements affecting "Trusted Machines, 1" Button
+    t =   397.57s     Synthesize event
+    t =   397.86s     Wait for dev.lancer.mobile to idle
+    t =   398.24s Waiting 60.0s for "connected" StaticText to exist
+    t =   399.27s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =   399.27s         Checking existence of `"connected" StaticText`
+    t =   399.37s Waiting 5.0s for "Close" Button to exist
+    t =   400.39s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   400.39s         Checking existence of `"Close" Button`
+    t =   400.42s Tap "Close" Button
+    t =   400.42s     Wait for dev.lancer.mobile to idle
+    t =   400.43s     Find the "Close" Button
+    t =   400.45s     Check for interrupting elements affecting "Close" Button
+    t =   400.48s     Synthesize event
+    t =   400.77s     Wait for dev.lancer.mobile to idle
+    t =   401.13s Waiting 5.0s for "Close" Button to exist
+    t =   402.14s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   402.14s         Checking existence of `"Close" Button`
+    t =   402.17s Tap "Close" Button
+    t =   402.17s     Wait for dev.lancer.mobile to idle
+    t =   402.17s     Find the "Close" Button
+    t =   402.19s     Check for interrupting elements affecting "xmark" Button
+    t =   402.21s     Synthesize event
+    t =   402.50s     Wait for dev.lancer.mobile to idle
+    t =   402.86s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =   403.91s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   403.91s         Checking existence of `"Workspaces" StaticText`
+    t =   419.94s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =   420.98s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =   420.98s         Checking existence of `"cursor-composer-tap" Button`
+    t =   421.03s Tap "cursor-composer-tap" Button
+    t =   421.03s     Wait for dev.lancer.mobile to idle
+    t =   421.04s     Find the "cursor-composer-tap" Button
+    t =   421.05s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =   421.14s     Synthesize event
+    t =   421.45s     Wait for dev.lancer.mobile to idle
+    t =   422.20s Waiting 10.0s for TextView (First Match) to exist
+    t =   423.23s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =   423.23s         Checking existence of `TextView (First Match)`
+    t =   423.28s Tap TextView (First Match)
+    t =   423.28s     Wait for dev.lancer.mobile to idle
+    t =   423.29s     Find the TextView (First Match)
+    t =   423.30s     Check for interrupting elements affecting TextView
+    t =   423.34s     Synthesize event
+    t =   423.64s     Wait for dev.lancer.mobile to idle
+    t =   424.35s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =   424.39s Type 'Reply with exactly...' into TextView
+    t =   424.39s     Wait for dev.lancer.mobile to idle
+    t =   424.39s     Find the TextView
+    t =   424.41s     Check for interrupting elements affecting TextView
+    t =   424.44s     Synthesize event
+    t =   425.48s     Wait for dev.lancer.mobile to idle
+    t =   425.49s Waiting 5.0s for "composer.send" Button to exist
+    t =   426.52s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =   426.52s         Checking existence of `"composer.send" Button`
+    t =   426.55s Find the "composer.send" Button
+    t =   426.57s Tap "composer.send" Button
+    t =   426.57s     Wait for dev.lancer.mobile to idle
+    t =   426.57s     Find the "composer.send" Button
+    t =   426.59s     Check for interrupting elements affecting "composer.send" Button
+    t =   426.62s     Synthesize event
+    t =   426.91s     Wait for dev.lancer.mobile to idle
+    t =   427.41s Checking existence of `"Retry" Button`
+    t =   427.47s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   427.53s Checking existence of `"reconnect-ok" StaticText`
+    t =   428.59s Checking existence of `"Retry" Button`
+    t =   428.65s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   428.71s Checking existence of `"reconnect-ok" StaticText`
+    t =   429.77s Checking existence of `"Retry" Button`
+    t =   429.83s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   429.88s Checking existence of `"reconnect-ok" StaticText`
+    t =   430.94s Checking existence of `"Retry" Button`
+    t =   431.00s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   431.05s Checking existence of `"reconnect-ok" StaticText`
+    t =   432.11s Checking existence of `"Retry" Button`
+    t =   432.18s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   432.23s Checking existence of `"reconnect-ok" StaticText`
+    t =   432.27s Get number of matches for: Elements matching predicate 'label == "Reply with exactly reconnect-ok. Do not use tools."'
+    t =   432.31s Get number of matches for: Elements matching predicate 'label == "reconnect-ok"'
+    t =   432.34s Checking existence of `"Retry" Button`
+    t =   432.48s Added attachment named 'cycle-06'
+RECONNECT_CYCLE 6 PASS timeToConnected=9.3s timeToFirstToken=5.7s
+    t =   432.48s Terminate dev.lancer.mobile:90924
+    t =   433.54s Open dev.lancer.mobile
+    t =   433.54s     Launch dev.lancer.mobile
+2026-07-15 12:54:40.818 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 12:54:40.818 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   433.79s         Setting up automation session
+    t =   435.94s         Wait for dev.lancer.mobile to idle
+    t =   437.33s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =   438.36s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   438.36s         Checking existence of `"Workspaces" StaticText`
+    t =   438.47s Waiting 15.0s for "Profile" Button to exist
+    t =   439.50s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =   439.50s         Checking existence of `"Profile" Button`
+    t =   439.53s Tap "Profile" Button
+    t =   439.53s     Wait for dev.lancer.mobile to idle
+    t =   439.53s     Find the "Profile" Button
+    t =   439.54s     Check for interrupting elements affecting "Profile" Button
+    t =   439.56s     Synthesize event
+    t =   439.85s     Wait for dev.lancer.mobile to idle
+    t =   440.26s Waiting 10.0s for Button (First Match) to exist
+    t =   441.29s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   441.29s         Checking existence of `Button (First Match)`
+    t =   441.33s Tap Button (First Match)
+    t =   441.34s     Wait for dev.lancer.mobile to idle
+    t =   441.34s     Find the Button (First Match)
+    t =   441.36s     Check for interrupting elements affecting "Trusted Machines, 1" Button
+    t =   441.38s     Synthesize event
+    t =   441.67s     Wait for dev.lancer.mobile to idle
+    t =   442.07s Waiting 60.0s for "connected" StaticText to exist
+    t =   443.11s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =   443.11s         Checking existence of `"connected" StaticText`
+    t =   443.20s Waiting 5.0s for "Close" Button to exist
+    t =   444.22s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   444.23s         Checking existence of `"Close" Button`
+    t =   444.26s Tap "Close" Button
+    t =   444.26s     Wait for dev.lancer.mobile to idle
+    t =   444.26s     Find the "Close" Button
+    t =   444.28s     Check for interrupting elements affecting "Close" Button
+    t =   444.32s     Synthesize event
+    t =   444.61s     Wait for dev.lancer.mobile to idle
+    t =   444.95s Waiting 5.0s for "Close" Button to exist
+    t =   445.98s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   445.98s         Checking existence of `"Close" Button`
+    t =   446.02s Tap "Close" Button
+    t =   446.02s     Wait for dev.lancer.mobile to idle
+    t =   446.02s     Find the "Close" Button
+    t =   446.04s     Check for interrupting elements affecting "xmark" Button
+    t =   446.07s     Synthesize event
+    t =   446.36s     Wait for dev.lancer.mobile to idle
+    t =   446.70s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =   447.74s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   447.74s         Checking existence of `"Workspaces" StaticText`
+    t =   463.80s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =   464.87s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =   464.88s         Checking existence of `"cursor-composer-tap" Button`
+    t =   465.02s Tap "cursor-composer-tap" Button
+    t =   465.02s     Wait for dev.lancer.mobile to idle
+    t =   465.04s     Find the "cursor-composer-tap" Button
+    t =   465.19s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =   465.42s     Synthesize event
+    t =   465.79s     Wait for dev.lancer.mobile to idle
+    t =   466.25s Waiting 10.0s for TextView (First Match) to exist
+    t =   467.29s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =   467.29s         Checking existence of `TextView (First Match)`
+    t =   467.33s Tap TextView (First Match)
+    t =   467.33s     Wait for dev.lancer.mobile to idle
+    t =   467.54s     Find the TextView (First Match)
+    t =   467.57s     Check for interrupting elements affecting TextView
+    t =   467.69s     Synthesize event
+    t =   467.99s     Wait for dev.lancer.mobile to idle
+    t =   468.69s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =   468.73s Type 'Reply with exactly...' into TextView
+    t =   468.73s     Wait for dev.lancer.mobile to idle
+    t =   468.73s     Find the TextView
+    t =   468.76s     Check for interrupting elements affecting TextView
+    t =   468.79s     Synthesize event
+    t =   469.83s     Wait for dev.lancer.mobile to idle
+    t =   469.84s Waiting 5.0s for "composer.send" Button to exist
+    t =   470.87s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =   470.87s         Checking existence of `"composer.send" Button`
+    t =   470.93s Find the "composer.send" Button
+    t =   470.96s Tap "composer.send" Button
+    t =   470.96s     Wait for dev.lancer.mobile to idle
+    t =   470.96s     Find the "composer.send" Button
+    t =   470.98s     Check for interrupting elements affecting "composer.send" Button
+    t =   471.02s     Synthesize event
+    t =   471.31s     Wait for dev.lancer.mobile to idle
+    t =   471.80s Checking existence of `"Retry" Button`
+    t =   471.86s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   471.93s Checking existence of `"reconnect-ok" StaticText`
+    t =   473.01s Checking existence of `"Retry" Button`
+    t =   473.07s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   473.13s Checking existence of `"reconnect-ok" StaticText`
+    t =   474.19s Checking existence of `"Retry" Button`
+    t =   474.25s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   474.31s Checking existence of `"reconnect-ok" StaticText`
+    t =   475.37s Checking existence of `"Retry" Button`
+    t =   475.42s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   475.48s Checking existence of `"reconnect-ok" StaticText`
+    t =   476.54s Checking existence of `"Retry" Button`
+    t =   476.60s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   476.66s Checking existence of `"reconnect-ok" StaticText`
+    t =   476.71s Get number of matches for: Elements matching predicate 'label == "Reply with exactly reconnect-ok. Do not use tools."'
+    t =   476.75s Get number of matches for: Elements matching predicate 'label == "reconnect-ok"'
+    t =   476.78s Checking existence of `"Retry" Button`
+    t =   476.93s Added attachment named 'cycle-07'
+RECONNECT_CYCLE 7 PASS timeToConnected=9.7s timeToFirstToken=5.8s
+    t =   476.93s Terminate dev.lancer.mobile:92745
+    t =   478.00s Open dev.lancer.mobile
+    t =   478.00s     Launch dev.lancer.mobile
+2026-07-15 12:55:25.279 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 12:55:25.279 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   478.25s         Setting up automation session
+    t =   480.61s         Wait for dev.lancer.mobile to idle
+    t =   482.03s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =   483.06s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   483.07s         Checking existence of `"Workspaces" StaticText`
+    t =   483.16s Waiting 15.0s for "Profile" Button to exist
+    t =   484.21s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =   484.21s         Checking existence of `"Profile" Button`
+    t =   484.24s Tap "Profile" Button
+    t =   484.24s     Wait for dev.lancer.mobile to idle
+    t =   484.25s     Find the "Profile" Button
+    t =   484.26s     Check for interrupting elements affecting "Profile" Button
+    t =   484.30s     Synthesize event
+    t =   484.59s     Wait for dev.lancer.mobile to idle
+    t =   485.01s Waiting 10.0s for Button (First Match) to exist
+    t =   486.05s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   486.05s         Checking existence of `Button (First Match)`
+    t =   486.10s Tap Button (First Match)
+    t =   486.10s     Wait for dev.lancer.mobile to idle
+    t =   486.10s     Find the Button (First Match)
+    t =   486.13s     Check for interrupting elements affecting "Trusted Machines, 1" Button
+    t =   486.15s     Synthesize event
+    t =   486.44s     Wait for dev.lancer.mobile to idle
+    t =   486.87s Waiting 60.0s for "connected" StaticText to exist
+    t =   487.90s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =   487.90s         Checking existence of `"connected" StaticText`
+    t =   487.98s Waiting 5.0s for "Close" Button to exist
+    t =   489.01s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   489.01s         Checking existence of `"Close" Button`
+    t =   489.04s Tap "Close" Button
+    t =   489.04s     Wait for dev.lancer.mobile to idle
+    t =   489.04s     Find the "Close" Button
+    t =   489.06s     Check for interrupting elements affecting "Close" Button
+    t =   489.10s     Synthesize event
+    t =   489.39s     Wait for dev.lancer.mobile to idle
+    t =   489.75s Waiting 5.0s for "Close" Button to exist
+    t =   490.79s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   490.79s         Checking existence of `"Close" Button`
+    t =   490.82s Tap "Close" Button
+    t =   490.82s     Wait for dev.lancer.mobile to idle
+    t =   490.82s     Find the "Close" Button
+    t =   490.84s     Check for interrupting elements affecting "xmark" Button
+    t =   490.86s     Synthesize event
+    t =   491.15s     Wait for dev.lancer.mobile to idle
+    t =   491.49s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =   492.53s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   492.53s         Checking existence of `"Workspaces" StaticText`
+    t =   508.59s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =   509.63s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =   509.63s         Checking existence of `"cursor-composer-tap" Button`
+    t =   509.67s Tap "cursor-composer-tap" Button
+    t =   509.67s     Wait for dev.lancer.mobile to idle
+    t =   509.67s     Find the "cursor-composer-tap" Button
+    t =   509.68s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =   509.70s     Synthesize event
+    t =   509.99s     Wait for dev.lancer.mobile to idle
+    t =   510.65s Waiting 10.0s for TextView (First Match) to exist
+    t =   511.68s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =   511.68s         Checking existence of `TextView (First Match)`
+    t =   511.73s Tap TextView (First Match)
+    t =   511.73s     Wait for dev.lancer.mobile to idle
+    t =   511.73s     Find the TextView (First Match)
+    t =   511.75s     Check for interrupting elements affecting TextView
+    t =   511.79s     Synthesize event
+    t =   512.08s     Wait for dev.lancer.mobile to idle
+    t =   512.79s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =   512.81s Type 'Reply with exactly...' into TextView
+    t =   512.81s     Wait for dev.lancer.mobile to idle
+    t =   512.82s     Find the TextView
+    t =   512.84s     Check for interrupting elements affecting TextView
+    t =   512.87s     Synthesize event
+    t =   513.91s     Wait for dev.lancer.mobile to idle
+    t =   513.91s Waiting 5.0s for "composer.send" Button to exist
+    t =   514.95s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =   514.95s         Checking existence of `"composer.send" Button`
+    t =   514.98s Find the "composer.send" Button
+    t =   515.01s Tap "composer.send" Button
+    t =   515.01s     Wait for dev.lancer.mobile to idle
+    t =   515.01s     Find the "composer.send" Button
+    t =   515.04s     Check for interrupting elements affecting "composer.send" Button
+    t =   515.07s     Synthesize event
+    t =   515.37s     Wait for dev.lancer.mobile to idle
+    t =   515.81s Checking existence of `"Retry" Button`
+    t =   515.86s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   515.93s Checking existence of `"reconnect-ok" StaticText`
+    t =   517.00s Checking existence of `"Retry" Button`
+    t =   517.06s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   517.12s Checking existence of `"reconnect-ok" StaticText`
+    t =   518.18s Checking existence of `"Retry" Button`
+    t =   518.25s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   518.30s Checking existence of `"reconnect-ok" StaticText`
+    t =   519.36s Checking existence of `"Retry" Button`
+    t =   519.44s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   519.50s Checking existence of `"reconnect-ok" StaticText`
+    t =   520.56s Checking existence of `"Retry" Button`
+    t =   520.64s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   520.70s Checking existence of `"reconnect-ok" StaticText`
+    t =   520.75s Get number of matches for: Elements matching predicate 'label == "Reply with exactly reconnect-ok. Do not use tools."'
+    t =   520.79s Get number of matches for: Elements matching predicate 'label == "reconnect-ok"'
+    t =   520.82s Checking existence of `"Retry" Button`
+    t =   520.95s Added attachment named 'cycle-08'
+RECONNECT_CYCLE 8 PASS timeToConnected=10.0s timeToFirstToken=5.7s
+    t =   520.96s Terminate dev.lancer.mobile:94685
+    t =   522.00s Open dev.lancer.mobile
+    t =   522.01s     Launch dev.lancer.mobile
+2026-07-15 12:56:09.275 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 12:56:09.275 xcodebuild[75187:1205400] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   522.24s         Setting up automation session
+    t =   524.76s         Wait for dev.lancer.mobile to idle
+    t =   526.20s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =   527.24s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   527.24s         Checking existence of `"Workspaces" StaticText`
+    t =   527.33s Waiting 15.0s for "Profile" Button to exist
+    t =   528.36s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =   528.36s         Checking existence of `"Profile" Button`
+    t =   528.39s Tap "Profile" Button
+    t =   528.39s     Wait for dev.lancer.mobile to idle
+    t =   528.40s     Find the "Profile" Button
+    t =   528.41s     Check for interrupting elements affecting "Profile" Button
+    t =   528.42s     Synthesize event
+    t =   528.72s     Wait for dev.lancer.mobile to idle
+    t =   529.08s Waiting 10.0s for Button (First Match) to exist
+    t =   530.12s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   530.12s         Checking existence of `Button (First Match)`
+    t =   530.18s Tap Button (First Match)
+    t =   530.18s     Wait for dev.lancer.mobile to idle
+    t =   530.29s     Find the Button (First Match)
+    t =   530.32s     Check for interrupting elements affecting "Trusted Machines, 1" Button
+    t =   530.34s     Synthesize event
+    t =   530.63s     Wait for dev.lancer.mobile to idle
+    t =   531.02s Waiting 60.0s for "connected" StaticText to exist
+    t =   532.05s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =   532.05s         Checking existence of `"connected" StaticText`
+    t =   532.14s Waiting 5.0s for "Close" Button to exist
+    t =   533.17s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   533.17s         Checking existence of `"Close" Button`
+    t =   533.21s Tap "Close" Button
+    t =   533.21s     Wait for dev.lancer.mobile to idle
+    t =   533.21s     Find the "Close" Button
+    t =   533.23s     Check for interrupting elements affecting "Close" Button
+    t =   533.26s     Synthesize event
+    t =   533.55s     Wait for dev.lancer.mobile to idle
+    t =   533.90s Waiting 5.0s for "Close" Button to exist
+    t =   534.93s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =   534.94s         Checking existence of `"Close" Button`
+    t =   534.97s Tap "Close" Button
+    t =   534.97s     Wait for dev.lancer.mobile to idle
+    t =   534.97s     Find the "Close" Button
+    t =   534.99s     Check for interrupting elements affecting "xmark" Button
+    t =   535.00s     Synthesize event
+    t =   535.29s     Wait for dev.lancer.mobile to idle
+    t =   535.64s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =   536.68s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =   536.68s         Checking existence of `"Workspaces" StaticText`
+    t =   552.73s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =   553.77s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =   553.77s         Checking existence of `"cursor-composer-tap" Button`
+    t =   553.79s Tap "cursor-composer-tap" Button
+    t =   553.79s     Wait for dev.lancer.mobile to idle
+    t =   553.80s     Find the "cursor-composer-tap" Button
+    t =   553.81s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =   553.82s     Synthesize event
+    t =   554.12s     Wait for dev.lancer.mobile to idle
+    t =   554.78s Waiting 10.0s for TextView (First Match) to exist
+    t =   555.82s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =   555.82s         Checking existence of `TextView (First Match)`
+    t =   555.87s Tap TextView (First Match)
+    t =   555.87s     Wait for dev.lancer.mobile to idle
+    t =   555.87s     Find the TextView (First Match)
+    t =   555.89s     Check for interrupting elements affecting TextView
+    t =   555.93s     Synthesize event
+    t =   556.22s     Wait for dev.lancer.mobile to idle
+    t =   556.94s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =   556.98s Type 'Reply with exactly...' into TextView
+    t =   556.98s     Wait for dev.lancer.mobile to idle
+    t =   556.99s     Find the TextView
+    t =   557.01s     Check for interrupting elements affecting TextView
+    t =   557.05s     Synthesize event
+    t =   558.09s     Wait for dev.lancer.mobile to idle
+    t =   558.10s Waiting 5.0s for "composer.send" Button to exist
+    t =   559.12s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =   559.12s         Checking existence of `"composer.send" Button`
+    t =   559.15s Find the "composer.send" Button
+    t =   559.17s Tap "composer.send" Button
+    t =   559.17s     Wait for dev.lancer.mobile to idle
+    t =   559.17s     Find the "composer.send" Button
+    t =   559.19s     Check for interrupting elements affecting "composer.send" Button
+    t =   559.22s     Synthesize event
+    t =   559.51s     Wait for dev.lancer.mobile to idle
+    t =   559.94s Checking existence of `"Retry" Button`
+    t =   560.00s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   560.06s Checking existence of `"reconnect-ok" StaticText`
+    t =   561.13s Checking existence of `"Retry" Button`
+    t =   561.19s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   561.24s Checking existence of `"reconnect-ok" StaticText`
+    t =   562.30s Checking existence of `"Retry" Button`
+    t =   562.37s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   562.45s Checking existence of `"reconnect-ok" StaticText`
+    t =   563.52s Checking existence of `"Retry" Button`
+    t =   563.58s Checking existence of `"Couldn't get a reply" StaticText`
+    t =   563.66s Checking existence of `"reconnect-ok" StaticText`
+    t =   563.75s Get number of matches for: Elements matching predicate 'label == "Reply with exactly reconnect-ok. Do not use tools."'
+    t =   563.81s Get number of matches for: Elements matching predicate 'label == "reconnect-ok"'
+/Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/LancerUITests/ReconnectCycleUITests.swift:128: error: -[LancerUITests.ReconnectCycleUITests testTenConsecutiveReconnectFirstSendCycles] : XCTAssertEqual failed: ("2") is not equal to ("1") - cycle 9: duplicate user turn detected
+    t =   563.92s Tear Down
+Test Case '-[LancerUITests.ReconnectCycleUITests testTenConsecutiveReconnectFirstSendCycles]' failed (564.780 seconds).
+Test Suite 'ReconnectCycleUITests' failed at 2026-07-15 12:56:52.029.
+	 Executed 1 test, with 1 failure (0 unexpected) in 564.780 (564.783) seconds
+Test Suite 'LancerUITests.xctest' failed at 2026-07-15 12:56:52.030.
+	 Executed 1 test, with 1 failure (0 unexpected) in 564.780 (564.784) seconds
+Test Suite 'Selected tests' failed at 2026-07-15 12:56:52.031.
+	 Executed 1 test, with 1 failure (0 unexpected) in 564.780 (564.786) seconds
+2026-07-15 12:56:52.519 xcodebuild[75187:1205400] [MT] IDETestOperationsObserverDebug: 569.345 elapsed -- Testing started completed.
+2026-07-15 12:56:52.519 xcodebuild[75187:1205400] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-07-15 12:56:52.519 xcodebuild[75187:1205400] [MT] IDETestOperationsObserverDebug: 569.345 sec, +569.345 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/roshansilva/Library/Developer/XcodeBuildMCP/workspaces/lancer-ios-orchestration-f491ad-be5b3af10bcc/result-bundles/test_sim_2026-07-15T16-47-15-010Z_pid74443_f1daf576.xcresult
+
+Failing tests:
+	ReconnectCycleUITests.testTenConsecutiveReconnectFirstSendCycles()
+
+** TEST EXECUTE FAILED **
+
+Testing started

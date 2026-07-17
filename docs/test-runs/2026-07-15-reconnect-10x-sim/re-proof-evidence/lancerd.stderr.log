@@ -1,0 +1,16 @@
+lancerd daemon listening on /tmp/s1-reconnect-v2/state/lancerd.sock
+lancerd daemon: E2E relay started
+2026/07/15 12:40:18 e2e: connected to relay as daemon
+2026/07/15 12:46:23 e2e: paired with phone
+2026/07/15 12:46:33 e2e: paired with phone
+2026/07/15 12:46:46 e2e: paired with phone
+2026/07/15 12:47:30 e2e: paired with phone
+2026/07/15 12:48:14 e2e: paired with phone
+2026/07/15 12:51:53 e2e: paired with phone
+2026/07/15 12:52:35 e2e: paired with phone
+2026/07/15 12:53:16 e2e: paired with phone
+2026/07/15 12:53:59 e2e: paired with phone
+2026/07/15 12:54:14 e2e: rejecting replayed or out-of-order frame (gen="_Fg1tJpw9s0QXtuIUpuApQ", seq=6)
+2026/07/15 12:54:43 e2e: paired with phone
+2026/07/15 12:55:28 e2e: paired with phone
+2026/07/15 12:56:12 e2e: paired with phone

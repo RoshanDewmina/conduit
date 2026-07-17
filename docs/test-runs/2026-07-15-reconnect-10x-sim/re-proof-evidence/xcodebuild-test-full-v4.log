@@ -1,0 +1,856 @@
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -project /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Lancer.xcodeproj -scheme Lancer -configuration Debug -skipMacroValidation -destination "platform=iOS Simulator,id=095F8B3A-FEA3-4031-A2A5-561755740730" -collect-test-diagnostics never COMPILER_INDEX_STORE_ENABLE=NO ONLY_ACTIVE_ARCH=YES -packageCachePath /Users/roshansilva/Library/Caches/org.swift.swiftpm -derivedDataPath /tmp/s1-reconnect-v4/DerivedData "-only-testing:LancerUITests/ReconnectCycleUITests" build-for-testing
+
+Build settings from command line:
+    COMPILER_INDEX_STORE_ENABLE = NO
+    ONLY_ACTIVE_ARCH = YES
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  Sentry: https://github.com/getsentry/sentry-cocoa @ 8.58.4
+  BigInt: https://github.com/attaswift/BigInt.git @ 5.7.0
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.101.2
+  swift-nio-ssh: https://github.com/Wellz26/swift-nio-ssh.git @ 0.3.6
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.1
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 3.15.1
+  GRDB: https://github.com/groue/GRDB.swift.git @ 6.29.3
+  LancerKit: /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Packages/LancerKit
+  swift-log: https://github.com/apple/swift-log.git @ 1.14.0
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  SwiftTerm: https://github.com/migueldeicaza/SwiftTerm.git @ 1.13.0
+  Citadel: https://github.com/orlandos-nl/Citadel.git @ 0.12.1
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-system: https://github.com/apple/swift-system.git @ 1.7.2
+
+Build Preparation
+Build task concurrency set to 6 via user default IDEBuildOperationMaxNumberOfConcurrentCompileTasks
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (84 targets)
+    Target 'LancerUITests' in project 'Lancer'
+        ➜ Explicit dependency on target 'Lancer' in project 'Lancer'
+    Target 'Lancer' in project 'Lancer'
+        ➜ Explicit dependency on target 'AppFeature-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'IntentsKit-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Sentry-product' in project 'Sentry'
+    Target 'Sentry-product' in project 'Sentry'
+        ➜ Explicit dependency on target 'SentryCppHelper' in project 'Sentry'
+    Target 'SentryCppHelper' in project 'Sentry' (no dependencies)
+    Target 'IntentsKit-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'IntentsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'IntentsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'AppFeature-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AppFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'WorkspacesFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SessionFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'InboxFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'OnboardingFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SettingsFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PreviewKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+    Target 'AppFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'WorkspacesFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SessionFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'InboxFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'OnboardingFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SettingsFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PreviewKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+    Target 'PreviewKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+    Target 'SettingsFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'OnboardingFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+    Target 'InboxFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+    Target 'SessionFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerKit_TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+    Target 'SwiftTerm-product' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm'
+    Target 'SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm'
+    Target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm' (no dependencies)
+    Target 'LancerKit_TerminalEngine' in project 'LancerKit' (no dependencies)
+    Target 'WorkspacesFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+    Target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'GRDB-product' in project 'GRDB'
+        ➜ Explicit dependency on target 'GRDB' in project 'GRDB'
+        ➜ Explicit dependency on target 'GRDB_GRDB' in project 'GRDB'
+    Target 'GRDB' in project 'GRDB'
+        ➜ Explicit dependency on target 'GRDB_GRDB' in project 'GRDB'
+        ➜ Explicit dependency on target 'CSQLite' in project 'GRDB'
+    Target 'CSQLite' in project 'GRDB' (no dependencies)
+    Target 'GRDB_GRDB' in project 'GRDB' (no dependencies)
+    Target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+    Target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+    Target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+    Target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'Citadel' in project 'Citadel'
+        ➜ Explicit dependency on target 'CCitadelBcrypt' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target '_CryptoExtras-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'BigInt-product' in project 'BigInt'
+        ➜ Explicit dependency on target 'Logging-product' in project 'swift-log'
+    Target 'Citadel' in project 'Citadel'
+        ➜ Explicit dependency on target 'CCitadelBcrypt' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target '_CryptoExtras-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'BigInt-product' in project 'BigInt'
+        ➜ Explicit dependency on target 'Logging-product' in project 'swift-log'
+    Target 'Logging-product' in project 'swift-log'
+        ➜ Explicit dependency on target 'Logging' in project 'swift-log'
+    Target 'Logging' in project 'swift-log' (no dependencies)
+    Target 'BigInt-product' in project 'BigInt'
+        ➜ Explicit dependency on target 'BigInt' in project 'BigInt'
+    Target 'BigInt' in project 'BigInt' (no dependencies)
+    Target '_CryptoExtras-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target '_CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto__CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'SwiftASN1-product' in project 'swift-asn1'
+    Target '_CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto__CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'SwiftASN1-product' in project 'swift-asn1'
+    Target 'SwiftASN1-product' in project 'swift-asn1'
+        ➜ Explicit dependency on target 'SwiftASN1' in project 'swift-asn1'
+    Target 'SwiftASN1' in project 'swift-asn1' (no dependencies)
+    Target 'CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+    Target 'swift-crypto_CryptoBoringWrapper' in project 'swift-crypto' (no dependencies)
+    Target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+    Target 'swift-crypto_CCryptoBoringSSLShims' in project 'swift-crypto' (no dependencies)
+    Target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_CCryptoBoringSSL' in project 'swift-crypto'
+    Target 'swift-crypto_CCryptoBoringSSL' in project 'swift-crypto' (no dependencies)
+    Target 'swift-crypto__CryptoExtras' in project 'swift-crypto' (no dependencies)
+    Target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'NIOFoundationCompat-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOConcurrencyHelpers-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'swift-nio_NIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'CNIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'Atomics-product' in project 'swift-atomics'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target '_AtomicsShims' in project 'swift-atomics' (no dependencies)
+    Target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'ContainersPreview' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target '_NIODataStructures' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWASI' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWindows' in project 'swift-nio' (no dependencies)
+    Target 'CNIOLinux' in project 'swift-nio' (no dependencies)
+    Target 'CNIODarwin' in project 'swift-nio' (no dependencies)
+    Target 'CNIOFreeBSD' in project 'swift-nio' (no dependencies)
+    Target 'CNIOOpenBSD' in project 'swift-nio' (no dependencies)
+    Target '_NIOBase64' in project 'swift-nio' (no dependencies)
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'CNIOAtomics' in project 'swift-nio' (no dependencies)
+    Target 'CCitadelBcrypt' in project 'Citadel' (no dependencies)
+    Target 'LancerCore' in project 'LancerKit' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/usr/bin/ibtool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Lancer/Resources/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -x c++ -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -x assembler-with-cpp -c /dev/null
+
+ReadFileContents /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+Build description signature: ceccce4561fc72de4477094a2a008a06
+Build description path: /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/XCBuildData/ceccce4561fc72de4477094a2a008a06.xcbuilddata
+ClangStatCache /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk /tmp/s1-reconnect-v4/DerivedData/SDKStatCaches.noindex/iphonesimulator27.0-24A5355p-802b3160ec225d8f0f354b513c6f7a323243818bda632a4370e1cc7a9fd181c5.sdkstatcache
+    cd /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Lancer.xcodeproj
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -o /tmp/s1-reconnect-v4/DerivedData/SDKStatCaches.noindex/iphonesimulator27.0-24A5355p-802b3160ec225d8f0f354b513c6f7a323243818bda632a4370e1cc7a9fd181c5.sdkstatcache
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-nio_NIOPosix.bundle/Info.plist /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/swift-nio_NIOPosix-b.build/empty-swift-nio_NIOPosix.plist (in target 'swift-nio_NIOPosix' from project 'swift-nio')
+    cd /tmp/s1-reconnect-v4/DerivedData/SourcePackages/checkouts/swift-nio
+    builtin-infoPlistUtility /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/swift-nio_NIOPosix-b.build/empty-swift-nio_NIOPosix.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-nio_NIOPosix.bundle/Info.plist
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto-b.build/empty-swift-crypto_Crypto.plist (in target 'swift-crypto_Crypto' from project 'swift-crypto')
+    cd /tmp/s1-reconnect-v4/DerivedData/SourcePackages/checkouts/swift-crypto
+    builtin-infoPlistUtility /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto-b.build/empty-swift-crypto_Crypto.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto__CryptoExtras.bundle/Info.plist /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto__CryptoExtras-b.build/empty-swift-crypto__CryptoExtras.plist (in target 'swift-crypto__CryptoExtras' from project 'swift-crypto')
+    cd /tmp/s1-reconnect-v4/DerivedData/SourcePackages/checkouts/swift-crypto
+    builtin-infoPlistUtility /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto__CryptoExtras-b.build/empty-swift-crypto__CryptoExtras.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto__CryptoExtras.bundle/Info.plist
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSL.bundle/Info.plist /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSL-b.build/empty-swift-crypto_CCryptoBoringSSL.plist (in target 'swift-crypto_CCryptoBoringSSL' from project 'swift-crypto')
+    cd /tmp/s1-reconnect-v4/DerivedData/SourcePackages/checkouts/swift-crypto
+    builtin-infoPlistUtility /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSL-b.build/empty-swift-crypto_CCryptoBoringSSL.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSL.bundle/Info.plist
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSLShims.bundle/Info.plist /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSLShims-b.build/empty-swift-crypto_CCryptoBoringSSLShims.plist (in target 'swift-crypto_CCryptoBoringSSLShims' from project 'swift-crypto')
+    cd /tmp/s1-reconnect-v4/DerivedData/SourcePackages/checkouts/swift-crypto
+    builtin-infoPlistUtility /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSLShims-b.build/empty-swift-crypto_CCryptoBoringSSLShims.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSLShims.bundle/Info.plist
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CryptoBoringWrapper.bundle/Info.plist /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CryptoBoringWrapper-b.build/empty-swift-crypto_CryptoBoringWrapper.plist (in target 'swift-crypto_CryptoBoringWrapper' from project 'swift-crypto')
+    cd /tmp/s1-reconnect-v4/DerivedData/SourcePackages/checkouts/swift-crypto
+    builtin-infoPlistUtility /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CryptoBoringWrapper-b.build/empty-swift-crypto_CryptoBoringWrapper.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CryptoBoringWrapper.bundle/Info.plist
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/GRDB_GRDB.bundle/Info.plist /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/GRDB.build/Debug-iphonesimulator/GRDB_GRDB-b.build/empty-GRDB_GRDB.plist (in target 'GRDB_GRDB' from project 'GRDB')
+    cd /tmp/s1-reconnect-v4/DerivedData/SourcePackages/checkouts/GRDB.swift
+    builtin-infoPlistUtility /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/GRDB.build/Debug-iphonesimulator/GRDB_GRDB-b.build/empty-GRDB_GRDB.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/GRDB_GRDB.bundle/Info.plist
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerKit_TerminalEngine.bundle/Info.plist /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/LancerKit.build/Debug-iphonesimulator/LancerKit_TerminalEngine-b.build/empty-LancerKit_TerminalEngine.plist (in target 'LancerKit_TerminalEngine' from project 'LancerKit')
+    cd /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Packages/LancerKit
+    builtin-infoPlistUtility /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/LancerKit.build/Debug-iphonesimulator/LancerKit_TerminalEngine-b.build/empty-LancerKit_TerminalEngine.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerKit_TerminalEngine.bundle/Info.plist
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/SwiftTerm_SwiftTerm.bundle/Info.plist /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm_SwiftTerm-b.build/empty-SwiftTerm_SwiftTerm.plist (in target 'SwiftTerm_SwiftTerm' from project 'SwiftTerm')
+    cd /tmp/s1-reconnect-v4/DerivedData/SourcePackages/checkouts/SwiftTerm
+    builtin-infoPlistUtility /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm_SwiftTerm-b.build/empty-SwiftTerm_SwiftTerm.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/SwiftTerm_SwiftTerm.bundle/Info.plist
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Info.plist /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Lancer/Info.plist (in target 'Lancer' from project 'Lancer')
+    cd /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive
+    builtin-infoPlistUtility /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Lancer/Info.plist -producttype com.apple.product-type.application -genpkginfo /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PkgInfo -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/LaunchScreen-SBPartialInfo.plist -additionalcontentfile /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/assetcatalog_generated_info.plist -scanforprivacyfile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Frameworks/Sentry.framework -scanforprivacyfile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/GRDB_GRDB.bundle -scanforprivacyfile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/LancerKit_TerminalEngine.bundle -scanforprivacyfile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/SwiftTerm_SwiftTerm.bundle -scanforprivacyfile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-crypto_CCryptoBoringSSL.bundle -scanforprivacyfile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-crypto_CCryptoBoringSSLShims.bundle -scanforprivacyfile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-crypto_Crypto.bundle -scanforprivacyfile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-crypto_CryptoBoringWrapper.bundle -scanforprivacyfile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-crypto__CryptoExtras.bundle -scanforprivacyfile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-nio_NIOPosix.bundle -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Info.plist
+
+CopySwiftLibs /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app (in target 'Lancer' from project 'Lancer')
+    cd /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Lancer.debug.dylib --scan-folder /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Frameworks --scan-folder /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PlugIns --scan-folder /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/SystemExtensions --scan-folder /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Extensions --scan-folder /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/System/Library/Frameworks/AppIntents.framework --platform iphonesimulator --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.5194.15.Tp309m/Metal.xctoolchain --toolchain /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ProcessInfoPlistFile /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Info.plist /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/empty-LancerUITests.plist (in target 'LancerUITests' from project 'Lancer')
+    cd /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive
+    builtin-infoPlistUtility /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/empty-LancerUITests.plist -producttype com.apple.product-type.bundle.ui-testing -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/ProductTypeInfoPlistAdditions.plist -o /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Info.plist
+
+CopySwiftLibs /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest (in target 'LancerUITests' from project 'Lancer')
+    cd /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/LancerUITests --scan-folder /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Frameworks --scan-folder /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/PlugIns --scan-folder /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/SystemExtensions --scan-folder /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Extensions --scan-folder /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/System/Library/Frameworks/AppIntents.framework --platform iphonesimulator --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.5194.15.Tp309m/Metal.xctoolchain --toolchain /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /tmp/s1-reconnect-v4/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+PruneExplicitPrecompiledModules /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/s1-reconnect-v4/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+** TEST BUILD SUCCEEDED ** [4.033 sec]
+
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -project /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Lancer.xcodeproj -scheme Lancer -configuration Debug -skipMacroValidation -destination "platform=iOS Simulator,id=095F8B3A-FEA3-4031-A2A5-561755740730" -collect-test-diagnostics never COMPILER_INDEX_STORE_ENABLE=NO ONLY_ACTIVE_ARCH=YES -packageCachePath /Users/roshansilva/Library/Caches/org.swift.swiftpm -derivedDataPath /tmp/s1-reconnect-v4/DerivedData "-only-testing:LancerUITests/ReconnectCycleUITests" -resultBundlePath /tmp/s1-reconnect-v4/TestResults.xcresult test-without-building
+
+Build settings from command line:
+    COMPILER_INDEX_STORE_ENABLE = NO
+    ONLY_ACTIVE_ARCH = YES
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  GRDB: https://github.com/groue/GRDB.swift.git @ 6.29.3
+  swift-log: https://github.com/apple/swift-log.git @ 1.14.0
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 3.15.1
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.101.2
+  Citadel: https://github.com/orlandos-nl/Citadel.git @ 0.12.1
+  BigInt: https://github.com/attaswift/BigInt.git @ 5.7.0
+  LancerKit: /Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/Packages/LancerKit
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.1
+  swift-system: https://github.com/apple/swift-system.git @ 1.7.2
+  swift-nio-ssh: https://github.com/Wellz26/swift-nio-ssh.git @ 0.3.6
+  Sentry: https://github.com/getsentry/sentry-cocoa @ 8.58.4
+  SwiftTerm: https://github.com/migueldeicaza/SwiftTerm.git @ 1.13.0
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+
+Writing result bundle at path:
+	/tmp/s1-reconnect-v4/TestResults.xcresult
+
+2026-07-15 14:39:17.044941-0400 LancerUITests-Runner[38809:1775787] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-07-15 14:39:19.382.
+Test Suite 'LancerUITests.xctest' started at 2026-07-15 14:39:19.382.
+Test Suite 'ReconnectCycleUITests' started at 2026-07-15 14:39:19.382.
+Test Case '-[LancerUITests.ReconnectCycleUITests testTenConsecutiveReconnectFirstSendCycles]' started.
+    t =     0.00s Start Test at 2026-07-15 14:39:19.383
+    t =     0.04s Set Up
+    t =     0.05s Terminate dev.lancer.mobile:0
+    t =     0.06s Open dev.lancer.mobile
+    t =     0.06s     Launch dev.lancer.mobile
+2026-07-15 14:39:19.639 xcodebuild[38742:1775332] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 14:39:19.639 xcodebuild[38742:1775332] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[38809]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x107f60398) and /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x1080a4310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     0.70s         Setting up automation session
+    t =     2.86s         Wait for dev.lancer.mobile to idle
+    t =     4.34s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =     5.38s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =     5.38s         Checking existence of `"Workspaces" StaticText`
+    t =     5.44s Waiting 15.0s for "Profile" Button to exist
+    t =     6.45s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =     6.45s         Checking existence of `"Profile" Button`
+    t =     6.46s Tap "Profile" Button
+    t =     6.46s     Wait for dev.lancer.mobile to idle
+    t =     6.47s     Find the "Profile" Button
+    t =     6.47s     Check for interrupting elements affecting "Profile" Button
+    t =     6.54s     Synthesize event
+    t =     6.84s     Wait for dev.lancer.mobile to idle
+    t =     7.27s Waiting 10.0s for Button (First Match) to exist
+    t =     8.30s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =     8.31s         Checking existence of `Button (First Match)`
+    t =     8.35s Tap Button (First Match)
+    t =     8.35s     Wait for dev.lancer.mobile to idle
+    t =     8.35s     Find the Button (First Match)
+    t =     8.37s     Check for interrupting elements affecting "Trusted Machines, 3" Button
+    t =     8.39s     Synthesize event
+    t =     8.68s     Wait for dev.lancer.mobile to idle
+    t =     9.10s Waiting 60.0s for "connected" StaticText to exist
+    t =    10.14s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =    10.14s         Checking existence of `"connected" StaticText`
+    t =    10.24s Waiting 5.0s for "Close" Button to exist
+    t =    11.27s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =    11.27s         Checking existence of `"Close" Button`
+    t =    11.31s Tap "Close" Button
+    t =    11.31s     Wait for dev.lancer.mobile to idle
+    t =    11.31s     Find the "Close" Button
+    t =    11.33s     Check for interrupting elements affecting "Close" Button
+    t =    11.37s     Synthesize event
+    t =    11.66s     Wait for dev.lancer.mobile to idle
+    t =    12.02s Waiting 5.0s for "Close" Button to exist
+    t =    13.05s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =    13.05s         Checking existence of `"Close" Button`
+    t =    13.07s Tap "Close" Button
+    t =    13.07s     Wait for dev.lancer.mobile to idle
+    t =    13.07s     Find the "Close" Button
+    t =    13.09s     Check for interrupting elements affecting "xmark" Button
+    t =    13.11s     Synthesize event
+    t =    13.40s     Wait for dev.lancer.mobile to idle
+    t =    13.73s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =    14.76s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    14.77s         Checking existence of `"Workspaces" StaticText`
+    t =    30.81s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =    31.84s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =    31.84s         Checking existence of `"cursor-composer-tap" Button`
+    t =    31.88s Tap "cursor-composer-tap" Button
+    t =    31.88s     Wait for dev.lancer.mobile to idle
+    t =    31.88s     Find the "cursor-composer-tap" Button
+    t =    31.89s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =    31.91s     Synthesize event
+    t =    32.20s     Wait for dev.lancer.mobile to idle
+    t =    32.87s Waiting 10.0s for TextView (First Match) to exist
+    t =    33.90s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =    33.90s         Checking existence of `TextView (First Match)`
+    t =    33.95s Tap TextView (First Match)
+    t =    33.95s     Wait for dev.lancer.mobile to idle
+    t =    33.95s     Find the TextView (First Match)
+    t =    33.97s     Check for interrupting elements affecting TextView
+    t =    34.00s     Synthesize event
+    t =    34.29s     Wait for dev.lancer.mobile to idle
+    t =    35.02s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =    35.06s Type 'Reply with exactly...' into TextView
+    t =    35.06s     Wait for dev.lancer.mobile to idle
+    t =    35.07s     Find the TextView
+    t =    35.09s     Check for interrupting elements affecting TextView
+    t =    35.12s     Synthesize event
+    t =    36.15s     Wait for dev.lancer.mobile to idle
+    t =    36.15s Waiting 5.0s for "composer.send" Button to exist
+    t =    37.18s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =    37.18s         Checking existence of `"composer.send" Button`
+    t =    37.21s Find the "composer.send" Button
+    t =    37.23s Tap "composer.send" Button
+    t =    37.23s     Wait for dev.lancer.mobile to idle
+    t =    37.23s     Find the "composer.send" Button
+    t =    37.25s     Check for interrupting elements affecting "composer.send" Button
+    t =    37.29s     Synthesize event
+    t =    37.58s     Wait for dev.lancer.mobile to idle
+    t =    38.04s Checking existence of `"Retry" Button`
+    t =    38.09s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    38.14s Checking existence of `"reconnect-ok" StaticText`
+    t =    39.19s Checking existence of `"Retry" Button`
+    t =    39.24s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    39.28s Checking existence of `"reconnect-ok" StaticText`
+    t =    40.33s Checking existence of `"Retry" Button`
+    t =    40.39s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    40.43s Checking existence of `"reconnect-ok" StaticText`
+    t =    41.48s Checking existence of `"Retry" Button`
+    t =    41.55s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    41.60s Checking existence of `"reconnect-ok" StaticText`
+    t =    41.64s Get number of matches for: Elements matching predicate 'label == "Reply with exactly reconnect-ok. Do not use tools."'
+    t =    41.71s Get number of matches for: Elements matching predicate 'label == "reconnect-ok"'
+    t =    41.76s Checking existence of `"Retry" Button`
+    t =    41.90s Added attachment named 'cycle-01'
+RECONNECT_CYCLE 1 PASS timeToConnected=10.2s timeToFirstToken=4.4s
+    t =    41.90s Terminate dev.lancer.mobile:38942
+    t =    42.95s Open dev.lancer.mobile
+    t =    42.95s     Launch dev.lancer.mobile
+2026-07-15 14:40:02.336 xcodebuild[38742:1775332] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-15 14:40:02.337 xcodebuild[38742:1775332] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    43.17s         Setting up automation session
+    t =    45.33s         Wait for dev.lancer.mobile to idle
+    t =    46.74s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =    47.77s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    47.77s         Checking existence of `"Workspaces" StaticText`
+    t =    47.86s Waiting 15.0s for "Profile" Button to exist
+    t =    48.90s     Checking `Expect predicate `existsNoRetry == 1` for object "Profile" Button`
+    t =    48.90s         Checking existence of `"Profile" Button`
+    t =    48.93s Tap "Profile" Button
+    t =    48.93s     Wait for dev.lancer.mobile to idle
+    t =    48.93s     Find the "Profile" Button
+    t =    48.94s     Check for interrupting elements affecting "Profile" Button
+    t =    48.96s     Synthesize event
+    t =    49.25s     Wait for dev.lancer.mobile to idle
+    t =    49.62s Waiting 10.0s for Button (First Match) to exist
+    t =    50.65s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    50.65s         Checking existence of `Button (First Match)`
+    t =    50.71s Tap Button (First Match)
+    t =    50.71s     Wait for dev.lancer.mobile to idle
+    t =    50.71s     Find the Button (First Match)
+    t =    50.73s     Check for interrupting elements affecting "Trusted Machines, 3" Button
+    t =    50.75s     Synthesize event
+    t =    51.04s     Wait for dev.lancer.mobile to idle
+    t =    51.43s Waiting 60.0s for "connected" StaticText to exist
+    t =    52.47s     Checking `Expect predicate `existsNoRetry == 1` for object "connected" StaticText`
+    t =    52.47s         Checking existence of `"connected" StaticText`
+    t =    52.57s Waiting 5.0s for "Close" Button to exist
+    t =    53.60s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =    53.60s         Checking existence of `"Close" Button`
+    t =    53.64s Tap "Close" Button
+    t =    53.64s     Wait for dev.lancer.mobile to idle
+    t =    53.64s     Find the "Close" Button
+    t =    53.66s     Check for interrupting elements affecting "Close" Button
+    t =    53.69s     Synthesize event
+    t =    53.98s     Wait for dev.lancer.mobile to idle
+    t =    54.33s Waiting 5.0s for "Close" Button to exist
+    t =    55.37s     Checking `Expect predicate `existsNoRetry == 1` for object "Close" Button`
+    t =    55.37s         Checking existence of `"Close" Button`
+    t =    55.41s Tap "Close" Button
+    t =    55.41s     Wait for dev.lancer.mobile to idle
+    t =    55.42s     Find the "Close" Button
+    t =    55.44s     Check for interrupting elements affecting "xmark" Button
+    t =    55.46s     Synthesize event
+    t =    55.75s     Wait for dev.lancer.mobile to idle
+    t =    56.09s Waiting 10.0s for "Workspaces" StaticText to exist
+    t =    57.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    57.13s         Checking existence of `"Workspaces" StaticText`
+    t =    73.17s Waiting 10.0s for "cursor-composer-tap" Button to exist
+    t =    74.20s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor-composer-tap" Button`
+    t =    74.20s         Checking existence of `"cursor-composer-tap" Button`
+    t =    74.21s Tap "cursor-composer-tap" Button
+    t =    74.21s     Wait for dev.lancer.mobile to idle
+    t =    74.21s     Find the "cursor-composer-tap" Button
+    t =    74.22s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =    74.23s     Synthesize event
+    t =    74.52s     Wait for dev.lancer.mobile to idle
+    t =    75.03s Waiting 10.0s for TextView (First Match) to exist
+    t =    76.06s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =    76.06s         Checking existence of `TextView (First Match)`
+    t =    76.11s Tap TextView (First Match)
+    t =    76.11s     Wait for dev.lancer.mobile to idle
+    t =    76.11s     Find the TextView (First Match)
+    t =    76.13s     Check for interrupting elements affecting TextView
+    t =    76.16s     Synthesize event
+    t =    76.45s     Wait for dev.lancer.mobile to idle
+    t =    77.15s Find the TextView at {{26.2, 634.3}, {349.5, 115.2}}
+    t =    77.20s Type 'Reply with exactly...' into TextView
+    t =    77.20s     Wait for dev.lancer.mobile to idle
+    t =    77.20s     Find the TextView
+    t =    77.22s     Check for interrupting elements affecting TextView
+    t =    77.26s     Synthesize event
+    t =    78.29s     Wait for dev.lancer.mobile to idle
+    t =    78.30s Waiting 5.0s for "composer.send" Button to exist
+    t =    79.33s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =    79.33s         Checking existence of `"composer.send" Button`
+    t =    79.36s Find the "composer.send" Button
+    t =    79.38s Tap "composer.send" Button
+    t =    79.38s     Wait for dev.lancer.mobile to idle
+    t =    79.39s     Find the "composer.send" Button
+    t =    79.41s     Check for interrupting elements affecting "composer.send" Button
+    t =    79.43s     Synthesize event
+    t =    79.72s     Wait for dev.lancer.mobile to idle
+    t =    80.15s Checking existence of `"Retry" Button`
+    t =    80.20s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    80.26s Checking existence of `"reconnect-ok" StaticText`
+    t =    81.33s Checking existence of `"Retry" Button`
+    t =    81.38s Checking existence of `"Couldn't get a reply" StaticText`
+    t =    81.43s Checking existence of `"reconnect-ok" StaticText`
+    t =    82.48s Checking existence of `"Retry" Button`
+    t =    82.62s Added attachment named 'cycle-02-FAIL-retry'
+/Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/LancerUITests/ReconnectCycleUITests.swift:107: error: -[LancerUITests.ReconnectCycleUITests testTenConsecutiveReconnectFirstSendCycles] : failed - cycle 2: Retry/error state appeared instead of a reply
+    t =    82.65s Tear Down
+Test Case '-[LancerUITests.ReconnectCycleUITests testTenConsecutiveReconnectFirstSendCycles]' failed (82.978 seconds).
+Test Suite 'ReconnectCycleUITests' failed at 2026-07-15 14:40:42.362.
+	 Executed 1 test, with 1 failure (0 unexpected) in 82.978 (82.980) seconds
+Test Suite 'LancerUITests.xctest' failed at 2026-07-15 14:40:42.364.
+	 Executed 1 test, with 1 failure (0 unexpected) in 82.978 (82.982) seconds
+Test Suite 'Selected tests' failed at 2026-07-15 14:40:42.365.
+	 Executed 1 test, with 1 failure (0 unexpected) in 82.978 (82.983) seconds
+2026-07-15 14:40:42.714 xcodebuild[38742:1775332] [MT] IDETestOperationsObserverDebug: 87.126 elapsed -- Testing started completed.
+2026-07-15 14:40:42.714 xcodebuild[38742:1775332] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-07-15 14:40:42.714 xcodebuild[38742:1775332] [MT] IDETestOperationsObserverDebug: 87.126 sec, +87.126 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/s1-reconnect-v4/TestResults.xcresult
+
+Failing tests:
+	ReconnectCycleUITests.testTenConsecutiveReconnectFirstSendCycles()
+
+** TEST EXECUTE FAILED **
+
+Testing started

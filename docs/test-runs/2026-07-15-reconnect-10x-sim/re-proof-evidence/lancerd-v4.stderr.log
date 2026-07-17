@@ -1,0 +1,32 @@
+Wrote /tmp/s1-reconnect-v4/state/home/.claude/hooks/lancer-hook.sh
+Enabled Lancer-scoped Claude approvals in /tmp/s1-reconnect-v4/state/home/.claude/settings.json
+lancerd daemon listening on /tmp/s1-reconnect-v4/state/lancerd.sock
+lancerd daemon: E2E relay started
+2026/07/15 14:22:40 e2e: connected to relay as daemon
+lancerd daemon: relay pairing identity changed — dropping the previous relay session; phones on it are orphaned until re-paired
+2026/07/15 14:23:20 e2e: receive error: read tcp [2607:fea8:fe00:853d:bc24:8673:41e4:3b02]:60349->[2a09:8280:1::14b:ac3:0]:443: use of closed network connection
+lancerd daemon: E2E relay started
+2026/07/15 14:23:20 e2e: connected to relay as daemon
+lancerd daemon: relay pairing identity changed — dropping the previous relay session; phones on it are orphaned until re-paired
+2026/07/15 14:29:35 e2e: receive error: read tcp [2607:fea8:fe00:853d:bc24:8673:41e4:3b02]:60392->[2a09:8280:1::14b:ac3:0]:443: use of closed network connection
+lancerd daemon: E2E relay started
+2026/07/15 14:29:35 e2e: connected to relay as daemon
+2026/07/15 14:30:09 e2e: paired with phone
+2026/07/15 14:31:12 e2e: paired with phone
+lancerd daemon: relay pairing identity changed — dropping the previous relay session; phones on it are orphaned until re-paired
+2026/07/15 14:31:40 e2e: receive error: read tcp [2607:fea8:fe00:853d:bc24:8673:41e4:3b02]:60732->[2a09:8280:1::14b:ac3:0]:443: use of closed network connection
+lancerd daemon: E2E relay started
+2026/07/15 14:31:40 e2e: connected to relay as daemon
+2026/07/15 14:32:11 e2e: paired with phone
+2026/07/15 14:33:37 e2e: paired with phone
+lancerd daemon: relay pairing identity changed — dropping the previous relay session; phones on it are orphaned until re-paired
+2026/07/15 14:34:10 e2e: receive error: read tcp [2607:fea8:fe00:853d:bc24:8673:41e4:3b02]:60852->[2a09:8280:1::14b:ac3:0]:443: use of closed network connection
+lancerd daemon: E2E relay started
+2026/07/15 14:34:10 e2e: connected to relay as daemon
+2026/07/15 14:34:43 e2e: paired with phone
+2026/07/15 14:37:09 e2e: paired with phone
+2026/07/15 14:38:27 e2e: paired with phone
+2026/07/15 14:38:36 e2e: paired with phone
+2026/07/15 14:39:23 e2e: paired with phone
+2026/07/15 14:39:23 e2e: rejecting replayed or out-of-order frame (gen="K6dhl1GSLu42H_rbeaVr0g", seq=0)
+2026/07/15 14:40:05 e2e: paired with phone

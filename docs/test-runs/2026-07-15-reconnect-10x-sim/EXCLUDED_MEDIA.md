@@ -1,0 +1,1 @@
+Large screen recordings (>50MB, incl. re-proof-evidence/screen-recording-v5.mp4 at 185MB) were excluded from this commit — GitHub 100MB limit. They remain only in local scratch; logs + screenshots preserved here.

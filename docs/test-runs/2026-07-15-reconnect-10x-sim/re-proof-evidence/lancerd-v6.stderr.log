@@ -1,0 +1,21 @@
+Wrote /tmp/s1-reconnect-v6/state/home/.claude/hooks/lancer-hook.sh
+Enabled Lancer-scoped Claude approvals in /tmp/s1-reconnect-v6/state/home/.claude/settings.json
+lancerd daemon listening on /tmp/s1-reconnect-v6/state/lancerd.sock
+lancerd daemon: E2E relay started
+2026/07/15 15:27:49 e2e: connected to relay as daemon
+2026/07/15 15:32:01 e2e: paired with phone
+2026/07/15 15:35:15 e2e: paired with phone
+2026/07/15 15:36:15 e2e: paired with phone
+2026/07/15 15:36:25 e2e: paired with phone
+2026/07/15 15:37:28 e2e: paired with phone
+2026/07/15 15:38:12 e2e: paired with phone
+2026/07/15 15:38:54 e2e: paired with phone
+2026/07/15 15:38:54 e2e: rejecting replayed or out-of-order frame (gen="Sptc-mr1a9RSBxwFw9ibeQ", seq=0)
+2026/07/15 15:39:36 e2e: paired with phone
+2026/07/15 15:39:36 e2e: rejecting replayed or out-of-order frame (gen="6QtL9EgAQ5matfftxuL0iQ", seq=0)
+2026/07/15 15:43:15 e2e: paired with phone
+2026/07/15 15:43:57 e2e: paired with phone
+2026/07/15 15:44:38 e2e: paired with phone
+2026/07/15 15:45:24 e2e: paired with phone
+2026/07/15 15:46:09 e2e: paired with phone
+2026/07/15 15:46:53 e2e: paired with phone

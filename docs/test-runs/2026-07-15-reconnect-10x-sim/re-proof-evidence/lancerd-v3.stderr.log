@@ -1,0 +1,11 @@
+Wrote /tmp/s1-reconnect-v3/state/home/.claude/hooks/lancer-hook.sh
+Enabled Lancer-scoped Claude approvals in /tmp/s1-reconnect-v3/state/home/.claude/settings.json
+lancerd daemon listening on /tmp/s1-reconnect-v3/state/lancerd.sock
+lancerd daemon: E2E relay started
+2026/07/15 13:34:06 e2e: connected to relay as daemon
+2026/07/15 13:39:57 e2e: paired with phone
+2026/07/15 13:40:03 e2e: paired with phone
+2026/07/15 13:40:14 e2e: paired with phone
+2026/07/15 13:41:03 e2e: paired with phone
+2026/07/15 13:41:44 e2e: paired with phone
+2026/07/15 13:42:27 e2e: paired with phone

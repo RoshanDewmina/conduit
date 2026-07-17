@@ -1,0 +1,50 @@
+Wrote /tmp/s1-reconnect/state/home/.claude/hooks/lancer-hook.sh
+Enabled Lancer-scoped Claude approvals in /tmp/s1-reconnect/state/home/.claude/settings.json
+lancerd daemon: E2E relay started
+lancerd daemon listening on /tmp/s1-reconnect/state/lancerd.sock
+2026/07/15 10:19:37 e2e: connected to relay as daemon
+2026/07/15 10:25:22 e2e: paired with phone
+2026/07/15 10:25:37 e2e: rejecting replayed or out-of-order frame (seq=2)
+2026/07/15 10:29:15 e2e: paired with phone
+2026/07/15 10:30:34 e2e: paired with phone
+2026/07/15 10:30:41 e2e: paired with phone
+2026/07/15 10:31:12 e2e: paired with phone
+2026/07/15 10:42:33 e2e: rejecting replayed or out-of-order frame (seq=46)
+2026/07/15 10:43:09 e2e: rejecting replayed or out-of-order frame (seq=50)
+2026/07/15 10:44:59 e2e: rejecting replayed or out-of-order frame (seq=68)
+lancerd daemon: E2E relay started
+lancerd daemon listening on /tmp/s1-reconnect/state/lancerd.sock
+2026/07/15 10:56:03 e2e: connected to relay as daemon
+2026/07/15 10:56:03 e2e: paired with phone
+2026/07/15 10:56:08 e2e: rejecting replayed or out-of-order frame (seq=0)
+2026/07/15 10:56:08 e2e: rejecting replayed or out-of-order frame (seq=1)
+2026/07/15 10:56:24 e2e: rejecting replayed or out-of-order frame (seq=2)
+2026/07/15 10:56:24 e2e: rejecting replayed or out-of-order frame (seq=3)
+2026/07/15 10:56:45 e2e: rejecting replayed or out-of-order frame (seq=4)
+2026/07/15 10:56:45 e2e: rejecting replayed or out-of-order frame (seq=5)
+2026/07/15 10:57:06 e2e: rejecting replayed or out-of-order frame (seq=6)
+2026/07/15 10:57:06 e2e: rejecting replayed or out-of-order frame (seq=7)
+2026/07/15 10:57:28 e2e: rejecting replayed or out-of-order frame (seq=8)
+2026/07/15 10:57:28 e2e: rejecting replayed or out-of-order frame (seq=9)
+2026/07/15 10:57:49 e2e: rejecting replayed or out-of-order frame (seq=10)
+2026/07/15 10:57:49 e2e: rejecting replayed or out-of-order frame (seq=11)
+2026/07/15 10:58:10 e2e: rejecting replayed or out-of-order frame (seq=12)
+2026/07/15 10:58:10 e2e: rejecting replayed or out-of-order frame (seq=13)
+2026/07/15 10:58:32 e2e: rejecting replayed or out-of-order frame (seq=14)
+2026/07/15 10:58:32 e2e: rejecting replayed or out-of-order frame (seq=15)
+2026/07/15 10:58:53 e2e: rejecting replayed or out-of-order frame (seq=16)
+2026/07/15 10:58:53 e2e: rejecting replayed or out-of-order frame (seq=17)
+2026/07/15 10:59:14 e2e: rejecting replayed or out-of-order frame (seq=18)
+2026/07/15 10:59:14 e2e: rejecting replayed or out-of-order frame (seq=19)
+2026/07/15 10:59:35 e2e: rejecting replayed or out-of-order frame (seq=20)
+2026/07/15 10:59:35 e2e: rejecting replayed or out-of-order frame (seq=21)
+2026/07/15 10:59:57 e2e: rejecting replayed or out-of-order frame (seq=22)
+2026/07/15 10:59:57 e2e: rejecting replayed or out-of-order frame (seq=23)
+2026/07/15 11:00:18 e2e: rejecting replayed or out-of-order frame (seq=24)
+2026/07/15 11:00:18 e2e: rejecting replayed or out-of-order frame (seq=25)
+2026/07/15 11:00:39 e2e: rejecting replayed or out-of-order frame (seq=26)
+2026/07/15 11:00:39 e2e: rejecting replayed or out-of-order frame (seq=27)
+2026/07/15 11:01:01 e2e: rejecting replayed or out-of-order frame (seq=28)
+2026/07/15 11:01:01 e2e: rejecting replayed or out-of-order frame (seq=29)
+2026/07/15 11:01:06 e2e: paired with phone
+2026/07/15 11:01:50 e2e: paired with phone

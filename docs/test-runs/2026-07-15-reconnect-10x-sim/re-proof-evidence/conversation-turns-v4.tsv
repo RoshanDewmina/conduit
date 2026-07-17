@@ -1,0 +1,3 @@
+conv_8a3114a0-1c04-46e3-9053-74daa05389ab|Reply with exactly baseline-ok. Do not use tools.|exited|2026-07-15T18:38:45Z|2026-07-15T18:38:49Z|
+conv_63aa6d53-6459-40c1-8a26-78401471c636|Reply with exactly reconnect-ok. Do not use tools.|exited|2026-07-15T18:39:57Z|2026-07-15T18:40:00Z|
+conv_22d1252e-87d6-4e8b-9a88-d00168695f9a|Reply with exactly reconnect-ok. Do not use tools.|failed|2026-07-15T18:40:39Z|2026-07-15T18:40:40Z|You've hit your session limit · resets 5:30pm (America/Toronto)

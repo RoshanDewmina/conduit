@@ -1,0 +1,26 @@
+555:Test Suite 'Selected tests' started at 2026-07-15 12:47:27.245.
+556:Test Suite 'LancerUITests.xctest' started at 2026-07-15 12:47:27.246.
+557:Test Suite 'ReconnectCycleUITests' started at 2026-07-15 12:47:27.246.
+558:Test Case '-[LancerUITests.ReconnectCycleUITests testTenConsecutiveReconnectFirstSendCycles]' started.
+561:    t =     0.05s Terminate dev.lancer.mobile:0
+668:RECONNECT_CYCLE 1 PASS timeToConnected=10.4s timeToFirstToken=5.7s
+669:    t =    43.42s Terminate dev.lancer.mobile:75446
+766:RECONNECT_CYCLE 2 PASS timeToConnected=9.9s timeToFirstToken=120.7s
+767:    t =   262.19s Terminate dev.lancer.mobile:77243
+873:RECONNECT_CYCLE 3 PASS timeToConnected=10.0s timeToFirstToken=4.3s
+874:    t =   304.60s Terminate dev.lancer.mobile:85915
+977:RECONNECT_CYCLE 4 PASS timeToConnected=9.1s timeToFirstToken=4.4s
+978:    t =   346.16s Terminate dev.lancer.mobile:87543
+1084:RECONNECT_CYCLE 5 PASS timeToConnected=9.1s timeToFirstToken=5.7s
+1085:    t =   389.00s Terminate dev.lancer.mobile:89245
+1191:RECONNECT_CYCLE 6 PASS timeToConnected=9.3s timeToFirstToken=5.7s
+1192:    t =   432.48s Terminate dev.lancer.mobile:90924
+1298:RECONNECT_CYCLE 7 PASS timeToConnected=9.7s timeToFirstToken=5.8s
+1299:    t =   476.93s Terminate dev.lancer.mobile:92745
+1405:RECONNECT_CYCLE 8 PASS timeToConnected=10.0s timeToFirstToken=5.7s
+1406:    t =   520.96s Terminate dev.lancer.mobile:94685
+1507:/Users/roshansilva/Documents/command-center/.worktrees/integration-daily-drive/LancerUITests/ReconnectCycleUITests.swift:128: error: -[LancerUITests.ReconnectCycleUITests testTenConsecutiveReconnectFirstSendCycles] : XCTAssertEqual failed: ("2") is not equal to ("1") - cycle 9: duplicate user turn detected
+1509:Test Case '-[LancerUITests.ReconnectCycleUITests testTenConsecutiveReconnectFirstSendCycles]' failed (564.780 seconds).
+1510:Test Suite 'ReconnectCycleUITests' failed at 2026-07-15 12:56:52.029.
+1512:Test Suite 'LancerUITests.xctest' failed at 2026-07-15 12:56:52.030.
+1514:Test Suite 'Selected tests' failed at 2026-07-15 12:56:52.031.
