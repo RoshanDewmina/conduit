@@ -17,6 +17,7 @@ public struct AppSettingsView: View {
     @State private var isStopping = false
     @State private var emergencyStopError: String?
     @State private var lastStoppedRuns: Int?
+    @State private var isFeedbackPresented = false
 
     public init(embedsInParentNavigation: Bool = false) {
         self.embedsInParentNavigation = embedsInParentNavigation
@@ -52,12 +53,16 @@ public struct AppSettingsView: View {
         } message: {
             Text(AppSettingsCopy.emergencyStopConfirmMessage)
         }
+        .sheet(isPresented: $isFeedbackPresented) {
+            FeedbackView()
+        }
     }
 
     private var settingsList: some View {
         List {
             connectionsSection
             policyGovernanceSection
+            supportSection
             emergencyStopSection
         }
         .accessibilityIdentifier("cursor.settings")
@@ -105,6 +110,21 @@ public struct AppSettingsView: View {
                 }
             }
             .accessibilityIdentifier("cursor.settings.row.audit")
+        }
+    }
+
+    private var supportSection: some View {
+        Section {
+            Button {
+                isFeedbackPresented = true
+            } label: {
+                Label {
+                    Text("Send Feedback")
+                } icon: {
+                    Image(systemName: "envelope")
+                }
+            }
+            .accessibilityIdentifier("cursor.settings.row.send-feedback")
         }
     }
 
