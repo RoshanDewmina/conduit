@@ -512,12 +512,13 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		r.server.applyRunControl(p.RunID, p.Action)
 
 	case "agentEmergencyStop":
-		stopped := r.server.applyEmergencyStop()
+		stopped, denied := r.server.applyEmergencyStop()
 		msg := map[string]interface{}{
 			"type": "emergencyStopResult",
 			"payload": map[string]interface{}{
 				"emergencyStopped": true,
 				"stoppedRuns":      stopped,
+				"deniedApprovals":  denied,
 			},
 		}
 		data, _ := json.Marshal(msg)

@@ -763,8 +763,54 @@ func (s *server) applyRunControl(runID, action string) {
 	}
 }
 
-func (s *server) applyEmergencyStop() int {
-	return s.dispatcher.emergencyStop()
+// applyEmergencyStop denies every pending approval/escalation (fail-closed —
+// never approve), then stops live runs. Returns how many runs were stopped and
+// how many pending approvals were successfully denied. A failed individual
+// resolve still proceeds with the rest; only successes increment the deny count.
+func (s *server) applyEmergencyStop() (stoppedRuns, deniedApprovals int) {
+	deniedApprovals = s.denyPendingApprovalsForEmergencyStop()
+	stoppedRuns = s.dispatcher.emergencyStop()
+	return stoppedRuns, deniedApprovals
+}
+
+// denyPendingApprovalsForEmergencyStop resolves every currently-pending
+// approval as deny through the same chokepoint a phone Reject uses
+// (approvals.resolve → channel wake → approvalRetired), with an audit action
+// that records the emergency-stop origin. Never approves. Failures on one id
+// do not abort the rest.
+func (s *server) denyPendingApprovalsForEmergencyStop() int {
+	pending := s.approvals.pendingEvents()
+	denied := 0
+	for _, event := range pending {
+		if s.denyOneForEmergencyStop(event) {
+			denied++
+		}
+	}
+	return denied
+}
+
+func (s *server) denyOneForEmergencyStop(event ApprovalEvent) bool {
+	// Deliver decision "deny" on the hook channel (vendor CLI only understands
+	// approve/deny) while auditing with an emergency-stop-origin action.
+	resolved, ok := s.approvals.resolve(event.ApprovalID, "deny", "", event.ContentHash)
+	if !ok {
+		return false
+	}
+	_ = s.audit.append(AuditEntry{
+		Action:     "deny-emergency-stop",
+		Agent:      resolved.Agent,
+		Kind:       resolved.Kind,
+		Command:    resolved.Command,
+		Effect:     "deny",
+		Rule:       resolved.MatchedRule,
+		ApprovalID: resolved.ApprovalID,
+	})
+	if s.approvalRetired != nil {
+		if err := s.approvalRetired(resolved.ApprovalID); err != nil {
+			fmt.Fprintf(os.Stderr, "sync approval queue after emergency-stop denying %s: %v\n", resolved.ApprovalID, err)
+		}
+	}
+	return true
 }
 
 // startScheduler runs the schedule ticker until ctx-like stop; call from daemon/legacy serve.
@@ -1365,8 +1411,12 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		s.writeResult(msg.ID, receipt)
 
 	case "agent.emergencyStop":
-		stopped := s.applyEmergencyStop()
-		s.writeResult(msg.ID, map[string]interface{}{"emergencyStopped": true, "stoppedRuns": stopped})
+		stopped, denied := s.applyEmergencyStop()
+		s.writeResult(msg.ID, map[string]interface{}{
+			"emergencyStopped": true,
+			"stoppedRuns":      stopped,
+			"deniedApprovals":  denied,
+		})
 
 	case "agent.pause":
 		var p struct {
