@@ -54,8 +54,10 @@ public struct ProofReelView: View {
             }
         }
         .onAppear {
+            #if DEBUG
             applyDebugScrubSeamIfNeeded()
             applyDebugAutoPlayIfNeeded()
+            #endif
         }
         .onDisappear {
             playTask?.cancel()

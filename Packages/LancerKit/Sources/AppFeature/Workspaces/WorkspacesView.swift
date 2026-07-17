@@ -18,9 +18,9 @@ public struct WorkspacesView: View {
     @State private var activeLiveThread: LiveThreadIdentifier?
     @Namespace private var composerMorphNamespace
     private let composerMorphSpring = Animation.spring(response: 0.32, dampingFraction: 0.86)
+    @Environment(TerminalSessionCoordinator.self) private var terminalCoordinator
     #if DEBUG
     @Environment(RelayApprovalIngest.self) private var relayApprovalIngest
-    @Environment(TerminalSessionCoordinator.self) private var terminalCoordinator
     @State private var isSettingsPresented = false
     @State private var isComposerRepoPickerPresented = false
     @State private var isRepoPickerDirectPresented = false
