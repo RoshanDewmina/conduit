@@ -5,7 +5,7 @@ import PersistenceKit
 
 /// Workspaces home affordance: "you have N pending approvals."
 /// Hidden entirely when count is 0. Tap opens the relevant live thread via
-/// the caller's existing `liveThreadPresentation` routing — no new nav stack.
+/// the caller's existing `liveThreadPresentation` push — no new nav stack.
 struct PendingApprovalsBanner: View {
     @Environment(RelayApprovalIngest.self) private var approvalIngest
     @Environment(RelayFleetStore.self) private var relayFleetStore

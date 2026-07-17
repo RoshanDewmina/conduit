@@ -363,9 +363,8 @@ public struct ThreadListView: View {
     private func handleSend(_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference] = []) {
         guard WorkspaceRepoCatalog.isAbsoluteSendTarget(cwd) else { return }
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
-        // Same stacked-sheet hazard as WorkspacesView.handleSend — dismiss
-        // the composer explicitly instead of letting it race the live-thread
-        // sheet's presentation.
+        // Dismiss the composer sheet before pushing the live thread so the
+        // two presentations don't race (same hazard as WorkspacesView.handleSend).
         isComposerPresented = false
         activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized, attachments: attachments)
     }
