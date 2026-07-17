@@ -644,8 +644,17 @@ struct ThreadDetailView: View {
         var rows: [BackgroundTasksPresentation.TaskRow] = []
         for turn in turns {
             let items = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+            // WT-B: a terminal turn cannot have running tasks — a tool_call
+            // whose result never landed must not spin the pill forever.
+            let terminalAdjusted: [TurnTranscriptItem] = items.map { item in
+                guard case .toolChip(let chip) = item else { return item }
+                let forced = ToolChipGrouping.withTerminalTurnStatus(
+                    [chip], turnIsTerminal: turn.status != .running
+                )
+                return .toolChip(forced[0])
+            }
             rows.append(contentsOf: BackgroundTasksPresentation.rows(
-                items: items,
+                items: terminalAdjusted,
                 events: eventsByTurnID[turn.id] ?? []
             ))
         }
