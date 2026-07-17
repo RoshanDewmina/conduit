@@ -180,6 +180,13 @@ public struct LiveThreadView: View {
                         }
                         Task { await refreshTranscriptExtras() }
                     }
+                    // Within-turn growth (observed live-follow, mirrored
+                    // streaming) changes the LAST turn's text without changing
+                    // the count — follow it too or the thread stalls mid-story
+                    // while the user sits at the bottom (CC-1 parity).
+                    .onChange(of: bridge.transcriptTurns.last?.assistantText ?? "") { _, _ in
+                        scrollToTailIfFollowing(proxy)
+                    }
                     .onAppear {
                         if !hasPerformedInitialScroll, !bridge.transcriptTurns.isEmpty {
                             hasPerformedInitialScroll = true
@@ -562,7 +569,7 @@ public struct LiveThreadView: View {
     }
 
     private func scrollToTail(_ proxy: ScrollViewProxy) {
-        withAnimation {
+        withAnimation(.easeOut(duration: 0.25)) {
             proxy.scrollTo(Self.scrollTailID, anchor: .bottom)
         }
     }
