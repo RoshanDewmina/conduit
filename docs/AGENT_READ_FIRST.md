@@ -46,7 +46,7 @@ Tool-agnostic entry point for Claude Code, Codex, Cursor, and Kimi working in th
    Cursor's mobile app, system light/dark). The W0.A `CursorStyle` shell is **retired** —
    do not resurrect it. **No agent deletes frontend chrome without a fresh owner ask.**
 7. **Do not wholesale-merge `amazing-mayer-246fef`** — cherry-pick only.
-8. **Deployment target:** iOS **26.0** — not 27, until the Phase 3 raise decision.
+8. **Deployment target:** iOS **27.0** (`project.yml` / `Package.swift`).
 9. **Permanent safety rules:** no Siri approve intent · no Face ID reintroduction ·
    voice-approve rejected · fail-closed mutating kinds · never "all clear" on stale relay data.
 10. **`AskUserQuestion`:** max 4 options per question.

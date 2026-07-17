@@ -2,7 +2,7 @@ name: Lancer
 options:
   bundleIdPrefix: dev.lancer
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "27.0"
   xcodeVersion: "27.0"
   createIntermediateGroups: true
   developmentLanguage: en
@@ -10,7 +10,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.2"
-    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "27.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
     # Must stay YES: the lock-screen Approve/Reject actions are backed by
@@ -43,7 +43,7 @@ targets:
   Lancer:
     type: application
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
     sources:
       - path: Lancer
     resources:
@@ -209,7 +209,7 @@ targets:
   LancerUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "27.0"
     sources:
       - path: LancerUITests
     settings:

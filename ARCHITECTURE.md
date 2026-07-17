@@ -3,7 +3,7 @@
 > *Phone-native cockpit for remote AI coding workspaces.*
 
 Last updated: 2026-07-15 (Workspaces-root frontend reconciliation)
-Target platform: iOS 26.0+ deployment (`project.yml` and `Package.swift`); verified with Xcode 27 / iOS 27 simulator (Swift 6.2, strict concurrency on). iOS 27-only affordances are fast-follow candidates and must stay gated or out of the shipping path while the deployment target remains 26.0.
+Target platform: iOS 27.0+ deployment (`project.yml` and `Package.swift`); verified with Xcode 27 / iOS 27 simulator (Swift 6.2+, strict concurrency on).
 Status: **production UI root is Workspaces** (`AppFeature/Workspaces/WorkspacesView.swift` via `AppRoot.readyRoot` → `NavigationStack { WorkspacesView() }`). DEBUG deep-links use `LANCER_DESTINATION` (e.g. `profile`, `settings`, `composer`, `threadList`, `threadDetail`, `trustedMachines`, `addRepo`, `search`, `review`). The retired `AppFeature/CursorStyle/` module and `LANCER_CURSOR_SHELL*` flags were removed by commit `6b97da65` (2026-07-11). Legacy sidebar / Command Home was **deleted** (2026-07-06); see §4.1.
 
 ---
@@ -97,10 +97,8 @@ not frame V1 around it. Both transports re-run policy + budget gates.
 ### Deferred to V2 — code retained, NOT deleted
 - **Hosted-cloud execution UI:** `ProviderDetailView`, `HostedProvisioningView`, `HostedRunnerStatusView`, `SelfHostVsHostedView` (orphaned, 0 refs) and the `agent-runner`/multi-cloud dispatch depth (Fly real; GCP needs an image; Lightsail bootstrap only). Compiles, stays in tree, unwired in V1. **Do not delete.**
 - **Siri / App Intents Phase 2 (RelevantEntities, App Shortcuts relevance, run-start intent):**
-  implemented and device-tested (`cursor/siri-phase2-fixes-9257`, PRs #16/#24), but **intentionally
-  not merged to master** (owner decision, 2026-07-06) — these are iOS 27-only APIs, and master
-  targets iOS 26.0 until iOS 27 actually ships. Revisit merging this branch when the deployment
-  target moves to 27.0+. This is a parked fast-follow, not a stalled/forgotten PR.
+  implemented and device-tested (`cursor/siri-phase2-fixes-9257`, PRs #16/#24). Deployment
+  target is now iOS 27.0 — dual-SDK gates for these APIs are removed.
 
 ### Planned (not started)
 - First-class **Loop** primitive (`lancer_loop_start`/`lancer_step_complete`) per the "control plane for loops" thesis — backend has no Loop object yet.
@@ -180,7 +178,7 @@ even when users ask, because pursuing them dilutes the product.
 
 - **Name:** Lancer
 - **Bundle ID:** `dev.lancer.mobile` (app), `dev.lancer.kit` (frameworks)
-- **Platforms:** iOS 26.0+ / iPadOS 26.0+ deployment target, tested on the iOS 27 simulator. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
+- **Platforms:** iOS 27.0+ / iPadOS 27.0+ deployment target. watchOS 26.0+ for the companion Watch app. macOS Catalyst deferred.
 - **Toolchain:** Xcode 27.x, Swift 6.2, SwiftPM-first. Strict concurrency and existential-any are defaults — no upcoming-feature flags needed.
 - **License:** TBD. Engine modules (TerminalEngine, SSHTransport) likely
   open under MIT/Apache-2.0; feature modules and the app stay proprietary.
