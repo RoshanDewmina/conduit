@@ -1,5 +1,52 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-17 ~12:05 ET — dual-product dogfood swarm run: 10 PRs merged, phone reinstalled at `c85f4a7e`
+
+**Session:** Fable orchestrator + Cursor Grok (primary coder) + Sonnet subagents (sim/device evidence,
+sensitive-path review). Heavy parallelism: up to 5 concurrent lanes via disjoint worktrees.
+
+**Lancer `origin/master`:** `ad73e04c` → `c85f4a7e` via 10 merged PRs:
+#154 (WT-H observed live-follow) → #155 (WT-C/I/J + CC-parity + WT-B chip fix + WT-E daemon
+persist) → #156 (Simurgh-adoption config, extracted clean from the dirty terminal branch) →
+#153 (owner walkthrough docs, union-merged) → #157 (fix: push-device persistence was
+process-global — `go test` was clobbering the REAL `~/.lancer/push-device.json`, found live
+during WP4 diagnosis) → #158 (WT-A2 per-chat autonomy: pill now writes a per-cwd daemon
+override, not the global default; audited `scope=<cwd>`) → #159 (WT-B live-stream regression
+test, teeth-proven) → #160 (WP5 gap re-proof: #10/#14/C4#7 live PASS on an isolated
+sim+daemon rig with REAL agent runs, not seeded transcripts; **Emergency Stop found live
+FAIL** — UI/audit claimed success but the PreToolUse hook process survived 6+ min) → #161
+(fix: Emergency Stop now denies every pending approval through the same chokepoint as a
+phone Reject, unblocking hook gates) → #162 (fix: hook binary isolation — dispatched agent
+env now pins `LANCERD=` to the dispatching daemon's own executable, closing a version-skew
+gap the WP5 rig exposed) → #163 (perf: 3 measured+fixed offenders — live-follow full-transcript
+republish on unchanged polls, uncached transcript-item assembly across 7 render call sites,
+thread-list N+1 query 51.2ms→5.0ms/10.3x on 150 conversations).
+
+**Production:** daemon binary swapped (stop→mv→restart, never cp-onto-running), bogus
+`push-device.json` test fixture removed, phone app reinstalled+relaunched at `c85f4a7e` via
+`/tmp/lancer-device-dogfood-dd`; pair confirmed live, no remint.
+
+**Simurgh:** local master (96 commits ahead) pushed to `origin/master` `deac3ef` → `4fe7e53`
+after go test green; one revoked `crsr_` credential redacted from 2 unpushed doc commits via
+scoped `git filter-repo` before push (tip tree bit-identical, backup `master-backup-pre-redact`).
+`~/bin/simurgh` rebuilt (backup kept). `docs/DOGFOOD_FROM_LANCER.md` ledger opened with 3
+frictions from this session (XcodeBuildMCP session-defaults clobber across concurrent leases,
+hook-binary isolation gap, pairing-code TTL too short for manual nav) — first two acted on,
+one filed as a background task.
+
+**Open / owner-gated:** WP4 APNs app-closed push — daemon-side fix (#157) deployed and phone
+relaunched, but live lock-screen confirmation needs the owner's eyes on the physical device
+(no on-device screenshot/interaction tool available for this session). WT-F risk-scoring
+(`ls -la` over-scored High) untouched — deferred, cheap but not requested this run.
+
+**Dual-product learning:** the two highest-value findings this session were BOTH surfaced by
+using Simurgh to build Lancer, not by targeted testing — the production `push-device.json`
+corruption (#157) was only caught because a WP5 gap-reproof lane's isolated-daemon test run
+diagnosis noticed the file's mtime/content didn't match a real phone session; Emergency
+Stop's live FAIL was only caught because the same lane drove a REAL agent run through the
+approval loop instead of trusting a seeded/harness transcript. Seed/harness proof and code
+review both said these were fine; only live dogfooding on isolated infrastructure found them.
+
 ## ⚡ 2026-07-16 ~21:30 ET — CC-app parity epic started; WT-H/I/J/C fixed + deployed; 3 lanes in flight
 
 - **Owner directive:** copy the Claude Code iOS app's chat design/features 1:1 (frame-by-frame

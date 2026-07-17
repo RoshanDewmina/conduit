@@ -1,8 +1,8 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-16 ~16:50 ET.  
-**`origin/master`:** `fbc85191` (PR #140 + PR #141 FX10). Phone reinstalled with FX10.  
-**Dogfood:** pair code **347051** owner-owed — see `DOGFOOD_SMOKE.md`.
+**Last updated:** 2026-07-17 ~12:05 ET.  
+**`origin/master`:** `c85f4a7e` (PR #154→#163: observed-live-follow, thread UX/perf+CC-parity, Simurgh adoption, walkthrough docs, push-persist home-scope, per-chat autonomy scope WT-A2, WT-B live-stream regression, gap re-proof WP5, Emergency Stop denies pending, hook-binary isolation, perf top-3 fixes). Production daemon + phone reinstalled at this tip.  
+**Dogfood:** pair **confirmed live** (no remint) after reinstall. Emergency Stop live-verified FAIL→fixed this session. APNs app-closed push: daemon fix deployed + phone relaunched; live lock-screen confirmation is **owner-gated** (needs eyes on the physical device).
 
 > **2026-07-16 sweep in one line:** untested-feature live sweep found + fixed F1/F4 daemon
 > approval bugs; Wave 1 merged FX7 (needsApproval→awaiting), FX5 (Connect above keypad),
