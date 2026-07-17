@@ -115,7 +115,7 @@ public final class ShellLiveBridge {
 
     /// Live follow of an adopted observed session's vendor transcript, so
     /// desktop-side activity appears while the thread is open. Cancelled by
-    /// `resetForNewThread` (the view's `onDisappear` path).
+    /// `resetForNewThread` (LiveThreadPresentation binding-clear path).
     private var observedFollowTask: Task<Void, Never>?
 
     /// Single-flight gate for `retryLastAttempt` — claimed before any
@@ -320,7 +320,7 @@ public final class ShellLiveBridge {
         self.chatRepo = chatRepo
     }
 
-    /// Clears in-flight UI state when the live sheet dismisses so the next New
+    /// Clears in-flight UI state when the live thread pops so the next New
     /// Chat is not wedged behind a stale `isSendInFlight` / prior transcript.
     /// The host-side run may keep going; list sync keeps its status honest.
     public func resetForNewThread() {

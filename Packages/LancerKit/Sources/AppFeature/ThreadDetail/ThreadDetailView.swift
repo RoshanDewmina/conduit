@@ -45,6 +45,9 @@ struct ThreadDetailView: View {
     @State private var isBackgroundTasksPresented = false
     /// True while `refreshThreadFromHost` is in flight (not just local mirror read).
     @State private var isHostTranscriptRefreshing = false
+    /// True from appear until `loadTurns()` finishes — drives the skeleton when
+    /// there is nothing cached to paint yet.
+    @State private var isLoadTurnsInFlight = true
 
     private static let initialWindowSize = 100
     private static let windowExtendStep = 100
@@ -110,6 +113,13 @@ struct ThreadDetailView: View {
         turns.count > visibleTurnLimit
     }
 
+    private var showsTranscriptSkeleton: Bool {
+        ChatTranscriptSkeletonVisibility.shouldShow(
+            hasCachedContent: !turns.isEmpty,
+            isLoadInFlight: isLoadTurnsInFlight
+        )
+    }
+
     public var body: some View {
         ZStack(alignment: .bottom) {
             Color(.systemBackground)
@@ -143,7 +153,7 @@ struct ThreadDetailView: View {
                                 }
                             }
 
-                            if isHostTranscriptRefreshing {
+                            if isHostTranscriptRefreshing && !turns.isEmpty {
                                 HStack(spacing: 8) {
                                     ProgressView()
                                     Text("Refreshing transcript…")
@@ -166,12 +176,15 @@ struct ThreadDetailView: View {
                                 }
                             }
 
-                            if turns.isEmpty && !isHostTranscriptRefreshing {
+                            if showsTranscriptSkeleton {
+                                ChatTranscriptSkeleton()
+                                    .transition(.opacity)
+                            } else if turns.isEmpty {
                                 Text("No turns in the local mirror yet. Follow up below to continue in this repo.")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
-                            } else if !turns.isEmpty {
+                            } else {
                                 if hasEarlierTurns {
                                     Button {
                                         visibleTurnLimit = min(
@@ -254,6 +267,7 @@ struct ThreadDetailView: View {
                                 }
                         }
                         .padding(.horizontal, 20)
+                        .animation(.easeInOut(duration: 0.2), value: showsTranscriptSkeleton)
                     }
                     .overlay(alignment: .bottom) {
                         if showScrollToBottom {
@@ -448,7 +462,9 @@ struct ThreadDetailView: View {
 
 
     private func loadTurns() async {
+        defer { isLoadTurnsInFlight = false }
         guard thread.id != "preview" else { return }
+        isLoadTurnsInFlight = true
         let loadToken = transcriptLoadGate.beginLoad()
         guard let db = try? AppDatabase.openShared() else { return }
         let repo = ChatConversationRepository(db)

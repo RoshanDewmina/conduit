@@ -2,8 +2,8 @@ import Foundation
 import LancerCore
 
 /// Identifies one live-send `LiveThreadView` presentation. A fresh id per
-/// send ensures `.sheet(item:)` always treats a new send as a new sheet
-/// instance, even if the prompt text happens to repeat.
+/// send ensures `.navigationDestination(item:)` always treats a new send as a
+/// new destination instance, even if the prompt text happens to repeat.
 struct LiveThreadIdentifier: Identifiable, Sendable, Hashable {
     let id: UUID
     let prompt: String
@@ -34,9 +34,12 @@ struct LiveThreadIdentifier: Identifiable, Sendable, Hashable {
 #if os(iOS)
 import SwiftUI
 
-/// Shared `.sheet(item:)` presentation for `LiveThreadView`, matching the
-/// Workspaces M3 pattern — presenters only set `activeLiveThread`; the
-/// bridge send stays inside `LiveThreadView`'s own `.task`.
+/// Shared push presentation for `LiveThreadView` onto the enclosing
+/// `NavigationStack`. Presenters only set `activeLiveThread`; the bridge send
+/// stays inside `LiveThreadView`'s own `.task`.
+///
+/// Reset fires when the binding clears (pop) or swaps to a different id —
+/// not when LiveThread presents its own Proof/Review/BackgroundTasks sheets.
 private struct LiveThreadPresentationModifier: ViewModifier {
     @Binding var activeLiveThread: LiveThreadIdentifier?
     @Environment(ShellLiveBridge.self) private var shellLiveBridge
@@ -47,21 +50,26 @@ private struct LiveThreadPresentationModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(item: $activeLiveThread) { thread in
+            .navigationDestination(item: $activeLiveThread) { thread in
                 LiveThreadView(
                     prompt: thread.prompt,
                     cwd: thread.cwd,
                     attachments: thread.attachments,
                     existingConversationID: thread.existingConversationID
                 )
-                    .environment(shellLiveBridge)
-                    .environment(relayApprovalIngest)
-                    .environment(relayQuestionIngest)
-                    .environment(relayFleetStore)
-                    .environment(workspaceDataStore)
-                    .onDisappear {
-                        shellLiveBridge.resetForNewThread()
-                    }
+                .environment(shellLiveBridge)
+                .environment(relayApprovalIngest)
+                .environment(relayQuestionIngest)
+                .environment(relayFleetStore)
+                .environment(workspaceDataStore)
+            }
+            .onChange(of: activeLiveThread?.id) { previousID, newID in
+                // Pop (non-nil → nil) or replace with a different thread id.
+                // Sub-sheets do not mutate `activeLiveThread`, so they never
+                // trip this path (unlike view `onDisappear` under a cover).
+                if previousID != nil, previousID != newID {
+                    shellLiveBridge.resetForNewThread()
+                }
             }
     }
 }

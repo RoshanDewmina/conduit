@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 22:28 Cursor Grok — UX-NAV: chat transcript loading skeleton + LiveThread push nav (sheet→navigationDestination; Close→system back; reset on binding clear) (`lane/ux-nav`)
 - 22:25 Claude Fable (orchestrator) — finish-off pass DEPLOYED to phone: WT-G audit feed newest-first structured rows (merged, 5/5 tests), WT-E root-caused (all 503s were July 1–3 stale; tonight's silent failure = in-memory s.device wiped by daemon reloads) + FIXED (push-device.json persistence + boot rehydration + register logging, deployed), LANCER_SEED_TRANSCRIPT seam, seeded-sim parity verdicts PASS for CC-1/2/3/4/5 with screenshots (docs/test-runs/2026-07-16-cc-parity/), 2 new bugs found+fixed by the harness itself (history-view terminal-state leak ×2 call sites, ThreadDetail bottom-stack transparent overlay) (`fix/thread-ux-polish`)
 - 21:59 Cursor Grok — WT-G Settings→Audit feed: newest-first structured rows (action · command + relative time/agent/effect tint), tap-expand + Copy raw; AuditFeedFormatting + tests (`lane/wt-g-audit`)
 - 23:55 Claude Fable (orchestrator) — Managed AI Credits UNFROZEN (owner-approved): STATUS_LEDGER amended (narrow slice; hosted-cloud execution stays frozen); locked $24/mo·$12 cap·$5 trial (App Attest-gated)·Redis stores; implementation plan with 5 work packages + routing + gates written (`docs/plans/2026-07-16-managed-ai-credits-plan.md`, doc-only)
