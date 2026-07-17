@@ -3,6 +3,23 @@ import Foundation
 import Observation
 import LancerCore
 import PersistenceKit
+import OSLog
+
+/// Perf measurement seam (WP1, 2026-07-17) — thread-list return-visit cost.
+/// Grep for "workspaceCatalog.loadLocalRows" in the device/simulator log.
+private let workspaceCatalogPerfLog = Logger(subsystem: "dev.lancer.mobile", category: "WorkspaceCatalogPerf")
+
+/// Not `#if os(iOS)`-gated (unlike `ThreadDetailPerf`'s home file) so it's
+/// visible to both the cross-platform `swift build`/`swift test` gate and
+/// the iOS app target — several perf log call sites across both need it.
+extension Duration {
+    /// Millisecond value for perf log lines — `Duration` has no direct
+    /// Double conversion, only `.components` (seconds, attoseconds).
+    var asMilliseconds: Double {
+        let (seconds, attoseconds) = components
+        return Double(seconds) * 1000 + Double(attoseconds) / 1_000_000_000_000_000
+    }
+}
 
 /// One workspace/repo row shown in Workspaces / composer / picker.
 /// `cwd` is the real path used for live sends — never a guessed `~/name`.
@@ -770,24 +787,36 @@ public final class WorkspaceDataStore {
         }
     }
 
+    /// Was an N+1 loop (up to 200 sequential `turns(conversationID:)` full
+    /// scans + `artifacts(turnID:)` calls, one pair per conversation) that
+    /// re-ran on every thread-list appear/return-visit. Now two batched
+    /// round trips regardless of conversation count — see
+    /// `ChatConversationRepository.latestTurns(conversationIDs:)` and
+    /// `artifacts(turnIDs:)`. Measured 2026-07-17 —
+    /// docs/test-runs/2026-07-17-perf/README.md.
     private func loadLocalRows() async throws {
+        let clock = ContinuousClock()
+        let start = clock.now
         let recent = try await chatRepo.recent(limit: 200)
-        var turns: [String: ChatTurn] = [:]
+        let conversationIDs = recent.map(\.id)
+        let turns = try await chatRepo.latestTurns(conversationIDs: conversationIDs)
+        let turnIDs = turns.values.map(\.id)
+        let artifactsByTurnID = try await chatRepo.artifacts(turnIDs: turnIDs)
+
         var diffs: [String: (added: Int, removed: Int)] = [:]
-        for conversation in recent {
-            if let last = try? await chatRepo.turns(conversationID: conversation.id).last {
-                turns[conversation.id] = last
-                // Latest turn's artifacts — same +/− chips SessionDiffPill's
-                // local path derives from (no per-row sessionDiff RPC).
-                if let artifacts = try? await chatRepo.artifacts(turnID: last.id),
-                   let totals = ThreadListMetadata.diffTotals(fromArtifacts: artifacts) {
-                    diffs[conversation.id] = totals
-                }
+        for (conversationID, turn) in turns {
+            // Latest turn's artifacts — same +/− chips SessionDiffPill's
+            // local path derives from (no per-row sessionDiff RPC).
+            if let artifacts = artifactsByTurnID[turn.id],
+               let totals = ThreadListMetadata.diffTotals(fromArtifacts: artifacts) {
+                diffs[conversationID] = totals
             }
         }
         conversations = recent
         lastTurnByConversationID = turns
         diffByConversationID = diffs
+        let elapsed = start.duration(to: clock.now)
+        workspaceCatalogPerfLog.notice("workspaceCatalog.loadLocalRows conversations=\(recent.count) elapsedMs=\(elapsed.asMilliseconds, privacy: .public)")
     }
 
     public func search(_ query: String) async -> WorkspaceSearchResult {

@@ -41,6 +41,10 @@ public struct LiveThreadView: View {
     @State private var streamingPacer = ChatStreamingTextPacer()
     @State private var receiptsByRunID: [String: ProofReceipt] = [:]
     @State private var eventsByTurnID: [String: [ChatEvent]] = [:]
+    /// See `TurnTranscriptItemsCache` doc comment (ConversationSyncCoordinator.swift)
+    /// — this view has 4 separate call sites that each independently
+    /// re-derived `TurnTranscriptAssembler.items(from:)` for the same turn.
+    @State private var transcriptItemsCache = TurnTranscriptItemsCache()
     @State private var toolArtifactsByTurnID: [String: [ChatArtifact]] = [:]
     @State private var showScrollToBottom = false
     @State private var isNearBottom = true
@@ -555,10 +559,16 @@ public struct LiveThreadView: View {
         )
     }
 
+    /// Cached wrapper around `TurnTranscriptAssembler.items(from:)` — see
+    /// `transcriptItemsCache` doc comment.
+    private func transcriptItems(for turn: LancerCore.ChatTurn) -> [TurnTranscriptItem] {
+        transcriptItemsCache.items(for: turn.id, events: eventsByTurnID[turn.id] ?? [])
+    }
+
     private var backgroundTaskRows: [BackgroundTasksPresentation.TaskRow] {
         var rows: [BackgroundTasksPresentation.TaskRow] = []
         for turn in bridge.transcriptTurns {
-            let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+            let eventItems = transcriptItems(for: turn)
             // WT-B: a terminal turn cannot have running tasks — a tool_call
             // whose result never landed must not spin the pill forever.
             let terminalAdjusted: [TurnTranscriptItem] = eventItems.map { item in
@@ -658,7 +668,7 @@ public struct LiveThreadView: View {
     @ViewBuilder
     private func turnTranscriptBody(_ turn: LancerCore.ChatTurn) -> some View {
         let receipt = receiptsByRunID[turn.runID]
-        let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+        let eventItems = transcriptItems(for: turn)
         let artifactChips = (toolArtifactsByTurnID[turn.id] ?? []).map(ToolChipItem.init(artifact:))
         let merged = mergeToolArtifacts(into: eventItems, artifacts: artifactChips)
         if merged.contains(where: {
@@ -714,7 +724,7 @@ public struct LiveThreadView: View {
     }
 
     private func hasAssistantArtifacts(for turn: LancerCore.ChatTurn) -> Bool {
-        let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+        let eventItems = transcriptItems(for: turn)
         let artifactChips = (toolArtifactsByTurnID[turn.id] ?? []).map(ToolChipItem.init(artifact:))
         let merged = mergeToolArtifacts(into: eventItems, artifacts: artifactChips)
         let hasTranscriptItems = merged.contains {
@@ -1022,7 +1032,7 @@ public struct LiveThreadView: View {
 
     @ViewBuilder
     private func liveToolChips(for turn: LancerCore.ChatTurn) -> some View {
-        let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+        let eventItems = transcriptItems(for: turn)
         let artifactChips = (toolArtifactsByTurnID[turn.id] ?? []).map(ToolChipItem.init(artifact:))
         let merged = mergeToolArtifacts(into: eventItems, artifacts: artifactChips)
         let turnIsTerminal = turn.status != .running

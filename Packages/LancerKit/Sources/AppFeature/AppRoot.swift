@@ -279,6 +279,7 @@ public struct AppRoot: View {
                         await DebugSeeder.resetForUITestIfRequested(env: env)
                         await DebugSeeder.seedIfNeeded(env: env)
                         await DebugSeeder.seedTranscriptIfRequested(env: env)
+                        await DebugSeeder.seedLongTranscriptIfRequested(env: env)
                         isUITestSeedReady = true
                     }
             }

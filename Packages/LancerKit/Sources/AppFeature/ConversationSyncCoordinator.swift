@@ -536,6 +536,47 @@ public enum TurnTranscriptAssembler: Sendable {
     }
 }
 
+/// Per-turn cache for `TurnTranscriptAssembler.items(from:)`. That function
+/// is pure but not cheap — it sorts the turn's full event array and walks it
+/// once to build a `tool_use_id → result` map, then again to assemble
+/// prose/thinking/toolChip items. Chat views call it from inside `body` (and
+/// from several helper methods that each independently re-derive the same
+/// items for the same turn), so without a cache a turn with N events gets
+/// re-sorted/re-walked on every SwiftUI re-render, not just when its events
+/// actually change (scrolling, keyboard focus, any unrelated `@State` write
+/// in the view all trigger a body re-evaluation).
+///
+/// Deliberately a reference type held in `@State` (`@State private var foo =
+/// TurnTranscriptItemsCache()`) rather than a `@State` dictionary: mutating
+/// a class's internal storage does not republish through SwiftUI, so filling
+/// the cache during a body pass doesn't itself trigger another render.
+///
+/// Invalidation key is `(event count, last event seq)` rather than the full
+/// event array — cheap to compare, and correct here because this codebase's
+/// event log is append-only per turn (events are never edited or reordered
+/// in place; a turn's `[ChatEvent]` slice only grows).
+public final class TurnTranscriptItemsCache: @unchecked Sendable {
+    private struct Entry {
+        let eventCount: Int
+        let lastSeq: Int
+        let items: [TurnTranscriptItem]
+    }
+
+    private var storage: [String: Entry] = [:]
+
+    public init() {}
+
+    public func items(for turnID: String, events: [ChatEvent]) -> [TurnTranscriptItem] {
+        let lastSeq = events.last?.seq ?? -1
+        if let cached = storage[turnID], cached.eventCount == events.count, cached.lastSeq == lastSeq {
+            return cached.items
+        }
+        let items = TurnTranscriptAssembler.items(from: events)
+        storage[turnID] = Entry(eventCount: events.count, lastSeq: lastSeq, items: items)
+        return items
+    }
+}
+
 private extension String {
     var nilIfEmpty: String? {
         let t = trimmingCharacters(in: .whitespacesAndNewlines)

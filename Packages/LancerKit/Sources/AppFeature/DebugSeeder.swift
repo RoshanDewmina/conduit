@@ -378,5 +378,97 @@ public enum DebugSeeder {
         ]
         try? await repo.appendEventsMirror(conversationID: convID, events: events)
     }
+
+    /// Seeds a LONG deterministic conversation for perf measurement (thread
+    /// open→first paint / scroll-to-latest / live-follow on hundreds of
+    /// events). Gated on `LANCER_SEED_TRANSCRIPT_COUNT=<turnCount>` (e.g.
+    /// `LANCER_SEED_TRANSCRIPT_COUNT=150` seeds 150 turns × 4 events each =
+    /// 600 events). Fixed conversation id `conv-perf-seed-<turnCount>` so
+    /// re-running with the same count is a no-op (idempotent, like the
+    /// existing `LANCER_SEED_TRANSCRIPT` seam) but a different count seeds a
+    /// fresh fixture. There is no such count parameter on
+    /// `LANCER_SEED_TRANSCRIPT` (that seam is a single fixed 12-event turn) —
+    /// this is the new seam added 2026-07-17 for WP1 perf measurement.
+    public static func seedLongTranscriptIfRequested(env: AppEnvironment) async {
+        guard let raw = ProcessInfo.processInfo.environment["LANCER_SEED_TRANSCRIPT_COUNT"],
+              let turnCount = Int(raw), turnCount > 0
+        else { return }
+        guard let db = try? AppDatabase.openShared() else { return }
+        let repo = ChatConversationRepository(db)
+        let convID = "conv-perf-seed-\(turnCount)"
+        if let turns = try? await repo.turns(conversationID: convID), !turns.isEmpty { return }
+
+        let base = Date(timeIntervalSinceNow: -Double(turnCount) * 60)
+        _ = try? await repo.upsertConversationMirror(
+            ChatConversation(
+                id: convID,
+                title: "Perf seed — \(turnCount) turns",
+                agentID: "claudeCode",
+                hostName: "seed-host",
+                hostID: nil,
+                cwd: "/Users/dev/project"
+            ),
+            lastHostSeq: turnCount * 4,
+            syncState: .synced
+        )
+
+        var seq = 0
+        for i in 0..<turnCount {
+            let turnID = "turn-perf-\(i)"
+            let runID = "run-perf-\(i)"
+            let turnStart = base.addingTimeInterval(Double(i) * 45)
+            _ = try? await repo.upsertTurnMirror(
+                ChatTurn(
+                    id: turnID,
+                    conversationID: convID,
+                    ordinal: i,
+                    prompt: "Perf seed turn \(i) — make a small change and verify.",
+                    runID: runID,
+                    status: .completed,
+                    assistantText: "",
+                    createdAt: turnStart,
+                    completedAt: turnStart.addingTimeInterval(20)
+                ),
+                vendorSessionID: "seed-session-\(i)",
+                hostSeqStart: seq + 1,
+                hostSeqEnd: seq + 4
+            )
+
+            seq += 1
+            let thinking = ChatEvent(
+                conversationID: convID, seq: seq, turnID: turnID, runID: runID,
+                kind: "thinking", role: nil, stream: nil,
+                text: "Working through step \(i) of the perf fixture.",
+                payloadJSON: nil, createdAt: turnStart.addingTimeInterval(1)
+            )
+            seq += 1
+            let toolCall = ChatEvent(
+                conversationID: convID, seq: seq, turnID: turnID, runID: runID,
+                kind: "tool_call", role: nil, stream: nil,
+                text: "Bash",
+                payloadJSON: #"{"name":"Bash","toolUseId":"tu-\#(seq)","input":{"command":"echo step-\#(i)"}}"#,
+                createdAt: turnStart.addingTimeInterval(2)
+            )
+            seq += 1
+            let toolResult = ChatEvent(
+                conversationID: convID, seq: seq, turnID: turnID, runID: runID,
+                kind: "tool_result", role: nil, stream: nil,
+                text: "step-\(i)",
+                payloadJSON: #"{"toolUseId":"tu-\#(seq - 1)","isError":false}"#,
+                createdAt: turnStart.addingTimeInterval(4)
+            )
+            seq += 1
+            let output = ChatEvent(
+                conversationID: convID, seq: seq, turnID: turnID, runID: runID,
+                kind: "output", role: "assistant", stream: nil,
+                text: "Step \(i) complete — echoed the marker and verified it landed.",
+                payloadJSON: nil, createdAt: turnStart.addingTimeInterval(5)
+            )
+            try? await repo.appendEventsMirror(
+                conversationID: convID,
+                events: [thinking, toolCall, toolResult, output]
+            )
+        }
+    }
 }
 #endif // os(iOS) && DEBUG
