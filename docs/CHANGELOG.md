@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 20:40 Claude Fable — observed desktop threads now update LIVE + re-attach delta-imports transcript growth (WT-H): daemon `deltaImportObservedSession` unfreezes snapshot-once attach; iOS `ShellLiveBridge` observed-follow poll (Orca-subscription analogue, no protocol change). go -race + 12/12 bridge tests on sim (lease-199) + **owner live-proved on phone** (marker appeared in open thread) (`fix/observed-thread-live-follow`)
 - 19:20 Cursor Grok — expand SESSION_HOP_REPORT §2.4 Simurgh coverage (LE reclaim, DD collision, HOME pin, 30→60m TTL, wave commits `2fe3a2b`/`c11fb11`/`b1305a7`/`85f3907`, `~/bin/simurgh` hot-swap, C4 `simurgh exec`) (`docs/simurgh-hop-coverage`)
 - 18:20 Cursor Composer — SESSION_HOP_REPORT §0: verbatim owner goals from session JSONL/transcripts (amends PR #150 without §0) (`docs/session-hop-goals-section`)
 - 18:15 Cursor Composer — session-hop doc sync: GAP_LIST/DOGFOOD_READY/orchestrator aligned to master `62b4424d` + verified pair/launch PASS (`docs/session-hop-doc-sync`)

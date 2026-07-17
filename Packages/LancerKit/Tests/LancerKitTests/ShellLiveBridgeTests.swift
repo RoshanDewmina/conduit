@@ -793,6 +793,67 @@ struct ShellLiveBridgeTests {
         }() == false)
         #expect(unresolved != bridge.sendState)
     }
+
+    @Test("observed follow appends desktop-side activity to an open thread")
+    func observedFollowAppendsDesktopActivity() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let store = RelayFleetStore(connectionStates: ConnectionStateStore())
+        _ = makeConnectedMachine(into: store)
+        let bridge = makeBridge(repo: repo, relayFleetStore: store)
+        bridge.markHydrated()
+        bridge.testObservedFollowIntervalNanoseconds = 20_000_000
+        bridge.armObservedContinue(vendor: "claudeCode", sessionId: "sess-follow", cwd: "/proj")
+        bridge.testRelayAttachObservedSession = { _, _, _ in
+            ConversationAttachObservedSessionResponse(error: "forced-fallback")
+        }
+        let initial = [
+            SessionMessage(role: .user, text: "hello"),
+            SessionMessage(role: .assistant, text: "hi"),
+        ]
+        let growth = [
+            SessionMessage(role: .user, text: "desk follow-up"),
+            SessionMessage(role: .assistant, text: "desk answer"),
+        ]
+        let served = ServedGrowth()
+        bridge.testRelayFetchTranscript = { _, sinceLine in
+            if sinceLine == 0 {
+                return (messages: initial, nextLine: 2, resetRequired: false)
+            }
+            if sinceLine == 2, await served.claim() {
+                return (messages: growth, nextLine: 4, resetRequired: false)
+            }
+            return (messages: [], nextLine: max(sinceLine, 4), resetRequired: false)
+        }
+
+        await bridge.adoptArmedObservedContinue(fallbackCwd: "/proj")
+        #expect(bridge.transcriptTurns.count == 1)
+
+        // Follow loop: baseline tick, then the growth tick appends a new turn.
+        for _ in 0..<200 where bridge.transcriptTurns.count < 2 {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        #expect(bridge.transcriptTurns.count == 2)
+        let appended = try #require(bridge.transcriptTurns.last)
+        #expect(appended.prompt == "desk follow-up")
+        #expect(appended.assistantText == "desk answer")
+        #expect(appended.id == "observedFollow:sess-follow:1")
+
+        // Leaving the thread cancels the follow so no zombie poll survives.
+        bridge.resetForNewThread()
+        #expect(bridge.transcriptTurns.isEmpty)
+    }
+}
+
+/// Serves observed-follow growth exactly once, actor-isolated for the Sendable
+/// test transcript closure.
+private actor ServedGrowth {
+    private var served = false
+    func claim() -> Bool {
+        if served { return false }
+        served = true
+        return true
+    }
 }
 
 /// One-shot async gate for coordinating MainActor test races.
