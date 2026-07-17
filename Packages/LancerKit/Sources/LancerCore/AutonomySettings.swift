@@ -79,4 +79,46 @@ public enum AutonomyPreset: String, CaseIterable, Sendable, Codable {
             return true
         }
     }
+
+    // MARK: - Coarse relay permission mode
+
+    /// Maps this UI preset onto the daemon's coarse policy `default`
+    /// (`deny` / `ask` / `allow`) for `agentPermissionModeSet`.
+    ///
+    /// The daemon's named `PresetDocument`s (`cautious` / `balanced` /
+    /// `bypass` in `policy/types.go`) encode richer per-rule YAML, but the
+    /// relay RPC can only write the document-level `default`. Closest
+    /// coarse effects (fail-closed — any ambiguity → `.ask`):
+    /// - `.bypass` → `.allow` (matches onboarding bypass starter YAML
+    ///   `default: allow`; full "don't stop me" intent)
+    /// - `.autoSafeWrites` (balanced), `.autoReads` (cautious),
+    ///   `.alwaysAsk`, `.agentDecides` → `.ask`
+    ///
+    /// No AutonomyPreset maps to `.deny`; that coarse mode is Settings-only.
+    public var coarsePermissionMode: PermissionMode {
+        switch self {
+        case .bypass:
+            return .allow
+        case .autoReads, .autoSafeWrites, .alwaysAsk, .agentDecides:
+            return .ask
+        }
+    }
+
+    /// Best AutonomyPreset to display for a daemon-confirmed coarse mode.
+    /// Prefer `preferred` when it already maps to `mode` so a finer UI label
+    /// (e.g. Always ask vs Safe writes) survives a round-trip that both map
+    /// to `.ask`. Fail-closed: unknown / `.deny` → `.alwaysAsk`.
+    public static func reflecting(
+        coarseMode mode: PermissionMode,
+        preferred: AutonomyPreset = .autoSafeWrites
+    ) -> AutonomyPreset {
+        switch mode {
+        case .allow:
+            return .bypass
+        case .ask:
+            return preferred.coarsePermissionMode == .ask ? preferred : .autoSafeWrites
+        case .deny:
+            return .alwaysAsk
+        }
+    }
 }
