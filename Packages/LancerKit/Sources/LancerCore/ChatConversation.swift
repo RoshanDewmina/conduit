@@ -110,7 +110,7 @@ public struct ChatConversation: Codable, Sendable, Identifiable {
     }
 }
 
-public struct ChatTurn: Codable, Sendable, Identifiable {
+public struct ChatTurn: Codable, Sendable, Identifiable, Equatable {
     public let id: String
     public let conversationID: String
     public let ordinal: Int
@@ -140,7 +140,7 @@ public struct ChatTurn: Codable, Sendable, Identifiable {
     /// phone cache keyed by `previewCacheKey` — never in SQLite.
     public var attachments: [ConversationAttachmentReference]
 
-    public enum Status: String, Codable, Sendable {
+    public enum Status: String, Codable, Sendable, Equatable {
         case running
         case completed
         case failed

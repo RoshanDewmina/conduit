@@ -2,6 +2,13 @@
 import SwiftUI
 import LancerCore
 import PersistenceKit
+import OSLog
+
+/// Perf measurement seam (WP1, 2026-07-17) — thread open→first-paint timing.
+/// Grep the device/simulator log for "threadDetail.localRead" /
+/// "threadDetail.loadTurnsTotal" to get real elapsed-time numbers instead of
+/// eyeballing screenshots. See docs/test-runs/2026-07-17-perf/README.md.
+private let threadDetailPerfLog = Logger(subsystem: "dev.lancer.mobile", category: "ThreadDetailPerf")
 
 /// Thread detail for a real conversation row. Renders the local-mirror
 /// transcript (user + assistant) with Flight Recorder per turn, plus follow-up
@@ -48,6 +55,13 @@ struct ThreadDetailView: View {
     /// True from appear until `loadTurns()` finishes — drives the skeleton when
     /// there is nothing cached to paint yet.
     @State private var isLoadTurnsInFlight = true
+    /// Reference-type cache so writes don't republish through `@State` (a
+    /// plain dictionary in `@State` would re-trigger SwiftUI diffing on every
+    /// insert). `TurnTranscriptAssembler.items(from:)` was measured being
+    /// called up to 3x per turn per render from this view alone (plus more
+    /// from `LiveThreadView`), re-sorting/re-walking the same event array
+    /// from scratch every time — see docs/test-runs/2026-07-17-perf/README.md.
+    @State private var transcriptItemsCache = TurnTranscriptItemsCache()
 
     private static let initialWindowSize = 100
     private static let windowExtendStep = 100
@@ -387,6 +401,12 @@ struct ThreadDetailView: View {
         }
     }
 
+    /// Cached wrapper around `TurnTranscriptAssembler.items(from:)` — see
+    /// `transcriptItemsCache` doc comment.
+    private func transcriptItems(for turn: ChatTurn) -> [TurnTranscriptItem] {
+        transcriptItemsCache.items(for: turn.id, events: eventsByTurnID[turn.id] ?? [])
+    }
+
     @ViewBuilder
     private func threadAssistant(_ turn: ChatTurn) -> some View {
         if turn.status == .failed {
@@ -398,7 +418,7 @@ struct ThreadDetailView: View {
                     .foregroundStyle(.secondary)
             }
         } else {
-            let items = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+            let items = transcriptItems(for: turn)
             let receipt = receiptForTurn(turn)
             if items.contains(where: {
                 if case .toolChip = $0 { return true }
@@ -440,7 +460,7 @@ struct ThreadDetailView: View {
     }
 
     private func hasAssistantArtifacts(for turn: ChatTurn) -> Bool {
-        let items = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+        let items = transcriptItems(for: turn)
         let hasTranscriptItems = items.contains {
             switch $0 {
             case .toolChip, .thinking:
@@ -462,6 +482,8 @@ struct ThreadDetailView: View {
 
 
     private func loadTurns() async {
+        let clock = ContinuousClock()
+        let loadStart = clock.now
         defer { isLoadTurnsInFlight = false }
         guard thread.id != "preview" else { return }
         isLoadTurnsInFlight = true
@@ -471,6 +493,8 @@ struct ThreadDetailView: View {
         turns = (try? await repo.turns(conversationID: thread.id)) ?? []
         let localEvents = (try? await repo.events(conversationID: thread.id, limit: 10_000)) ?? []
         eventsByTurnID = Dictionary(grouping: localEvents.filter { $0.turnID != nil }, by: { $0.turnID! })
+        let localReadElapsed = loadStart.duration(to: clock.now)
+        threadDetailPerfLog.notice("threadDetail.localRead thread=\(thread.id, privacy: .public) turns=\(turns.count) events=\(localEvents.count) elapsedMs=\(localReadElapsed.asMilliseconds, privacy: .public)")
         // Always reconcile on open. Older builds could create turn skeletons
         // while incorrectly advancing the event cursor from a list summary;
         // checking only `turns.isEmpty` made that poisoned mirror permanent.
@@ -502,6 +526,8 @@ struct ThreadDetailView: View {
         let events = (try? await repo.events(conversationID: thread.id, limit: 10_000)) ?? []
         eventsByTurnID = Dictionary(grouping: events.filter { $0.turnID != nil }, by: { $0.turnID! })
         await loadReviewDiffs()
+        let totalElapsed = loadStart.duration(to: clock.now)
+        threadDetailPerfLog.notice("threadDetail.loadTurnsTotal thread=\(thread.id, privacy: .public) elapsedMs=\(totalElapsed.asMilliseconds, privacy: .public)")
     }
 
     private func loadReviewDiffs() async {
@@ -659,7 +685,7 @@ struct ThreadDetailView: View {
     private var backgroundTaskRows: [BackgroundTasksPresentation.TaskRow] {
         var rows: [BackgroundTasksPresentation.TaskRow] = []
         for turn in turns {
-            let items = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+            let items = transcriptItems(for: turn)
             // WT-B: a terminal turn cannot have running tasks — a tool_call
             // whose result never landed must not spin the pill forever.
             let terminalAdjusted: [TurnTranscriptItem] = items.map { item in

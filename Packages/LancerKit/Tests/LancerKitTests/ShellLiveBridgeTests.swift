@@ -794,6 +794,88 @@ struct ShellLiveBridgeTests {
         #expect(unresolved != bridge.sendState)
     }
 
+    /// WP1 perf fix (2026-07-17): `refreshTranscript` used to reassign
+    /// `transcriptTurns` on every `pollUntilTerminal` tick (~1s cadence)
+    /// regardless of whether the DB read actually changed, republishing the
+    /// whole transcript and re-triggering every downstream `@Observable`
+    /// reader (e.g. `LiveThreadView`'s `receiptRefreshToken`, which itself
+    /// re-fetches up to 10k events) even during a long-running live-follow
+    /// where the host has nothing new to report. This proves the fix: over
+    /// several real poll ticks of an unchanging `.running` turn, exactly one
+    /// tick publishes (the first) and the rest are skipped.
+    @Test("unchanging running turn: only the first poll tick republishes transcriptTurns")
+    func unchangingRunningTurnSkipsRepublishAfterFirstTick() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conversationID = "conv-steady"
+        let runID = "run-steady"
+
+        _ = try await repo.upsertConversationMirror(
+            ChatConversation(
+                id: conversationID,
+                title: "T",
+                agentID: "claudeCode",
+                hostName: "h",
+                hostID: nil,
+                cwd: "/proj"
+            ),
+            lastHostSeq: 1,
+            syncState: .synced
+        )
+        _ = try await repo.upsertTurnMirror(
+            ChatTurn(
+                id: "turn-steady",
+                conversationID: conversationID,
+                ordinal: 0,
+                prompt: "long-running task",
+                runID: runID,
+                status: .running,
+                assistantText: ""
+            ),
+            vendorSessionID: nil,
+            hostSeqStart: nil,
+            hostSeqEnd: nil
+        )
+
+        let bridge = makeBridge(repo: repo)
+        bridge.testSetSendState(.working)
+        bridge.testSetInFlight(runID: runID, prompt: "long-running task")
+
+        // Never mutates the DB — the turn stays `.running` with the same
+        // content across every tick, exactly the "nothing new to report"
+        // live-follow case the fix targets.
+        let transport = ConversationTransport(
+            append: { _ in
+                ConversationAppendResponse(status: "started", conversationId: conversationID)
+            },
+            fetch: { _ in
+                struct TestRefreshError: Error {}
+                throw TestRefreshError()
+            },
+            archive: { req in
+                ConversationArchiveResponse(ok: true, conversationId: req.conversationId)
+            }
+        )
+
+        let pollTask = Task { @MainActor in
+            await bridge.testPollUntilTerminal(
+                runID: runID,
+                conversationID: conversationID,
+                transport: transport
+            )
+        }
+
+        // LivePollPolicy.pollIntervalNanoseconds is 1s — sleep past several
+        // ticks to observe real repeated polling, not just the first call.
+        try await Task.sleep(nanoseconds: 3_300_000_000)
+        bridge.resetForNewThread()
+        pollTask.cancel()
+        _ = await pollTask.value
+
+        #expect(bridge.testTranscriptRefreshPublishCount == 1)
+        #expect(bridge.testTranscriptRefreshSkipCount >= 2)
+    }
+
     @Test("observed follow appends desktop-side activity to an open thread")
     func observedFollowAppendsDesktopActivity() async throws {
         let db = try AppDatabase.inMemory()

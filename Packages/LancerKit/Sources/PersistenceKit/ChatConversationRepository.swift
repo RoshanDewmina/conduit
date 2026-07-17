@@ -186,6 +186,36 @@ public actor ChatConversationRepository {
         }
     }
 
+    /// Batched "last turn per conversation" lookup — one round trip for up to
+    /// N conversations instead of N sequential `turns(conversationID:)` full
+    /// scans (each of which fetches every turn just to keep `.last`). Built
+    /// for `WorkspaceRepoCatalog.loadLocalRows()`, which re-runs this on every
+    /// thread-list appear/return-visit; the per-row loop was measured making
+    /// up to 200 sequential DB round trips per visit before this existed.
+    public func latestTurns(conversationIDs: [String]) async throws -> [String: ChatTurn] {
+        guard !conversationIDs.isEmpty else { return [:] }
+        return try await db.dbWriter.read { db in
+            let placeholders = conversationIDs.map { _ in "?" }.joined(separator: ",")
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT t.* FROM chat_turns t
+                INNER JOIN (
+                    SELECT conversation_id, MAX(ordinal) AS max_ordinal
+                    FROM chat_turns
+                    WHERE conversation_id IN (\(placeholders))
+                    GROUP BY conversation_id
+                ) latest
+                  ON latest.conversation_id = t.conversation_id
+                 AND latest.max_ordinal = t.ordinal
+            """, arguments: StatementArguments(conversationIDs))
+            var result: [String: ChatTurn] = [:]
+            for row in rows {
+                let turn = try Self.decodeTurn(row)
+                result[turn.conversationID] = turn
+            }
+            return result
+        }
+    }
+
     // MARK: - Artifacts
 
     public func upsertArtifact(_ artifact: ChatArtifact) async throws {
@@ -249,6 +279,25 @@ public actor ChatConversationRepository {
                 ORDER BY created_at ASC
             """, arguments: [turnID])
             return rows.compactMap(Self.decodeArtifact)
+        }
+    }
+
+    /// Batched artifacts-by-turn lookup — companion to `latestTurns(conversationIDs:)`
+    /// for the same thread-list N+1 fix. One round trip for up to N turn ids.
+    public func artifacts(turnIDs: [String]) async throws -> [String: [ChatArtifact]] {
+        guard !turnIDs.isEmpty else { return [:] }
+        return try await db.dbWriter.read { db in
+            let placeholders = turnIDs.map { _ in "?" }.joined(separator: ",")
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT * FROM chat_artifacts WHERE turn_id IN (\(placeholders))
+                ORDER BY created_at ASC
+            """, arguments: StatementArguments(turnIDs))
+            var result: [String: [ChatArtifact]] = [:]
+            for row in rows {
+                guard let artifact = Self.decodeArtifact(row) else { continue }
+                result[artifact.turnID, default: []].append(artifact)
+            }
+            return result
         }
     }
 

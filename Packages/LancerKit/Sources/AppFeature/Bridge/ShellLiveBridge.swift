@@ -203,6 +203,14 @@ public final class ShellLiveBridge {
 
     /// Runs after `chatRepo.turns` returns and before the epoch-guarded write.
     var testPostTranscriptFetchHold: (@MainActor () async -> Void)?
+    /// How many `refreshTranscript` calls actually reassigned `transcriptTurns`
+    /// (content changed). Together with `testTranscriptRefreshSkipCount`,
+    /// proves the WP1 diff-before-publish fix (2026-07-17): unchanged polls
+    /// during a live-follow no longer republish the whole transcript.
+    private(set) var testTranscriptRefreshPublishCount = 0
+    /// How many `refreshTranscript` calls fetched from the DB but skipped the
+    /// `transcriptTurns` write because nothing changed.
+    private(set) var testTranscriptRefreshSkipCount = 0
     /// Runs after the retry single-flight gate is claimed (before dispatch).
     var testAfterRetryGateClaimed: (@MainActor () async -> Void)?
     /// How many times `retryLastAttempt` claimed the single-flight gate.
@@ -1231,13 +1239,26 @@ public final class ShellLiveBridge {
         }
     }
 
+    /// Re-reads turns from the local mirror and republishes `transcriptTurns`
+    /// only if they actually changed. Called on essentially every
+    /// `pollUntilTerminal` tick (~1s while a run is in-flight), so without the
+    /// equality gate every tick re-triggers every downstream observer keyed
+    /// off `transcriptTurns` (e.g. `LiveThreadView.receiptRefreshToken`,
+    /// which itself re-fetches up to 10k events) even when the host had
+    /// nothing new to report. Measured 2026-07-17 — see
+    /// docs/test-runs/2026-07-17-perf/README.md.
     private func refreshTranscript(conversationID: String, epoch: UInt64) async {
         if let turns = try? await chatRepo.turns(conversationID: conversationID) {
             if let hold = testPostTranscriptFetchHold {
                 await hold()
             }
             guard epoch == sessionEpoch else { return }
-            transcriptTurns = turns
+            if turns != transcriptTurns {
+                transcriptTurns = turns
+                testTranscriptRefreshPublishCount += 1
+            } else {
+                testTranscriptRefreshSkipCount += 1
+            }
         }
     }
 

@@ -4,6 +4,13 @@ import Testing
 @testable import LancerCore
 @testable import PersistenceKit
 
+private extension Duration {
+    var testMilliseconds: Double {
+        let (seconds, attoseconds) = components
+        return Double(seconds) * 1000 + Double(attoseconds) / 1_000_000_000_000_000
+    }
+}
+
 @Suite("ChatConversationRepository")
 struct ChatConversationRepositoryTests {
 
@@ -190,6 +197,112 @@ struct ChatConversationRepositoryTests {
         let arts2 = try await repo.artifacts(turnID: t2.id)
         #expect(arts2.count == 1)
         #expect(arts2.first?.title == "y")
+    }
+
+    // MARK: - WP1 perf: batched thread-list lookups (2026-07-17)
+    // WorkspaceRepoCatalog.loadLocalRows() used to loop
+    // `turns(conversationID:).last` + `artifacts(turnID:)` once per
+    // conversation (up to 400 sequential round trips for 200 conversations).
+    // latestTurns(conversationIDs:)/artifacts(turnIDs:) replace that with one
+    // batched round trip each.
+
+    @Test("latestTurns(conversationIDs:) returns only the highest-ordinal turn per conversation")
+    func latestTurnsReturnsLastTurnPerConversation() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let convA = try await repo.createConversation(title: "A", agentID: "claude", hostName: "h", hostID: nil, cwd: "/a")
+        let convB = try await repo.createConversation(title: "B", agentID: "claude", hostName: "h", hostID: nil, cwd: "/b")
+        _ = try await repo.appendTurn(conversationID: convA.id, prompt: "a1", runID: "ra1")
+        let aLast = try await repo.appendTurn(conversationID: convA.id, prompt: "a2", runID: "ra2")
+        let bOnly = try await repo.appendTurn(conversationID: convB.id, prompt: "b1", runID: "rb1")
+
+        let latest = try await repo.latestTurns(conversationIDs: [convA.id, convB.id])
+
+        #expect(latest.count == 2)
+        #expect(latest[convA.id]?.id == aLast.id)
+        #expect(latest[convB.id]?.id == bOnly.id)
+    }
+
+    @Test("latestTurns(conversationIDs:) with empty input returns empty without querying")
+    func latestTurnsEmptyInput() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let latest = try await repo.latestTurns(conversationIDs: [])
+        #expect(latest.isEmpty)
+    }
+
+    @Test("artifacts(turnIDs:) groups by turn and excludes unrelated turns")
+    func artifactsByTurnIDsGroups() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conv = try await repo.createConversation(title: "T", agentID: "claude", hostName: "h", hostID: nil, cwd: "/tmp")
+        let t1 = try await repo.appendTurn(conversationID: conv.id, prompt: "a", runID: "r1")
+        let t2 = try await repo.appendTurn(conversationID: conv.id, prompt: "b", runID: "r2")
+        let t3 = try await repo.appendTurn(conversationID: conv.id, prompt: "c", runID: "r3")
+        try await repo.upsertArtifact(ChatArtifact(
+            conversationID: conv.id, turnID: t1.id, runID: "r1",
+            kind: .tool, title: "x", payloadJSON: "{}", status: .done
+        ))
+        try await repo.upsertArtifact(ChatArtifact(
+            conversationID: conv.id, turnID: t2.id, runID: "r2",
+            kind: .approval, title: "y", payloadJSON: "{}", status: .running
+        ))
+        // t3 has no artifacts — must not appear in the result.
+
+        let byTurn = try await repo.artifacts(turnIDs: [t1.id, t2.id, t3.id])
+
+        #expect(byTurn[t1.id]?.map(\.title) == ["x"])
+        #expect(byTurn[t2.id]?.map(\.title) == ["y"])
+        #expect(byTurn[t3.id] == nil)
+    }
+
+    /// Not a pass/fail perf gate (timing-based assertions are flaky under CI
+    /// load) — prints real elapsed-time numbers for the evidence file. Seeds
+    /// 150 conversations (1 turn + 1 artifact each) and times the OLD N+1
+    /// pattern (sequential `turns(conversationID:).last` +
+    /// `artifacts(turnID:)` per conversation, exactly what
+    /// `WorkspaceRepoCatalog.loadLocalRows()` used to do) against the NEW
+    /// batched `latestTurns`/`artifacts(turnIDs:)` pair, on the same DB.
+    @Test("perf: batched lookup is faster than the N+1 loop it replaced (150 conversations)")
+    func batchedLookupFasterThanN1Loop() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ChatConversationRepository(db)
+        let conversationCount = 150
+        var conversationIDs: [String] = []
+        for i in 0..<conversationCount {
+            let conv = try await repo.createConversation(
+                title: "Conv \(i)", agentID: "claude", hostName: "h", hostID: nil, cwd: "/repo\(i)"
+            )
+            let turn = try await repo.appendTurn(conversationID: conv.id, prompt: "p\(i)", runID: "r\(i)")
+            try await repo.upsertArtifact(ChatArtifact(
+                conversationID: conv.id, turnID: turn.id, runID: "r\(i)",
+                kind: .tool, title: "artifact\(i)", payloadJSON: "{}", status: .done
+            ))
+            conversationIDs.append(conv.id)
+        }
+
+        let clock = ContinuousClock()
+
+        let oldStart = clock.now
+        for conversationID in conversationIDs {
+            if let last = try? await repo.turns(conversationID: conversationID).last {
+                _ = try? await repo.artifacts(turnID: last.id)
+            }
+        }
+        let oldElapsedMs = oldStart.duration(to: clock.now).testMilliseconds
+
+        let newStart = clock.now
+        let latest = try await repo.latestTurns(conversationIDs: conversationIDs)
+        let turnIDs = latest.values.map(\.id)
+        _ = try await repo.artifacts(turnIDs: turnIDs)
+        let newElapsedMs = newStart.duration(to: clock.now).testMilliseconds
+
+        print("[WP1 perf] N+1 loop (\(conversationCount) conversations): \(oldElapsedMs)ms; batched: \(newElapsedMs)ms; speedup: \(oldElapsedMs / max(newElapsedMs, 0.001))x")
+
+        #expect(latest.count == conversationCount)
+        // Loose bound (not a tight CI gate) — batched must not regress to
+        // N+1-equivalent cost.
+        #expect(newElapsedMs < oldElapsedMs)
     }
 
     // MARK: - FTS Search
