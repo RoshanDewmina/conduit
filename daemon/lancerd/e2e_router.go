@@ -646,7 +646,7 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		srv.device = &registeredDevice{PushBackendURL: p.PushBackendURL, SessionID: p.SessionID}
 		relayToken := srv.relayToken
 		srv.deviceMu.Unlock()
-		savePersistedDevice(&registeredDevice{PushBackendURL: p.PushBackendURL, SessionID: p.SessionID})
+		srv.savePersistedDevice(&registeredDevice{PushBackendURL: p.PushBackendURL, SessionID: p.SessionID})
 		log.Printf("e2e: device registered for push (session %s, apnsToken=%v)", p.SessionID, p.APNSToken != "")
 		if p.PushBackendURL != "" {
 			// Decision-relay Bearer (closed-app Approve/Reject returns via the
