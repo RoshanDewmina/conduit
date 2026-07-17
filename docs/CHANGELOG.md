@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 21:45 Cursor Grok — CC-5 typography: assistant `ChatMarkdownBody` prose → system serif + ~1.25× leading (inline/fenced code stays mono); user bubble soft gray fill + 16pt radius (`lane/p-type`)
 - 21:55 Claude Fable (orchestrator) — merged lanes p-chips + cc10-attachments into `fix/thread-ux-polish` (gates re-run by hand: build + 13/13 tests), deployed merged CC-parity build to owner phone; salvaged + pushed `lane/cc-parity-harness` (XCUITest screenshot suite + simurgh runner + honest reachability verdicts; PNGs lost to session death — re-run owed; `LANCER_SEED_TRANSCRIPT` seam filed as follow-up)
 - 21:00 Cursor Grok — P-CHIPS CC-2/CC-3/WT-B: consecutive tool chips collapse (Ran N commands / Used N tools…), Worked Ns duration never 0 when dates differ + tappable summary, terminal turn forces chips out of Running (`lane/p-chips`)
 - 21:00 Cursor Grok — CC-10: inline image/video thumbnails in user bubble (local preview + media cache; mirrored without bytes still file-chip); AttachmentMediaClassification + tests (`lane/cc10-attachments`)
