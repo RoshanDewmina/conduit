@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 21:00 Cursor Grok — CC-10: inline image/video thumbnails in user bubble (local preview + media cache; mirrored without bytes still file-chip); AttachmentMediaClassification + tests (`lane/cc10-attachments`)
 - 21:05 Claude Fable — thread UX + perf: open-at-latest (WT-J, defaultScrollAnchor+unconditional first scroll), pr-link renders as one markdown PR link + hook noise dropped (WT-I, adapter-level with deterministic window dedup), LazyVStack transcript+thread-list, DB-handle reuse in refreshTranscriptExtras, honest observed-refresh spinner (WT-C); deployed to phone+daemon, pairing kept (`fix/thread-ux-polish`, stacked on PR #154)
 - 20:40 Claude Fable — observed desktop threads now update LIVE + re-attach delta-imports transcript growth (WT-H): daemon `deltaImportObservedSession` unfreezes snapshot-once attach; iOS `ShellLiveBridge` observed-follow poll (Orca-subscription analogue, no protocol change). go -race + 12/12 bridge tests on sim (lease-199) + **owner live-proved on phone** (marker appeared in open thread) (`fix/observed-thread-live-follow`)
 - 19:20 Cursor Grok — expand SESSION_HOP_REPORT §2.4 Simurgh coverage (LE reclaim, DD collision, HOME pin, 30→60m TTL, wave commits `2fe3a2b`/`c11fb11`/`b1305a7`/`85f3907`, `~/bin/simurgh` hot-swap, C4 `simurgh exec`) (`docs/simurgh-hop-coverage`)

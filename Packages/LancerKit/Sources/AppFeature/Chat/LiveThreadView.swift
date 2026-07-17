@@ -1329,16 +1329,11 @@ public struct LiveThreadView: View {
 
         let refs = AttachmentDraftStore.references(from: drafts)
         if !refs.isEmpty {
-            let cache = try? AttachmentPreviewCache()
-            for draft in drafts {
-                guard case .done = draft.state else { continue }
-                if Task.isCancelled { return }
-                if let preview = await AttachmentPreviewCache.makePreviewDataOffMain(
-                    from: draft.data, mimeType: draft.mimeType
-                ) {
-                    try? cache?.storePreview(preview, for: draft.id.uuidString)
-                }
-            }
+            if Task.isCancelled { return }
+            await AttachmentLocalMediaStore.persistSentDrafts(
+                drafts,
+                previewCache: try? AttachmentPreviewCache()
+            )
         }
 
         followUpText = ""
