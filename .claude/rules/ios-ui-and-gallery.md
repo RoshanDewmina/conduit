@@ -17,11 +17,18 @@ The old mock-gallery harness was **deleted**; the seams below replace it.
   (open the Settings sheet); anything else → the Workspaces root.
 - **`LANCER_SEED_DEMO=1`** — populate demo hosts/approvals/snippets so screens aren't empty.
 
-`simctl` strips the `SIMCTL_CHILD_` prefix when forwarding env to the app:
+`simctl` strips the `SIMCTL_CHILD_` prefix when forwarding env to the app.
+
+**Simulator builds:** acquire a Simurgh lease first (`lease_acquire` MCP or
+`simurgh acquire --wait --rm`). Route `xcodebuild` through
+`simurgh exec <lease-id> -- …` — bare `xcodebuild` risks mid-run reclaim and
+shared DerivedData. Use the leased UDID from `lease_status`, not `booted`.
 
 ```bash
-xcodebuild -project Lancer.xcodeproj -scheme Lancer -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-SIMCTL_CHILD_LANCER_SEED_DEMO=1 SIMCTL_CHILD_LANCER_DESTINATION=governance xcrun simctl launch booted dev.lancer.mobile
+# After simurgh acquire + lease id in $L:
+simurgh exec "$L" -- xcodebuild -project Lancer.xcodeproj -scheme Lancer build
+SIMCTL_CHILD_LANCER_SEED_DEMO=1 SIMCTL_CHILD_LANCER_DESTINATION=governance \
+  xcrun simctl launch "$SIMURGH_UDID" dev.lancer.mobile
 ```
 
 Prefer `mcp__XcodeBuildMCP__launch_app_sim` with an `env:` map — it adds the `SIMCTL_CHILD_` prefix

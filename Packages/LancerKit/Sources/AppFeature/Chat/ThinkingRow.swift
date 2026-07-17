@@ -1,46 +1,34 @@
 #if os(iOS)
 import SwiftUI
 
-/// Collapsed-by-default thinking caption; tap expands full text.
-/// Caption/default match `ThinkingPresentation` (unit-tested).
 struct ThinkingRow: View {
     let text: String
 
-    @State private var isExpanded = ThinkingPresentation.isExpandedByDefault
+    @State private var isPresented = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "brain")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                    Text(ThinkingPresentation.collapsedCaption)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(ThinkingPresentation.collapsedCaption))
-            .accessibilityHint(Text(isExpanded ? "Collapse thinking" : "Expand thinking"))
-
-            if isExpanded {
-                Text(text)
-                    .font(.system(size: 14))
+        Button {
+            isPresented = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "clock")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                Text("Thought process")
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                Spacer(minLength: 0)
             }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("Thought process"))
+        .accessibilityHint(Text("Show thought process"))
+        .sheet(isPresented: $isPresented) {
+            ThoughtProcessSheet(text: text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

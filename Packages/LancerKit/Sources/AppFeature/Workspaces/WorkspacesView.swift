@@ -313,7 +313,7 @@ public struct WorkspacesView: View {
         guard WorkspaceRepoCatalog.isAbsoluteSendTarget(cwd) else { return }
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
         // Collapse the inline composer immediately (no spring) before the
-        // live-thread sheet presents — otherwise the composer's TextEditor
+        // live thread pushes — otherwise the composer's TextEditor
         // (still showing the just-sent prompt) remains enumerable by the
         // accessibility tree during its morph-out at the same time the live
         // thread's prompt bubble renders, reading as a duplicate turn to

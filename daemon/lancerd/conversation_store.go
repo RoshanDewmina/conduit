@@ -248,6 +248,19 @@ func conversationNow() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
+// observedEventCreatedAt prefers the vendor transcript's own message timestamp
+// over the import time — stamping every imported event with `now` collapses a
+// turn's real span to 0s (the "Worked 0s" bug on observed threads).
+func observedEventCreatedAt(msg SessionMessage, fallback string) string {
+	if msg.Timestamp == "" {
+		return fallback
+	}
+	if _, err := time.Parse(time.RFC3339, msg.Timestamp); err != nil {
+		return fallback
+	}
+	return msg.Timestamp
+}
+
 // --- Request/result types -----------------------------------------------
 
 // conversationAppendRequest mirrors the agent.conversations.append RPC request
@@ -1504,17 +1517,7 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 	if existing, ok, err := existingTurnByClientTurnID(tx, clientTurnID); err != nil {
 		return conversationImportResult{}, err
 	} else if ok {
-		conv, err := scanConversationRow(tx.QueryRow(conversationSelectByID, existing.conversationID))
-		if err != nil {
-			return conversationImportResult{}, err
-		}
-		return conversationImportResult{
-			ConversationID:  existing.conversationID,
-			TurnID:          existing.id,
-			RunID:           existing.runID,
-			LastSeq:         conv.LastSeq,
-			AlreadyAttached: true,
-		}, nil
+		return s.deltaImportObservedSession(tx, existing, clientTurnID, provider, sessionID, messages)
 	}
 
 	now := conversationNow()
@@ -1572,7 +1575,7 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 			if _, err := tx.Exec(`INSERT INTO conversation_events
 				(conversation_id, seq, turn_id, run_id, kind, role, text, payload_json, created_at)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				convID, seq, turnID, runID, kind, nullIfEmpty(role), text, nullIfEmpty(payload), now); err != nil {
+				convID, seq, turnID, runID, kind, nullIfEmpty(role), text, nullIfEmpty(payload), observedEventCreatedAt(msg, now)); err != nil {
 				return conversationImportResult{}, err
 			}
 		}
@@ -1599,6 +1602,88 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 		RunID:          outRun,
 		ImportedEvents: importedEvents,
 		LastSeq:        seq,
+	}, nil
+}
+
+// deltaImportObservedSession appends transcript growth since the original
+// snapshot import. segmentObservedMessages is deterministic over the
+// append-only vendor JSONL, so previously-imported segments keep their
+// ordinals (and deterministic client_turn_id); a re-attach therefore imports
+// exactly the missing tail — new events on already-imported turns, plus any
+// entirely new turns. Without this, an observed conversation is frozen at
+// first attach and a re-opened thread never shows later desktop activity.
+func (s *conversationStore) deltaImportObservedSession(tx *sql.Tx, first existingTurnRef, clientTurnID, provider, sessionID string, messages []SessionMessage) (conversationImportResult, error) {
+	conv, err := scanConversationRow(tx.QueryRow(conversationSelectByID, first.conversationID))
+	if err != nil {
+		return conversationImportResult{}, err
+	}
+
+	segments := segmentObservedMessages(messages, "")
+	now := conversationNow()
+	seq := conv.LastSeq
+	imported := 0
+
+	for _, seg := range segments {
+		ctID := clientTurnID
+		if seg.Ordinal > 1 {
+			ctID = fmt.Sprintf("%s:%d", clientTurnID, seg.Ordinal)
+		}
+		turnRef, exists, err := existingTurnByClientTurnID(tx, ctID)
+		if err != nil {
+			return conversationImportResult{}, err
+		}
+		turnID, runID := turnRef.id, turnRef.runID
+		newOutputs := seg.Outputs
+		if exists {
+			var have int
+			if err := tx.QueryRow(`SELECT COUNT(*) FROM conversation_events WHERE turn_id = ?`, turnID).Scan(&have); err != nil {
+				return conversationImportResult{}, err
+			}
+			if len(seg.Outputs) <= have {
+				continue
+			}
+			newOutputs = seg.Outputs[have:]
+		} else {
+			turnID = "turn_" + newUUID()
+			runID = "observed_" + newUUID()
+			if _, err := tx.Exec(`INSERT INTO conversation_turns
+				(id, conversation_id, ordinal, client_turn_id, prompt, run_id, provider,
+				 vendor_session_id, status, started_at, completed_at, attachments_json)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'exited', ?, ?, '[]')`,
+				turnID, first.conversationID, seg.Ordinal, ctID, seg.Prompt, runID, provider, sessionID, now, now); err != nil {
+				return conversationImportResult{}, err
+			}
+		}
+		for _, msg := range newOutputs {
+			seq++
+			imported++
+			kind, role, text, payload := observedEventFields(msg)
+			if _, err := tx.Exec(`INSERT INTO conversation_events
+				(conversation_id, seq, turn_id, run_id, kind, role, text, payload_json, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				first.conversationID, seq, turnID, runID, kind, nullIfEmpty(role), text, nullIfEmpty(payload), observedEventCreatedAt(msg, now)); err != nil {
+				return conversationImportResult{}, err
+			}
+		}
+	}
+
+	if imported > 0 {
+		if _, err := tx.Exec(`UPDATE conversations SET last_seq = ?, updated_at = ?, last_activity_at = ? WHERE id = ?`,
+			seq, now, now, first.conversationID); err != nil {
+			return conversationImportResult{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return conversationImportResult{}, err
+	}
+
+	return conversationImportResult{
+		ConversationID:  first.conversationID,
+		TurnID:          first.id,
+		RunID:           first.runID,
+		ImportedEvents:  imported,
+		LastSeq:         seq,
+		AlreadyAttached: true,
 	}, nil
 }
 

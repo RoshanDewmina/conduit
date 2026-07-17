@@ -144,8 +144,13 @@ public struct ThreadListView: View {
     /// Subtle top spinner while a background refresh is in flight and rows
     /// are already visible (never replaces the list with a blank spinner).
     private var showsSubtleRefreshing: Bool {
+        // An observed-sessions re-list runs on every visit and its bounded
+        // relay wait is seconds long — spinning over an already-painted list
+        // for that read as "always loading" (WT-C). Only surface it while we
+        // have nothing observed to show yet.
         hasAnyThreads
-            && (isObservedSessionsLoading || workspaceData.fetchPhase.isLoading)
+            && ((isObservedSessionsLoading && observedSessions.isEmpty)
+                || workspaceData.fetchPhase.isLoading)
     }
 
     public var body: some View {
@@ -212,7 +217,9 @@ public struct ThreadListView: View {
                     Spacer(minLength: 0)
                 } else {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
+                        // Lazy so a repo with hundreds of threads only builds
+                        // the visible rows.
+                        LazyVStack(alignment: .leading, spacing: 0) {
                             if showsSubtleRefreshing {
                                 ProgressView()
                                     .controlSize(.small)
@@ -356,9 +363,8 @@ public struct ThreadListView: View {
     private func handleSend(_ prompt: String, _ cwd: String, _ attachments: [ConversationAttachmentReference] = []) {
         guard WorkspaceRepoCatalog.isAbsoluteSendTarget(cwd) else { return }
         let normalized = WorkspaceRepoCatalog.normalizeCwd(cwd)
-        // Same stacked-sheet hazard as WorkspacesView.handleSend — dismiss
-        // the composer explicitly instead of letting it race the live-thread
-        // sheet's presentation.
+        // Dismiss the composer sheet before pushing the live thread so the
+        // two presentations don't race (same hazard as WorkspacesView.handleSend).
         isComposerPresented = false
         activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: normalized, attachments: attachments)
     }

@@ -17,6 +17,17 @@ How every feature gets built. Applies to humans and agents. Companion:
 | Fallback + sensitive paths | **Claude Sonnet 5 (high)** via Agent tool | (a) Grok failed the gate twice on the same task; (b) work needing repo skills / XcodeBuildMCP (simulator screenshots, UI test evidence); (c) security-sensitive paths (below) |
 | Verify slugs at session start | `agent models` / `agent --list-models` | Model names drift; never hard-code without checking |
 
+**Simulator routing lane — Simurgh lease discipline** (simulator work only; required before
+XcodeBuildMCP simulator operations or other `simctl` use — not physical-device builds):
+call `pool_status`, then `lease_acquire` before simulator work — never pick a booted device or
+raw `simctl` UDID. Route every `xcodebuild` through `simurgh exec <lease-id> -- …` so
+isolation flags merge and the lease auto-renews during long builds; bare `xcodebuild` risks
+mid-run reclaim. Use the returned UDID with isolated DerivedData, SwiftPM, and module-cache
+bindings; for XcodeBuildMCP simulator operations, use the per-lease XcodeBuildMCP adapter bound
+to that lease. Call `lease_renew` when work spans multiple steps and may outlast TTL. Confirm
+`lease_status` before starting; always `lease_release` in cleanup/finally; check `pool_status`
+after. One lease per parallel agent.
+
 **Security-sensitive paths — Grok may draft, but Sonnet-5-high or Fable must review the full
 diff, no exceptions:** `daemon/lancerd/dispatch.go` (+ run `vendor-cli-adapter-audit` skill),
 `daemon/lancerd/policy/`, `approval.go`/content-hash code, `Packages/**/Security*`,

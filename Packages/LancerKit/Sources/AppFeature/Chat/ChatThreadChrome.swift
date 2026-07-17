@@ -5,11 +5,15 @@ import LancerCore
 
 /// Renders assistant markdown as plain body text (not a bubble): prose via native
 /// `AttributedString(markdown:)` with inline-code chips, plus fenced blocks with copy.
+/// Prose uses system serif (New York) with ~1.25× leading; inline/fenced code stays mono.
 /// Block splits are memoized in `ChatMarkdownBlockParser`; oversized single blocks skip
 /// markdown attribution and render as plain monospaced text.
 struct ChatMarkdownBody: View {
     let markdown: String
     var bodyFontSize: CGFloat = 16
+
+    /// Extra line spacing for ~1.25× body leading (CC-5 / Claude Code app parity).
+    private var proseLineSpacing: CGFloat { bodyFontSize * 0.25 }
 
     @State private var blocks: [ChatMarkdownBlock]
 
@@ -44,9 +48,9 @@ struct ChatMarkdownBody: View {
 
     private func proseView(_ text: String) -> some View {
         Text(styledProse(text))
-            .font(.system(size: bodyFontSize))
+            .font(.system(size: bodyFontSize, design: .serif))
             .foregroundStyle(.primary)
-            .lineSpacing(4)
+            .lineSpacing(proseLineSpacing)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -55,13 +59,14 @@ struct ChatMarkdownBody: View {
         Text(text)
             .font(.system(size: bodyFontSize, design: .monospaced))
             .foregroundStyle(.primary)
-            .lineSpacing(4)
+            .lineSpacing(proseLineSpacing)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func styledProse(_ text: String) -> AttributedString {
         var attributed = ChatMarkdownAttributedString.make(from: text)
+        // Explicit mono on `.code` runs so the view-level serif font does not wash them out.
         let chip = UIColor.tertiarySystemFill
         for range in ChatMarkdownAttributedString.inlineCodeRanges(in: attributed) {
             attributed[range].backgroundColor = chip
@@ -123,12 +128,14 @@ struct ChatCodeFenceBlock: View {
     }
 }
 
-/// Right-aligned quiet user bubble (Cursor reference: muted fill, no accent color).
-/// Attachments render as thumbnails / file cards — never host paths.
+/// Right-aligned soft gray user bubble (CC-5: plain sans body, ~16pt radius — not a heavy pill).
+/// Attachments: images/videos inline from local preview/media cache; other files as chips.
+/// Never opens hostPath. Mirrored media without local bytes falls back to the file chip.
 struct ChatUserBubble: View {
     let text: String
     var attachments: [ConversationAttachmentReference] = []
     var previewCache: AttachmentPreviewCaching?
+    var mediaStore: AttachmentLocalMediaCaching?
     /// Mid-run feedback that is locally queued until the agent finishes.
     var isQueued: Bool = false
 
@@ -141,8 +148,12 @@ struct ChatUserBubble: View {
             Spacer(minLength: 48)
             VStack(alignment: .trailing, spacing: 8) {
                 if !attachments.isEmpty {
-                    ChatAttachmentStrip(attachments: attachments, previewCache: previewCache)
-                        .frame(maxWidth: 280, alignment: .trailing)
+                    ChatAttachmentStrip(
+                        attachments: attachments,
+                        previewCache: previewCache,
+                        mediaStore: mediaStore
+                    )
+                    .frame(maxWidth: 280, alignment: .trailing)
                 }
                 if !displayText.isEmpty {
                     VStack(alignment: .trailing, spacing: 4) {
@@ -153,8 +164,8 @@ struct ChatUserBubble: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
                             .background(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .fill(Color(.secondarySystemFill))
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color(.tertiarySystemFill))
                             )
                             .textSelection(.enabled)
                         if isQueued {
@@ -271,13 +282,19 @@ struct ChatOutlinePillLabel: View {
 }
 
 /// Live follow-up composer styled like Cursor's docked bar; keeps TextField + send path.
+/// While a turn is in flight, the trailing control is Stop (■) — CC-8 parity —
+/// and keyboard submit still queues via `onSend`.
 struct ChatFollowUpComposerBar: View {
     @Binding var text: String
     var isFocused: FocusState<Bool>.Binding
     var placeholder: String = "Follow up…"
     var isDisabled: Bool = false
     var canSend: Bool = false
+    /// When true, trailing button is Stop instead of Send (mid-run CC-8).
+    var isRunInFlight: Bool = false
     var onSend: () -> Void
+    /// Stops the current in-flight run. Required when `isRunInFlight` is true.
+    var onStop: (() -> Void)? = nil
     /// Opens context attach (Photos / Files). Same affordance as New Chat `+`.
     var onAddContext: (() -> Void)? = nil
 
@@ -309,7 +326,19 @@ struct ChatFollowUpComposerBar: View {
                     onSend()
                 }
 
-            if canSend {
+            if isRunInFlight {
+                Button {
+                    onStop?()
+                } label: {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.system(size: 28))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.primary)
+                }
+                .disabled(isDisabled || onStop == nil)
+                .accessibilityLabel(Text("Stop"))
+                .accessibilityIdentifier("composer-stop")
+            } else if canSend {
                 Button(action: onSend) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 28))

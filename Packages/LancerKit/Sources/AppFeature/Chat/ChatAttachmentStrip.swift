@@ -8,11 +8,13 @@ import UIKit
 struct ChatAttachmentStrip: View {
     let attachments: [ConversationAttachmentReference]
     var previewCache: AttachmentPreviewCaching
+    var mediaStore: AttachmentLocalMediaCaching
     @State private var fullScreen: ConversationAttachmentReference?
 
     init(
         attachments: [ConversationAttachmentReference],
-        previewCache: AttachmentPreviewCaching? = nil
+        previewCache: AttachmentPreviewCaching? = nil,
+        mediaStore: AttachmentLocalMediaCaching? = nil
     ) {
         self.attachments = attachments
         if let previewCache {
@@ -22,110 +24,75 @@ struct ChatAttachmentStrip: View {
         } else {
             self.previewCache = NullAttachmentPreviewCache()
         }
+        if let mediaStore {
+            self.mediaStore = mediaStore
+        } else if let store = try? AttachmentLocalMediaStore() {
+            self.mediaStore = store
+        } else {
+            self.mediaStore = NullAttachmentLocalMediaStore()
+        }
+    }
+
+    private var mediaAttachments: [ConversationAttachmentReference] {
+        attachments.filter {
+            AttachmentMediaClassification.classify(reference: $0).isInlineMedia
+        }
+    }
+
+    private var fileAttachments: [ConversationAttachmentReference] {
+        attachments.filter {
+            !AttachmentMediaClassification.classify(reference: $0).isInlineMedia
+        }
     }
 
     var body: some View {
-        let images = attachments.filter { $0.kind == .image }
-        let files = attachments.filter { $0.kind != .image }
         VStack(alignment: .leading, spacing: 8) {
-            if !images.isEmpty {
-                imageGrid(images)
+            if !mediaAttachments.isEmpty {
+                mediaRow(mediaAttachments)
             }
-            ForEach(files) { file in
+            ForEach(fileAttachments) { file in
                 ChatAttachmentFileCard(reference: file, previewCache: previewCache)
             }
         }
         .fullScreenCover(item: $fullScreen) { ref in
-            AttachmentFullScreenPreview(reference: ref, previewCache: previewCache) {
+            AttachmentMediaFullScreen(
+                reference: ref,
+                previewCache: previewCache,
+                mediaStore: mediaStore
+            ) {
                 fullScreen = nil
             }
         }
     }
 
     @ViewBuilder
-    private func imageGrid(_ images: [ConversationAttachmentReference]) -> some View {
-        let columns = AttachmentLayoutPolicy.columns(for: images.count)
-        if columns <= 1, let only = images.first {
-            AttachmentPreviewView(reference: only, previewCache: previewCache, prominent: true) {
+    private func mediaRow(_ media: [ConversationAttachmentReference]) -> some View {
+        if media.count == 1, let only = media.first {
+            AttachmentMediaView(
+                reference: only,
+                previewCache: previewCache,
+                mediaStore: mediaStore,
+                maxHeight: 220
+            ) {
                 fullScreen = only
             }
         } else {
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: max(columns, 1)),
-                spacing: 8
-            ) {
-                ForEach(images) { image in
-                    AttachmentPreviewView(reference: image, previewCache: previewCache, prominent: false) {
-                        fullScreen = image
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(media) { item in
+                        AttachmentMediaView(
+                            reference: item,
+                            previewCache: previewCache,
+                            mediaStore: mediaStore,
+                            maxHeight: 220
+                        ) {
+                            fullScreen = item
+                        }
+                        .frame(width: 160)
                     }
                 }
             }
         }
-    }
-}
-
-struct AttachmentPreviewView: View {
-    let reference: ConversationAttachmentReference
-    var previewCache: AttachmentPreviewCaching
-    var prominent: Bool
-    var onTap: () -> Void
-
-    @State private var image: UIImage?
-    @State private var loadFailed = false
-
-    private var presentation: AttachmentPresentation {
-        AttachmentPresentation.card(for: reference, previewAvailable: image != nil && !loadFailed)
-    }
-
-    var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(.tertiarySystemFill))
-                    VStack(spacing: 6) {
-                        Image(systemName: loadFailed ? "photo.badge.exclamationmark" : "photo")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                        Text(reference.name)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .padding(10)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: prominent ? 220 : 120)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color(.separator), lineWidth: 0.5)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(presentation.accessibilityLabel))
-        .task(id: reference.previewCacheKey) {
-            await loadPreview()
-        }
-    }
-
-    private func loadPreview() async {
-        loadFailed = false
-        image = nil
-        let key = reference.previewCacheKey
-        let data = try? previewCache.previewData(for: key)
-        guard !Task.isCancelled else { return }
-        guard let data, let decoded = UIImage(data: data) else {
-            loadFailed = true
-            return
-        }
-        image = decoded
     }
 }
 
@@ -139,9 +106,13 @@ struct ChatAttachmentFileCard: View {
         AttachmentPresentation.card(for: reference, previewAvailable: false)
     }
 
+    private var mediaKind: AttachmentMediaClassification {
+        AttachmentMediaClassification.classify(reference: reference)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: reference.kind == .image ? "photo" : "doc.fill")
+            Image(systemName: fileIconName)
                 .font(.system(size: iconSize))
                 .foregroundStyle(.secondary)
                 .frame(width: 28, height: 28)
@@ -167,40 +138,12 @@ struct ChatAttachmentFileCard: View {
         .accessibilityLabel(Text(presentation.accessibilityLabel))
         // V1: file cards are not tappable / Quick Look — never open hostPath.
     }
-}
 
-struct AttachmentFullScreenPreview: View {
-    let reference: ConversationAttachmentReference
-    var previewCache: AttachmentPreviewCaching
-    var onClose: () -> Void
-    @State private var image: UIImage?
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .padding()
-                } else {
-                    ChatAttachmentFileCard(reference: reference, previewCache: previewCache)
-                        .padding()
-                }
-            }
-            .navigationTitle(reference.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", action: onClose)
-                }
-            }
-        }
-        .task(id: reference.previewCacheKey) {
-            if let data = try? previewCache.previewData(for: reference.previewCacheKey) {
-                image = UIImage(data: data)
-            }
+    private var fileIconName: String {
+        switch mediaKind {
+        case .image: return "photo"
+        case .video: return "video"
+        case .file: return "doc.fill"
         }
     }
 }

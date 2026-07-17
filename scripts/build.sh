@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Build the SwiftPM package. Use xcodebuild + a simulator to compile the
 # iOS-only feature modules and the app target.
+#
+# Local agent/simulator work: acquire a Simurgh lease and route iOS builds through
+#   simurgh exec <lease-id> -- xcodebuild …
+# (see AGENTS.md). This script is a convenience for engines-only SPM builds and
+# bare xcodebuild ios — not the governed sim path.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."

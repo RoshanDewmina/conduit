@@ -7,6 +7,11 @@ public enum LivePollPolicy: Sendable {
     /// `assistantText` reaches the UI promptly.
     public static let pollIntervalNanoseconds: UInt64 = 1_000_000_000
 
+    /// Idle tick for the observed-session live follow (desktop activity
+    /// appearing in an open thread). Slightly slower than the in-flight poll —
+    /// each tick is a relay round trip even when nothing changed.
+    public static let observedFollowIntervalNanoseconds: UInt64 = 1_500_000_000
+
     /// Consecutive `refreshConversation` failures before entering degraded.
     public static let consecutiveFailureLimit = 5
 

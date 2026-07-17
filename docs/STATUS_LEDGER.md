@@ -90,7 +90,13 @@ Owner starts `docs/dogfood-log.md` (one line/day; every laptop-reach is a bug or
 **September target (owner, 07-10): App Store launch at iOS 27 GA (~Sept 14)** — S27 + LAUNCH
 work packages in the build roadmap §3.1/§3.1b; billing + legal/review unfreeze early August.
 Dogfood log by mid-Aug is the go/no-go input (downgrade path: TestFlight-only).
-**Still frozen:** team tier, hosted-cloud, Away Launch Composer. Watch: cut (owner, Jul 8).
+**Still frozen:** team tier, hosted-cloud **execution** (Fly/agent-runner), Away Launch Composer,
+StoreKit↔Stripe reconciliation. Watch: cut (owner, Jul 8).
+**Unfrozen (narrow, owner-approved 2026-07-16): "Managed AI Credits"** — Stripe subscription +
+capped per-customer OpenRouter sub-key vended to the phone, US storefront only. $24/mo · $12/mo
+included cap · $5 trial (sign-in + App Attest gated, overage OFF) · Redis-backed billing stores.
+Design: [`product/2026-07-16-managed-ai-credits-design.md`](product/2026-07-16-managed-ai-credits-design.md) ·
+Plan: [`plans/2026-07-16-managed-ai-credits-plan.md`](plans/2026-07-16-managed-ai-credits-plan.md).
 
 **Execution model + process (owner, 07-10):** [`ENGINEERING_PROCESS.md`](ENGINEERING_PROCESS.md)
 — Cursor CLI (Grok 4.5 high / Composer 2.5) codes, Sonnet 5 high is fallback + sensitive paths,

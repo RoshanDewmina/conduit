@@ -90,8 +90,12 @@ public struct AttachmentDraft: Identifiable, Equatable, Sendable {
         mimeType: String? = nil
     ) -> ConversationAttachmentReference {
         let resolvedMime = mimeType ?? self.mimeType
+        let media = AttachmentMediaClassification.classify(
+            mimeType: resolvedMime, fileName: name
+        )
+        // Wire `Kind` stays image|file only (no daemon video enum). Video → .file.
         let kind: ConversationAttachmentReference.Kind =
-            resolvedMime?.hasPrefix("image/") == true ? .image : .file
+            media == .image ? .image : .file
         return ConversationAttachmentReference(
             id: id,
             name: name,
@@ -102,6 +106,45 @@ public struct AttachmentDraft: Identifiable, Equatable, Sendable {
             previewCacheKey: self.id.uuidString,
             contentDigest: contentDigest
         )
+    }
+}
+
+/// UI/media classification from MIME + filename. Pure — package-testable on macOS.
+/// Wire `ConversationAttachmentReference.Kind` remains `.image` / `.file` only.
+public enum AttachmentMediaClassification: String, Equatable, Sendable {
+    case image
+    case video
+    case file
+
+    public static func classify(mimeType: String?, fileName: String) -> AttachmentMediaClassification {
+        if let mime = mimeType?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines),
+           !mime.isEmpty {
+            if mime.hasPrefix("image/") { return .image }
+            if mime.hasPrefix("video/") { return .video }
+        }
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        switch ext {
+        case "png", "jpg", "jpeg", "heic", "heif", "gif", "webp", "bmp", "tif", "tiff":
+            return .image
+        case "mov", "mp4", "m4v":
+            return .video
+        default:
+            return .file
+        }
+    }
+
+    /// Prefer MIME/name; fall back to wire `kind == .image` for legacy refs.
+    public static func classify(
+        reference: ConversationAttachmentReference
+    ) -> AttachmentMediaClassification {
+        let fromMeta = classify(mimeType: reference.mimeType, fileName: reference.name)
+        if fromMeta != .file { return fromMeta }
+        if reference.kind == .image { return .image }
+        return .file
+    }
+
+    public var isInlineMedia: Bool {
+        self == .image || self == .video
     }
 }
 
@@ -254,7 +297,12 @@ public struct AttachmentPresentation: Equatable, Sendable {
     ) -> AttachmentPresentation {
         let safeName = sanitizedDisplayName(ref.name)
         let size = AttachmentFormatting.byteCount(ref.byteCount)
-        let kindWord = ref.kind == .image ? "Attached image" : "Attached file"
+        let kindWord: String
+        switch AttachmentMediaClassification.classify(reference: ref) {
+        case .image: kindWord = "Attached image"
+        case .video: kindWord = "Attached video"
+        case .file: kindWord = "Attached file"
+        }
         return AttachmentPresentation(
             displayName: safeName,
             accessibilityLabel: "\(kindWord), \(safeName), \(size)",

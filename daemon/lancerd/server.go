@@ -42,6 +42,48 @@ type registeredDevice struct {
 	SessionID      string `json:"sessionID"`
 }
 
+// The push registration must survive daemon restarts: s.device was in-memory
+// only, so every reload orphaned app-closed push delivery until the phone's
+// next foreground deviceRegister (2026-07-16 WT-E — the 19:42 escalate hit a
+// nil device and no push was ever attempted). The APNs token itself is not
+// persisted (the backend holds it); on boot we re-register session+relayToken
+// with the backend so its poller/decision path keeps working.
+func persistedDevicePath() string {
+	dir, err := lancerDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "push-device.json")
+}
+
+func savePersistedDevice(dev *registeredDevice) {
+	path := persistedDevicePath()
+	if path == "" || dev == nil {
+		return
+	}
+	data, err := json.Marshal(dev)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, data, 0o600)
+}
+
+func loadPersistedDevice() *registeredDevice {
+	path := persistedDevicePath()
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var dev registeredDevice
+	if json.Unmarshal(data, &dev) != nil || dev.SessionID == "" {
+		return nil
+	}
+	return &dev
+}
+
 type policyEngine struct {
 	mu         sync.RWMutex
 	home       string
@@ -363,6 +405,22 @@ func newServer(home string) *server {
 	// persist IDENTICALLY to the live-SSH respond path (audit + approveAlways
 	// policy) — not via a bare resolve that skips both.
 	s.poller = newDecisionPoller(s.applyDecision)
+	// Rehydrate the phone's push registration so a daemon restart doesn't
+	// orphan app-closed approval push until the next foreground register.
+	// A fresh relayToken is minted and re-registered with the backend; the
+	// phone learns the new token on its next deviceRegister ack, and until
+	// then the direct relay path remains primary as usual.
+	if dev := loadPersistedDevice(); dev != nil {
+		if tok, err := generateRelayToken(); err == nil {
+			s.device = dev
+			s.relayToken = tok
+			if dev.PushBackendURL != "" {
+				go s.postRelayRegistration(dev.PushBackendURL, dev.SessionID, tok)
+				s.poller.ensureRunning(dev.PushBackendURL, dev.SessionID, tok)
+			}
+			log.Printf("push: rehydrated device registration (session %s)", dev.SessionID)
+		}
+	}
 	// Run-control actions (pause/resume/stop/budget-exceeded) feed the same audit log.
 	s.dispatcher.audit = s.auditEntry
 	// Launch-time policy "ask" gates (dispatch/continueRun/resumeObservedSession/
@@ -1185,6 +1243,7 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		s.device = &info
 		relayToken := s.relayToken
 		s.deviceMu.Unlock()
+		savePersistedDevice(&info)
 
 		// Register sessionId → relayToken with the backend over the control plane
 		// (APPROVAL_RELAY_SECRET). Best-effort + async so we don't block the RPC

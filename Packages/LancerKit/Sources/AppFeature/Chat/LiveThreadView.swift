@@ -6,19 +6,18 @@ import PersistenceKit
 import SessionFeature
 import SSHTransport
 
-/// M3: the real, live conversation view — reached only from the New Chat
-/// composer's send action (a brand-new conversation flow). This is
-/// deliberately separate from `ThreadDetailView` (Section 7's static,
-/// owner-approved PR-review-style mockup for browsing sample thread rows) —
-/// see the M3 brief's scope boundary. Apple-native `NavigationStack` /
+/// M3: the real, live conversation view — reached from New Chat send,
+/// Agents / observed-session rows, and the pending-approvals banner. Pushed
+/// onto the enclosing `NavigationStack` (not a sheet). Deliberately separate
+/// from `ThreadDetailView` (local-mirror history threads). Apple-native
 /// `ScrollView` / `TextField` only, no DesignSystem module.
 ///
-/// M4: also renders a pending-approval card (see `approvalCard`) — a fully
+/// M4: also renders a pending-approval sheet (see `ApprovalDecisionSheet`,
+/// opened from `approvalPendingRow`) — a fully
 /// separate, orthogonal piece of UI state from `SendState` below. A pending
 /// approval can appear at any point regardless of whether the current turn
 /// is still working or already completed.
 public struct LiveThreadView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(ShellLiveBridge.self) private var bridge
     @Environment(RelayApprovalIngest.self) private var approvalIngest
     @Environment(RelayQuestionIngest.self) private var questionIngest
@@ -45,6 +44,11 @@ public struct LiveThreadView: View {
     @State private var toolArtifactsByTurnID: [String: [ChatArtifact]] = [:]
     @State private var showScrollToBottom = false
     @State private var isNearBottom = true
+    /// A freshly opened thread lands at the TOP, so `isNearBottom` is false
+    /// and `scrollToTailIfFollowing` never fires for the initial transcript
+    /// load — the first population must scroll unconditionally (WT-J).
+    @State private var hasPerformedInitialScroll = false
+    @State private var extrasRepo: ChatConversationRepository?
     /// Ephemeral runStatus events from the daemon (G3). Absent → legacy Working….
     @State private var liveRunStatus: LiveRunStatusParams?
     @State private var liveStatusFirstAt: Date?
@@ -55,6 +59,15 @@ public struct LiveThreadView: View {
     @State private var reviewPresentation: ReviewPresentation?
     @State private var queuedReviewComments: [QueuedReviewComment] = []
     @State private var isBackgroundTasksPresented = false
+    /// True while `adoptArmedObservedContinue` is in flight (Agents / observed
+    /// row open). Drives the transcript skeleton until history lands.
+    @State private var isAdoptingObservedContinue = false
+    /// CC-6: the pending approval now presents as a bottom sheet
+    /// (`ApprovalDecisionSheet`) instead of an inline card. Auto-opens when a
+    /// new approval arrives; the inline compact row stays visible underneath
+    /// so a manually-dismissed sheet can be reopened with a tap.
+    @State private var isApprovalSheetPresented = false
+    @State private var lastAutoPresentedApprovalID: Approval.ID?
     @FocusState private var isFollowUpFocused: Bool
     #if DEBUG
     @State private var hasAutoAnsweredQuestion = false
@@ -103,52 +116,62 @@ public struct LiveThreadView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
-                            ForEach(priorTurns) { turn in
-                                if LiveThreadTranscript.shouldRenderPromptBubble(for: turn) {
+                        // Lazy so opening a long thread doesn't build (and
+                        // markdown-parse) every historical turn up front.
+                        LazyVStack(alignment: .leading, spacing: 18) {
+                            if showsTranscriptSkeleton {
+                                ChatTranscriptSkeleton()
+                                    .transition(.opacity)
+                            } else {
+                                ForEach(priorTurns) { turn in
+                                    if LiveThreadTranscript.shouldRenderPromptBubble(for: turn) {
+                                        ChatUserBubble(
+                                            text: turn.prompt,
+                                            attachments: turn.attachments
+                                        )
+                                    }
+                                    staticAssistant(turn)
+                                }
+
+                                if let liveUserPrompt {
                                     ChatUserBubble(
-                                        text: turn.prompt,
-                                        attachments: turn.attachments
+                                        text: liveUserPrompt,
+                                        attachments: liveUserAttachments
                                     )
                                 }
-                                staticAssistant(turn)
-                            }
 
-                            if let liveUserPrompt {
-                                ChatUserBubble(
-                                    text: liveUserPrompt,
-                                    attachments: liveUserAttachments
-                                )
-                            }
-
-                            ForEach(bridge.queuedFeedback.items) { item in
-                                ChatUserBubble(
-                                    text: item.text,
-                                    attachments: item.attachments,
-                                    isQueued: true
-                                )
-                            }
-
-                            replyState
-                                .id(Self.scrollTailID)
-
-                            // Tail visibility drives the jump arrow — geometry
-                            // math goes stale when the keyboard resizes the
-                            // viewport (arrow showed while at the tail).
-                            Color.clear
-                                .frame(height: 4)
-                                .onScrollVisibilityChange(threshold: 0.1) { visible in
-                                    withAnimation { showScrollToBottom = !visible }
+                                ForEach(bridge.queuedFeedback.items) { item in
+                                    ChatUserBubble(
+                                        text: item.text,
+                                        attachments: item.attachments,
+                                        isQueued: true
+                                    )
                                 }
+
+                                replyState
+                                    .id(Self.scrollTailID)
+
+                                // Tail visibility drives the jump arrow — geometry
+                                // math goes stale when the keyboard resizes the
+                                // viewport (arrow showed while at the tail).
+                                Color.clear
+                                    .frame(height: 4)
+                                    .onScrollVisibilityChange(threshold: 0.1) { visible in
+                                        withAnimation { showScrollToBottom = !visible }
+                                    }
+                            }
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 16)
                         .padding(.bottom, 12)
+                        .animation(.easeInOut(duration: 0.2), value: showsTranscriptSkeleton)
                     }
+                    // Open at the latest message (WT-J) — the lazy stack then
+                    // materializes from the bottom up instead of the top down.
+                    .defaultScrollAnchor(.bottom)
                     .onScrollGeometryChange(for: Double.self) { geometry in
                         ChatScrollPolicy.distanceFromBottom(
                             contentHeight: geometry.contentSize.height,
@@ -161,9 +184,27 @@ public struct LiveThreadView: View {
                     .onChange(of: bridge.sendState) { _, _ in
                         scrollToTailIfFollowing(proxy)
                     }
-                    .onChange(of: bridge.transcriptTurns.count) { _, _ in
-                        scrollToTailIfFollowing(proxy)
+                    .onChange(of: bridge.transcriptTurns.count) { _, newCount in
+                        if !hasPerformedInitialScroll, newCount > 0 {
+                            hasPerformedInitialScroll = true
+                            scrollToTail(proxy)
+                        } else {
+                            scrollToTailIfFollowing(proxy)
+                        }
                         Task { await refreshTranscriptExtras() }
+                    }
+                    // Within-turn growth (observed live-follow, mirrored
+                    // streaming) changes the LAST turn's text without changing
+                    // the count — follow it too or the thread stalls mid-story
+                    // while the user sits at the bottom (CC-1 parity).
+                    .onChange(of: bridge.transcriptTurns.last?.assistantText ?? "") { _, _ in
+                        scrollToTailIfFollowing(proxy)
+                    }
+                    .onAppear {
+                        if !hasPerformedInitialScroll, !bridge.transcriptTurns.isEmpty {
+                            hasPerformedInitialScroll = true
+                            scrollToTail(proxy)
+                        }
                     }
                     .onChange(of: bridge.queuedFeedback.count) { _, _ in
                         scrollToTailIfFollowing(proxy)
@@ -190,10 +231,12 @@ public struct LiveThreadView: View {
                     }
                 }
 
-                if let machineID = bridge.activeMachineID, let pendingApproval {
-                    approvalCard(pendingApproval, machineID: machineID)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 12)
+                if let pendingApproval {
+                    approvalPendingRow(pendingApproval) {
+                        isApprovalSheetPresented = true
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
                 }
 
                 if let machineID = bridge.activeMachineID, let pendingQuestion {
@@ -232,12 +275,16 @@ public struct LiveThreadView: View {
                     ChatFollowUpComposerBar(
                         text: $followUpText,
                         isFocused: $isFollowUpFocused,
-                        placeholder: bridge.isSendInFlight ? "Add feedback…" : "Follow up…",
+                        placeholder: bridge.isSendInFlight ? "Queue for after this turn…" : "Follow up…",
                         isDisabled: isUploadingAttachments,
                         canSend: canSendFollowUpWithAttachments,
+                        isRunInFlight: bridge.isSendInFlight,
                         onSend: {
                             followUpUploadTask?.cancel()
                             followUpUploadTask = Task { await sendFollowUp() }
+                        },
+                        onStop: {
+                            Task { await bridge.stopCurrentRun() }
                         },
                         onAddContext: { isContextPresented = true }
                     )
@@ -258,9 +305,6 @@ public struct LiveThreadView: View {
             .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 1) {
                         Text(sessionNavTitle)
@@ -277,7 +321,6 @@ public struct LiveThreadView: View {
             .sheet(isPresented: $isBackgroundTasksPresented) {
                 BackgroundTasksSheet(rows: backgroundTaskRows)
             }
-        }
         .task {
             guard !hasSentInitialPrompt else { return }
             hasSentInitialPrompt = true
@@ -290,6 +333,8 @@ public struct LiveThreadView: View {
                 // with an empty prompt — show the approval card, don't adopt.
                 isFollowUpFocused = true
             } else {
+                isAdoptingObservedContinue = true
+                defer { isAdoptingObservedContinue = false }
                 await bridge.adoptArmedObservedContinue(fallbackCwd: cwd)
                 switch bridge.sendState {
                 case .idle, .adoptedNoHistory:
@@ -327,6 +372,24 @@ public struct LiveThreadView: View {
             await refreshReceipts()
             await refreshTranscriptExtras()
             await refreshReviewDiffs()
+        }
+        .sheet(isPresented: $isApprovalSheetPresented) {
+            if let pendingApproval {
+                ApprovalDecisionSheet(approval: pendingApproval) { decision in
+                    decideApproval(pendingApproval, decision: decision)
+                }
+            }
+        }
+        // Auto-open the sheet the moment a NEW approval arrives (CC-6 parity
+        // with the reference app's auto-presented bottom sheet). Tracking
+        // the last auto-presented id (rather than re-firing on every change)
+        // lets a manually dismissed sheet stay closed — the compact row
+        // above remains as the way back in — while still re-presenting for
+        // a genuinely different approval that supersedes it.
+        .onChange(of: pendingApproval) { _, newValue in
+            guard let newValue, lastAutoPresentedApprovalID != newValue.id else { return }
+            lastAutoPresentedApprovalID = newValue.id
+            isApprovalSheetPresented = true
         }
         .sheet(item: $reviewPresentation) { presentation in
             ReviewSheetView(
@@ -482,13 +545,32 @@ public struct LiveThreadView: View {
         WorkspaceRepoCatalog.displayName(forCwd: cwd)
     }
 
+    /// Skeleton while observed-session adopt hydrates and nothing is painted yet.
+    /// New-send paths paint the user bubble immediately — never skeleton those.
+    private var showsTranscriptSkeleton: Bool {
+        let hasCachedContent = !bridge.transcriptTurns.isEmpty || liveUserPrompt != nil
+        return ChatTranscriptSkeletonVisibility.shouldShow(
+            hasCachedContent: hasCachedContent,
+            isLoadInFlight: isAdoptingObservedContinue
+        )
+    }
+
     private var backgroundTaskRows: [BackgroundTasksPresentation.TaskRow] {
         var rows: [BackgroundTasksPresentation.TaskRow] = []
         for turn in bridge.transcriptTurns {
             let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+            // WT-B: a terminal turn cannot have running tasks — a tool_call
+            // whose result never landed must not spin the pill forever.
+            let terminalAdjusted: [TurnTranscriptItem] = eventItems.map { item in
+                guard case .toolChip(let chip) = item else { return item }
+                let forced = ToolChipGrouping.withTerminalTurnStatus(
+                    [chip], turnIsTerminal: turn.status != .running
+                )
+                return .toolChip(forced[0])
+            }
             let artifacts = toolArtifactsByTurnID[turn.id] ?? []
             rows.append(contentsOf: BackgroundTasksPresentation.rows(
-                items: eventItems,
+                items: terminalAdjusted,
                 events: eventsByTurnID[turn.id] ?? [],
                 artifacts: artifacts
             ))
@@ -541,7 +623,7 @@ public struct LiveThreadView: View {
     }
 
     private func scrollToTail(_ proxy: ScrollViewProxy) {
-        withAnimation {
+        withAnimation(.easeOut(duration: 0.25)) {
             proxy.scrollTo(Self.scrollTailID, anchor: .bottom)
         }
     }
@@ -589,7 +671,8 @@ public struct LiveThreadView: View {
                 items: merged,
                 emptyFallback: LiveThreadTranscript.assistantFallback(for: turn),
                 activitySummary: activitySummary(for: turn, items: merged),
-                receipt: receipt
+                receipt: receipt,
+                turnIsTerminal: turn.status != .running
             )
         } else if let body = LiveThreadTranscript.assistantFallback(for: turn) {
             VStack(alignment: .leading, spacing: 12) {
@@ -607,10 +690,25 @@ public struct LiveThreadView: View {
         items: [TurnTranscriptItem]
     ) -> TurnActivitySummary? {
         guard turn.status != .running else { return nil }
+        let startedAt = turn.createdAt
         let completedAt = turn.completedAt ?? Date()
-        return TurnTranscriptAssembler.activitySummary(
+        let turnSeconds = ToolChipGrouping.durationSeconds(
+            startedAt: startedAt,
+            completedAt: completedAt
+        )
+        if turnSeconds == 0, let events = eventsByTurnID[turn.id], !events.isEmpty {
+            let times = events.map(\.createdAt)
+            if let first = times.min(), let last = times.max(), last > first {
+                return TurnActivitySummary.make(
+                    from: items,
+                    startedAt: first,
+                    completedAt: last
+                )
+            }
+        }
+        return TurnActivitySummary.make(
             from: items,
-            startedAt: turn.createdAt,
+            startedAt: startedAt,
             completedAt: completedAt
         )
     }
@@ -676,10 +774,13 @@ public struct LiveThreadView: View {
     }
 
     private func refreshTranscriptExtras() async {
-        guard let conversationID = bridge.activeConversationID,
-              let db = try? AppDatabase.openShared()
-        else { return }
-        let repo = ChatConversationRepository(db)
+        guard let conversationID = bridge.activeConversationID else { return }
+        // Reuse one DB handle per view — openShared() builds a fresh
+        // DatabasePool each call, and this runs on every turn-count change.
+        if extrasRepo == nil, let db = try? AppDatabase.openShared() {
+            extrasRepo = ChatConversationRepository(db)
+        }
+        guard let repo = extrasRepo else { return }
         let events = (try? await repo.events(conversationID: conversationID, limit: 10_000)) ?? []
         eventsByTurnID = Dictionary(grouping: events.filter { $0.turnID != nil }, by: { $0.turnID! })
         let artifacts = (try? await repo.artifacts(conversationID: conversationID)) ?? []
@@ -924,6 +1025,7 @@ public struct LiveThreadView: View {
         let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
         let artifactChips = (toolArtifactsByTurnID[turn.id] ?? []).map(ToolChipItem.init(artifact:))
         let merged = mergeToolArtifacts(into: eventItems, artifacts: artifactChips)
+        let turnIsTerminal = turn.status != .running
         let chips = merged.compactMap { item -> ToolChipItem? in
             if case .toolChip(let chip) = item { return chip }
             return nil
@@ -938,12 +1040,13 @@ public struct LiveThreadView: View {
                     ThinkingRow(text: row.text)
                 }
                 if !chips.isEmpty {
-                    let grouped = TurnTranscriptAssembler.groupedForDisplay(
-                        chips.map { .toolChip($0) }
+                    let grouped = ToolChipGrouping.displayGroups(
+                        from: chips.map { .toolChip($0) },
+                        turnIsTerminal: turnIsTerminal
                     )
                     ForEach(grouped) { item in
                         if case .toolChips(let group) = item {
-                            ToolCallChipView(chips: group)
+                            ToolCallChipView(chips: group, turnIsTerminal: turnIsTerminal)
                         }
                     }
                 }
@@ -1014,6 +1117,8 @@ public struct LiveThreadView: View {
                     case .sendInitial(let attachments):
                         await bridge.send(prompt: prompt, cwd: cwd, attachments: attachments)
                     case .adoptObserved:
+                        isAdoptingObservedContinue = true
+                        defer { isAdoptingObservedContinue = false }
                         await bridge.adoptArmedObservedContinue(fallbackCwd: cwd)
                     }
                 }
@@ -1035,38 +1140,43 @@ public struct LiveThreadView: View {
         return approval
     }
 
-    private func approvalCard(_ approval: Approval, machineID: RelayMachineID) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.shield")
-                    .foregroundStyle(.blue)
-                Text(approval.kind.rawValue.capitalized)
-                    .font(.system(size: 15, weight: .semibold))
-                Spacer()
+    /// CC-6: compact inline row that replaces the old inline approve/deny
+    /// card. Tapping it (or the auto-present `onChange` below) opens
+    /// `ApprovalDecisionSheet`, which owns the actual decision buttons.
+    private func approvalPendingRow(_ approval: Approval, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("Waiting on approval — \(approvalSummaryText(approval)) \u{203A}")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 8)
                 riskLabel(approval.risk)
             }
-            Text(approval.command ?? approval.patch ?? "(no detail)")
-                .font(.system(size: 13, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .lineLimit(6)
-            HStack(spacing: 12) {
-                Button("Deny", role: .destructive) {
-                    Task { await approvalIngest.decide(approval, decision: .rejected, machineID: machineID) }
-                }
-                .buttonStyle(.bordered)
-
-                Button("Approve") {
-                    Task { await approvalIngest.decide(approval, decision: .approved, machineID: machineID) }
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("cursor.approval.approve")
-            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+            )
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("approval-pending-row")
+    }
+
+    private func approvalSummaryText(_ approval: Approval) -> String {
+        approval.command ?? approval.patch ?? approval.kind.rawValue.capitalized
+    }
+
+    /// Wires `ApprovalDecisionSheet`'s buttons to the exact same
+    /// `RelayApprovalIngest.decide` call the old inline card made — see the
+    /// sheet's doc comment for the plumbing guarantee.
+    private func decideApproval(_ approval: Approval, decision: Approval.Decision) {
+        guard let machineID = bridge.activeMachineID else { return }
+        Task { await approvalIngest.decide(approval, decision: decision, machineID: machineID) }
     }
 
     private func riskLabel(_ risk: Approval.Risk) -> some View {
@@ -1298,16 +1408,11 @@ public struct LiveThreadView: View {
 
         let refs = AttachmentDraftStore.references(from: drafts)
         if !refs.isEmpty {
-            let cache = try? AttachmentPreviewCache()
-            for draft in drafts {
-                guard case .done = draft.state else { continue }
-                if Task.isCancelled { return }
-                if let preview = await AttachmentPreviewCache.makePreviewDataOffMain(
-                    from: draft.data, mimeType: draft.mimeType
-                ) {
-                    try? cache?.storePreview(preview, for: draft.id.uuidString)
-                }
-            }
+            if Task.isCancelled { return }
+            await AttachmentLocalMediaStore.persistSentDrafts(
+                drafts,
+                previewCache: try? AttachmentPreviewCache()
+            )
         }
 
         followUpText = ""

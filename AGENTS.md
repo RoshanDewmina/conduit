@@ -89,7 +89,9 @@ isolation and risk mid-run reclaim when TTL expires. Between discrete steps,
 call `lease_renew` / `simurgh renew` if work will outlast the current expiry —
 do not acquire a second lease. For XcodeBuildMCP, use
 `simurgh integration xcodebuildmcp start --session <lease-id>` bound to the same
-lease.
+lease. Confirm the Simurgh MCP server is registered in project `.mcp.json`
+(`simurgh init` upserts it); restart the agent session after adding it — a
+missing server surfaces as `Server "simurgh" not found`.
 
 Source: `~/Documents/simurgh` (private repo, not published) — `README.md` for
 the CLI reference, `docs/AGENT_GUIDE.md` for agent lease/build discipline,

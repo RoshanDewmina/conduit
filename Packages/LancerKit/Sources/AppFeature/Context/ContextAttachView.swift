@@ -260,6 +260,8 @@ public struct ContextAttachView: View {
         case "gif": return "image/gif"
         case "heic": return "image/heic"
         case "webp": return "image/webp"
+        case "mov": return "video/quicktime"
+        case "mp4", "m4v": return "video/mp4"
         case "pdf": return "application/pdf"
         case "txt": return "text/plain"
         case "md": return "text/markdown"
