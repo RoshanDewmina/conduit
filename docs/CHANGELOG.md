@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 21:35 Cursor Grok — WT-A: ChatPermissionModePill pushes AutonomyPreset→coarse deny/ask/allow via GovernanceHostActions (relay SET); hydrates from GET on open; fail-closed revert+error on RPC failure; mapping tests (`lane/wt-a-permission`)
 - 21:45 Cursor Grok — CC-5 typography: assistant `ChatMarkdownBody` prose → system serif + ~1.25× leading (inline/fenced code stays mono); user bubble soft gray fill + 16pt radius (`lane/p-type`)
 - 21:36 Cursor Grok — P-THINK CC-4: Thought process row (clock + label + chevron) opens full-height ThoughtProcessSheet with serif body (`lane/p-think`)
 - 21:35 Cursor Grok — CC-8 mid-run composer: Stop (■) via single-run `agentRunControl` stop + placeholder "Queue for after this turn…" (`lane/p-composer`)
