@@ -1,10 +1,13 @@
 #if os(iOS)
 import SwiftUI
+import PersistenceKit
 
 /// Repo picker sheet over the real workspace list (derived + user-added).
 public struct RepoPickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(WorkspaceDataStore.self) private var workspaceData
     @State private var searchText = ""
+    @State private var isAddRepoPresented = false
 
     let repos: [WorkspaceRepo]
     let selectedCwd: String?
@@ -43,13 +46,27 @@ public struct RepoPickerView: View {
             Divider()
 
             if filtered.isEmpty {
-                Text(repos.isEmpty ? "Add a repo to get started" : "No matching repos")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 24)
-                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 0) {
+                    if repos.isEmpty {
+                        addRepoButton
+                        Divider()
+                            .padding(.leading, 58)
+                        Text("Add a repo to get started")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
+                    } else {
+                        Text("No matching repos")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 24)
+                    }
+                    Spacer(minLength: 0)
+                }
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -98,6 +115,10 @@ public struct RepoPickerView: View {
                             Divider()
                                 .padding(.leading, 58)
                         }
+
+                        addRepoButton
+                        Divider()
+                            .padding(.leading, 58)
                     }
                     .padding(.bottom, 24)
                 }
@@ -106,6 +127,45 @@ public struct RepoPickerView: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .sheet(isPresented: $isAddRepoPresented) {
+            AddRepoView { name, cwd in
+                guard let added = workspaceData.addRepo(name: name, cwd: cwd) else { return }
+                let selected = workspaceData.repos.first {
+                    WorkspaceRepoCatalog.pathsMatch($0.cwd, added.cwd)
+                } ?? WorkspaceRepo(
+                    name: added.name,
+                    cwd: added.cwd,
+                    threadCount: 0,
+                    isUserAdded: true
+                )
+                onSelect(selected)
+                dismiss()
+            }
+        }
+    }
+
+    private var addRepoButton: some View {
+        Button {
+            isAddRepoPresented = true
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "folder.badge.plus")
+                    .font(.system(size: 19, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24)
+
+                Text("Add Repo")
+                    .font(.system(size: 17))
+                    .foregroundStyle(.primary)
+
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("Add Repo"))
     }
 }
 
@@ -228,6 +288,8 @@ struct RepoListRow: View {
 }
 
 #Preview {
+    let db = try! PersistenceKit.AppDatabase.inMemory()
     RepoPickerView(repos: [], selectedCwd: nil, onSelect: { _ in })
+        .environment(WorkspaceDataStore(chatRepo: ChatConversationRepository(db)))
 }
 #endif

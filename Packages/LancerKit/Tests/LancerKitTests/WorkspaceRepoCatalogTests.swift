@@ -500,4 +500,27 @@ struct AddedRepoStoreTests {
         #expect(store.repos.map(\.name) == ["first", "other"])
         #expect(store.repos.map(\.cwd) == ["/Users/dev/command-center", "/Users/dev/other"])
     }
+
+    @Test("add then deriveRepos yields selectable WorkspaceRepo for composer")
+    func selectionAfterAdd() {
+        let suite = "dev.lancer.tests.addedRepos.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let store = AddedRepoStore(userDefaults: defaults)
+        let added = store.add(name: "demo", cwd: "/Users/dev/demo/")
+        #expect(added?.cwd == "/Users/dev/demo")
+
+        let repos = WorkspaceRepoCatalog.deriveRepos(
+            conversations: [],
+            added: store.repos
+        )
+        let selected = repos.first {
+            WorkspaceRepoCatalog.pathsMatch($0.cwd, added?.cwd ?? "")
+        }
+        #expect(selected?.name == "demo")
+        #expect(selected?.cwd == "/Users/dev/demo")
+        #expect(selected?.isUserAdded == true)
+        #expect(selected?.threadCount == 0)
+    }
 }
