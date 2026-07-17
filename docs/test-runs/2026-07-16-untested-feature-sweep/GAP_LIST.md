@@ -59,8 +59,8 @@ Best available verdict per candidate. Prefer A2/C2/D2/C3/F-final/LB over earlier
 | # | Candidate | Best verdict | Lane | Notes |
 |---|---|---|---|---|
 | 1 | Emergency Stop | **BLOCKED** (harness) | LA2 | UI reachable; "No connected host" under re-pair race |
-| 2 | Policy editor | **PARTIAL** (live) | Lane P + LC4 | Relay mode picker works; SSH error flash remains |
-| 3 | Audit feed | **PASS** (live) | Lane P + LC4 | `agentAuditTail` over relay |
+| 2 | Policy editor | **PASS** (phone) | Lane P + LC4 + WT | Picker loads on owner phone, no SSH flash (#144 holds); design concern WT-A2 |
+| 3 | Audit feed | **PASS** (phone) | Lane P + LC4 + WT | Live on owner phone with same-night entries |
 | 4 | Pending-approvals banner | **PASS** | LB | |
 | 5 | First-run onboarding | **PASS** (+ Connect **PASS** live) | LB + FX5 + LC4 | `LC4-01-pairing-keypad.png` |
 | 6 | Inline approval card | **PASS** | LB | Real git commit landed |
@@ -69,7 +69,7 @@ Best available verdict per candidate. Prefer A2/C2/D2/C3/F-final/LB over earlier
 | 9 | AddCommentSheet | **BLOCKED** → retest via C4 | LC3 | Was blocked on #7 UI |
 | 10 | Background-tasks pill | **FAIL** (C4 pre-FX10) → **code FIXED** | LD2 + LF-final + LC4 | FX10 `5a3fce93` on master; live re-proof owed |
 | 11 | Mid-run feedback queue | **BLOCKED** (harness) | LD2 + LF-final | followup send never enabled mid-run |
-| 12 | Permission-mode pill | **PASS** | LB | |
+| 12 | Permission-mode pill | **PASS (rendering only)** — **WT-A: not wired** | LB + WT | Pill persists locally; never sent to daemon; `PresetDocument` dead code |
 | 13 | Composer dispatch picker | **PASS** | LB | |
 | 14 | Tool-call label dedup | **BLOCKED** (no chips) | LD2 + LF-final | bashCount=0 |
 | 15 | Thread-list filters | **PASS** | LD2 | |
@@ -108,10 +108,14 @@ Best available verdict per candidate. Prefer A2/C2/D2/C3/F-final/LB over earlier
 
 ---
 
+## Owner device walkthrough — 2026-07-16 evening (see `DOGFOOD_DEVICE_WALKTHROUGH.md`)
+
+Live on the physical iPhone @ `62b4424d`: **approve loop PASS** (escalate→push-over-relay→approve→exit 0 in 21s), **Proof under ⋯ PASS** (#147), **Policy picker PASS** (#144), **Audit feed PASS on phone** (#3 upgrade from sim), **follow-up same-thread PASS** (same vendor session), **All Repos cold paint PASS** (#149). **FAILs/new gaps:** WT-A autonomy pill display-only (P1 — #12's PASS was rendering-only), WT-B live thread never renders completion (P1), WT-E no APNs approval push while locked (P1), WT-C return-visit spinner (P2), WT-D ⋯ missing on first entry (P2), WT-F `ls -la` risk-rated High (P3). E-Stop skipped (owner); #1 stays BLOCKED.
+
 ## Remaining work (ordered)
 
 1. ~~**Merge-to-master + push**~~ — **DONE** (#140–#149 merged; tip `62b4424d`).
-2. **Owner phone dogfood** — install @ `62b4424d` **claimed SUCCEEDED**; pair **confirmed**; launch smoke **PASS** post-#145. Full `DOGFOOD_READY.md` §4 checklist (approve + follow-up + Policy/Audit UI screenshots) **not fully evidenced**.
+2. ~~**Owner phone dogfood**~~ — **DONE 2026-07-16 evening** (`DOGFOOD_DEVICE_WALKTHROUGH.md`); remaining from it: WT-A/WT-B/WT-E P1 fixes, E-Stop re-test, lock-push diagnosis.
 3. **Lane C4 live sim re-test**: #7 chain (#8/#9/#17/#23) **still live-owed** — harness never got `paired with phone`; FX7 awaiting-card not observed. Also #10/#14 recheck + #1/#11/#18 harness retries.
 4. **Publish / TestFlight** — not started (`docs/PUBLISH_READINESS_CHECKLIST.md`).
 

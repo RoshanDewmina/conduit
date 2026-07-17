@@ -48,16 +48,20 @@ type registeredDevice struct {
 // nil device and no push was ever attempted). The APNs token itself is not
 // persisted (the backend holds it); on boot we re-register session+relayToken
 // with the backend so its poller/decision path keeps working.
-func persistedDevicePath() string {
-	dir, err := lancerDir()
-	if err != nil {
+// Scoped to the server's home (not the process-global lancerDir()): tests and
+// LANCER_STATE_DIR-isolated daemons construct servers with their own home, and
+// a global path let `go test` clobber the real ~/.lancer/push-device.json with
+// test fixtures (observed 2026-07-17 — real phone registration replaced by
+// test-session-id).
+func persistedDevicePath(home string) string {
+	if home == "" {
 		return ""
 	}
-	return filepath.Join(dir, "push-device.json")
+	return filepath.Join(home, "push-device.json")
 }
 
-func savePersistedDevice(dev *registeredDevice) {
-	path := persistedDevicePath()
+func (s *server) savePersistedDevice(dev *registeredDevice) {
+	path := persistedDevicePath(s.home)
 	if path == "" || dev == nil {
 		return
 	}
@@ -68,8 +72,8 @@ func savePersistedDevice(dev *registeredDevice) {
 	_ = os.WriteFile(path, data, 0o600)
 }
 
-func loadPersistedDevice() *registeredDevice {
-	path := persistedDevicePath()
+func (s *server) loadPersistedDevice() *registeredDevice {
+	path := persistedDevicePath(s.home)
 	if path == "" {
 		return nil
 	}
@@ -314,6 +318,7 @@ func (e *policyEngine) setPolicyYAML(cwd, yamlText string) error {
 }
 
 type server struct {
+	home       string
 	approvals  *approvalStore
 	questions  *questionStore
 	policy     *policyEngine
@@ -395,6 +400,7 @@ func (s *server) setEmitter(emit func([]byte) error) {
 
 func newServer(home string) *server {
 	s := &server{
+		home:           home,
 		approvals:      newApprovalStore(),
 		questions:      newQuestionStore(),
 		policy:         newPolicyEngine(home),
@@ -434,7 +440,7 @@ func newServer(home string) *server {
 	// A fresh relayToken is minted and re-registered with the backend; the
 	// phone learns the new token on its next deviceRegister ack, and until
 	// then the direct relay path remains primary as usual.
-	if dev := loadPersistedDevice(); dev != nil {
+	if dev := s.loadPersistedDevice(); dev != nil {
 		if tok, err := generateRelayToken(); err == nil {
 			s.device = dev
 			s.relayToken = tok
@@ -1289,7 +1295,7 @@ func (s *server) handleMessage(msg *rpcMessage) {
 		s.device = &info
 		relayToken := s.relayToken
 		s.deviceMu.Unlock()
-		savePersistedDevice(&info)
+		s.savePersistedDevice(&info)
 
 		// Register sessionId → relayToken with the backend over the control plane
 		// (APPROVAL_RELAY_SECRET). Best-effort + async so we don't block the RPC
