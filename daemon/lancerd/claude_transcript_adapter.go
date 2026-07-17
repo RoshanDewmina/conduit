@@ -190,16 +190,16 @@ func parseClaudeLine(raw []byte) ([]SessionMessage, bool) {
 			Timestamp: l.Timestamp,
 		}}, true
 	case "ai-title", "agent-name", "last-prompt", "queue-operation", "attachment",
-		"summary", "mode", "permission-mode", "bridge-session", "file-history-snapshot":
+		"summary", "mode", "permission-mode", "bridge-session", "file-history-snapshot",
+		"custom-title":
 		return nil, true
 	case "":
 		return nil, true
 	default:
-		text := string(raw)
-		if len(text) > maxMessageTextBytes {
-			text = text[:maxMessageTextBytes]
-		}
-		return []SessionMessage{{Role: "unknown", Text: text, Timestamp: l.Timestamp}}, true
+		// Unknown record types are harness bookkeeping until proven otherwise —
+		// rendering raw JSON as message text is never right (custom-title and
+		// pr-link both leaked this way before being classified).
+		return nil, true
 	}
 }
 

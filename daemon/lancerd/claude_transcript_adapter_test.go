@@ -56,9 +56,10 @@ func TestParseClaudeTranscriptRolesAndOrder(t *testing.T) {
 		t.Fatalf("nextLine = %d, want %d", nextLine, len(fixtureTranscriptLines()))
 	}
 
-	// system records (stop_hook_summary etc.) are harness bookkeeping and are
-	// dropped from transcripts entirely — see parseClaudeLine.
-	wantRoles := []string{"user", "assistant", "toolCall", "toolResult", "unknown"}
+	// system records (stop_hook_summary etc.) AND unrecognized record types are
+	// harness bookkeeping and are dropped from transcripts entirely — raw JSON
+	// must never render as message text (custom-title/pr-link leak class).
+	wantRoles := []string{"user", "assistant", "toolCall", "toolResult"}
 	if len(msgs) != len(wantRoles) {
 		t.Fatalf("got %d messages, want %d: %+v", len(msgs), len(wantRoles), msgs)
 	}
@@ -82,9 +83,6 @@ func TestParseClaudeTranscriptRolesAndOrder(t *testing.T) {
 	}
 	if msgs[3].Text != "no matches" {
 		t.Errorf("toolResult text = %q", msgs[3].Text)
-	}
-	if msgs[4].Role != "unknown" {
-		t.Errorf("weird-future-type should map to unknown role")
 	}
 }
 
@@ -147,8 +145,8 @@ func TestParseClaudeTranscriptUnknownTypeNeverCrashes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("should never error on bad lines, got: %v", err)
 	}
-	if len(msgs) != 1 || msgs[0].Role != "unknown" {
-		t.Fatalf("got %+v, want one unknown-role message", msgs)
+	if len(msgs) != 0 {
+		t.Fatalf("got %+v, want unknown types skipped (raw JSON must never render)", msgs)
 	}
 }
 

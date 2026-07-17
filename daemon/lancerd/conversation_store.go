@@ -248,6 +248,19 @@ func conversationNow() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
+// observedEventCreatedAt prefers the vendor transcript's own message timestamp
+// over the import time — stamping every imported event with `now` collapses a
+// turn's real span to 0s (the "Worked 0s" bug on observed threads).
+func observedEventCreatedAt(msg SessionMessage, fallback string) string {
+	if msg.Timestamp == "" {
+		return fallback
+	}
+	if _, err := time.Parse(time.RFC3339, msg.Timestamp); err != nil {
+		return fallback
+	}
+	return msg.Timestamp
+}
+
 // --- Request/result types -----------------------------------------------
 
 // conversationAppendRequest mirrors the agent.conversations.append RPC request
@@ -1562,7 +1575,7 @@ func (s *conversationStore) attachObservedSession(provider, sessionID, cwd, titl
 			if _, err := tx.Exec(`INSERT INTO conversation_events
 				(conversation_id, seq, turn_id, run_id, kind, role, text, payload_json, created_at)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				convID, seq, turnID, runID, kind, nullIfEmpty(role), text, nullIfEmpty(payload), now); err != nil {
+				convID, seq, turnID, runID, kind, nullIfEmpty(role), text, nullIfEmpty(payload), observedEventCreatedAt(msg, now)); err != nil {
 				return conversationImportResult{}, err
 			}
 		}
@@ -1648,7 +1661,7 @@ func (s *conversationStore) deltaImportObservedSession(tx *sql.Tx, first existin
 			if _, err := tx.Exec(`INSERT INTO conversation_events
 				(conversation_id, seq, turn_id, run_id, kind, role, text, payload_json, created_at)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				first.conversationID, seq, turnID, runID, kind, nullIfEmpty(role), text, nullIfEmpty(payload), now); err != nil {
+				first.conversationID, seq, turnID, runID, kind, nullIfEmpty(role), text, nullIfEmpty(payload), observedEventCreatedAt(msg, now)); err != nil {
 				return conversationImportResult{}, err
 			}
 		}
