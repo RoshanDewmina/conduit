@@ -894,6 +894,23 @@ func agentLaunchEnvironment() []string {
 	if !pathFound {
 		result = append(result, "PATH="+strings.Join(extra, ":"))
 	}
+	// The vendor-CLI hooks resolve the gating binary as ${LANCERD:-$HOME/.lancer/bin/lancerd}.
+	// Without an explicit LANCERD, runs dispatched by an isolated (LANCER_STATE_DIR)
+	// daemon still gate through the PRODUCTION binary — version skew observed live
+	// 2026-07-17 (docs/test-runs/2026-07-17-gap-reproof). Point hooks at the
+	// dispatching daemon's own executable; a pre-set LANCERD wins.
+	hasLancerd := false
+	for _, e := range env {
+		if strings.HasPrefix(e, "LANCERD=") {
+			hasLancerd = true
+			break
+		}
+	}
+	if !hasLancerd {
+		if exe, err := os.Executable(); err == nil && exe != "" {
+			result = append(result, "LANCERD="+exe)
+		}
+	}
 	return result
 }
 

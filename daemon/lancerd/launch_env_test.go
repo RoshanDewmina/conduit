@@ -93,3 +93,38 @@ func TestLookPathInExcludingSkipsShimDir(t *testing.T) {
 func writeExecutable(path string) error {
 	return os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755)
 }
+
+// The vendor-CLI hooks resolve their gating binary as
+// ${LANCERD:-$HOME/.lancer/bin/lancerd}; the launch env must pin LANCERD to
+// the dispatching daemon's own executable so isolated daemons don't gate
+// through the production binary.
+func TestAgentLaunchEnvironmentInjectsLancerd(t *testing.T) {
+	t.Setenv("LANCERD", "")
+	os.Unsetenv("LANCERD")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got string
+	for _, e := range agentLaunchEnvironment() {
+		if strings.HasPrefix(e, "LANCERD=") {
+			got = strings.TrimPrefix(e, "LANCERD=")
+		}
+	}
+	if got != exe {
+		t.Fatalf("LANCERD = %q, want daemon executable %q", got, exe)
+	}
+}
+
+func TestAgentLaunchEnvironmentRespectsExplicitLancerd(t *testing.T) {
+	t.Setenv("LANCERD", "/custom/lancerd")
+	var got []string
+	for _, e := range agentLaunchEnvironment() {
+		if strings.HasPrefix(e, "LANCERD=") {
+			got = append(got, strings.TrimPrefix(e, "LANCERD="))
+		}
+	}
+	if len(got) != 1 || got[0] != "/custom/lancerd" {
+		t.Fatalf("LANCERD entries = %v, want exactly [/custom/lancerd]", got)
+	}
+}

@@ -271,7 +271,7 @@ public struct LiveThreadView: View {
                     }
                     followUpAttachmentChips
                     HStack {
-                        ChatPermissionModePill()
+                        ChatPermissionModePill(cwd: cwd)
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 26)

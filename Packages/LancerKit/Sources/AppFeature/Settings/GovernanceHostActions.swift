@@ -7,11 +7,10 @@ import SSHTransport
 /// Resolves the live host transport for governance Settings actions.
 /// Emergency stop + audit tail: SSH `DaemonChannel` first, then a relay mirror
 /// (`agentEmergencyStop` / `agentAuditTail`) — same fallback shape.
-/// Permission mode (coarse deny/ask/allow default): SSH `agent.policy.get`/`.set`
-/// first, then relay `agentPermissionModeGet`/`agentPermissionModeSet`.
-/// Full per-rule policy YAML editing stays SSH-only: no relay round-trip of the
-/// entire rules document (see docs/product/2026-07-16-policy-audit-relay-port-map.md —
-/// none of the studied competitors expose full remote rules editing either).
+/// Permission mode (coarse deny/ask/allow): SSH `agent.permissionMode.get`/`.set`
+/// first, then relay `agentPermissionModeGet`/`agentPermissionModeSet`. Real
+/// repo `cwd` scopes to a per-chat override; ""/"~" keeps the document-level
+/// default (Settings). Full per-rule policy YAML editing stays SSH-only.
 @MainActor
 enum GovernanceHostActions {
     enum Failure: Error, LocalizedError {
@@ -62,19 +61,20 @@ enum GovernanceHostActions {
         throw Failure.noTransport
     }
 
-    /// Reads the coarse policy default (deny/ask/allow). SSH-first via the
-    /// existing `agent.policy.get` RPC's `default` field; relay fallback via
+    /// Reads the coarse policy default (deny/ask/allow). SSH-first via
+    /// `agent.permissionMode.get` (per-cwd override when `cwd` is a real repo
+    /// path; document default for ""/"~"); relay fallback via
     /// `agentPermissionModeGet` for a relay-only pairing.
     static func fetchPermissionMode(cwd: String = "~", relayFleetStore: RelayFleetStore) async throws -> PermissionMode {
         if let channel = ApprovalRelay.shared.channel {
-            let result = try await channel.fetchPolicy(cwd: cwd)
-            guard let raw = result.default, let mode = PermissionMode(rawValue: raw) else {
+            let result = try await channel.fetchPermissionMode(cwd: cwd)
+            guard let mode = PermissionMode(rawValue: result.mode) else {
                 throw Failure.noTransport
             }
             return mode
         }
         if let bridge = relayFleetStore.firstConnectedMachine?.bridge {
-            let result = try await bridge.sendPermissionModeGet()
+            let result = try await bridge.sendPermissionModeGet(cwd: cwd)
             guard let mode = PermissionMode(rawValue: result.mode) else {
                 throw Failure.noTransport
             }
@@ -84,50 +84,25 @@ enum GovernanceHostActions {
     }
 
     /// Writes ONLY the coarse policy default (deny/ask/allow) — never full rules
-    /// YAML. SSH-first via `agent.policy.set` (re-reading current YAML and
-    /// patching just `default:` so existing rules survive); relay fallback via
-    /// `agentPermissionModeSet` for a relay-only pairing.
+    /// YAML. SSH-first via `agent.permissionMode.set` (per-cwd override when
+    /// `cwd` is a real repo path; document Default for ""/"~"); relay fallback
+    /// via `agentPermissionModeSet` for a relay-only pairing.
     static func setPermissionMode(_ mode: PermissionMode, cwd: String = "~", relayFleetStore: RelayFleetStore) async throws {
         if let channel = ApprovalRelay.shared.channel {
-            let current = try await channel.fetchPolicy(cwd: cwd)
-            guard let yaml = current.yaml else {
+            let result = try await channel.setPermissionMode(mode, cwd: cwd)
+            guard result.ok else {
                 throw Failure.noTransport
             }
-            let patched = Self.replacingDefaultLine(in: yaml, with: mode.rawValue)
-            try await channel.savePolicyYAML(cwd: cwd, yaml: patched)
             return
         }
         if let bridge = relayFleetStore.firstConnectedMachine?.bridge {
-            let result = try await bridge.sendPermissionModeSet(mode)
+            let result = try await bridge.sendPermissionModeSet(mode, cwd: cwd)
             guard result.ok else {
                 throw Failure.noTransport
             }
             return
         }
         throw Failure.noTransport
-    }
-
-    /// Rewrites (or inserts) the top-level `default:` line in a policy YAML
-    /// document, leaving every other line — including all rules — untouched.
-    /// Used only by the SSH path of `setPermissionMode`, which must patch a
-    /// single field without round-tripping a structured rules editor through
-    /// this coarse-mode control.
-    private static func replacingDefaultLine(in yaml: String, with mode: String) -> String {
-        var lines = yaml.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var replaced = false
-        for i in lines.indices {
-            // Top-level key only — an indented `default:` inside a rule block
-            // must never be rewritten to an unindented line.
-            if lines[i].hasPrefix("default:") {
-                lines[i] = "default: \(mode)"
-                replaced = true
-                break
-            }
-        }
-        if !replaced {
-            lines.insert("default: \(mode)", at: 0)
-        }
-        return lines.joined(separator: "\n")
     }
 }
 #endif
