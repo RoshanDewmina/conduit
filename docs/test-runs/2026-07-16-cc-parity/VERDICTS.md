@@ -64,3 +64,8 @@ reference = archived CC frames per spec citations.
 | Layout | Bottom-stack overlap (found by THIS run) | **FIXED** | ThreadDetail accessory stack was ZStack-overlaid with no background — content scrolled through pills; now `.regularMaterial` backed |
 
 Re-verification of the two FIXED rows: post-fix sim screenshot below (same seeded thread).
+
+**Post-fix re-verification (`lancer/cc-2345-thread-final.png`, 22:19 ET):** aggregated chip
+static (no spinner), no phantom "1 running task" pill, bottom accessory stack material-backed
+with zero content bleed-through — both FIXED rows confirmed on-sim. Second WT-B call site
+(ThreadDetailView's own `backgroundTaskRows`) caught and fixed in the same pass.
