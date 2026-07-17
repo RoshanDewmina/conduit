@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-17
 
+- 10:55 Cursor Grok — WT-B live-stream regression: LiveTerminalStateRegressionTests prove in-place host-status delta (no re-entry) flips derived chips/"Running"/background-task count to terminal; ShellLiveBridge iOS-gated so tests hit pure LiveThreadView derivation seam (`test/live-terminal-state-regression`)
 - 10:55 Cursor Grok — WP2 WT-A2: per-chat permission pill scopes to conversation repo cwd (daemon per-cwd override before document default; relay/SSH GET/SET carry cwd; audit `scope=<cwd>`) (`feat/per-chat-autonomy-scope`)
 - 11:20 Claude Fable (orchestrator) — fix P1 test-pollution from #155: push-device persistence was process-global (`lancerDir()`), so `go test` clobbered the REAL `~/.lancer/push-device.json` with `test-session-id`/localhost fixtures (observed live — daemon restarts would rehydrate a bogus push session, silently re-breaking WT-E); persistence now scoped to the server's `home` (`fix/push-persist-home-scoped`)
 - 10:55 Claude Fable (orchestrator) — merged PR #154 (observed-thread live follow, WT-H) and PR #155 (thread UX/perf + CC-parity wave, WT-C/I/J + WT-B chips + WT-E daemon persist) to master after re-running gates (swift build/test, go test all green) + orchestrator sensitive-path diff review of `server.go`/`e2e_router.go`/`conversation_store.go` (PR #154, PR #155)
