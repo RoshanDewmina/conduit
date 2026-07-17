@@ -342,7 +342,11 @@ struct ThreadDetailView: View {
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.top, 10)
             .padding(.bottom, 8)
+            // ZStack-overlaid on the transcript — without a backing surface,
+            // scrolled content renders straight through the pills/composer.
+            .background(.regularMaterial)
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -394,7 +398,8 @@ struct ThreadDetailView: View {
                     items: items,
                     emptyFallback: LiveThreadTranscript.assistantFallback(for: turn),
                     activitySummary: threadActivitySummary(for: turn, items: items),
-                    receipt: receipt
+                    receipt: receipt,
+                    turnIsTerminal: turn.status != .running
                 )
             } else if let body = LiveThreadTranscript.assistantFallback(for: turn) {
                 VStack(alignment: .leading, spacing: 12) {

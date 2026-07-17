@@ -545,9 +545,18 @@ public struct LiveThreadView: View {
         var rows: [BackgroundTasksPresentation.TaskRow] = []
         for turn in bridge.transcriptTurns {
             let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
+            // WT-B: a terminal turn cannot have running tasks — a tool_call
+            // whose result never landed must not spin the pill forever.
+            let terminalAdjusted: [TurnTranscriptItem] = eventItems.map { item in
+                guard case .toolChip(let chip) = item else { return item }
+                let forced = ToolChipGrouping.withTerminalTurnStatus(
+                    [chip], turnIsTerminal: turn.status != .running
+                )
+                return .toolChip(forced[0])
+            }
             let artifacts = toolArtifactsByTurnID[turn.id] ?? []
             rows.append(contentsOf: BackgroundTasksPresentation.rows(
-                items: eventItems,
+                items: terminalAdjusted,
                 events: eventsByTurnID[turn.id] ?? [],
                 artifacts: artifacts
             ))
