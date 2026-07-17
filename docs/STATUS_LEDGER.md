@@ -1,6 +1,14 @@
 # Lancer status ledger
 
-**Last updated:** 2026-07-17 ~12:05 ET.  
+**Last updated:** 2026-07-17 ~14:30 ET.  
+**`origin/master`:** `8ed78d37` — App-Store push session: PR #164 (worktree-triage salvage), #165 (publish-checklist reconcile), #166 (App Store prep pack `docs/appstore/` + dead camera-permission removed), #167 (iOS deployment target 26→27, dual-SDK gates dropped), Release-config DEBUG-seam fixes, `scripts/release-ios-testflight.sh` (archive→export→upload chain).  
+**TestFlight:** fresh Release IPA archived + export-signed at `5f4f1181` — upload REJECTED with ASC 90534: local Xcode 27 is beta 1 (`27A5194q`); ASC accepts beta 2+. **Owner action: update Xcode 27 beta, then run `scripts/release-ios-testflight.sh`.**  
+**Simurgh:** proof-gate v0.1 (`simurgh proof status`, advisory) + issue #4 closed (lease-scoped `xcodebuildmcp_*` proxy tools on the simurgh MCP server) — `dced58f`.  
+**Worktrees:** 41→12 after owner-approved deletion of superseded/noise lists; live remainder: terminal-rewrite line, relay-append-resume uncommitted work, untested-sweep uncommitted tests, 2 open codex PRs.  
+**rel1-relay:** proven ALREADY MERGED (PR #110, later improved by #111) — branch deleted, `REL1_REBASE_NOTES.md`.  
+**APNs lock-screen proof:** daemon sent approval `818003a8` over relay 13:58 ET (policy `default:ask` escalation path verified end-to-end daemon-side); phone-side banner confirmation still owner-owed — hook timed out fail-closed after 5 min with no decision.
+
+> **2026-07-17 ~12:05 ET (historical):**  
 **`origin/master`:** `c85f4a7e` (PR #154→#163: observed-live-follow, thread UX/perf+CC-parity, Simurgh adoption, walkthrough docs, push-persist home-scope, per-chat autonomy scope WT-A2, WT-B live-stream regression, gap re-proof WP5, Emergency Stop denies pending, hook-binary isolation, perf top-3 fixes). Production daemon + phone reinstalled at this tip.  
 **Dogfood:** pair **confirmed live** (no remint) after reinstall. Emergency Stop live-verified FAIL→fixed this session. APNs app-closed push: daemon fix deployed + phone relaunched; live lock-screen confirmation is **owner-gated** (needs eyes on the physical device).
 
