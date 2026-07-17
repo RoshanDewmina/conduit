@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-17 ~14:30 ET.  
 **`origin/master`:** `8ed78d37` — App-Store push session: PR #164 (worktree-triage salvage), #165 (publish-checklist reconcile), #166 (App Store prep pack `docs/appstore/` + dead camera-permission removed), #167 (iOS deployment target 26→27, dual-SDK gates dropped), Release-config DEBUG-seam fixes, `scripts/release-ios-testflight.sh` (archive→export→upload chain).  
-**TestFlight:** fresh Release IPA archived + export-signed at `5f4f1181` — upload REJECTED with ASC 90534: local Xcode 27 is beta 1 (`27A5194q`); ASC accepts beta 2+. **Owner action: update Xcode 27 beta, then run `scripts/release-ios-testflight.sh`.**  
+**TestFlight:** ✅ build UPLOADED 15:06 ET (delivery `2c17f676`, tip `639ba8da`, Xcode `27A5218g`; the fresh beta needed `xcodebuild -downloadComponent MetalToolchain` first — SwiftTerm Shaders.metal fails without it). Next: ASC processing → owner installs via TestFlight → dogfood smoke + IAP sandbox.
 **Simurgh:** proof-gate v0.1 (`simurgh proof status`, advisory) + issue #4 closed (lease-scoped `xcodebuildmcp_*` proxy tools on the simurgh MCP server) — `dced58f`.  
 **Worktrees:** 41→12 after owner-approved deletion of superseded/noise lists; live remainder: terminal-rewrite line, relay-append-resume uncommitted work, untested-sweep uncommitted tests, 2 open codex PRs.  
 **rel1-relay:** proven ALREADY MERGED (PR #110, later improved by #111) — branch deleted, `REL1_REBASE_NOTES.md`.  

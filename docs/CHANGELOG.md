@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-17
 
+- 15:06 Claude Fable (orchestrator) — **TestFlight build UPLOADED** (UPLOAD SUCCEEDED, delivery `2c17f676`, tip `639ba8da`, Xcode 27A5218g + Metal Toolchain component 27A5218h which the fresh beta lacked); appears in ASC → TestFlight after processing (`scripts/release-ios-testflight.sh`)
 - 14:30 Claude Fable (orchestrator) — App-Store push session close-out: fresh Release IPA built+signed at `5f4f1181`, TestFlight upload blocked ONLY on ASC 90534 (Xcode 27 beta 1 local vs beta 2+ required — owner updates Xcode, re-runs `scripts/release-ios-testflight.sh`); STATUS_LEDGER updated (`master`)
 - 14:20 Claude Fable (orchestrator) — fix Release-config archive: DEBUG-seam leaks (WorkspacesView terminalCoordinator @Environment inside #if DEBUG but used unconditionally; ProofReelView debug scrub/autoplay seams called outside DEBUG) — Release device build now SUCCEEDS (`master`)
 - 14:05 Claude Fable (orchestrator) — App-Store push: s27 iOS-27 target raise merged (#167, full gates); rel1 proven ALREADY-MERGED as PR #110 (REL1_REBASE_NOTES.md) — branch deleted not re-applied; TestFlight release script committed (scripts/release-ios-testflight.sh); salvaged reconnect-10x BLOCKED evidence bundle + 07-07 fable research brief (`release-prep docs`)
