@@ -11,6 +11,8 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-17
 
+- 11:20 Claude Fable (orchestrator) — fix P1 test-pollution from #155: push-device persistence was process-global (`lancerDir()`), so `go test` clobbered the REAL `~/.lancer/push-device.json` with `test-session-id`/localhost fixtures (observed live — daemon restarts would rehydrate a bogus push session, silently re-breaking WT-E); persistence now scoped to the server's `home` (`fix/push-persist-home-scoped`)
+
 - 10:55 Claude Fable (orchestrator) — merged PR #154 (observed-thread live follow, WT-H) and PR #155 (thread UX/perf + CC-parity wave, WT-C/I/J + WT-B chips + WT-E daemon persist) to master after re-running gates (swift build/test, go test all green) + orchestrator sensitive-path diff review of `server.go`/`e2e_router.go`/`conversation_store.go` (PR #154, PR #155)
 - 10:50 Claude Fable (orchestrator) — Simurgh adoption config landed as its own PR from the dirty terminal branch: `.mcp.json` registers `simurgh` MCP server; AGENTS.md `.mcp.json`/`simurgh init` note; ENGINEERING_PROCESS simulator-routing lane; verification-gate + ios-ui rule + build.sh aligned to `simurgh exec` lease discipline (`docs/simurgh-adoption`)
 - 10:45 Claude Fable (orchestrator) — Simurgh published: local master (96 commits — exec flag-merge/auto-renew, hold/unhold, TTL 60m, xcodebuildmcp per-lease adapter, hardenings) pushed to `simurgh` origin/master `deac3efb` after go test green + secret scan; a revoked leaked `crsr_` credential was redacted from two unpushed doc commits via scoped filter-repo (tip tree bit-identical) before push; `~/bin/simurgh` rebuilt from tip; dual dogfood ledger opened (`simurgh docs/DOGFOOD_FROM_LANCER.md`)
