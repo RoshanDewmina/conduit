@@ -5,11 +5,15 @@ import LancerCore
 
 /// Renders assistant markdown as plain body text (not a bubble): prose via native
 /// `AttributedString(markdown:)` with inline-code chips, plus fenced blocks with copy.
+/// Prose uses system serif (New York) with ~1.25× leading; inline/fenced code stays mono.
 /// Block splits are memoized in `ChatMarkdownBlockParser`; oversized single blocks skip
 /// markdown attribution and render as plain monospaced text.
 struct ChatMarkdownBody: View {
     let markdown: String
     var bodyFontSize: CGFloat = 16
+
+    /// Extra line spacing for ~1.25× body leading (CC-5 / Claude Code app parity).
+    private var proseLineSpacing: CGFloat { bodyFontSize * 0.25 }
 
     @State private var blocks: [ChatMarkdownBlock]
 
@@ -44,9 +48,9 @@ struct ChatMarkdownBody: View {
 
     private func proseView(_ text: String) -> some View {
         Text(styledProse(text))
-            .font(.system(size: bodyFontSize))
+            .font(.system(size: bodyFontSize, design: .serif))
             .foregroundStyle(.primary)
-            .lineSpacing(4)
+            .lineSpacing(proseLineSpacing)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -55,13 +59,14 @@ struct ChatMarkdownBody: View {
         Text(text)
             .font(.system(size: bodyFontSize, design: .monospaced))
             .foregroundStyle(.primary)
-            .lineSpacing(4)
+            .lineSpacing(proseLineSpacing)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func styledProse(_ text: String) -> AttributedString {
         var attributed = ChatMarkdownAttributedString.make(from: text)
+        // Explicit mono on `.code` runs so the view-level serif font does not wash them out.
         let chip = UIColor.tertiarySystemFill
         for range in ChatMarkdownAttributedString.inlineCodeRanges(in: attributed) {
             attributed[range].backgroundColor = chip
@@ -123,7 +128,7 @@ struct ChatCodeFenceBlock: View {
     }
 }
 
-/// Right-aligned quiet user bubble (Cursor reference: muted fill, no accent color).
+/// Right-aligned soft gray user bubble (CC-5: plain sans body, ~16pt radius — not a heavy pill).
 /// Attachments: images/videos inline from local preview/media cache; other files as chips.
 /// Never opens hostPath. Mirrored media without local bytes falls back to the file chip.
 struct ChatUserBubble: View {
@@ -159,8 +164,8 @@ struct ChatUserBubble: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
                             .background(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .fill(Color(.secondarySystemFill))
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color(.tertiarySystemFill))
                             )
                             .textSelection(.enabled)
                         if isQueued {

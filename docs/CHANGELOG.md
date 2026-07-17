@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 21:45 Cursor Grok — CC-5 typography: assistant `ChatMarkdownBody` prose → system serif + ~1.25× leading (inline/fenced code stays mono); user bubble soft gray fill + 16pt radius (`lane/p-type`)
 - 21:36 Cursor Grok — P-THINK CC-4: Thought process row (clock + label + chevron) opens full-height ThoughtProcessSheet with serif body (`lane/p-think`)
 - 21:35 Cursor Grok — CC-8 mid-run composer: Stop (■) via single-run `agentRunControl` stop + placeholder "Queue for after this turn…" (`lane/p-composer`)
 - 21:55 Claude Fable (orchestrator) — merged lanes p-chips + cc10-attachments into `fix/thread-ux-polish` (gates re-run by hand: build + 13/13 tests), deployed merged CC-parity build to owner phone; salvaged + pushed `lane/cc-parity-harness` (XCUITest screenshot suite + simurgh runner + honest reachability verdicts; PNGs lost to session death — re-run owed; `LANCER_SEED_TRANSCRIPT` seam filed as follow-up)
