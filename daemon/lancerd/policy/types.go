@@ -77,6 +77,9 @@ type Result struct {
 	ShouldEscalate  bool
 	ScoredRisk      int
 	ScoredRiskLabel string
+	// Scope is set when a per-cwd coarse-mode override replaced the document
+	// default (audit callers append " scope=<cwd>" so the feed is provable).
+	Scope string
 }
 
 // PresetDocument returns a named, human-recognizable policy preset. These map 1:1

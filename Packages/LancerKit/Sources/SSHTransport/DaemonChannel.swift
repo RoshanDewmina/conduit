@@ -318,6 +318,55 @@ public actor DaemonChannel {
         }
     }
 
+    /// Coarse deny/ask/allow for `cwd`: real repo path → per-cwd override when
+    /// present; ""/"~" → document-level Default (Settings).
+    public func fetchPermissionMode(cwd: String) async throws -> PermissionModeGetResult {
+        let data = try await sendRPC(method: "agent.permissionMode.get", params: ["cwd": cwd])
+        return try decodePermissionModeGet(data)
+    }
+
+    /// Writes coarse deny/ask/allow for `cwd` (per-cwd override or document
+    /// Default). Never round-trips full policy YAML.
+    public func setPermissionMode(_ mode: PermissionMode, cwd: String) async throws -> PermissionModeSetResult {
+        let data = try await sendRPC(
+            method: "agent.permissionMode.set",
+            params: ["cwd": cwd, "mode": mode.rawValue]
+        )
+        return try decodePermissionModeSet(data)
+    }
+
+    private func decodePermissionModeGet(_ data: Data) throws -> PermissionModeGetResult {
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw DaemonChannelError.badResponse
+        }
+        if let err = dict["error"] as? [String: Any] {
+            throw DaemonChannelError.rpc(err["message"] as? String ?? "permissionMode.get failed")
+        }
+        guard let result = dict["result"],
+              JSONSerialization.isValidJSONObject(result),
+              let rd = try? JSONSerialization.data(withJSONObject: result)
+        else {
+            throw DaemonChannelError.badResponse
+        }
+        return try JSONDecoder().decode(PermissionModeGetResult.self, from: rd)
+    }
+
+    private func decodePermissionModeSet(_ data: Data) throws -> PermissionModeSetResult {
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw DaemonChannelError.badResponse
+        }
+        if let err = dict["error"] as? [String: Any] {
+            throw DaemonChannelError.rpc(err["message"] as? String ?? "permissionMode.set failed")
+        }
+        guard let result = dict["result"],
+              JSONSerialization.isValidJSONObject(result),
+              let rd = try? JSONSerialization.data(withJSONObject: result)
+        else {
+            throw DaemonChannelError.badResponse
+        }
+        return try JSONDecoder().decode(PermissionModeSetResult.self, from: rd)
+    }
+
     public func simulatePolicy(yaml: String, periodDays: Int = 7) async throws -> PolicySimulation {
         let data = try await sendRPC(
             method: "agent.policy.simulate",
