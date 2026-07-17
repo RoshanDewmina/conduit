@@ -49,6 +49,7 @@ public struct LiveThreadView: View {
     /// and `scrollToTailIfFollowing` never fires for the initial transcript
     /// load — the first population must scroll unconditionally (WT-J).
     @State private var hasPerformedInitialScroll = false
+    @State private var extrasRepo: ChatConversationRepository?
     /// Ephemeral runStatus events from the daemon (G3). Absent → legacy Working….
     @State private var liveRunStatus: LiveRunStatusParams?
     @State private var liveStatusFirstAt: Date?
@@ -111,7 +112,9 @@ public struct LiveThreadView: View {
             VStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
+                        // Lazy so opening a long thread doesn't build (and
+                        // markdown-parse) every historical turn up front.
+                        LazyVStack(alignment: .leading, spacing: 18) {
                             ForEach(priorTurns) { turn in
                                 if LiveThreadTranscript.shouldRenderPromptBubble(for: turn) {
                                     ChatUserBubble(
@@ -153,6 +156,9 @@ public struct LiveThreadView: View {
                         .padding(.top, 16)
                         .padding(.bottom, 12)
                     }
+                    // Open at the latest message (WT-J) — the lazy stack then
+                    // materializes from the bottom up instead of the top down.
+                    .defaultScrollAnchor(.bottom)
                     .onScrollGeometryChange(for: Double.self) { geometry in
                         ChatScrollPolicy.distanceFromBottom(
                             contentHeight: geometry.contentSize.height,
@@ -691,10 +697,13 @@ public struct LiveThreadView: View {
     }
 
     private func refreshTranscriptExtras() async {
-        guard let conversationID = bridge.activeConversationID,
-              let db = try? AppDatabase.openShared()
-        else { return }
-        let repo = ChatConversationRepository(db)
+        guard let conversationID = bridge.activeConversationID else { return }
+        // Reuse one DB handle per view — openShared() builds a fresh
+        // DatabasePool each call, and this runs on every turn-count change.
+        if extrasRepo == nil, let db = try? AppDatabase.openShared() {
+            extrasRepo = ChatConversationRepository(db)
+        }
+        guard let repo = extrasRepo else { return }
         let events = (try? await repo.events(conversationID: conversationID, limit: 10_000)) ?? []
         eventsByTurnID = Dictionary(grouping: events.filter { $0.turnID != nil }, by: { $0.turnID! })
         let artifacts = (try? await repo.artifacts(conversationID: conversationID)) ?? []
