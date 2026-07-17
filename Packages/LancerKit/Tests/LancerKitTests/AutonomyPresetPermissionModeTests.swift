@@ -58,4 +58,13 @@ struct AutonomyPresetPermissionModeTests {
         #expect(AutonomySelection.coarsePermissionMode(forRaw: nil) == .ask)
         #expect(AutonomySelection.coarsePermissionMode(forRaw: "bogus") == .ask)
     }
+
+    @Test("PermissionModeScope: empty/~ are document default; repo cwd is per-chat")
+    func permissionModeScope() {
+        #expect(PermissionModeScope.isDocumentDefault(""))
+        #expect(PermissionModeScope.isDocumentDefault("~"))
+        #expect(PermissionModeScope.isDocumentDefault("  ~  "))
+        #expect(!PermissionModeScope.isDocumentDefault("/tmp/repoA"))
+        #expect(!PermissionModeScope.isDocumentDefault("~/Documents/app"))
+    }
 }

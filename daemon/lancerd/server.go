@@ -141,10 +141,23 @@ func (e *policyEngine) evaluate(event ApprovalEvent) policy.Result {
 	e.mu.RLock()
 	docs := append([]policy.Document(nil), e.docs...)
 	e.mu.RUnlock()
+	var res policy.Result
 	if len(docs) == 0 {
-		return policy.Evaluate(policy.DefaultDocument(), req)
+		res = policy.Evaluate(policy.DefaultDocument(), req)
+	} else {
+		res = policy.EvaluateDocuments(docs, req)
 	}
-	return policy.EvaluateDocuments(docs, req)
+	// Per-cwd coarse override replaces the document-level default only
+	// (matched rules still win). Fail-closed: missing/invalid → leave res.
+	if res.FromDefault {
+		if mode, ok := policy.LookupCWDOverride(e.home, event.CWD); ok {
+			res.Effect = mode
+			res.MatchedRule = "default:" + string(mode)
+			res.ShouldEscalate = mode == policy.EffectAsk
+			res.Scope = policy.NormalizeCWD(event.CWD)
+		}
+	}
+	return res
 }
 
 // appendAllowAlways persists approve-always via policy.AppendAllowRule (policy-always.yaml).
@@ -175,7 +188,7 @@ func (e *policyEngine) getPolicyDocuments(cwd string) (policyGetResult, error) {
 	if doc, err := policy.LoadFile(policy.AlwaysPolicyPath(e.home)); err == nil {
 		out.Documents = append(out.Documents, doc)
 	}
-	out.Default = string(policy.EffectAsk)
+	out.Default = e.getPermissionMode(cwd)
 	yaml, err := e.getPolicyYAML(cwd)
 	if err == nil {
 		out.YAML = yaml
@@ -209,26 +222,32 @@ func validPermissionMode(mode string) bool {
 	}
 }
 
-// getPermissionMode returns the current global policy's coarse Default effect
-// (deny/ask/allow). Read-only mirror of the same file agent.policy.get reads
-// via getPolicyDocuments — no new business logic, just the Default field.
-func (e *policyEngine) getPermissionMode() string {
+// getPermissionMode returns the coarse deny/ask/allow for cwd. A real repo cwd
+// (not "" / "~") reads the per-cwd override when present; otherwise (and for
+// global cwd) returns the document-level Default — Settings stays unchanged.
+func (e *policyEngine) getPermissionMode(cwd string) string {
 	e.ensureMigrated()
+	if !policy.IsGlobalCWD(cwd) {
+		if mode, ok := policy.LookupCWDOverride(e.home, cwd); ok {
+			return string(mode)
+		}
+	}
 	if doc, err := policy.LoadFile(policy.GlobalPolicyPath(e.home)); err == nil && doc.Default != "" {
 		return doc.Default
 	}
 	return string(policy.EffectAsk)
 }
 
-// setPermissionMode writes ONLY the coarse Default effect on the global policy
-// document, preserving any existing rules untouched. Used by the relay
-// agentPermissionModeSet mirror so a relay-only phone can change the default
-// decision mode without round-tripping full policy YAML (see
-// docs/product/2026-07-16-policy-audit-relay-port-map.md). Rejects anything
-// but deny/ask/allow and leaves the file untouched on rejection (fail-closed).
-func (e *policyEngine) setPermissionMode(mode string) error {
+// setPermissionMode writes the coarse deny/ask/allow. Real cwd → per-cwd
+// override file (global policy.yaml untouched). Empty/"~" → document Default
+// only, preserving existing rules (relay Settings / global pill semantics).
+// Rejects anything but deny/ask/allow and leaves storage untouched (fail-closed).
+func (e *policyEngine) setPermissionMode(mode, cwd string) error {
 	if !validPermissionMode(mode) {
 		return fmt.Errorf("invalid permission mode %q: must be one of deny, ask, allow", mode)
+	}
+	if !policy.IsGlobalCWD(cwd) {
+		return policy.SetCWDOverride(e.home, cwd, policy.Effect(mode))
 	}
 	doc, err := policy.LoadFile(policy.GlobalPolicyPath(e.home))
 	if err != nil {
@@ -248,15 +267,20 @@ func (e *policyEngine) setPermissionMode(mode string) error {
 // agentPermissionModeSet arm: applies the coarse-mode write, then records it
 // to the audit log the same way every other governance mutation does
 // (s.audit.append), with actor set to identify the relay-phone origin.
-func (s *server) setPermissionModeAudited(mode, actor string) error {
-	if err := s.policy.setPermissionMode(mode); err != nil {
+// Scoped writes audit Rule as "scope=<cwd>" so the feed proves per-chat effect.
+func (s *server) setPermissionModeAudited(mode, actor, cwd string) error {
+	if err := s.policy.setPermissionMode(mode, cwd); err != nil {
 		return err
+	}
+	rule := "default"
+	if !policy.IsGlobalCWD(cwd) {
+		rule = "scope=" + policy.NormalizeCWD(cwd)
 	}
 	s.auditEntry(AuditEntry{
 		Action: "policy-mode-set",
 		Agent:  actor,
 		Kind:   "policy",
-		Rule:   "default",
+		Rule:   rule,
 		Effect: mode,
 	})
 	return nil
@@ -1006,6 +1030,28 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			return
 		}
 		s.writeResult(msg.ID, "ok")
+
+	case "agent.permissionMode.get":
+		var params struct {
+			CWD string `json:"cwd"`
+		}
+		_ = json.Unmarshal(msg.Params, &params)
+		s.writeResult(msg.ID, map[string]string{"mode": s.policy.getPermissionMode(params.CWD)})
+
+	case "agent.permissionMode.set":
+		var params struct {
+			CWD  string `json:"cwd"`
+			Mode string `json:"mode"`
+		}
+		if err := json.Unmarshal(msg.Params, &params); err != nil || params.Mode == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		if err := s.setPermissionModeAudited(params.Mode, "ssh-client", params.CWD); err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, map[string]interface{}{"ok": true, "mode": params.Mode})
 
 	case "agent.policy.simulate":
 		var p struct {
@@ -1806,6 +1852,10 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 	event.ContentHash = computeContentHash(event.Command, event.Patch, event.CWD, event.ToolInput)
 
 	eval := s.policy.evaluate(event)
+	auditRule := eval.MatchedRule
+	if eval.Scope != "" {
+		auditRule = eval.MatchedRule + " scope=" + eval.Scope
+	}
 	switch eval.Effect {
 	case policy.EffectAllow:
 		_ = s.audit.append(AuditEntry{
@@ -1814,7 +1864,7 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 			Kind:       event.Kind,
 			Command:    event.Command,
 			Effect:     string(eval.Effect),
-			Rule:       eval.MatchedRule,
+			Rule:       auditRule,
 			ApprovalID: event.ApprovalID,
 		})
 		_ = json.NewEncoder(conn).Encode(ApprovalDecision{ApprovalID: event.ApprovalID, Decision: "approve"})
@@ -1826,7 +1876,7 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 			Kind:       event.Kind,
 			Command:    event.Command,
 			Effect:     string(eval.Effect),
-			Rule:       eval.MatchedRule,
+			Rule:       auditRule,
 			ApprovalID: event.ApprovalID,
 		})
 		_ = json.NewEncoder(conn).Encode(ApprovalDecision{ApprovalID: event.ApprovalID, Decision: "deny"})
@@ -1846,7 +1896,7 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 		Kind:       event.Kind,
 		Command:    event.Command,
 		Effect:     string(eval.Effect),
-		Rule:       eval.MatchedRule,
+		Rule:       auditRule,
 		ApprovalID: event.ApprovalID,
 	})
 
