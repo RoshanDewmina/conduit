@@ -43,6 +43,14 @@
       ],
       "env": {}
     },
+    "simurgh": {
+      "type": "stdio",
+      "command": "simurgh",
+      "args": [
+        "mcp"
+      ],
+      "env": {}
+    },
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=sfuqarvoxfupvadsvejb"
