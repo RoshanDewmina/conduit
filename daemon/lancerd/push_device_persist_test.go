@@ -12,17 +12,17 @@ import (
 // deviceRegister because s.device was memory-only).
 func TestPersistedDeviceRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("LANCER_STATE_DIR", dir)
+	s := &server{home: dir}
 
-	if got := loadPersistedDevice(); got != nil {
+	if got := s.loadPersistedDevice(); got != nil {
 		t.Fatalf("missing file should load nil, got %+v", got)
 	}
 
-	savePersistedDevice(&registeredDevice{
+	s.savePersistedDevice(&registeredDevice{
 		PushBackendURL: "https://conduit-push.fly.dev",
 		SessionID:      "sess-abc",
 	})
-	got := loadPersistedDevice()
+	got := s.loadPersistedDevice()
 	if got == nil || got.SessionID != "sess-abc" || got.PushBackendURL != "https://conduit-push.fly.dev" {
 		t.Fatalf("round trip = %+v", got)
 	}
@@ -38,14 +38,14 @@ func TestPersistedDeviceRoundTrip(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "push-device.json"), []byte("{not json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := loadPersistedDevice(); got != nil {
+	if got := s.loadPersistedDevice(); got != nil {
 		t.Fatalf("junk file should load nil, got %+v", got)
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, "push-device.json"), []byte(`{"pushBackendURL":"x","sessionID":""}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := loadPersistedDevice(); got != nil {
+	if got := s.loadPersistedDevice(); got != nil {
 		t.Fatalf("empty sessionID should load nil (fail closed), got %+v", got)
 	}
 }
