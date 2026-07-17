@@ -345,3 +345,81 @@ func TestAttachObservedSessionStructuredKindsRoundTrip(t *testing.T) {
 		t.Fatal("tool_call payload missing input key")
 	}
 }
+
+// TestAttachObservedSessionDeltaImportsTranscriptGrowth proves a re-attach
+// with a grown vendor transcript appends exactly the missing tail — new events
+// on the last already-imported turn plus entirely new turns — instead of
+// freezing the conversation at the first snapshot (the 2026-07-16 WT-H
+// dogfood gap: re-opened observed threads never showed later desktop activity).
+func TestAttachObservedSessionDeltaImportsTranscriptGrowth(t *testing.T) {
+	s := newObservedTestStore(t)
+
+	initial := []SessionMessage{
+		{Role: "user", Text: "fix the flaky test"},
+		{Role: "assistant", Text: "Looking into it now."},
+	}
+	first, err := s.attachObservedSession("claudeCode", "vendor-delta-1", "/proj", "", initial)
+	if err != nil {
+		t.Fatalf("first attach: %v", err)
+	}
+
+	// Vendor JSONL grew: the first turn gained an assistant message, and a
+	// whole new user turn followed.
+	grown := append(append([]SessionMessage{}, initial...),
+		SessionMessage{Role: "assistant", Text: "Fixed — test passes."},
+		SessionMessage{Role: "user", Text: "now update the docs"},
+		SessionMessage{Role: "assistant", Text: "Docs updated."},
+	)
+	second, err := s.attachObservedSession("claudeCode", "vendor-delta-1", "/proj", "", grown)
+	if err != nil {
+		t.Fatalf("re-attach: %v", err)
+	}
+	if !second.AlreadyAttached {
+		t.Fatal("expected AlreadyAttached=true on re-attach")
+	}
+	if second.ConversationID != first.ConversationID {
+		t.Fatalf("re-attach created a different conversation: %q vs %q", second.ConversationID, first.ConversationID)
+	}
+	// 3 new messages, one of which is a user prompt (becomes a turn, not an event).
+	if second.ImportedEvents != 2 {
+		t.Fatalf("ImportedEvents = %d, want 2", second.ImportedEvents)
+	}
+	if second.LastSeq != first.LastSeq+2 {
+		t.Fatalf("LastSeq = %d, want %d", second.LastSeq, first.LastSeq+2)
+	}
+
+	fetched, err := s.fetch(first.ConversationID, 0, 100)
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(fetched.Turns) != 2 {
+		t.Fatalf("turns = %d, want 2 (original + delta-imported)", len(fetched.Turns))
+	}
+	if fetched.Turns[1].Prompt != "now update the docs" {
+		t.Fatalf("second turn prompt = %q", fetched.Turns[1].Prompt)
+	}
+	var sawGrowth, sawNewTurnReply bool
+	for _, ev := range fetched.Events {
+		if ev.Text == "Fixed — test passes." {
+			sawGrowth = true
+		}
+		if ev.Text == "Docs updated." {
+			sawNewTurnReply = true
+		}
+	}
+	if !sawGrowth || !sawNewTurnReply {
+		t.Fatalf("delta events missing: growth=%v newTurnReply=%v", sawGrowth, sawNewTurnReply)
+	}
+
+	// Third attach with the SAME messages must import nothing (idempotent).
+	third, err := s.attachObservedSession("claudeCode", "vendor-delta-1", "/proj", "", grown)
+	if err != nil {
+		t.Fatalf("third attach: %v", err)
+	}
+	if third.ImportedEvents != 0 {
+		t.Fatalf("idempotent re-attach imported %d events, want 0", third.ImportedEvents)
+	}
+	if third.LastSeq != second.LastSeq {
+		t.Fatalf("idempotent re-attach moved LastSeq %d -> %d", second.LastSeq, third.LastSeq)
+	}
+}

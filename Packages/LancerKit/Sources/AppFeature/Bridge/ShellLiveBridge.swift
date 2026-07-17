@@ -113,6 +113,11 @@ public final class ShellLiveBridge {
     /// Bumped by `resetForNewThread` so abandoned poll loops stop mutating UI.
     private var sessionEpoch: UInt64 = 0
 
+    /// Live follow of an adopted observed session's vendor transcript, so
+    /// desktop-side activity appears while the thread is open. Cancelled by
+    /// `resetForNewThread` (the view's `onDisappear` path).
+    private var observedFollowTask: Task<Void, Never>?
+
     /// Single-flight gate for `retryLastAttempt` — claimed before any
     /// `waitForConnectedMachine` await so rapid repeated Retry taps cannot
     /// double-dispatch while `send`/`sendFollowUp` are still idle.
@@ -208,6 +213,8 @@ public final class ShellLiveBridge {
     /// Return a response with a non-empty `error` (or throw) to force the
     /// tail-transcript fallback path in tests.
     var testRelayAttachObservedSession: (@MainActor (String, String, String) async throws -> ConversationAttachObservedSessionResponse)?
+    /// Shrinks the observed-follow tick so tests don't wait real seconds.
+    var testObservedFollowIntervalNanoseconds: UInt64?
 
     func testArmLastAttempt(_ attempt: LastSendAttempt) {
         lastAttempt = attempt
@@ -304,6 +311,8 @@ public final class ShellLiveBridge {
     /// The host-side run may keep going; list sync keeps its status honest.
     public func resetForNewThread() {
         sessionEpoch &+= 1
+        observedFollowTask?.cancel()
+        observedFollowTask = nil
         isRetryDispatchInFlight = false
         isSendDispatchInFlight = false
         sendState = .idle
@@ -455,6 +464,7 @@ public final class ShellLiveBridge {
             inFlightAttachments = []
             inFlightRunID = nil
             sendState = turns.isEmpty ? .adoptedNoHistory : .idle
+            startObservedFollow(sessionId: resolved.sessionId, machine: machine)
             return true
         } catch {
             return false
@@ -494,10 +504,134 @@ public final class ShellLiveBridge {
             sendState = LiveThreadTranscript.shouldShowAdoptedNoHistoryPlaceholder(
                 transcriptMessageCount: result.messages.count
             ) ? .adoptedNoHistory : .idle
+            startObservedFollow(sessionId: resolved.sessionId, machine: machine)
         } catch {
             guard epoch == sessionEpoch else { return }
             sendState = .failed(error.localizedDescription)
         }
+    }
+
+    // MARK: - Observed live follow
+
+    /// Starts live-following the vendor transcript of an adopted observed
+    /// session. Orca's equivalent is a push subscription over its RPC socket;
+    /// this is the poll analogue over the existing `agent.sessions.transcript`
+    /// incremental fetch — no relay protocol change. The loop pauses (and
+    /// re-baselines) around phone-initiated sends so the reply the send path
+    /// renders is never duplicated from the vendor transcript.
+    private func startObservedFollow(sessionId: String, machine: RelayFleetStore.Machine) {
+        observedFollowTask?.cancel()
+        let epoch = sessionEpoch
+        observedFollowTask = Task { [weak self] in
+            await self?.observedFollowLoop(sessionId: sessionId, machine: machine, epoch: epoch)
+        }
+    }
+
+    private func fetchObservedTranscript(
+        machine: RelayFleetStore.Machine,
+        sessionId: String,
+        sinceLine: Int
+    ) async throws -> (messages: [SessionMessage], nextLine: Int, resetRequired: Bool) {
+        if let override = testRelayFetchTranscript {
+            return try await override(sessionId, sinceLine)
+        }
+        return try await machine.bridge.relayFetchTranscript(sessionId: sessionId, sinceLine: sinceLine)
+    }
+
+    private func observedFollowLoop(
+        sessionId: String,
+        machine: RelayFleetStore.Machine,
+        epoch: UInt64
+    ) async {
+        // nextLine < 0 means "needs (re)baseline": take the current transcript
+        // tail as the new zero so history already rendered (adopted ledger
+        // turns, or a send-path reply) is never re-appended.
+        var nextLine = -1
+        var buffered: [SessionMessage] = []
+        var baselineTurnCount = transcriptTurns.count
+        var failures = 0
+
+        let tick = testObservedFollowIntervalNanoseconds ?? LivePollPolicy.observedFollowIntervalNanoseconds
+        while !Task.isCancelled, epoch == sessionEpoch {
+            try? await Task.sleep(nanoseconds: tick)
+            guard !Task.isCancelled, epoch == sessionEpoch else { return }
+            if isSendInFlight || isSendDispatchInFlight {
+                // The send path renders its own reply turn; whatever lands in
+                // the vendor transcript meanwhile must not be double-rendered.
+                nextLine = -1
+                continue
+            }
+            do {
+                if nextLine < 0 {
+                    let baseline = try await fetchObservedTranscript(
+                        machine: machine, sessionId: sessionId, sinceLine: 0
+                    )
+                    guard !Task.isCancelled, epoch == sessionEpoch else { return }
+                    if isSendInFlight || isSendDispatchInFlight { continue }
+                    nextLine = baseline.nextLine
+                    buffered = []
+                    baselineTurnCount = transcriptTurns.count
+                    failures = 0
+                    continue
+                }
+                let delta = try await fetchObservedTranscript(
+                    machine: machine, sessionId: sessionId, sinceLine: nextLine
+                )
+                guard !Task.isCancelled, epoch == sessionEpoch else { return }
+                if isSendInFlight || isSendDispatchInFlight {
+                    nextLine = -1
+                    continue
+                }
+                failures = 0
+                if delta.resetRequired {
+                    nextLine = -1
+                    continue
+                }
+                nextLine = delta.nextLine
+                guard !delta.messages.isEmpty else { continue }
+                buffered.append(contentsOf: delta.messages)
+                renderObservedFollowSuffix(
+                    buffered: buffered,
+                    sessionId: sessionId,
+                    baselineTurnCount: baselineTurnCount
+                )
+            } catch {
+                failures += 1
+                if failures >= LivePollPolicy.consecutiveFailureLimit { return }
+            }
+        }
+    }
+
+    /// Re-renders the post-baseline suffix from the full buffered delta each
+    /// tick (the mapper is pure), with deterministic ids/ordinals offset past
+    /// the adopted prefix so SwiftUI row identity survives suffix growth.
+    private func renderObservedFollowSuffix(
+        buffered: [SessionMessage],
+        sessionId: String,
+        baselineTurnCount: Int
+    ) {
+        let conversationID = activeConversationID ?? "observed:\(sessionId)"
+        let suffix = LiveThreadTranscript.turns(
+            fromObservedMessages: buffered,
+            conversationID: conversationID,
+            vendorSessionID: sessionId
+        )
+        guard !suffix.isEmpty else { return }
+        let offsetSuffix = suffix.enumerated().map { index, turn in
+            ChatTurn(
+                id: "observedFollow:\(sessionId):\(baselineTurnCount + index)",
+                conversationID: turn.conversationID,
+                ordinal: baselineTurnCount + index,
+                prompt: turn.prompt,
+                runID: turn.runID,
+                transportKind: turn.transportKind,
+                status: turn.status,
+                assistantText: turn.assistantText,
+                completedAt: turn.completedAt,
+                vendorSessionID: turn.vendorSessionID
+            )
+        }
+        transcriptTurns = Array(transcriptTurns.prefix(baselineTurnCount)) + offsetSuffix
     }
 
     /// Starts a brand-new conversation on the first connected paired machine
