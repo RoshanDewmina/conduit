@@ -607,6 +607,11 @@ public final class SessionViewModel {
         defaults.set(snapshot.pendingApprovals, forKey: WidgetSnapshot.pendingApprovalsKey)
         defaults.set(snapshot.status, forKey: WidgetSnapshot.sessionStatusKey)
         defaults.set(host.name, forKey: WidgetSnapshot.hostNameKey)
+        if let agentName = snapshot.agentName {
+            defaults.set(agentName, forKey: WidgetSnapshot.agentNameKey)
+        } else {
+            defaults.removeObject(forKey: WidgetSnapshot.agentNameKey)
+        }
         defaults.set(Date().timeIntervalSince1970, forKey: WidgetSnapshot.lastUpdatedKey)
         WidgetCenter.shared.reloadAllTimelines()
     }

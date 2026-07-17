@@ -138,6 +138,13 @@ targets:
       # there), which is the project's authoritative verification path. The
       # target still builds standalone via its own scheme. Re-embed only once a
       # paired-watch-sim or device flow replaces the simctl install path.
+      #
+      # LancerWidgets (Live Activity + Home Screen widgets) is an iOS
+      # app-extension, same arch as the host app, so unlike LancerWatch it
+      # DOES embed cleanly into the iOS-simulator-installable .app — no
+      # arch-mismatch concern here.
+      - target: LancerWidgets
+        embed: true
 
   LancerWatch:
     type: application
@@ -205,6 +212,47 @@ targets:
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
       - sdk: AppIntents.framework
+
+  LancerWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "27.0"
+    sources:
+      - path: LancerWidgets
+    info:
+      path: LancerWidgets/Info.plist
+      properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleDisplayName: "Lancer Widgets"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: LancerWidgets/LancerWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.dev.lancer.mobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.lancer.mobile.widgets
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 2
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 39HM2X8GS6
+        SWIFT_VERSION: "6.2"
+        ENABLE_BITCODE: "NO"
+        # Same rationale as the app target (see comment above): the widget's
+        # interactive Live Activity buttons are App Intents
+        # (ApprovalActionIntent) and need Metadata.appintents generated here too.
+        ENABLE_APP_INTENTS_METADATA_EXTRACTION: "YES"
+    dependencies:
+      - package: LancerKit
+        product: SessionFeature
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: AppIntents.framework
+      - sdk: ActivityKit.framework
 
   LancerUITests:
     type: bundle.ui-testing

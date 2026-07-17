@@ -199,6 +199,7 @@ public actor ApprovalIngest {
                     try? await repository.upsert(approval)
                     await chatPersistenceSink?.handleApprovalPending(params)
                     await Notifications.shared.notifyPendingApproval(approval, hostName: hostName)
+                    await repository.writeApprovalWidgetSnapshot()
                 }
                 if case .questionPending(let params) = event {
                     await chatPersistenceSink?.handleQuestionPending(params)
