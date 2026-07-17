@@ -11,6 +11,8 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-17
 
+- 12:20 Claude Fable (orchestrator) — landed the F3 pairing-repro investigation report from stray branch `fix/pairing-state-disagreement` (2026-07-16, orchestrator review requested at the time): no protocol/code defect found, procedural artifact + known settle-time under identity churn; evidence-only (`docs/test-runs/2026-07-16-untested-feature-sweep/F3-pairing-repro-report.md`)
+
 - 12:10 Claude Fable (orchestrator) — dual-product dogfood swarm run closed out: 10 Lancer PRs (#154-#163) merged to master `c85f4a7e`; production daemon+phone reinstalled at tip (pair kept, no remint); Simurgh 96 commits published to origin/master `4fe7e53` + CLI reinstalled; STATUS_LEDGER + orchestrator-state ⚡ refreshed; one-page install/smoke checklist written (`docs/test-runs/2026-07-17-dual-product-dogfood/INSTALL_AND_SMOKE.md`); WP4 APNs app-closed push left owner-gated (daemon fix deployed, live lock-screen confirmation needs the physical device)
 
 - 11:45 Claude Sonnet 5 (WP1 perf lane) — measured + fixed top perf offenders on thread open/scroll/list-return/live-follow: diff-before-publish in ShellLiveBridge.refreshTranscript (ChatTurn now Equatable; proven by new poll-tick test, 1 publish + skips over 3.3s of real ticks), TurnTranscriptItemsCache memoizing TurnTranscriptAssembler.items(from:) across 7 call sites in ThreadDetailView/LiveThreadView, batched N+1 fix in WorkspaceRepoCatalog.loadLocalRows (ChatConversationRepository.latestTurns/artifacts(turnIDs:), 10.3x speedup on 150 conversations); added LANCER_SEED_TRANSCRIPT_COUNT debug seam + perf log instrumentation; evidence + backlog in `docs/test-runs/2026-07-17-perf/README.md` (`perf/thread-feel`)
