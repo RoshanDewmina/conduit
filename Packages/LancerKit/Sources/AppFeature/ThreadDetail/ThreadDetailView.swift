@@ -327,7 +327,7 @@ struct ThreadDetailView: View {
                     }
                 }
                 HStack {
-                    ChatPermissionModePill()
+                    ChatPermissionModePill(cwd: thread.cwd)
                     Spacer(minLength: 0)
                 }
                 ChatFollowUpComposerBar(

@@ -497,14 +497,13 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
-    /// Reads the global policy's coarse decision mode (deny/ask/allow) over the
-    /// relay — mirrors the `default` field `DaemonChannel.fetchPolicy` / SSH
-    /// `agent.policy.get` returns, without round-tripping the full rules YAML.
-    /// Bounded 15s wait.
-    public func sendPermissionModeGet() async throws -> PermissionModeGetResult {
+    /// Reads the coarse decision mode (deny/ask/allow) over the relay for
+    /// `cwd`. Real repo path → per-cwd override when present; ""/"~" →
+    /// document-level Default. Bounded 15s wait.
+    public func sendPermissionModeGet(cwd: String = "~") async throws -> PermissionModeGetResult {
         guard isActive else { throw E2EError.notPaired }
-        struct Empty: Codable, Sendable {}
-        try await relayClient.send(type: "agentPermissionModeGet", payload: Empty())
+        struct GetParams: Codable, Sendable { let cwd: String }
+        try await relayClient.send(type: "agentPermissionModeGet", payload: GetParams(cwd: cwd))
         permissionModeGetContinuation?.resume(throwing: E2EError.superseded)
         permissionModeGetContinuation = nil
         let timeout = Task { @MainActor [weak self] in
@@ -519,15 +518,16 @@ public final class E2ERelayBridge: ObservableObject {
         }
     }
 
-    /// Writes ONLY the global policy's coarse decision mode (deny/ask/allow)
-    /// over the relay — never the full rules YAML from a relay-only phone (see
-    /// `docs/product/2026-07-16-policy-audit-relay-port-map.md`). The daemon
-    /// validates the mode and fails closed (leaves the policy file untouched,
-    /// `ok == false`) on anything else. Bounded 15s wait.
-    public func sendPermissionModeSet(_ mode: PermissionMode) async throws -> PermissionModeSetResult {
+    /// Writes coarse deny/ask/allow for `cwd` over the relay — per-cwd override
+    /// when scoped, document Default for ""/"~". Never full rules YAML. Daemon
+    /// validates and fails closed (`ok == false`) on anything else. Bounded 15s.
+    public func sendPermissionModeSet(_ mode: PermissionMode, cwd: String = "~") async throws -> PermissionModeSetResult {
         guard isActive else { throw E2EError.notPaired }
-        struct SetParams: Codable, Sendable { let mode: String }
-        try await relayClient.send(type: "agentPermissionModeSet", payload: SetParams(mode: mode.rawValue))
+        struct SetParams: Codable, Sendable {
+            let mode: String
+            let cwd: String
+        }
+        try await relayClient.send(type: "agentPermissionModeSet", payload: SetParams(mode: mode.rawValue, cwd: cwd))
         permissionModeSetContinuation?.resume(throwing: E2EError.superseded)
         permissionModeSetContinuation = nil
         let timeout = Task { @MainActor [weak self] in

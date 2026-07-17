@@ -148,14 +148,23 @@ public struct PolicyYAMLResult: Codable, Sendable {
 }
 
 /// The three coarse policy-decision modes a relay-only phone may read/set —
-/// mirrors the daemon's `policy.Effect` (deny/ask/allow), i.e. the global
-/// policy document's `default` field. Never a full rules-file round-trip; see
-/// `agentPermissionModeGet`/`agentPermissionModeSet` in `e2e_router.go` and
-/// `docs/product/2026-07-16-policy-audit-relay-port-map.md`.
+/// mirrors the daemon's `policy.Effect` (deny/ask/allow). Scoped by request
+/// `cwd`: real repo path → per-cwd override; ""/"~" → document `default`.
+/// Never a full rules-file round-trip; see `agentPermissionModeGet`/`Set` in
+/// `e2e_router.go` and `docs/product/2026-07-16-policy-audit-relay-port-map.md`.
 public enum PermissionMode: String, Codable, Sendable, CaseIterable {
     case deny
     case ask
     case allow
+}
+
+/// Whether `cwd` targets the document-level Settings default (empty / "~")
+/// rather than a per-chat repo override. Mirrors daemon `policy.IsGlobalCWD`.
+public enum PermissionModeScope {
+    public static func isDocumentDefault(_ cwd: String) -> Bool {
+        let trimmed = cwd.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty || trimmed == "~"
+    }
 }
 
 /// Result of relay `agentPermissionModeGet`.
