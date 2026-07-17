@@ -90,7 +90,7 @@ func handleFeedback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req feedbackRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&req); err != nil {
 		log.Printf("feedback: type=? ip=%s error=bad_json", ip)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
 		return
