@@ -617,7 +617,8 @@ public struct LiveThreadView: View {
                 items: merged,
                 emptyFallback: LiveThreadTranscript.assistantFallback(for: turn),
                 activitySummary: activitySummary(for: turn, items: merged),
-                receipt: receipt
+                receipt: receipt,
+                turnIsTerminal: turn.status != .running
             )
         } else if let body = LiveThreadTranscript.assistantFallback(for: turn) {
             VStack(alignment: .leading, spacing: 12) {
@@ -635,10 +636,25 @@ public struct LiveThreadView: View {
         items: [TurnTranscriptItem]
     ) -> TurnActivitySummary? {
         guard turn.status != .running else { return nil }
+        let startedAt = turn.createdAt
         let completedAt = turn.completedAt ?? Date()
-        return TurnTranscriptAssembler.activitySummary(
+        let turnSeconds = ToolChipGrouping.durationSeconds(
+            startedAt: startedAt,
+            completedAt: completedAt
+        )
+        if turnSeconds == 0, let events = eventsByTurnID[turn.id], !events.isEmpty {
+            let times = events.map(\.createdAt)
+            if let first = times.min(), let last = times.max(), last > first {
+                return TurnActivitySummary.make(
+                    from: items,
+                    startedAt: first,
+                    completedAt: last
+                )
+            }
+        }
+        return TurnActivitySummary.make(
             from: items,
-            startedAt: turn.createdAt,
+            startedAt: startedAt,
             completedAt: completedAt
         )
     }
@@ -955,6 +971,7 @@ public struct LiveThreadView: View {
         let eventItems = TurnTranscriptAssembler.items(from: eventsByTurnID[turn.id] ?? [])
         let artifactChips = (toolArtifactsByTurnID[turn.id] ?? []).map(ToolChipItem.init(artifact:))
         let merged = mergeToolArtifacts(into: eventItems, artifacts: artifactChips)
+        let turnIsTerminal = turn.status != .running
         let chips = merged.compactMap { item -> ToolChipItem? in
             if case .toolChip(let chip) = item { return chip }
             return nil
@@ -969,12 +986,13 @@ public struct LiveThreadView: View {
                     ThinkingRow(text: row.text)
                 }
                 if !chips.isEmpty {
-                    let grouped = TurnTranscriptAssembler.groupedForDisplay(
-                        chips.map { .toolChip($0) }
+                    let grouped = ToolChipGrouping.displayGroups(
+                        from: chips.map { .toolChip($0) },
+                        turnIsTerminal: turnIsTerminal
                     )
                     ForEach(grouped) { item in
                         if case .toolChips(let group) = item {
-                            ToolCallChipView(chips: group)
+                            ToolCallChipView(chips: group, turnIsTerminal: turnIsTerminal)
                         }
                     }
                 }

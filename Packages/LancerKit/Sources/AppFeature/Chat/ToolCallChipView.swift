@@ -11,12 +11,12 @@ struct ToolCallChipView: View {
 
     @State private var isExpanded = false
 
-    init(chips: [ToolChipItem]) {
-        self.chips = chips
+    init(chips: [ToolChipItem], turnIsTerminal: Bool = false) {
+        self.chips = ToolChipGrouping.withTerminalTurnStatus(chips, turnIsTerminal: turnIsTerminal)
     }
 
-    init(chip: ToolChipItem) {
-        self.chips = [chip]
+    init(chip: ToolChipItem, turnIsTerminal: Bool = false) {
+        self.chips = ToolChipGrouping.withTerminalTurnStatus([chip], turnIsTerminal: turnIsTerminal)
     }
 
     var body: some View {
@@ -152,7 +152,7 @@ struct ToolCallChipView: View {
     }
 
     private var collapsedTitle: String {
-        TurnTranscriptAssembler.groupedChipTitle(chips)
+        ToolChipGrouping.collapsedTitle(for: chips)
     }
 
     private var accessibilityCollapsedLabel: String {
@@ -201,11 +201,18 @@ struct TurnTranscriptItemsView: View {
     var activitySummary: TurnActivitySummary? = nil
     /// When non-nil, proof opens from the activity row menu (never inline).
     var receipt: ProofReceipt? = nil
+    /// WT-B: terminal turn forces chips out of `.running`.
+    var turnIsTerminal: Bool = false
 
     var body: some View {
         let todoState = TurnTranscriptAssembler.latestTodoChecklist(from: items)
         let displayItems = Self.itemsExcludingTodoChips(items, when: todoState != nil)
-        let grouped = TurnTranscriptAssembler.groupedForDisplay(displayItems)
+        let grouped = ToolChipGrouping.displayGroups(from: displayItems, turnIsTerminal: turnIsTerminal)
+        let allChips = displayItems.compactMap { item -> ToolChipItem? in
+            if case .toolChip(let chip) = item { return chip }
+            return nil
+        }
+        let summaryChips = ToolChipGrouping.withTerminalTurnStatus(allChips, turnIsTerminal: turnIsTerminal)
         if grouped.isEmpty && todoState == nil && activitySummary == nil {
             if let emptyFallback {
                 ChatMarkdownBody(markdown: emptyFallback)
@@ -219,14 +226,18 @@ struct TurnTranscriptItemsView: View {
                     case .thinking(let thinking):
                         ThinkingRow(text: thinking.text)
                     case .toolChips(let chips):
-                        ToolCallChipView(chips: chips)
+                        ToolCallChipView(chips: chips, turnIsTerminal: turnIsTerminal)
                     }
                 }
                 if let todoState {
                     TodoChecklistCard(state: todoState)
                 }
                 if let activitySummary {
-                    TurnActivitySummaryRow(summary: activitySummary, receipt: receipt)
+                    TurnActivitySummaryRow(
+                        summary: activitySummary,
+                        chips: summaryChips,
+                        receipt: receipt
+                    )
                 }
             }
         }
