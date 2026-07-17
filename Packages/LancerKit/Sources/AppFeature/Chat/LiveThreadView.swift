@@ -260,12 +260,16 @@ public struct LiveThreadView: View {
                     ChatFollowUpComposerBar(
                         text: $followUpText,
                         isFocused: $isFollowUpFocused,
-                        placeholder: bridge.isSendInFlight ? "Add feedback…" : "Follow up…",
+                        placeholder: bridge.isSendInFlight ? "Queue for after this turn…" : "Follow up…",
                         isDisabled: isUploadingAttachments,
                         canSend: canSendFollowUpWithAttachments,
+                        isRunInFlight: bridge.isSendInFlight,
                         onSend: {
                             followUpUploadTask?.cancel()
                             followUpUploadTask = Task { await sendFollowUp() }
+                        },
+                        onStop: {
+                            Task { await bridge.stopCurrentRun() }
                         },
                         onAddContext: { isContextPresented = true }
                     )
