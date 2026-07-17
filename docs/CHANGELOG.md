@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-16
 
+- 21:36 Cursor Grok — P-THINK CC-4: Thought process row (clock + label + chevron) opens full-height ThoughtProcessSheet with serif body (`lane/p-think`)
 - 21:35 Cursor Grok — CC-8 mid-run composer: Stop (■) via single-run `agentRunControl` stop + placeholder "Queue for after this turn…" (`lane/p-composer`)
 - 21:55 Claude Fable (orchestrator) — merged lanes p-chips + cc10-attachments into `fix/thread-ux-polish` (gates re-run by hand: build + 13/13 tests), deployed merged CC-parity build to owner phone; salvaged + pushed `lane/cc-parity-harness` (XCUITest screenshot suite + simurgh runner + honest reachability verdicts; PNGs lost to session death — re-run owed; `LANCER_SEED_TRANSCRIPT` seam filed as follow-up)
 - 21:00 Cursor Grok — P-CHIPS CC-2/CC-3/WT-B: consecutive tool chips collapse (Ran N commands / Used N tools…), Worked Ns duration never 0 when dates differ + tappable summary, terminal turn forces chips out of Running (`lane/p-chips`)
