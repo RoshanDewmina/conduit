@@ -319,14 +319,18 @@ struct ThreadDetailView: View {
                 ChatFollowUpComposerBar(
                     text: $followUpText,
                     isFocused: $isFollowUpFocused,
-                    placeholder: bridge.isSendInFlight ? "Add feedback…" : "Follow up…",
+                    placeholder: bridge.isSendInFlight ? "Queue for after this turn…" : "Follow up…",
                     isDisabled: thread.cwd.isEmpty,
                     canSend: !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         && !thread.cwd.isEmpty,
+                    isRunInFlight: bridge.isSendInFlight,
                     onSend: {
                         let prompt = followUpText
                         followUpText = ""
                         handleSend(prompt, thread.cwd)
+                    },
+                    onStop: {
+                        Task { await bridge.stopCurrentRun() }
                     }
                 )
                 if !bridge.queuedFeedback.isEmpty {

@@ -172,6 +172,20 @@ public final class ShellLiveBridge {
         return item
     }
 
+    /// Stops the single in-flight run (`inFlightRunID`) via relay
+    /// `agentRunControl` action `"stop"` — same path as
+    /// `CommandGateway.execute(.cancel(runId:))` / `DaemonChannel.cancelRun`.
+    /// Does **not** call fleet-wide `agentEmergencyStop`. Returns false when
+    /// there is no run ID yet or no connected machine bridge.
+    @discardableResult
+    public func stopCurrentRun() async -> Bool {
+        guard let runID = inFlightRunID else { return false }
+        let machine = activeMachineID.flatMap { relayFleetStore.machine($0) }
+            ?? relayFleetStore.firstConnectedMachine
+        guard let machine else { return false }
+        return await machine.bridge.sendRunControl(runId: runID, action: "stop")
+    }
+
     /// Pops and sends the next queued follow-up when the agent is idle.
     private func flushNextQueuedFeedback() async {
         var queue = queuedFeedback

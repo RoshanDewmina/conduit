@@ -277,13 +277,19 @@ struct ChatOutlinePillLabel: View {
 }
 
 /// Live follow-up composer styled like Cursor's docked bar; keeps TextField + send path.
+/// While a turn is in flight, the trailing control is Stop (■) — CC-8 parity —
+/// and keyboard submit still queues via `onSend`.
 struct ChatFollowUpComposerBar: View {
     @Binding var text: String
     var isFocused: FocusState<Bool>.Binding
     var placeholder: String = "Follow up…"
     var isDisabled: Bool = false
     var canSend: Bool = false
+    /// When true, trailing button is Stop instead of Send (mid-run CC-8).
+    var isRunInFlight: Bool = false
     var onSend: () -> Void
+    /// Stops the current in-flight run. Required when `isRunInFlight` is true.
+    var onStop: (() -> Void)? = nil
     /// Opens context attach (Photos / Files). Same affordance as New Chat `+`.
     var onAddContext: (() -> Void)? = nil
 
@@ -315,7 +321,19 @@ struct ChatFollowUpComposerBar: View {
                     onSend()
                 }
 
-            if canSend {
+            if isRunInFlight {
+                Button {
+                    onStop?()
+                } label: {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.system(size: 28))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.primary)
+                }
+                .disabled(isDisabled || onStop == nil)
+                .accessibilityLabel(Text("Stop"))
+                .accessibilityIdentifier("composer-stop")
+            } else if canSend {
                 Button(action: onSend) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 28))
