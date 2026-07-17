@@ -118,16 +118,12 @@ public enum LiveThreadTranscript: Sendable {
                     assistantText += "\n\n" + message.text
                 }
             case .toolCall, .toolResult:
+                // Tool inputs/results never render as prose (CC parity — they
+                // live behind collapsed chips on the ledger path; this legacy
+                // tail view just omits them rather than dumping heredocs and
+                // stdout into the transcript, 2026-07-16 owner report).
                 if !open {
                     open = true
-                }
-                // Text already carries the tool summary (e.g. "Bash: ls -la") from
-                // the daemon adapter — do not also prepend toolName or it doubles.
-                let chunk = message.text
-                if assistantText.isEmpty {
-                    assistantText = chunk
-                } else {
-                    assistantText += "\n\n" + chunk
                 }
             case .system, .unknown, .thinking:
                 // Extended-thinking blocks are internal reasoning, not part of

@@ -180,6 +180,25 @@ struct LiveThreadTranscriptTests {
         #expect(turns[1].ordinal == 1)
     }
 
+    @Test("tool inputs and results never render as prose (CC parity)")
+    func toolMessagesStayOutOfProse() {
+        let messages = [
+            SessionMessage(role: .user, text: "run the tests"),
+            SessionMessage(role: .toolCall, text: "Bash: swift test --filter Auth <<'EOF' giant heredoc body EOF"),
+            SessionMessage(role: .toolResult, text: "Command running in background with ID: xyz. Output is being written to /private/tmp/..."),
+            SessionMessage(role: .assistant, text: "All tests pass."),
+        ]
+        let turns = LiveThreadTranscript.turns(
+            fromObservedMessages: messages,
+            conversationID: "observed:s",
+            vendorSessionID: "s"
+        )
+        #expect(turns.count == 1)
+        #expect(turns[0].assistantText == "All tests pass.")
+        #expect(!turns[0].assistantText.contains("heredoc"))
+        #expect(!turns[0].assistantText.contains("running in background"))
+    }
+
     @Test("trailing user message without assistant still becomes a completed turn")
     func trailingUserOnlyTurn() {
         let messages = [
