@@ -70,7 +70,14 @@ Use for quick LancerKit feedback. It does not replace app-target simulator build
 
 ## Xcode App Target
 
-Use XcodeBuildMCP for iOS app target verification.
+**Simulator routing (required):** call Simurgh MCP `pool_status`, then `lease_acquire`
+before any simulator/XcodeBuildMCP work. Route every `xcodebuild` through
+`simurgh exec <lease-id> -- …` (or work inside `simurgh shell <lease-id>` for
+manual steps, still using `exec` for long builds). Never pick a booted simulator
+UDID from `simctl list`. Release the lease when done (`lease_release`).
+
+Use XcodeBuildMCP for iOS app target verification (with the per-lease adapter:
+`simurgh integration xcodebuildmcp start --session <lease-id>`).
 
 Required sequence in a fresh tool session:
 
