@@ -1,5 +1,40 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-17 ~13:45 ET — dogfood-tail closeout: worktree triage, Simurgh proof-gate v0.1 + issue #4 structural fix
+
+**Session:** Fable orchestrator + Cursor Grok (2 Simurgh lanes) + Composer cross-reviews. Closed the
+four deferred threads from the morning run.
+
+**Lancer:** PR #164 merged (`026b0111`) — Group C/D worktree triage: every worktree dispositioned
+(`docs/test-runs/2026-07-17-dual-product-dogfood/WORKTREE_TRIAGE_2026-07-17.md`). 7 more branches
+proven superseded file-by-file (g2 review sheet, p1b relay review, onboarding-connect, mic-morph,
+chat-p0, perf-cold-start, clever-payne); salvaged the real addrepo dead-end fix + Lane C4 sweep
+evidence + competitor mobile-chat notes. Gates: swift build+tests, app-target BUILD SUCCEEDED via
+simurgh lease-207. **Owner decisions queued:** rel1-relay re-verification (sensitive, drifted),
+s27 iOS 26→27 target raise, two approve-to-delete lists (drops ~39→~14 worktrees).
+
+**Simurgh `origin/master`:** `58b0d76` → `dced58f`. (1) Proof-gate v0.1 Option A per
+`PROOF_GATE_EXPLORATION.md`: `internal/proof/` + read-only `simurgh proof status` (exit 0/3/1,
+advisory, no enforcement), full TDD, Composer review no-blocking (6 documented minors; --lease
+daemon-autostart caveat fixed honestly). (2) **Issue #4 CLOSED** with option 2: lease-scoped
+`xcodebuildmcp_tools/call/stop` proxy tools on Simurgh's own MCP server (`internal/mcp/xbmcp_proxy.go`)
+— option 1 rejected because MCP clients bind servers at session start (mid-session `.mcp.json`
+writes don't redirect). Review round fixed 2 real blockings: process-group teardown (Setsid+`-pgid`)
+and release-vs-ensure respawn race. 21 pkgs `go test -race` ok.
+
+**Bench Phase A: still BLOCKED** — fresh preflight 13:04 ET: 2 stray `cursor-agent` PIDs
+(97405, 98252) + RAM 4.3GB free+inactive vs 8GB floor. Not forced, per guard policy.
+
+**WP4 (owner-only, still owed):** app-closed APNs banner on the physical iPhone lock screen.
+Daemon-side fix deployed and running (`~/.lancer/bin/lancerd` 07-17 11:44). Only the owner can
+watch their lock screen.
+
+**Proposal (owner-gated, NOT acted on):** both repos remain private/unpublished. No visibility,
+license, or history changes were made. If publishing Simurgh is ever desired: bench receipts are
+launch-gated on P0s in `bench/REVIEW_AND_NEXT_STEPS.md`, and the historical credential material
+noted in MORNING_PUBLISH must be resolved first. Decision stays with the owner.
+
+
 ## ⚡ 2026-07-17 ~12:05 ET — dual-product dogfood swarm run: 10 PRs merged, phone reinstalled at `c85f4a7e`
 
 **Session:** Fable orchestrator + Cursor Grok (primary coder) + Sonnet subagents (sim/device evidence,
