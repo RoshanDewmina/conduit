@@ -1,8 +1,9 @@
 # Dogfood smoke — owner iPhone (2026-07-16 post-merge)
 
 **Audience:** Roshan (owner phone dogfood)  
-**Updated:** 2026-07-16 ~17:22 ET (phone `"Hi"` launched after auth fix)  
-**Build:** app `origin/master` @ `ec3565f7`; host `lancerd` from merged PR #145 (`1a51329b`)  
+**Updated:** 2026-07-16 ~17:22 ET (phone `"Hi"` launched after auth fix); build line corrected ~19:50 ET  
+**Build:** at the 17:22 smoke the phone ran `ec3565f7`; later installs same day ended at `62b4424d` (see DOGFOOD_READY install history). Host `lancerd` from merged PR #145 (`1a51329b`)  
+**Superseded by:** `DOGFOOD_DEVICE_WALKTHROUGH.md` (evening owner walkthrough @ `62b4424d` — approve/Proof/Policy/Audit/follow-up verdicts live there)  
 **Device:** Roshan's iPhone `557A7877-F729-5031-9606-0E04F2B67822`  
 **App:** Reinstalled ~16:34 ET (`dev.lancer.mobile`); foregrounded ~17:19 via `devicectl`
 
