@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-17
 
+- 11:20 Claude Fable (orchestrator) — WP5 dogfood-gap re-proof at master `f6c22629`: live isolated-sim + isolated-daemon re-proof of GAP #10/#14/C4#7 all PASS (screenshots + audit logs); Emergency Stop confirmed **FAIL** live (host PreToolUse hook process not killed despite "Stopped N runs" UI/audit claim) — see `docs/test-runs/2026-07-17-gap-reproof/evidence-log.md` and updated `docs/test-runs/2026-07-16-untested-feature-sweep/GAP_LIST.md` (`docs/gap-reproof-2026-07-17`)
 - 10:55 Cursor Grok — WT-B live-stream regression: LiveTerminalStateRegressionTests prove in-place host-status delta (no re-entry) flips derived chips/"Running"/background-task count to terminal; ShellLiveBridge iOS-gated so tests hit pure LiveThreadView derivation seam (`test/live-terminal-state-regression`)
 - 10:55 Cursor Grok — WP2 WT-A2: per-chat permission pill scopes to conversation repo cwd (daemon per-cwd override before document default; relay/SSH GET/SET carry cwd; audit `scope=<cwd>`) (`feat/per-chat-autonomy-scope`)
 - 11:20 Claude Fable (orchestrator) — fix P1 test-pollution from #155: push-device persistence was process-global (`lancerDir()`), so `go test` clobbered the REAL `~/.lancer/push-device.json` with `test-session-id`/localhost fixtures (observed live — daemon restarts would rehydrate a bogus push session, silently re-breaking WT-E); persistence now scoped to the server's `home` (`fix/push-persist-home-scoped`)

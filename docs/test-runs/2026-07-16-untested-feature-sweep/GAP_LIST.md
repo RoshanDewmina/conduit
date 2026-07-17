@@ -135,3 +135,25 @@ Live on the physical iPhone @ `62b4424d`: **approve loop PASS** (escalate→push
 | `screenshots/` | Per-lane PNG evidence |
 
 **Incident:** accidental bare `lancerd pair` rotated `~/.lancer/relay-pairing.json` to fly.dev code `310440`; production daemon reconnected. Owner phone re-pair may be needed (L6 already owner-gated).
+
+---
+
+## 2026-07-17 evidence — WP5 re-proof (isolated sim + isolated daemon, master `f6c22629`)
+
+Full method + logs: `docs/test-runs/2026-07-17-gap-reproof/evidence-log.md` +
+`docs/test-runs/2026-07-17-gap-reproof/screenshots/`. Live sim (Simurgh `lease-205`) paired
+over relay to a freshly built, fully isolated `lancerd` (`LANCER_STATE_DIR=/tmp/wp5-lancerd-state`,
+own pairing code — production `~/.lancer` and the owner's phone slot were never touched;
+`~/.lancer/audit.log` verified unchanged before/after).
+
+| # | Candidate | 2026-07-17 verdict | Evidence |
+|---|---|---|---|
+| 7 | Review pill → sheet (needsApproval→awaiting, FX7) | **PASS** (live) | 3 real escalate→approve round-trips over relay (`bd7b6195…`/`8cbc210d…`/`57782942…`); real commit `b03e19b` landed in scratch repo; `c4-review-approval-card.png` |
+| 10 | Background-tasks pill (FX10 relay artifact mirror) | **PASS** (live) | `gap10-background-tasks-pill.png` — 4 real task entries with live elapsed timers, populated via relay mirror; minor bug noted: stayed "Running" after the turn completed |
+| 14 | Tool-call label dedup / chip rendering under real concurrent execution | **PASS** (live) | `gap14-tool-chips-expanded.png` — real (non-seeded) Claude Code run produced 4 distinct, correctly-labeled chips; no "Bash Bash:" dup-label bug |
+| 1 | Emergency Stop | **FAIL** (new finding, supersedes prior BLOCKED) | Pairing was clean this run (no harness ambiguity). App reported "Stopped 2 runs" (`emergency-stop-result.png`) and daemon audit recorded `run-stopped` for both dispatch-level approvalIds, but the live host-side PreToolUse hook process gating the pending `sleep 120` escalation (pid confirmed via `ps`) stayed alive 6+ minutes after the stop, requiring manual `kill -9`. Root cause: `run-stopped` resolves the dispatch-level approvalId, not the specific in-flight tool-call escalation — the gate process is never signaled. |
+
+**Net:** 3 of 4 re-proof items are now live-PASS on `origin/master` (#7/#10/#14 code fixes hold
+under real conditions). Emergency Stop is a confirmed product **FAIL**, not a harness artifact —
+needs a fix that resolves/kills the specific pending tool-call gate process, not just the
+dispatch-level run record.
