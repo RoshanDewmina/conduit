@@ -13,7 +13,8 @@ import SSHTransport
 /// see the M3 brief's scope boundary. Apple-native `NavigationStack` /
 /// `ScrollView` / `TextField` only, no DesignSystem module.
 ///
-/// M4: also renders a pending-approval card (see `approvalCard`) — a fully
+/// M4: also renders a pending-approval sheet (see `ApprovalDecisionSheet`,
+/// opened from `approvalPendingRow`) — a fully
 /// separate, orthogonal piece of UI state from `SendState` below. A pending
 /// approval can appear at any point regardless of whether the current turn
 /// is still working or already completed.
@@ -60,6 +61,12 @@ public struct LiveThreadView: View {
     @State private var reviewPresentation: ReviewPresentation?
     @State private var queuedReviewComments: [QueuedReviewComment] = []
     @State private var isBackgroundTasksPresented = false
+    /// CC-6: the pending approval now presents as a bottom sheet
+    /// (`ApprovalDecisionSheet`) instead of an inline card. Auto-opens when a
+    /// new approval arrives; the inline compact row stays visible underneath
+    /// so a manually-dismissed sheet can be reopened with a tap.
+    @State private var isApprovalSheetPresented = false
+    @State private var lastAutoPresentedApprovalID: Approval.ID?
     @FocusState private var isFollowUpFocused: Bool
     #if DEBUG
     @State private var hasAutoAnsweredQuestion = false
@@ -218,10 +225,12 @@ public struct LiveThreadView: View {
                     }
                 }
 
-                if let machineID = bridge.activeMachineID, let pendingApproval {
-                    approvalCard(pendingApproval, machineID: machineID)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 12)
+                if let pendingApproval {
+                    approvalPendingRow(pendingApproval) {
+                        isApprovalSheetPresented = true
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
                 }
 
                 if let machineID = bridge.activeMachineID, let pendingQuestion {
@@ -355,6 +364,24 @@ public struct LiveThreadView: View {
             await refreshReceipts()
             await refreshTranscriptExtras()
             await refreshReviewDiffs()
+        }
+        .sheet(isPresented: $isApprovalSheetPresented) {
+            if let pendingApproval {
+                ApprovalDecisionSheet(approval: pendingApproval) { decision in
+                    decideApproval(pendingApproval, decision: decision)
+                }
+            }
+        }
+        // Auto-open the sheet the moment a NEW approval arrives (CC-6 parity
+        // with the reference app's auto-presented bottom sheet). Tracking
+        // the last auto-presented id (rather than re-firing on every change)
+        // lets a manually dismissed sheet stay closed — the compact row
+        // above remains as the way back in — while still re-presenting for
+        // a genuinely different approval that supersedes it.
+        .onChange(of: pendingApproval) { _, newValue in
+            guard let newValue, lastAutoPresentedApprovalID != newValue.id else { return }
+            lastAutoPresentedApprovalID = newValue.id
+            isApprovalSheetPresented = true
         }
         .sheet(item: $reviewPresentation) { presentation in
             ReviewSheetView(
@@ -1084,38 +1111,43 @@ public struct LiveThreadView: View {
         return approval
     }
 
-    private func approvalCard(_ approval: Approval, machineID: RelayMachineID) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.shield")
-                    .foregroundStyle(.blue)
-                Text(approval.kind.rawValue.capitalized)
-                    .font(.system(size: 15, weight: .semibold))
-                Spacer()
+    /// CC-6: compact inline row that replaces the old inline approve/deny
+    /// card. Tapping it (or the auto-present `onChange` below) opens
+    /// `ApprovalDecisionSheet`, which owns the actual decision buttons.
+    private func approvalPendingRow(_ approval: Approval, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("Waiting on approval — \(approvalSummaryText(approval)) \u{203A}")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 8)
                 riskLabel(approval.risk)
             }
-            Text(approval.command ?? approval.patch ?? "(no detail)")
-                .font(.system(size: 13, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .lineLimit(6)
-            HStack(spacing: 12) {
-                Button("Deny", role: .destructive) {
-                    Task { await approvalIngest.decide(approval, decision: .rejected, machineID: machineID) }
-                }
-                .buttonStyle(.bordered)
-
-                Button("Approve") {
-                    Task { await approvalIngest.decide(approval, decision: .approved, machineID: machineID) }
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("cursor.approval.approve")
-            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+            )
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("approval-pending-row")
+    }
+
+    private func approvalSummaryText(_ approval: Approval) -> String {
+        approval.command ?? approval.patch ?? approval.kind.rawValue.capitalized
+    }
+
+    /// Wires `ApprovalDecisionSheet`'s buttons to the exact same
+    /// `RelayApprovalIngest.decide` call the old inline card made — see the
+    /// sheet's doc comment for the plumbing guarantee.
+    private func decideApproval(_ approval: Approval, decision: Approval.Decision) {
+        guard let machineID = bridge.activeMachineID else { return }
+        Task { await approvalIngest.decide(approval, decision: decision, machineID: machineID) }
     }
 
     private func riskLabel(_ risk: Approval.Risk) -> some View {
