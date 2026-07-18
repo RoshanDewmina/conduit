@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# Codex PreToolUse hook for Lancer approval cards.
+# Kimi PreToolUse hook for Lancer approval cards.
 #
 # Install:
-#   mkdir -p ~/.codex/hooks
-#   cp docs/codex-lancer-hook.sh ~/.codex/hooks/lancer-hook.sh
-#   chmod 700 ~/.codex/hooks/lancer-hook.sh
+#   mkdir -p ~/.kimi-code/hooks
+#   cp docs/kimi-lancer-hook.sh ~/.kimi-code/hooks/lancer-hook.sh
+#   chmod 700 ~/.kimi-code/hooks/lancer-hook.sh
 #
 # Configure:
-#   cp docs/codex-hooks.json ~/.codex/hooks.json
-#   Run /hooks in Codex and trust the hook definition.
+#   cp docs/kimi-hooks.json ~/.kimi-code/hooks.json
+#   Kimi's hook-trust UX (if any) has not been live-verified — see
+#   kimi_hook_install.go. This hook lands so the script/config exist and
+#   `doctor` can report state, but hookWiredForAgent keeps kimi fail-closed
+#   (relaxLaunchEscalation never trusts it) until a live-fire proof exists.
 
 # This hook is registered globally, but only runs when launched by lancerd
-# opt-in. Never route an owner's ordinary interactive Codex session through
+# opt-in. Never route an owner's ordinary interactive Kimi session through
 # Lancer.
 if [[ "${LANCER_GATE:-}" != "1" ]]; then
   exit 0
@@ -133,7 +136,7 @@ log_event = {
 try:
     log_dir = os.path.expanduser("~/.lancer")
     os.makedirs(log_dir, mode=0o700, exist_ok=True)
-    with open(os.path.join(log_dir, "codex-hook-events.jsonl"), "a", encoding="utf-8") as f:
+    with open(os.path.join(log_dir, "kimi-hook-events.jsonl"), "a", encoding="utf-8") as f:
         f.write(json.dumps(log_event, separators=(",", ":"), sort_keys=True) + "\n")
 except Exception:
     pass
@@ -176,7 +179,7 @@ TOOL_INPUT="$(json_get tool_input_json)"
 
 # Build structured-field args from stdin-parsed values (bash array prevents
 # injection of extra flags by values containing spaces, quotes, or metacharacters).
-# Codex delivers all PreToolUse data on stdin as JSON — never via env vars.
+# Kimi delivers all PreToolUse data on stdin as JSON — never via env vars.
 EXTRA_ARGS=()
 [ -n "$TOOL_NAME" ]                              && EXTRA_ARGS+=(--tool-name="$TOOL_NAME")
 [ -n "$TOOL_USE_ID" ]                            && EXTRA_ARGS+=(--tool-use-id="$TOOL_USE_ID")
@@ -190,7 +193,7 @@ EXTRA_ARGS=()
 # auto-approved when lancerd was missing; that was a fail-open regression
 # and has been removed.
 if "$LANCERD" agent-hook \
-  --agent codex \
+  --agent kimi \
   --kind "$KIND" \
   --command "$COMMAND" \
   --cwd "$CWD" \
@@ -200,5 +203,5 @@ then
   exit 0
 fi
 
-printf '%s\n' "Blocked by Lancer: Codex action was rejected on the iOS app or timed out." >&2
+printf '%s\n' "Blocked by Lancer: Kimi action was rejected on the iOS app or timed out." >&2
 exit 2

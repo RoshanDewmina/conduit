@@ -256,7 +256,11 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 //   - opencode: run -s/--session <id>  (verified live: same sessionID retained)
 //   - kimi:     -S/--session <id>  (from --help only; kimi CLI errored on an
 //     unrelated account/billing check during this session, so resume-by-id was
-//     not live-smoke-tested — re-verify before relying on it in production)
+//     not live-smoke-tested — re-verify before relying on it in production.
+//     Re-confirmed 2026-07-18: `kimi --prompt ... --output-format
+//     stream-json` still returns provider.api_error: 402 (membership) on
+//     this machine — an account/billing issue the owner must fix; nothing
+//     in this codebase can resolve it. Still not live-smoke-tested.)
 func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
