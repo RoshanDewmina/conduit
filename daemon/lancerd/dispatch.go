@@ -289,6 +289,22 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 			argv = append(argv, "--model", model)
 		}
 		return append(argv, prompt), true
+	case "pi":
+		// --continue/-c continues the most-recently-modified session for the
+		// launch cwd — verified live 2026-07-18 against pi 0.80.10 (per
+		// --help; agentArgv's pi case doc comment covers the shared
+		// --mode/--provider/--model shape). Unlike resumeArgv's pi case,
+		// this does NOT target an exact session id — same
+		// "latestInCwdFallback" semantics as every other vendor's continueArgv.
+		argv := []string{"pi", "--continue", "--mode", "json"}
+		provider, modelID := splitPiModel(model)
+		if provider != "" {
+			argv = append(argv, "--provider", provider)
+		}
+		if modelID != "" {
+			argv = append(argv, "--model", modelID)
+		}
+		return append(argv, "-p", prompt), true
 	default:
 		return nil, false
 	}
@@ -316,6 +332,9 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 //     stream-json` still returns provider.api_error: 402 (membership) on
 //     this machine — an account/billing issue the owner must fix; nothing
 //     in this codebase can resolve it. Still not live-smoke-tested.)
+//   - pi:       --session <id>  (verified live 2026-07-18 against pi 0.80.10:
+//     same session id retained, prior-turn context recalled — see this
+//     function's pi case doc comment)
 func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
@@ -359,6 +378,24 @@ func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]strin
 			argv = append(argv, "--model", model)
 		}
 		return append(argv, prompt), true
+	case "pi":
+		// --session <id> resumes that EXACT session (not "most recent") —
+		// live-verified 2026-07-18 against pi 0.80.10: the session event on
+		// the resumed run's stdout repeated the SAME id, and the model
+		// recalled prior-turn context (captured: scratchpad/pi-smoke/
+		// pi-resume.jsonl; the two-turn on-disk session file this produced is
+		// pi_session_reader_test.go's TestPiInspectAndSessionsDiscovery-style
+		// evidence). NEVER use -r/--resume (interactive picker, hangs
+		// headless — see agentArgv's pi case / the module doc comment above).
+		argv := []string{"pi", "--session", sessionID, "--mode", "json"}
+		provider, modelID := splitPiModel(model)
+		if provider != "" {
+			argv = append(argv, "--provider", provider)
+		}
+		if modelID != "" {
+			argv = append(argv, "--model", modelID)
+		}
+		return append(argv, "-p", prompt), true
 	default:
 		return nil, false
 	}

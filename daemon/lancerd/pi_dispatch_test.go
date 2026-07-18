@@ -41,6 +41,66 @@ func TestAgentArgvPiBareModelNoProviderPrefix(t *testing.T) {
 	}
 }
 
+// --- argv: pi continue/resume -------------------------------------------------
+//
+// --continue reuses the most-recently-modified session for the launch cwd;
+// --session <id> targets an EXACT session id. Both live-verified 2026-07-18
+// against pi 0.80.10: a `--session <id>` resume reused the same session id
+// and recalled prior-turn context (scratchpad/pi-smoke/pi-resume.jsonl); a
+// `--continue` run in a HOME scoped to a single prior session's directory
+// resumed that exact session id (scratchpad/pi-smoke3/pi-continue-stream2.jsonl
+// — the run then hit an unrelated OpenRouter 402 credits error, which is a
+// billing issue, not a resume-mechanics failure: the session event on line 0
+// already reported the correct pre-existing session id before the model call
+// was even attempted).
+
+func TestContinueArgvPi(t *testing.T) {
+	argv, ok := continueArgv("pi", "next step", "openrouter/deepseek/deepseek-v4-flash", false)
+	want := []string{"pi", "--continue", "--mode", "json", "--provider", "openrouter", "--model", "deepseek/deepseek-v4-flash", "-p", "next step"}
+	if !ok || !reflect.DeepEqual(argv, want) {
+		t.Fatalf("pi continueArgv mismatch:\n got %v (ok=%v)\nwant %v", argv, ok, want)
+	}
+}
+
+func TestResumeArgvPi(t *testing.T) {
+	argv, ok := resumeArgv("pi", "019f773d-faf4-7c6b-80f0-aba6c7d05745", "follow-up", "openrouter/deepseek/deepseek-v4-flash", false)
+	want := []string{"pi", "--session", "019f773d-faf4-7c6b-80f0-aba6c7d05745", "--mode", "json", "--provider", "openrouter", "--model", "deepseek/deepseek-v4-flash", "-p", "follow-up"}
+	if !ok || !reflect.DeepEqual(argv, want) {
+		t.Fatalf("pi resumeArgv mismatch:\n got %v (ok=%v)\nwant %v", argv, ok, want)
+	}
+	// resumeArgv must never use -r/--resume (interactive picker — hangs headless).
+	for _, a := range argv {
+		if a == "-r" || a == "--resume" {
+			t.Fatalf("pi resumeArgv must never use -r/--resume (interactive), got %v", argv)
+		}
+	}
+}
+
+func TestBuildConversationArgvPiRoutesResumeModes(t *testing.T) {
+	// IsNew → agentArgv, "new".
+	if argv, mode, ok := buildConversationArgv(conversationLaunchParams{Agent: "pi", Prompt: "hi", IsNew: true}); !ok || mode != "new" || argv[0] != "pi" {
+		t.Fatalf("IsNew: argv=%v mode=%q ok=%v", argv, mode, ok)
+	}
+	// Bound VendorSessionID → resumeArgv, "exact".
+	if argv, mode, ok := buildConversationArgv(conversationLaunchParams{Agent: "pi", Prompt: "follow-up", VendorSessionID: "019f773d-faf4-7c6b-80f0-aba6c7d05745"}); !ok || mode != "exact" {
+		t.Fatalf("bound session: argv=%v mode=%q ok=%v", argv, mode, ok)
+	} else {
+		found := false
+		for _, a := range argv {
+			if a == "019f773d-faf4-7c6b-80f0-aba6c7d05745" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("exact-resume argv missing the bound session id: %v", argv)
+		}
+	}
+	// No bound session → continueArgv, "latestInCwdFallback".
+	if argv, mode, ok := buildConversationArgv(conversationLaunchParams{Agent: "pi", Prompt: "follow-up"}); !ok || mode != "latestInCwdFallback" {
+		t.Fatalf("no bound session: argv=%v mode=%q ok=%v", argv, mode, ok)
+	}
+}
+
 func TestSplitPiModel(t *testing.T) {
 	cases := []struct {
 		model, wantProvider, wantModelID string
