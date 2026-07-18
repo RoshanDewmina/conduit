@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.kimi-code/hooks/lancer-hook.sh",
+            "timeout": 150,
+            "statusMessage": "Waiting for Lancer approval"
+          }
+        ]
+      }
+    ]
+  }
+}

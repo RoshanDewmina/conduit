@@ -58,6 +58,21 @@ func runInstall() error {
 		fmt.Fprintln(os.Stderr, "  wire it manually — see docs/opencode-lancer-gate-plugin.js")
 	}
 
+	if err := installCodexHook(home); err != nil {
+		// Best-effort, same as the Claude/OpenCode hooks above: a failure here
+		// must not abort the daemon install. Note installCodexHook only wires
+		// hooks.json — it never grants hook trust (see codex_hook_install.go).
+		fmt.Fprintf(os.Stderr, "warning: could not wire Codex PreToolUse hook: %v\n", err)
+		fmt.Fprintln(os.Stderr, "  wire it manually — see docs/codex-hooks.json")
+	}
+
+	if err := installKimiHook(home); err != nil {
+		// Best-effort. Kimi stays fail-closed in hookWiredForAgent regardless
+		// of whether this succeeds — see kimi_hook_install.go.
+		fmt.Fprintf(os.Stderr, "warning: could not wire Kimi PreToolUse hook: %v\n", err)
+		fmt.Fprintln(os.Stderr, "  wire it manually — see docs/kimi-hooks.json")
+	}
+
 	switch runtime.GOOS {
 	case "darwin":
 		return installLaunchd(target, home)
