@@ -73,6 +73,13 @@ func runInstall() error {
 		fmt.Fprintln(os.Stderr, "  wire it manually — see docs/kimi-hooks.json")
 	}
 
+	if err := installPiExtension(home); err != nil {
+		// Best-effort. Without the extension file, appendPiExtension injects
+		// nothing and hookWiredForAgent keeps pi launches fail-closed.
+		fmt.Fprintf(os.Stderr, "warning: could not install Pi approval extension: %v\n", err)
+		fmt.Fprintln(os.Stderr, "  install it manually — see docs/pi-lancer-gate.ts")
+	}
+
 	switch runtime.GOOS {
 	case "darwin":
 		return installLaunchd(target, home)

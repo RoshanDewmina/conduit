@@ -686,6 +686,14 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 		env = lancerGateEnvironment(env)
 	}
 
+	// Pi's per-action approval gate is an extension loaded per-run via
+	// "-e <path>" (installPiExtension, Phase 3(d)). It is threaded here at
+	// the single exec choke point — not in each argv builder — so every pi
+	// launch path (new/continue/resume) picks it up exactly when the
+	// extension file is installed, and the argv-builder tests stay pinned to
+	// the pure CLI shape.
+	argv = appendPiExtension(argv)
+
 	// A claudeCode argv built with --input-format stream-json (agentArgv's
 	// doc comment) needs its prompt delivered over stdin, not positionally —
 	// see claudeStdinPromptArgv. execArgv is what actually gets exec'd;
@@ -905,7 +913,18 @@ func requiresLancerGate(argv []string) bool {
 	if len(argv) == 0 {
 		return false
 	}
-	return argv[0] == "claude" || argv[0] == "opencode"
+	// codex/kimi joined this list when their PreToolUse hook scripts landed
+	// (codex_hook_install.go / kimi_hook_install.go): both scripts exit 0
+	// unless LANCER_GATE=1, so omitting them here would make a trusted hook
+	// silently no-op on dispatched runs — fail-open once hookWiredForAgent
+	// relaxes the launch gate. Pi is deliberately absent: its gate is the
+	// -e extension appended per-run by realLauncher (appendPiExtension),
+	// which is its own opt-in — no env gating needed.
+	switch argv[0] {
+	case "claude", "opencode", "codex", "kimi":
+		return true
+	}
+	return false
 }
 
 // relaxLaunchEscalation decides whether an agent *launch* (dispatch or continue)
