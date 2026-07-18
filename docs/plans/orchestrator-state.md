@@ -1,6 +1,24 @@
 # Orchestrator state — Fable swarm dashboard
 
-## ⚡ 2026-07-18 ~17:10 ET — vendor-CLI parity + multi-account brief (IN PROGRESS)
+## ⚡ 2026-07-18 ~20:00 ET — vendor-CLI parity + multi-account brief: ALL 5 PHASES MERGED
+
+PRs #170–#174 → master tip `d6ed5792`. Phase 3 (d)/(e) finished by Fable after the Sonnet
+coder hit its session limit; Phase 4 implemented by Cursor Grok 4.5 high, gated by Fable
+(LancerKit 844+62+13 tests, app-target BUILD SUCCEEDED on simurgh lease-218, accounts-screen
+screenshot). Two fail-open bugs caught in review: codex draft hook auto-approved when lancerd
+missing + no LANCER_GATE guard (PR #171); requiresLancerGate omitted codex/kimi so trusted
+hooks would silently no-op on dispatched runs (PR #173).
+
+**Fail-closed holds pending owner action (task list #6):**
+1. Codex: `lancerd install` → codex `/hooks` → trust lancer-hook → one phone round-trip.
+2. Kimi: membership 402 → then live-fire hook + resume, flip hookWiredForAgent kimi.
+3. OpenRouter credits 402 → then live-fire pi extension veto, flip hookWiredForAgent pi.
+4. Queued decision: daemon-side account-switch RPC (Mac credential swap) for Phase 4's UI.
+
+Env changes made: codex 0.135.0→0.144.6 (+config model gpt-5.6-sol→terra, backup kept);
+pi 0.80.10 installed (bun). Prior entry below has phase-by-phase detail.
+
+## ⚡ 2026-07-18 ~17:10 ET — vendor-CLI parity + multi-account brief (superseded by above)
 
 **Session:** Fable orchestrator on branch `claude/vendor-cli-parity-multi-account-209d7c`
 (worktree `.claude/worktrees/vendor-cli-parity-multi-account-209d7c`). Brief: 5 phases —
