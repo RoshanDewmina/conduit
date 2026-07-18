@@ -9,6 +9,10 @@ re-deriving it from git archaeology. Do not rewrite or delete old lines.
 
 Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
+## 2026-07-18
+
+- 17:05 Claude Fable (orchestrator) — vendor-cli-matrix refreshed against live binaries (claude 2.1.214, codex 0.135.0, opencode 1.17.18, kimi 0.18.0, pi not installed); found Codex+Kimi now ship Claude-style PreToolUse hooks.json (trusted+working on this machine) and Kimi local default_permission_mode=yolo (branch claude/vendor-cli-parity-multi-account-209d7c)
+
 ## 2026-07-17
 
 - 16:50 Claude Fable (orchestrator) — LancerWidgets signing fixed: Xcode had NO Apple ID signed in (owner action, one-time); once signed in, App Groups capability auto-registered and all 3 signing errors cleared. Debug device build now SUCCEEDS with LancerWidgets.appex embedded, installed+launched on owner's physical iPhone (both Lancer + LancerWidgets processes confirmed running)
