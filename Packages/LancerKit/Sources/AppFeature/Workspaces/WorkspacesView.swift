@@ -22,6 +22,7 @@ public struct WorkspacesView: View {
     #if DEBUG
     @Environment(RelayApprovalIngest.self) private var relayApprovalIngest
     @State private var isSettingsPresented = false
+    @State private var isAccountsPresented = false
     @State private var isComposerRepoPickerPresented = false
     @State private var isRepoPickerDirectPresented = false
     @State private var isThreadListDirectPresented = false
@@ -197,6 +198,17 @@ public struct WorkspacesView: View {
                 .environment(relayFleetStore)
                 .environment(terminalCoordinator)
         }
+        .sheet(isPresented: $isAccountsPresented) {
+            NavigationStack {
+                AccountsUsageView()
+                    .environment(relayFleetStore)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close") { isAccountsPresented = false }
+                        }
+                    }
+            }
+        }
         .sheet(isPresented: $isRepoPickerDirectPresented) {
             RepoPickerView(repos: repos, selectedCwd: repos.first?.cwd, onSelect: { _ in })
         }
@@ -248,6 +260,8 @@ public struct WorkspacesView: View {
                 // governance → Settings with honest deferred Policy & Governance
                 // (no fake Apply / PolicyHome). Same sheet as settings.
                 isSettingsPresented = true
+            case "accounts":
+                isAccountsPresented = true
             case "approval":
                 Task {
                     await relayApprovalIngest.hydratePendingForUITestIfRequested()
