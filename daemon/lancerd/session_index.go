@@ -129,6 +129,7 @@ func buildSessionIndexUncached(home string) ([]SessionInfo, error) {
 	out = append(out, openCodeSessions(home)...)
 	out = append(out, codexSessions(home)...)
 	out = append(out, kimiSessions(home)...)
+	out = append(out, piSessions(home)...)
 
 	sort.Slice(out, func(i, j int) bool { return out[i].LastActivity > out[j].LastActivity })
 	// Cap to the most-recent sessions: the phone is a glanceable surface and
@@ -338,6 +339,9 @@ func loadSessionTranscript(home, sessionID string, sinceLine int) (SessionTransc
 		if codexFindTranscriptPath(home, sessionID) != "" {
 			return codexTranscript(home, sessionID, sinceLine)
 		}
+		if piFindTranscriptPath(home, sessionID) != "" {
+			return piTranscript(home, sessionID, sinceLine)
+		}
 		return SessionTranscriptResult{}, errUnknownSessionID
 	}
 	resetRequired := false
@@ -393,6 +397,9 @@ func loadFullObservedTranscript(home, sessionID string) (SessionTranscriptResult
 	if path == "" {
 		if codexFindTranscriptPath(home, sessionID) != "" {
 			return codexTranscript(home, sessionID, 0)
+		}
+		if piFindTranscriptPath(home, sessionID) != "" {
+			return piTranscript(home, sessionID, 0)
 		}
 		return SessionTranscriptResult{}, errUnknownSessionID
 	}
