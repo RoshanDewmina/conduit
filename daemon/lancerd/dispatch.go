@@ -164,7 +164,12 @@ func agentArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 	case "codex":
 		// --json emits structured NDJSON events; --dangerously-bypass flag is
 		// required for headless dispatch (no TTY) — see docs/audit/CODEX_GATING.md.
-		argv := []string{"codex", "exec", "--json"}
+		// -c model_reasoning_summary=auto unlocks reasoning items on the same
+		// stream — verified live 2026-07-18 against codex-cli 0.144.6: without
+		// this flag no item.completed{item:{type:"reasoning"}} line ever
+		// appears; with it one does (see streamJSONOutput's "item.completed"
+		// case, itemType=="reasoning").
+		argv := []string{"codex", "exec", "--json", "-c", "model_reasoning_summary=auto"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -179,7 +184,11 @@ func agentArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 		}
 		return argv, true
 	case "opencode":
-		argv := []string{"opencode", "run", "--format", "json"}
+		// --thinking unlocks "reasoning" events on the same stream — verified
+		// live 2026-07-18 against opencode 1.17.18: without this flag no
+		// {"type":"reasoning",...} line ever appears; with it one does (see
+		// streamJSONOutput's "reasoning" case).
+		argv := []string{"opencode", "run", "--format", "json", "--thinking"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -214,7 +223,8 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 		// Resume the most-recent codex session non-interactively. Same headless
 		// gating as agentArgv: codex needs the bypass env when no TTY is attached
 		// (see docs/audit/CODEX_GATING.md). No new blast radius beyond dispatch.
-		argv := []string{"codex", "exec", "resume", "--last", "--json"}
+		// -c model_reasoning_summary=auto: see agentArgv's codex case doc comment.
+		argv := []string{"codex", "exec", "resume", "--last", "--json", "-c", "model_reasoning_summary=auto"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -229,7 +239,8 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 		}
 		return argv, true
 	case "opencode":
-		argv := []string{"opencode", "run", "--continue", "--format", "json"}
+		// --thinking: see agentArgv's opencode case doc comment.
+		argv := []string{"opencode", "run", "--continue", "--format", "json", "--thinking"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -282,7 +293,8 @@ func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]strin
 		// codex exec resume <SESSION_ID> [PROMPT] resumes that exact conversation
 		// (positional session id, not a flag). Same headless-bypass gating as
 		// agentArgv/continueArgv — see docs/audit/CODEX_GATING.md.
-		argv := []string{"codex", "exec", "resume", sessionID, "--json"}
+		// -c model_reasoning_summary=auto: see agentArgv's codex case doc comment.
+		argv := []string{"codex", "exec", "resume", sessionID, "--json", "-c", "model_reasoning_summary=auto"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -297,7 +309,8 @@ func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]strin
 		}
 		return argv, true
 	case "opencode":
-		argv := []string{"opencode", "run", "--session", sessionID, "--format", "json"}
+		// --thinking: see agentArgv's opencode case doc comment.
+		argv := []string{"opencode", "run", "--session", sessionID, "--format", "json", "--thinking"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -1285,6 +1298,14 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			emit("agent.run.output", map[string]any{
 				"runId": runID, "stream": "stdout", "chunk": text, "seq": int(n),
 			})
+		case "reasoning":
+			// opencode: {"type":"reasoning","part":{"type":"reasoning","text":"..."}}
+			// — only appears on the wire with --thinking on the argv (see
+			// agentArgv's opencode case doc comment) — verified live
+			// 2026-07-18 against opencode 1.17.18. No text is forwarded to
+			// chat output (same as Claude's thinking_delta / codex's
+			// reasoning item below) — only the live-status state changes.
+			emitLiveStatusThinking(emit, runID)
 		case "tool_use":
 			// opencode: complete tool event (input already resolved, not streaming deltas).
 			part, _ := obj["part"].(map[string]any)
@@ -1325,7 +1346,8 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			if item == nil {
 				continue
 			}
-			if itemType, _ := item["type"].(string); itemType == "agent_message" {
+			switch itemType, _ := item["type"].(string); itemType {
+			case "agent_message":
 				text, _ := item["text"].(string)
 				if text != "" {
 					emitLiveStatusStreaming(emit, runID)
@@ -1334,6 +1356,15 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 						"runId": runID, "stream": "stdout", "chunk": text + "\n", "seq": int(n),
 					})
 				}
+			case "reasoning":
+				// codex --json: {"item":{"type":"reasoning","text":"**...**"}}
+				// — only appears on the wire with -c model_reasoning_summary=auto
+				// on the argv (see agentArgv's codex case doc comment) —
+				// verified live 2026-07-18 against codex-cli 0.144.6. No text
+				// is forwarded to chat output (same as Claude's thinking_delta
+				// / opencode's reasoning event above) — only the live-status
+				// state changes.
+				emitLiveStatusThinking(emit, runID)
 			}
 		case "thread.started":
 			// Codex: {"type":"thread.started","thread_id":"..."} — the exact
@@ -1350,12 +1381,51 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			"step_start", "step_finish", "tool", "tool_result",
 			"session_event", "message_start", "message_stop":
 			// lifecycle/metadata events (opencode + codex) — suppress
+		case "context.append_message":
+			// Kimi: {"type":"context.append_message","message":{"role":...,
+			// "content":[{"type":"text","text":"..."}],"toolCalls":[...]}} —
+			// the SAME wrapped shape kimi_session_reader.go's
+			// kimiMessagesFromLine already proves from real
+			// ~/.kimi-code/sessions/**/wire.jsonl captures (see
+			// TestKimiTranscriptToolCallInputJSON). Kimi's live
+			// `--output-format stream-json` stdout shape could NOT be
+			// live-verified this session — the installed kimi CLI (0.18.0)
+			// hits `provider.api_error: 402` (membership) before emitting any
+			// stdout, re-confirmed 2026-07-18 (see resumeArgv's doc comment
+			// for the same caveat). This mapping is shape-from-prior-captures
+			// only, NOT live-verified 2026-07-18 (402). No thinking/reasoning
+			// content type has ever been observed for kimi anywhere in this
+			// codebase (unlike codex's "reasoning" item or opencode's
+			// "reasoning" event, both live-verified above), so — per the
+			// "don't invent event types" constraint — no emitLiveStatusThinking
+			// call is wired here; only streaming (assistant text) and tool
+			// (toolCalls) are mapped, both grounded in kimiMessagesFromLine's
+			// existing, tested parsing.
+			for _, m := range kimiMessagesFromLine([]byte(line)) {
+				switch m.Role {
+				case "assistant":
+					if m.Text != "" {
+						emitLiveStatusStreaming(emit, runID)
+						n := atomic.AddInt64(seq, 1)
+						emit("agent.run.output", map[string]any{
+							"runId": runID, "stream": "stdout", "chunk": m.Text + "\n", "seq": int(n),
+						})
+					}
+				case "toolCall":
+					emitToolArtifact(emit, runID, m.ToolUseID, m.ToolName, m.InputJSON)
+				}
+			}
 		case "":
 			// kimi stream-json uses {"role":"..."} instead of {"type":"..."}.
+			// Flat shape kept alongside the "context.append_message" case
+			// above (uncertain which one, if either, the live stream-json
+			// output actually uses — see that case's doc comment on why kimi
+			// could not be live-verified this session).
 			role, _ := obj["role"].(string)
 			if role == "assistant" {
 				content, _ := obj["content"].(string)
 				if content != "" {
+					emitLiveStatusStreaming(emit, runID)
 					n := atomic.AddInt64(seq, 1)
 					emit("agent.run.output", map[string]any{
 						"runId": runID, "stream": "stdout", "chunk": content, "seq": int(n),

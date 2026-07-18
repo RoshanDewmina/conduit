@@ -1,5 +1,36 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-18 ~17:10 ET — vendor-CLI parity + multi-account brief (IN PROGRESS)
+
+**Session:** Fable orchestrator on branch `claude/vendor-cli-parity-multi-account-209d7c`
+(worktree `.claude/worktrees/vendor-cli-parity-multi-account-209d7c`). Brief: 5 phases —
+(0) matrix refresh, (1) Codex/Kimi approval hooks + doctor, (2) live-status parity,
+(3) Pi adapter, (4) iOS account/usage view.
+
+- **Phase 0 MERGED** — PR #170 (`a73ac7c8`): matrix refreshed to 2026-07-18 live baseline.
+  Key finds: Codex 0.135.0 + Kimi 0.18.0 both ship Claude-style PreToolUse `hooks.json`
+  (trusted conduit-era hooks live at `~/.codex/hooks.json` / `~/.kimi-code/hooks.json`);
+  Kimi local `default_permission_mode = "yolo"`; **pi not installed** (Phase 3 prereq).
+- **Phase 1 MERGED** — PR #171 (`2b768c6f`): Codex per-action hook wired
+  (codexHookWired = hooks.json entry + config.toml trust `enabled=true`; install never
+  grants trust); Kimi install path landed but hookWiredForAgent keeps kimi fail-closed;
+  doctor covers kimi CLI + both hook states; fail-open bug + missing LANCER_GATE guard
+  fixed in docs/codex-lancer-hook.sh. Live-verified in isolated CODEX_HOME on 0.144.6.
+  CORRECTION en route: conduit-era codex hook trust record is `enabled=false` (earlier
+  same-day "trusted+working" claim was wrong; matrix + changelog fixed).
+- **Phase 2 MERGED-PENDING/PR** — commit `453ec693`: codex `-c model_reasoning_summary=auto`
+  + reasoning→thinking; opencode `--thinking` + reasoning→thinking (both live-verified on
+  0.144.6 / 1.17.18); kimi context.append_message + flat-role mapping → streaming/tool
+  states (shape-from-captures, NOT live-verified — 402).
+- **Env fixes:** codex upgraded 0.135.0→0.144.6 in-place (0.135.0 hard-broken headless —
+  all model slugs retired); ~/.codex/config.toml model gpt-5.6-sol→gpt-5.6-terra (backup
+  `config.toml.20260718-fable.bak`). Pi 0.80.10 installed via bun; --mode json stream,
+  resume-by-id, session JSONL all live-verified (fixtures in session scratchpad).
+- **BLOCKED (owner):** (1) Kimi `provider.api_error: 402` (membership) — blocks Kimi
+  resume smoke, hook live-fire, stream verification. (2) Codex hook trust: owner must run
+  codex → /hooks → trust lancer-hook, then one phone-approval round-trip proves the loop
+  (brief's "real paired daemon" closure bar for Phase 1).
+
 ## ⚡ 2026-07-17 ~13:45 ET — dogfood-tail closeout: worktree triage, Simurgh proof-gate v0.1 + issue #4 structural fix
 
 **Session:** Fable orchestrator + Cursor Grok (2 Simurgh lanes) + Composer cross-reviews. Closed the
