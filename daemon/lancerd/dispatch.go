@@ -193,9 +193,53 @@ func agentArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 			argv = append(argv, "--model", model)
 		}
 		return append(argv, prompt), true
+	case "pi":
+		// --mode json emits one structured event per line (session, agent_start,
+		// turn_start, message_start/end, message_update{assistantMessageEvent},
+		// turn_end, agent_end, agent_settled, tool_execution_*) — verified live
+		// 2026-07-18 against pi 0.80.10 (scratchpad/pi-smoke/pi-stream.jsonl,
+		// pi-tool-stream.jsonl — see streamJSONOutput's pi cases). splitPiModel
+		// separates a "provider/model-id" string into pi's own --provider and
+		// --model flags (pi's --model alone also accepts a "provider/id"
+		// pattern per --help, but the live-verified invocation this mirrors
+		// used both flags explicitly: `pi --provider openrouter --model
+		// deepseek/deepseek-v4-flash --mode json -p "..."`).
+		//
+		// The approval-extension `-e <path>` flag is NOT appended here — see
+		// resumeArgv's pi case / installPiExtension (Phase 3(d)) for why it's
+		// threaded in at the dispatcher level instead of baked into every
+		// argv builder.
+		argv := []string{"pi", "--mode", "json"}
+		provider, modelID := splitPiModel(model)
+		if provider != "" {
+			argv = append(argv, "--provider", provider)
+		}
+		if modelID != "" {
+			argv = append(argv, "--model", modelID)
+		}
+		return append(argv, "-p", prompt), true
 	default:
 		return nil, false
 	}
+}
+
+// splitPiModel splits a Lancer model string of the form "provider/model-id"
+// (e.g. "openrouter/deepseek/deepseek-v4-flash") into (provider, modelID) for
+// pi's separate --provider/--model flags. A model with no "/" is returned as
+// (provider="", modelID=model) — pi's own --model flag also accepts a bare
+// "provider/id" pattern, but Lancer's model plumbing consistently prefixes
+// with the provider (see normalizeClaudeModel's doc comment for the same
+// convention on the claudeCode side), so a bare string with no separator is
+// treated as a model id with no provider override.
+func splitPiModel(model string) (provider, modelID string) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "", ""
+	}
+	if i := strings.Index(model, "/"); i > 0 {
+		return model[:i], model[i+1:]
+	}
+	return "", model
 }
 
 // continueArgv builds an explicit, shell-free argv that continues the most-recent
@@ -1381,6 +1425,73 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			"step_start", "step_finish", "tool", "tool_result",
 			"session_event", "message_start", "message_stop":
 			// lifecycle/metadata events (opencode + codex) — suppress
+		case "session":
+			// Pi: {"type":"session","version":3,"id":"...","timestamp":...,
+			// "cwd":"..."} — ALWAYS the first line pi emits in --mode json
+			// (verified live 2026-07-18 against pi 0.80.10,
+			// scratchpad/pi-smoke/pi-stream.jsonl line 0). The exact id
+			// `pi ... --session <id>` resumes (see resumeArgv's pi case,
+			// Phase 3(c), and pi_session_reader.go's on-disk format proof).
+			if !sessionCaptured {
+				if sid, _ := obj["id"].(string); sid != "" {
+					emitVendorSession(emit, runID, sid)
+					sessionCaptured = true
+				}
+			}
+		case "agent_start", "turn_start", "message_end", "turn_end", "agent_end", "agent_settled",
+			"tool_execution_start", "tool_execution_update", "tool_execution_end":
+			// Pi lifecycle/metadata events — verified live 2026-07-18 against
+			// pi 0.80.10. tool_execution_* duplicate what toolcall_end (below)
+			// already reports via emitToolArtifact (same toolCallId/toolName/
+			// arguments, just re-announced once the tool actually runs), so no
+			// separate live-status or artifact emission is needed here.
+		case "message_update":
+			// Pi: {"type":"message_update","assistantMessageEvent":{"type":
+			// thinking_start|thinking_delta|thinking_end|toolcall_start|
+			// toolcall_delta|toolcall_end|text_start|text_delta|text_end,...}}
+			// — verified live 2026-07-18 against pi 0.80.10 with a
+			// bash-tool-triggering prompt (scratchpad/pi-smoke/pi-tool-stream.jsonl).
+			ame, _ := obj["assistantMessageEvent"].(map[string]any)
+			if ame == nil {
+				break
+			}
+			switch ameType, _ := ame["type"].(string); ameType {
+			case "thinking_start", "thinking_delta":
+				emitLiveStatusThinking(emit, runID)
+			case "text_delta":
+				delta, _ := ame["delta"].(string)
+				if delta == "" {
+					break
+				}
+				emitLiveStatusStreaming(emit, runID)
+				n := atomic.AddInt64(seq, 1)
+				emit("agent.run.output", map[string]any{
+					"runId": runID, "stream": "stdout", "chunk": delta, "seq": int(n),
+				})
+			case "toolcall_end":
+				// The complete, resolved tool call — {id,name,arguments} — no
+				// need to accumulate toolcall_delta's partialArgs fragments
+				// (unlike Claude's content_block_delta/input_json_delta path)
+				// since pi hands back the fully-parsed arguments object here.
+				tc, _ := ame["toolCall"].(map[string]any)
+				if tc == nil {
+					break
+				}
+				toolID, _ := tc["id"].(string)
+				toolName, _ := tc["name"].(string)
+				if toolName == "" {
+					break
+				}
+				argsObj, _ := tc["arguments"].(map[string]any)
+				argsBytes, _ := json.Marshal(argsObj)
+				emitToolArtifact(emit, runID, toolID, toolName, string(argsBytes))
+			case "toolcall_start", "toolcall_delta", "thinking_end", "text_start", "text_end":
+				// No new information to forward: toolcall_end (above) carries
+				// the complete args; thinking_end/text_end are stream-closing
+				// markers only.
+			default:
+				// Unknown assistantMessageEvent type — suppress (forward-compat).
+			}
 		case "context.append_message":
 			// Kimi: {"type":"context.append_message","message":{"role":...,
 			// "content":[{"type":"text","text":"..."}],"toolCalls":[...]}} —
