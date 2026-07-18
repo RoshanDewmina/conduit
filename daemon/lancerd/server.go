@@ -639,6 +639,18 @@ func hookWiredForAgent(home string) func(string) bool {
 			return opencodeGateWired(home)
 		case "codex":
 			return codexHookWired(home)
+		case "pi":
+			// Pi's gate is the -e extension realLauncher appends
+			// (appendPiExtension) whenever the extension file exists. The
+			// mechanism is structurally verified (2026-07-18: extension loads
+			// error-free in pi 0.80.10; handler logic blocks fail-closed under
+			// Node; ToolCallEvent/ToolCallResult shapes match the installed
+			// package's type defs) but a model-driven tool_call veto has NOT
+			// been observed end-to-end — the OpenRouter account ran out of
+			// credits mid-session (402). Same discipline as kimi: stay
+			// fail-closed until a real run proves the veto, then flip this to
+			// piExtensionInstalled(home).
+			return false
 		default:
 			return false
 		}

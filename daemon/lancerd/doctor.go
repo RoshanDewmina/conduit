@@ -118,6 +118,7 @@ func collectDoctorResults(lancerDir, exePath, home string, look lookPathFunc, di
 		checkHooks(home),
 		checkCodexHooks(home),
 		checkKimiHooks(home),
+		checkPiExtension(home),
 		checkAuditLog(lancerDir),
 		checkQueue(lancerDir),
 		checkOSArch(),
@@ -228,7 +229,7 @@ func checkResidentDaemon(lancerDir string, dial dialFunc) checkResult {
 }
 
 func checkAgentCLIs(look lookPathFunc) checkResult {
-	agents := []string{"claude", "codex", "opencode", "kimi"}
+	agents := []string{"claude", "codex", "opencode", "kimi", "pi"}
 	var found []string
 	for _, a := range agents {
 		if _, err := look(a); err == nil {
@@ -239,7 +240,7 @@ func checkAgentCLIs(look lookPathFunc) checkResult {
 		return checkResult{
 			name:    "agent CLIs",
 			status:  statusWarn,
-			message: "none of claude/codex/opencode/kimi on PATH",
+			message: "none of claude/codex/opencode/kimi/pi on PATH",
 			hint:    "install at least one agent CLI",
 		}
 	}
@@ -363,6 +364,27 @@ func checkKimiHooks(home string) checkResult {
 		name:    "kimi hooks",
 		status:  statusWarn,
 		message: "Kimi hook not installed (script + hooks.json wiring both missing)",
+		hint:    "run: lancerd install",
+	}
+}
+
+// checkPiExtension reports whether the Pi approval extension is installed.
+// Unlike Claude/Codex there is no vendor-side settings or trust step: the
+// extension only loads when realLauncher passes "-e <path>" (appendPiExtension),
+// so file presence == every lancerd-launched pi run is gated.
+func checkPiExtension(home string) checkResult {
+	if piExtensionInstalled(home) {
+		return checkResult{
+			name:    "pi extension",
+			status:  statusWarn,
+			message: "Pi approval extension installed but UNVERIFIED (veto not live-fire tested — OpenRouter 402, fail-closed) — pi dispatches still use the coarse launch gate",
+			hint:    "top up OpenRouter credits, live-fire test the veto, then flip hookWiredForAgent's pi case",
+		}
+	}
+	return checkResult{
+		name:    "pi extension",
+		status:  statusWarn,
+		message: "Pi approval extension not installed — pi dispatches stay on the coarse launch gate",
 		hint:    "run: lancerd install",
 	}
 }

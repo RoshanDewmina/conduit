@@ -87,7 +87,17 @@ func TestLancerGateEnvironmentScopesVendorHooks(t *testing.T) {
 	if !requiresLancerGate([]string{"opencode", "run", "hello"}) {
 		t.Fatal("OpenCode dispatch must opt into the Lancer hook")
 	}
-	for _, argv := range [][]string{{"codex", "exec"}, {"kimi", "--prompt", "hello"}, nil} {
+	// codex/kimi joined when their LANCER_GATE-guarded hook scripts landed —
+	// without the env their hooks exit 0 (no-op), which would be fail-open
+	// once the launch gate is relaxed. See requiresLancerGate's doc comment.
+	if !requiresLancerGate([]string{"codex", "exec"}) {
+		t.Fatal("Codex dispatch must opt into the Lancer hook")
+	}
+	if !requiresLancerGate([]string{"kimi", "--prompt", "hello"}) {
+		t.Fatal("Kimi dispatch must opt into the Lancer hook")
+	}
+	// Pi's gate is the -e extension (appendPiExtension), not the env var.
+	for _, argv := range [][]string{{"pi", "--mode", "json"}, nil} {
 		if requiresLancerGate(argv) {
 			t.Fatalf("unexpected Lancer hook gate for %#v", argv)
 		}
