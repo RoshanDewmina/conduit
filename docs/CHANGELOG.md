@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-18
 
+- 23:35 Cursor Grok 4.5 — Phase 4 Accounts & Usage: VendorAccountStore (Keychain `dev.lancer.mobile.vendorAccounts`, metadata-only, manual select + restart-safety notice), AccountsUsageView (per-vendor list/add/remove/select + bridge usage via relay sendStatusQuery), Settings nav + LANCER_DESTINATION=accounts, AgentVendorAppEnum/AgentVendorStatus +pi (branch claude/vendor-cli-parity-multi-account-209d7c)
 - 19:45 Claude Fable (orchestrator) — pi adapter (d): approval extension (tool_call veto via lancerd agent-hook, loaded per-run via -e at realLauncher choke point), installer + docs/pi-lancer-gate.ts; pi stays fail-closed in hookWiredForAgent until model-driven veto is live-fire verified (OpenRouter credits ran out — 402). Also FIX: requiresLancerGate now covers codex/kimi — their LANCER_GATE-guarded hook scripts would otherwise silently no-op on dispatched runs (fail-open once trusted) (branch claude/vendor-cli-parity-multi-account-209d7c)
 - 19:50 Claude Fable (orchestrator) — pi adapter (e): doctor checkAgentCLIs includes pi; new pi-extension doctor check (installed-but-unverified wording matches kimi's) (branch claude/vendor-cli-parity-multi-account-209d7c)
 
