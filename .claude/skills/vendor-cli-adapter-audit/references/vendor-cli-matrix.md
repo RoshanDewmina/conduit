@@ -16,9 +16,12 @@ Key 2026-07-18 findings (verified against live `--help` and on-disk config, not 
 
 - **Codex 0.135.0 has a real hooks system.** `~/.codex/hooks.json` uses the Claude-style
   schema (`{"hooks":{"PreToolUse":[{"matcher":"","hooks":[{"type":"command","command":"…"}]}]}}`)
-  and a working, TRUSTED `pre_tool_use` hook is live on this machine
-  (`~/.codex/hooks/conduit-hook.sh`, trust recorded under `[hooks.state]` in
-  `~/.codex/config.toml` as `"~/.codex/hooks.json:pre_tool_use:0:0"`). Trust is per-definition;
+  and a conduit-era `pre_tool_use` hook is registered on this machine
+  (`~/.codex/hooks/conduit-hook.sh`, trust record under `[hooks.state]` in
+  `~/.codex/config.toml` as `"~/.codex/hooks.json:pre_tool_use:0:0"`).
+  CORRECTION (same day, Phase 1 review): that trust record has `enabled = false` — the
+  conduit hook is registered but NOT currently firing; Codex silently skips untrusted/disabled
+  hooks (live-verified 2026-07-18 in an isolated CODEX_HOME). Trust is per-definition and per-position;
   `codex --dangerously-bypass-hook-trust` exists to skip it (do not use in production).
   The repo draft `docs/codex-hooks.json` + `docs/codex-lancer-hook.sh` match this exact shape —
   the draft is viable, but any installer must MERGE into `hooks.json` (a conduit-era hook already
