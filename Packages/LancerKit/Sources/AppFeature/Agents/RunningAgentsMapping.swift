@@ -141,6 +141,50 @@ public enum RunningAgentsMapping: Sendable {
         guard let snapshot else { return 0 }
         return snapshot.agents.reduce(0) { $0 + ($1.runningCount ?? 0) }
     }
+
+    /// Same max() the Workspaces Agents header uses: prefer the richer of
+    /// session-list running rows vs `agent.status` vendor totals.
+    public static func resolvedRunningCount(rows: [Row], status: AgentStatusSnapshot?) -> Int {
+        max(totalRunningCount(from: status), rows.filter(\.isRunning).count)
+    }
+
+    /// Medium-widget lines for currently-running agents. Falls back to
+    /// per-vendor `agent.status` copy when the session list has no running
+    /// rows but status still reports a positive count.
+    public static func widgetLines(
+        from rows: [Row],
+        status: AgentStatusSnapshot?,
+        hostName: String? = nil,
+        limit: Int = 4
+    ) -> [String] {
+        let fromRows: [String] = rows
+            .filter(\.isRunning)
+            .prefix(limit)
+            .map { row in
+                let base = "\(row.providerLabel) · \(cwdSubtitle(row.cwd))"
+                if let hostName, !hostName.isEmpty {
+                    return "\(base) · \(hostName)"
+                }
+                return base
+            }
+        if !fromRows.isEmpty { return Array(fromRows) }
+
+        guard let status else { return [] }
+        var lines: [String] = []
+        for agent in status.agents {
+            let n = agent.runningCount ?? 0
+            guard n > 0 else { continue }
+            let label = providerLabel(agent.agent)
+            let base = n == 1 ? "\(label) · running" : "\(label) · \(n) running"
+            if let hostName, !hostName.isEmpty {
+                lines.append("\(base) · \(hostName)")
+            } else {
+                lines.append(base)
+            }
+            if lines.count >= limit { break }
+        }
+        return lines
+    }
 }
 
 /// Poll / degrade policy for the Agents section (~5s while visible).

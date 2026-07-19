@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 import PersistenceKit
 import LancerCore
+import SessionFeature
 
 /// Workspaces launch screen — real repos derived from conversations +
 /// user-added paths; honest empty state when none exist.
@@ -173,10 +174,21 @@ public struct WorkspacesView: View {
         .animation(composerMorphSpring, value: isComposerPresented)
         .task {
             await workspaceData.refresh()
+            if #available(iOS 16.2, *) {
+                LancerLiveActivityManager.shared.syncRunningAgentsWidget()
+            }
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
-            Task { await workspaceData.refresh() }
+            Task {
+                await workspaceData.refresh()
+                // Push-to-start / APNs-updated Live Activities can exist while
+                // the app was closed — mirror them into AgentStatusWidget on
+                // every foreground without requiring Agents section polling.
+                if #available(iOS 16.2, *) {
+                    LancerLiveActivityManager.shared.syncRunningAgentsWidget()
+                }
+            }
         }
         .sheet(isPresented: $isProfilePresented) {
             ProfileView()

@@ -1,5 +1,25 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-19 ~15:10 ET — Widget stale-approvals FIXED + device-installed (PR #185)
+
+- **Bug (owner screenshot ~14:47):** Home Screen approvals widget showed **9 waiting**
+  (`date +lockscreen…`) while daemon `queue.json` pending=0. Agents widget was already correct.
+- **Root cause:** phone-local approval rows only retire on explicit decide; daemon-side
+  resolution never cleared them. `SessionViewModel.writeWidgetSnapshot` could also overwrite
+  the DB-backed pending count. `lancerE2EApprovalResolved` was posted but never handled;
+  daemon `sendApprovalResolved` existed but was never called from production paths.
+- **Fix (PR #185, branch `fix/widget-stale-approvals` tip `4c909f02`):** 10m TTL
+  `expireStalePending` → `.expired` on snapshot write + ingest start/arrive; dedicated
+  `pendingApprovalsUpdatedKey`; SessionViewModel no longer writes pending count; ingest
+  handles `approvalResolved`; daemon sends resolved on e-stop deny + no-client auto-allow.
+- **Gates:** `swift build` OK; `swift test` OK (ApprovalStaleExpiryTests 2/2); `go test ./...` OK;
+  device Debug BUILD SUCCEEDED → installed+launched on phone `557A7877…` via `/tmp/lancer-device-widget-stale`;
+  lancerd hot-swapped (`~/.lancer/bin/lancerd` sha256 `0c0a83a2…`, LaunchAgent kickstart).
+- **Owner check:** glance Home Screen — approvals widget should read **0** after this launch.
+- **Still open (unchanged):** B1 remaining rows (lock-screen approval push app-closed, E-stop
+  mid-run, screenshots); LA Date-encoding test drift; re-forward activity token on relay reconnect.
+
+
 ## ⚡ 2026-07-18 ~20:00 ET — vendor-CLI parity + multi-account brief: ALL 5 PHASES MERGED
 
 PRs #170–#174 → master tip `d6ed5792`. Phase 3 (d)/(e) finished by Fable after the Sonnet

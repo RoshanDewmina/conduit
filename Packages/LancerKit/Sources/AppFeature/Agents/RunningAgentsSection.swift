@@ -195,6 +195,29 @@ public struct RunningAgentsSection: View {
                 tracker: tracker,
                 now: now
             )
+            // Prefer daemon session/status lines when they report running
+            // agents. If the poll is empty but a Live Activity (incl.
+            // push-to-start) still shows Running, sync from ActivityKit so
+            // we never clobber the island's truth down to widget 0.
+            let daemonCount = RunningAgentsMapping.resolvedRunningCount(
+                rows: rows,
+                status: status
+            )
+            if daemonCount > 0 {
+                RunningAgentsMapping.writeRunningAgentsWidgetSnapshot(
+                    rows: rows,
+                    status: status,
+                    hostName: machine.record.displayName
+                )
+            } else if #available(iOS 16.2, *) {
+                LancerLiveActivityManager.shared.syncRunningAgentsWidget()
+            } else {
+                RunningAgentsMapping.writeRunningAgentsWidgetSnapshot(
+                    rows: rows,
+                    status: status,
+                    hostName: machine.record.displayName
+                )
+            }
         } catch {
             _ = RunningAgentsFreshness.recordFailure(&tracker)
             statusMessage = RunningAgentsFreshness.statusMessage(
