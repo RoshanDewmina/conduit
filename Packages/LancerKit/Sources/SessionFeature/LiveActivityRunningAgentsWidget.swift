@@ -12,7 +12,6 @@ import WidgetKit
 /// APNs, so the island could show `claudeCode · Running` while the widget
 /// stayed at 0 forever. This mapper is the shared truth for "is an agent
 /// run visible on the island?" → widget count/lines.
-@available(iOS 16.2, *)
 public enum LiveActivityRunningAgentsWidget: Sendable {
 
     public struct SnapshotInput: Equatable, Sendable {
@@ -45,6 +44,7 @@ public enum LiveActivityRunningAgentsWidget: Sendable {
         }
     }
 
+    @available(iOS 16.2, *)
     public static func isAgentRunning(_ state: LancerSessionAttributes.ContentState) -> Bool {
         isAgentRunning(status: state.status, isStreaming: state.isStreaming)
     }
@@ -92,6 +92,7 @@ public enum LiveActivityRunningAgentsWidget: Sendable {
 
     /// System ActivityKit activities — includes push-to-start LAs the in-process
     /// manager dictionary never saw (app was closed when the run started).
+    @available(iOS 16.2, *)
     @MainActor
     public static func syncFromSystemActivities(
         suiteName: String = WidgetSnapshot.appGroupID

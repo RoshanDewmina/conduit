@@ -4,7 +4,6 @@ import Foundation
 @testable import SessionFeature
 
 #if os(iOS)
-@available(iOS 16.2, *)
 @Suite("Live Activity → AgentStatusWidget snapshot")
 struct LiveActivityRunningAgentsWidgetTests {
 
