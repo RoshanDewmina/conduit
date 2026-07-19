@@ -359,6 +359,17 @@ public struct AppRoot: View {
                 relayQuestionIngest.start()
                 relayArtifactIngest?.start()
                 devicePushRegistration?.start()
+                // Fire-and-forget: registerForRemoteNotifications() (AppDelegate) captures a
+                // device token without this, but iOS silently drops every alert-payload push
+                // (approvals, questions, run-complete) unless the user has actually granted
+                // alert authorization — with no system UI ever surfacing to explain why, since
+                // an app that has never called this has no Notifications row in Settings at
+                // all. Found 2026-07-19 live-testing PR #176's app-closed push fix: the whole
+                // daemon->push-backend->APNs pipeline reported success (backend 204, Apple 200)
+                // but nothing ever appeared on a locked phone because this call was missing
+                // entirely. Detached so the first-launch system permission sheet doesn't block
+                // the rest of hydration below.
+                Task { _ = await Notifications.shared.requestAuthorization() }
                 await RelayFleetHydration.hydrate(into: relayFleetStore)
                 shellLiveBridge.markHydrated()
                 await workspaceDataStore.refresh()
