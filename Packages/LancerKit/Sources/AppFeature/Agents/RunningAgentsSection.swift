@@ -195,6 +195,13 @@ public struct RunningAgentsSection: View {
                 tracker: tracker,
                 now: now
             )
+            // Feed Home Screen AgentStatusWidget from the same poll — not
+            // from SessionViewModel's Live Activity "connected" status.
+            RunningAgentsMapping.writeRunningAgentsWidgetSnapshot(
+                rows: rows,
+                status: status,
+                hostName: machine.record.displayName
+            )
         } catch {
             _ = RunningAgentsFreshness.recordFailure(&tracker)
             statusMessage = RunningAgentsFreshness.statusMessage(

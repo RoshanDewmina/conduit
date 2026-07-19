@@ -20,6 +20,17 @@ public enum WidgetSnapshot {
     /// to the widget TTL guard.
     public static let pendingApprovalsUpdatedKey = "widgetPendingApprovalsUpdated"
 
+    /// Count of agents currently running on the paired host, written from the
+    /// same `agent.sessions.list` + `agent.status` poll that feeds Workspaces
+    /// (`RunningAgentsSection`), not from phone session-connection status.
+    public static let runningAgentsCountKey = "widgetRunningAgentsCount"
+    /// One-liners for the Home Screen Agents medium widget (provider · cwd).
+    public static let runningAgentsLinesKey = "widgetRunningAgentsLines"
+    /// Unix epoch when the running-agents keys were last rewritten. Distinct
+    /// from `lastUpdatedKey` / `sessionStatusKey` so a Live Activity session
+    /// refresh cannot masquerade as a fresh daemon agent poll.
+    public static let runningAgentsUpdatedKey = "widgetRunningAgentsUpdated"
+
     /// Phone-local pending rows older than this are treated as dead corpses.
     /// Daemon-side resolutions (timeout-deny, restart prune, decision on
     /// another surface) never retire the phone row — only an explicit

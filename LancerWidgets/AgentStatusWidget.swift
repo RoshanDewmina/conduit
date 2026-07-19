@@ -3,15 +3,16 @@ import SwiftUI
 import LancerCore
 
 // Home Screen widget #1: running-agent snapshot, read from the App Group
-// `WidgetSnapshot` keys the app writes in
-// `SessionFeature/SessionViewModel.swift:writeWidgetSnapshot`.
+// `WidgetSnapshot` keys written by
+// `RunningAgentsMapping.writeRunningAgentsWidgetSnapshot` (same
+// `agent.sessions.list` + `agent.status` poll as Workspaces Agents).
 //
-// KNOWN V1 LIMITATION (matches the existing fleet-wide caveat documented on
-// `LancerLiveActivityManager.updatePendingApprovals`): the snapshot is a
-// single global slot, not one row per active session, so `lines` below is at
-// most a single one-liner today even though the widget is designed to show
-// several. Attributing snapshot state to a specific session/host is a
-// separate, bigger change — not solved here.
+// Do NOT key off `sessionStatusKey` / Live Activity "connected" — that is
+// phone↔daemon session liveness, not whether lancerd has active agents.
+//
+// KNOWN V1 LIMITATION: the snapshot is a single global slot (first connected
+// machine), refreshed while Workspaces Agents is mounted (~5s). Backgrounded
+// app keeps the last successful write until the next foreground poll.
 
 struct AgentStatusEntry: TimelineEntry {
     let date: Date
@@ -21,7 +22,7 @@ struct AgentStatusEntry: TimelineEntry {
 
 struct AgentStatusProvider: TimelineProvider {
     func placeholder(in context: Context) -> AgentStatusEntry {
-        AgentStatusEntry(date: .now, runningCount: 1, lines: ["Claude Code · connected"])
+        AgentStatusEntry(date: .now, runningCount: 1, lines: ["Claude Code · lancer"])
     }
 
     func getSnapshot(in context: Context, completion: @escaping (AgentStatusEntry) -> Void) {
@@ -30,25 +31,18 @@ struct AgentStatusProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<AgentStatusEntry>) -> Void) {
         let e = entry()
-        // Fallback refresh; `WidgetCenter.reloadAllTimelines()` from the app
-        // (SessionViewModel.writeWidgetSnapshot) is the primary trigger.
+        // Fallback refresh; `WidgetCenter.reloadTimelines(ofKind:)` from
+        // `writeRunningAgentsWidgetSnapshot` is the primary trigger.
         let next = Calendar.current.date(byAdding: .minute, value: 15, to: e.date)!
         completion(Timeline(entries: [e], policy: .after(next)))
     }
 
     private func entry() -> AgentStatusEntry {
         let defaults = UserDefaults(suiteName: WidgetSnapshot.appGroupID)
-        let status = defaults?.string(forKey: WidgetSnapshot.sessionStatusKey)
-        let hostName = defaults?.string(forKey: WidgetSnapshot.hostNameKey)
-        let agentName = defaults?.string(forKey: WidgetSnapshot.agentNameKey)
-
-        let isActive = (status == "connected" || status == "reconnecting")
-        guard isActive else {
-            return AgentStatusEntry(date: .now, runningCount: 0, lines: [])
-        }
-        let name = agentName ?? "Agent"
-        let line = hostName.map { "\(name) on \($0)" } ?? name
-        return AgentStatusEntry(date: .now, runningCount: 1, lines: [line])
+        let count = defaults?.integer(forKey: WidgetSnapshot.runningAgentsCountKey) ?? 0
+        let lines = defaults?.stringArray(forKey: WidgetSnapshot.runningAgentsLinesKey) ?? []
+        // If count > 0 but lines were cleared, still show the numeric count.
+        return AgentStatusEntry(date: .now, runningCount: count, lines: lines)
     }
 }
 
@@ -95,8 +89,8 @@ struct AgentStatusWidgetView: View {
                     .font(.caption2)
                     .foregroundStyle(entry.runningCount > 0 ? Color.orange : Color(white: 0.5))
             }
-            if entry.lines.isEmpty {
-                Text("No agents running")
+            if entry.runningCount == 0 || entry.lines.isEmpty {
+                Text(entry.runningCount == 0 ? "No agents running" : "\(entry.runningCount) agents running")
                     .font(.footnote)
                     .foregroundStyle(Color(white: 0.55))
             } else {
