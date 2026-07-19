@@ -1,0 +1,100 @@
+warning: 'grdb.swift': /Volumes/LancerDev/lancer/.worktrees/sim-remaining-lanes/Packages/LancerKit/.build/checkouts/GRDB.swift/Package.swift:40:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+38 |         .macOS(.v10_13),
+39 |         .tvOS(.v11),
+40 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+41 |     ],
+42 |     products: [
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+warning: 'bigint': /Volumes/LancerDev/lancer/.worktrees/sim-remaining-lanes/Packages/LancerKit/.build/checkouts/BigInt/Package.swift:18:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+16 |         .iOS(.v12),
+17 |         .tvOS(.v12),
+18 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+19 |         .macCatalyst(.v13),
+20 |         .visionOS(.v1),
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Building for debugging...
+[Computing dependencies]
+[Provisioning 1 / 99]
+[Constructing description]
+[Pre-planning 1 / 2442]
+[Planning 168 / 2442]
+[Planning 1733 / 2442]
+[Planning 1885 / 2442]
+[Planning deferred tasks]
+[Constructing 296 / 5483]
+[Starting]
+[15 / 252] swift-crypto_CCryptoBoringSSL
+[38 / 197] InternalCollectionsUtilities
+[47 / 99] IntentsKitTests-product
+[69 / 102] HostControlKitTests-product
+[70 / 108] IntentsKitTests-product
+[70 / 119] LancerKitTests-product
+[72 / 134]
+[81 / 134]
+[83 / 134]
+[86 / 134] HostControlKitTests-product
+[92 / 134]
+[94 / 134] HostControlKitTests-product
+[95 / 134] IntentsKitTests-product
+[104 / 134] LancerKitTests-product
+[105 / 134] LancerKitTests-product
+[108 / 134] LancerKitTests-product
+[109 / 134] LancerKitTests-product
+[110 / 134] LancerKitTests-product
+[111 / 134] LancerKitTests-product
+[112 / 134] IntentsKitTests-product
+[114 / 134] IntentsKitTests-product
+[115 / 134] IntentsKitTests-product
+[116 / 134] IntentsKitTests-product
+[118 / 134] HostControlKitTests-product
+[121 / 134]
+[123 / 134] LancerKitTests-product
+[128 / 134] LancerKitTests-product
+[130 / 134] LancerKitTests-product
+[131 / 134] LancerKitTests-product
+[132 / 134] LancerKitTests-product
+Build complete! (27.39 secs.)
+◇ Test run started.
+↳ Testing Library Version: 2073
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "Vendor account store" started.
+◇ Suite "RunningAgentsFreshness" started.
+◇ Suite "RunningAgentsMapping" started.
+◇ Test "remove clears active and promotes remaining account" started.
+◇ Test "first add becomes active; select updates active and lastSelectedAt" started.
+◇ Test "vendor catalog includes pi" started.
+◇ Test "round-trips accounts per vendor" started.
+◇ Test "displayTitle falls back to cwd basename" started.
+◇ Test "providerLabel maps known vendors" started.
+◇ Test "stale/unreachable surfaces data age — never all-clear" started.
+◇ Test "recovery clears degraded and allows all-clear again" started.
+◇ Test "totalRunningCount sums vendor runningCount" started.
+◇ Test "No agents running only from fresh success with zero rows" started.
+◇ Test "select unknown id throws" started.
+◇ Test "rows drop historical and sort running first" started.
+◇ Test "two consecutive failures yield degraded unreachable copy" started.
+◇ Test "one pre-first-success failure stays neutral (nil statusMessage)" started.
+◇ Test "poll interval is ~5s" started.
+✔ Test "recovery clears degraded and allows all-clear again" passed after 0.001 seconds.
+✔ Test "No agents running only from fresh success with zero rows" passed after 0.001 seconds.
+✔ Test "stale/unreachable surfaces data age — never all-clear" passed after 0.001 seconds.
+✔ Test "vendor catalog includes pi" passed after 0.001 seconds.
+✔ Test "two consecutive failures yield degraded unreachable copy" passed after 0.001 seconds.
+✔ Test "totalRunningCount sums vendor runningCount" passed after 0.001 seconds.
+✔ Test "one pre-first-success failure stays neutral (nil statusMessage)" passed after 0.001 seconds.
+✔ Test "poll interval is ~5s" passed after 0.001 seconds.
+✔ Test "rows drop historical and sort running first" passed after 0.001 seconds.
+✔ Test "providerLabel maps known vendors" passed after 0.001 seconds.
+✔ Suite "RunningAgentsFreshness" passed after 0.001 seconds.
+✔ Test "displayTitle falls back to cwd basename" passed after 0.001 seconds.
+✔ Suite "RunningAgentsMapping" passed after 0.001 seconds.
+✔ Test "first add becomes active; select updates active and lastSelectedAt" passed after 0.001 seconds.
+✔ Test "round-trips accounts per vendor" passed after 0.001 seconds.
+✔ Test "select unknown id throws" passed after 0.001 seconds.
+✔ Test "remove clears active and promotes remaining account" passed after 0.001 seconds.
+✔ Suite "Vendor account store" passed after 0.001 seconds.
+✔ Test run with 15 tests in 3 suites passed after 0.001 seconds.

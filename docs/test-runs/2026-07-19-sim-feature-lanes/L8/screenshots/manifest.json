@@ -1,0 +1,17 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "30DEF4E3-60A4-4F22-AC1B-0AB60664FA77",
+        "deviceName" : "simurgh-clone[lease-247:iPhone 17 Pro:27.0]",
+        "exportedFileName" : "C9811EEA-CB3B-45D5-A151-6483CC9174E2.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "L8-01-accounts-usage_0_7798FDF1-9515-4FD6-9A56-644C34F227F7.png",
+        "timestamp" : 1784501310.857
+      }
+    ],
+    "testIdentifier" : "SimRemainingLanesUITests/testL8_AccountsUsageDestination()",
+    "testIdentifierURL" : "test://com.apple.xcode/Lancer/LancerUITests/SimRemainingLanesUITests/testL8_AccountsUsageDestination"
+  }
+]

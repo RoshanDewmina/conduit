@@ -31,6 +31,7 @@ public struct WorkspacesView: View {
     @State private var isPRDetailDirectPresented = false
     @State private var isTrustedMachinesDirectPresented = false
     @State private var isAttachmentPreviewDirectPresented = false
+    @State private var isReviewPresented = false
     #endif
 
     public init() {}
@@ -225,6 +226,13 @@ public struct WorkspacesView: View {
         .sheet(isPresented: $isAttachmentPreviewDirectPresented) {
             AttachmentPreviewDemoView()
         }
+        .sheet(isPresented: $isReviewPresented) {
+            ReviewSheetView(
+                conversationID: "debug-review-fixture",
+                scope: .session,
+                dataSource: FixtureReviewDataSource.shared
+            )
+        }
         .navigationDestination(isPresented: $isThreadListDirectPresented) {
             if let first = repos.first {
                 ThreadListView(workspace: .repo(first))
@@ -262,6 +270,10 @@ public struct WorkspacesView: View {
                 isSettingsPresented = true
             case "accounts":
                 isAccountsPresented = true
+            case "review":
+                // DEBUG fixture seam for ReviewSheetView (LANCER_DESTINATION=review
+                // was removed with CursorStyle; restore for sim/UITest without host diffs).
+                isReviewPresented = true
             case "approval":
                 Task {
                     await relayApprovalIngest.hydratePendingForUITestIfRequested()
@@ -295,13 +307,24 @@ public struct WorkspacesView: View {
             case "attachmentPreview":
                 isAttachmentPreviewDirectPresented = true
             case "liveThread":
-                let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
-                    ?? "Can you take a look at the onboarding flow?"
-                let cwd = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_CWD"]
-                    ?? workspaceData.defaultRepo?.cwd
-                    ?? ""
-                guard !cwd.isEmpty else { break }
-                activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: cwd)
+                Task {
+                    // Match `terminal`: hydrate + auto-pair can take >20s; opening
+                    // the thread immediately raced `waitForConnectedMachine`'s
+                    // empty-fleet fail-fast (L1 serial 2026-07-19).
+                    var connected = relayFleetStore.firstConnectedMachine
+                    let deadline = Date().addingTimeInterval(45)
+                    while connected == nil, Date() < deadline {
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        connected = relayFleetStore.firstConnectedMachine
+                    }
+                    let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
+                        ?? "Can you take a look at the onboarding flow?"
+                    let cwd = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_CWD"]
+                        ?? workspaceData.defaultRepo?.cwd
+                        ?? ""
+                    guard !cwd.isEmpty else { return }
+                    activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: cwd)
+                }
             case "search":
                 isSearchPresented = true
             case "terminal":

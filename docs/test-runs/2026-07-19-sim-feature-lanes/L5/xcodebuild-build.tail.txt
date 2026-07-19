@@ -1,0 +1,40 @@
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Lancer.debug.dylib
+
+CodeSign /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/__preview.dylib (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/__preview.dylib
+
+CodeSign /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --entitlements /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/Lancer.app.xcent --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app
+
+ValidateEmbeddedBinary /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PlugIns/LancerWidgets.appex (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/embeddedBinaryValidationUtility /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PlugIns/LancerWidgets.appex -signing-cert - -info-plist-path /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Info.plist
+
+RegisterExecutionPolicyException /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets
+    builtin-RegisterExecutionPolicyException /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app
+
+Validate /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets
+    builtin-validationUtility /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets
+    /usr/bin/touch -c /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+** BUILD SUCCEEDED ** [98.495 sec]
+

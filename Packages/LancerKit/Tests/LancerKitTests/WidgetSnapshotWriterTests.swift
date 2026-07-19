@@ -49,6 +49,12 @@ struct WidgetSnapshotWriterTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
+        // Use wall-clock timestamps inside the 10m pending TTL.
+        // `writeApprovalWidgetSnapshot` always runs `expireStalePending` first —
+        // the historical epoch fixtures (1970) were immediately retired and left
+        // the App Group count at 0 (L5 sim FAIL after the stale-approvals fix).
+        let now = Date()
+
         // 1. A first approval arrives.
         let older = Approval(
             sessionID: SessionID(),
@@ -57,7 +63,7 @@ struct WidgetSnapshotWriterTests {
             command: "date +lockscreen-proof-1",
             cwd: "/repo",
             risk: .low,
-            createdAt: Date(timeIntervalSince1970: 1_000)
+            createdAt: now.addingTimeInterval(-120)
         )
         try await repo.upsert(older)
         await repo.writeApprovalWidgetSnapshot(suiteName: suite)
@@ -76,7 +82,7 @@ struct WidgetSnapshotWriterTests {
             command: "cat go.mod",
             cwd: "/repo",
             risk: .medium,
-            createdAt: Date(timeIntervalSince1970: 2_000)
+            createdAt: now.addingTimeInterval(-60)
         )
         try await repo.upsert(newer)
         await repo.writeApprovalWidgetSnapshot(suiteName: suite)

@@ -1,0 +1,62 @@
+Building for debugging...
+[Computing dependencies]
+[Constructing description]
+[Pre-planning 1 / 2442]
+[Planning 1 / 2442]
+[Planning 1289 / 2442]
+[Planning 2278 / 2442]
+[Planning deferred tasks]
+[Constructing 1 / 5483]
+[Constructing 1410 / 5483]
+[Starting]
+[1 / 5]
+[3 / 4] HostControlKitTests-product
+[3 / 6] CryptoBoringWrapper
+[3 / 6] _NIOBase64
+[11 / 23] NIO
+[11 / 22] CCryptoBoringSSL
+[13 / 14] IntentsKitTests-product
+[14 / 18] AppFeature
+[15 / 19] AppFeature
+[19 / 31] AppFeature
+[21 / 22] LancerKitTests-product
+[22 / 23] LancerKitTests-product
+Build complete! (9.79 secs.)
+◇ Test run started.
+↳ Testing Library Version: 2073
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite ReviewModelsTests started.
+◇ Test "decodes tree and file fixtures" started.
+◇ Test "hunk maps to display rows preserving kind and numbers" started.
+◇ Test "decodes sessionDiff fixture verbatim" started.
+◇ Test "comment queue formats chip and composer prefix" started.
+◇ Test "decodes turnDiff fixture verbatim" started.
+◇ Test "All Files tree hides .git metadata but keeps normal dotfiles" started.
+◇ Test "decodes fileDiff fixture with null line numbers" started.
+◇ Test "decodes fileDiff when omitempty drops truncated" started.
+◇ Test repoRPCSerializationGateSerializesConcurrentCallers() started.
+◇ Test "tree lazy-load merge is dirs-first and nested" started.
+◇ Test "relay review source falls back when bridge is nil" started.
+◇ Test "full-file presentation keeps monospaced lines without soft wrap" started.
+◇ Test "decodes file content when omitempty drops false/zero fields" started.
+◇ Test "decodes verbatim relay repo.* result payloads from Go router" started.
+◇ Test "lineRangeLabel uses the side that has lines" started.
+◇ Test "fixture data source drives turn/session/file/tree/file RPCs" started.
+✔ Test "decodes fileDiff fixture with null line numbers" passed after 0.001 seconds.
+✔ Test "decodes tree and file fixtures" passed after 0.001 seconds.
+✔ Test "decodes fileDiff when omitempty drops truncated" passed after 0.001 seconds.
+✔ Test "hunk maps to display rows preserving kind and numbers" passed after 0.001 seconds.
+✔ Test "relay review source falls back when bridge is nil" passed after 0.001 seconds.
+✔ Test "full-file presentation keeps monospaced lines without soft wrap" passed after 0.001 seconds.
+✔ Test "lineRangeLabel uses the side that has lines" passed after 0.001 seconds.
+✔ Test "decodes file content when omitempty drops false/zero fields" passed after 0.001 seconds.
+✔ Test "comment queue formats chip and composer prefix" passed after 0.001 seconds.
+✔ Test "decodes turnDiff fixture verbatim" passed after 0.001 seconds.
+✔ Test "decodes sessionDiff fixture verbatim" passed after 0.001 seconds.
+✔ Test "fixture data source drives turn/session/file/tree/file RPCs" passed after 0.001 seconds.
+✔ Test "decodes verbatim relay repo.* result payloads from Go router" passed after 0.002 seconds.
+✔ Test "All Files tree hides .git metadata but keeps normal dotfiles" passed after 0.013 seconds.
+✔ Test "tree lazy-load merge is dirs-first and nested" passed after 0.014 seconds.
+✔ Test repoRPCSerializationGateSerializesConcurrentCallers() passed after 0.220 seconds.
+✔ Suite ReviewModelsTests passed after 0.220 seconds.
+✔ Test run with 16 tests in 1 suite passed after 0.220 seconds.

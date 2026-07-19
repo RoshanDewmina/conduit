@@ -30,6 +30,9 @@ final class SweepLaneC4Tests: XCTestCase {
     private func launchSweepApp(destination: String, pairCode: String?) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
+        // Suppresses the iOS notification permission sheet that blocked HID on
+        // the 2026-07-19 L1 serial run (AppRoot honors this in DEBUG).
+        app.launchEnvironment["LANCER_SKIP_NOTIFICATION_PROMPT"] = "1"
         app.launchEnvironment["LANCER_DESTINATION"] = destination
         app.launchEnvironment["LANCER_STATE_DIR"] = "/tmp/sweep-C4"
         if let pairCode {
