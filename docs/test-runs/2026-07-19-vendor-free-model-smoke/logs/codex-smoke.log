@@ -1,0 +1,23 @@
+=== CODEX SMOKE START 2026-07-19T21:25:42Z model=gpt-5.4-mini effort=low ===
+Reading additional input from stdin...
+OpenAI Codex v0.144.6
+--------
+workdir: /private/tmp/lancer-vendor-smoke-2026-07-19/workdir
+model: gpt-5.4-mini
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: low
+reasoning summaries: none
+session id: 019f7c45-46c9-7650-9839-895fef7b25db
+--------
+user
+Reply with exactly: codex-smoke-OK
+codex
+codex-smoke-OK
+tokens used
+7,729
+codex-smoke-OK
+=== CODEX EXIT= 2026-07-19T21:25:45Z ===
+--- last message ---
+codex-smoke-OK

@@ -1,0 +1,5 @@
+production ~/.lancer untouched check:
+drwx------@ 27 roshansilva  staff  864 Jul 19 17:08 /Users/roshansilva/.lancer
+no lancerd pair invoked
+isolated CODEX_HOME=/tmp/lancer-vendor-smoke-2026-07-19/codex-home
+isolated OpenCode XDG under /tmp/lancer-vendor-smoke-2026-07-19/opencode-xdg-*

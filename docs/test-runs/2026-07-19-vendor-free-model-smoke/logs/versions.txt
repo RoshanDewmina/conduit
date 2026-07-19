@@ -1,0 +1,5 @@
+timestamp: 2026-07-19T21:21:33Z
+codex: codex-cli 0.144.6
+opencode: 1.17.18
+agent: 2026.07.16-899851b
+CODEX_HOME=/tmp/lancer-vendor-smoke-2026-07-19/codex-home
