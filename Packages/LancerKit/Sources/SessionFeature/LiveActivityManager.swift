@@ -106,6 +106,14 @@ public typealias ActivityTokenRegistration = @Sendable (
     _ isPushToStart: Bool
 ) async -> Void
 
+/// Called by `end(activityKey:)` once the local Activity has actually ended,
+/// so push-backend can clear its now-dead per-activity token (root cause b,
+/// 2026-07-19: a token left on file after the activity it belonged to ended
+/// permanently suppressed the next app-closed push-to-start). Carries only the
+/// device/app-level session id — never an activity token, since there is
+/// nothing left to register, only to clear.
+public typealias ActivityTokenClear = @Sendable (_ sessionID: String) async -> Void
+
 /// Thin wrapper around ActivityKit for Lancer's session activities. One
 /// activity per active *session* (keyed by `SessionViewModel.sessionID`, not
 /// `hostID`), so two concurrent sessions against the same host each get their
@@ -143,6 +151,16 @@ public final class LancerLiveActivityManager {
     /// Closure called when an activity or push-to-start push token is ready.
     /// Set by LancerApp at launch (alongside the APNs device-token path).
     public var tokenRegistration: ActivityTokenRegistration?
+
+    /// Closure called from `end(activityKey:)` to clear the now-dead
+    /// per-activity token on push-backend. Set by LancerApp alongside
+    /// `tokenRegistration`.
+    public var tokenClear: ActivityTokenClear?
+
+    /// deviceSessionID captured at `start(...)` per activityKey, so `end(...)`
+    /// (which only receives activityKey) can still tell `tokenClear` which
+    /// session's token to drop.
+    private var deviceSessionIDs: [String: String] = [:]
 
     private init() {}
 
@@ -207,6 +225,8 @@ public final class LancerLiveActivityManager {
             pendingApprovalRisk: resolvedApprovalRisk,
             cost: lastContent[activityKey]?.cost
         )
+
+        deviceSessionIDs[activityKey] = deviceSessionID
 
         if let existing = activities[activityKey] {
             await existing.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
@@ -373,6 +393,9 @@ public final class LancerLiveActivityManager {
     }
 
     /// End the activity for a single session (e.g. user disconnected).
+    /// Also clears push-backend's per-activity token via `tokenClear` — a
+    /// token left on file after its activity ends permanently suppresses the
+    /// NEXT app-closed push-to-start (root cause b, 2026-07-19).
     public func end(activityKey: String) async {
         guard let activity = activities[activityKey] else { return }
         await activity.end(nil, dismissalPolicy: .immediate)
@@ -380,6 +403,9 @@ public final class LancerLiveActivityManager {
         lastContent.removeValue(forKey: activityKey)
         tokenTasks[activityKey]?.cancel()
         tokenTasks.removeValue(forKey: activityKey)
+        if let deviceSessionID = deviceSessionIDs.removeValue(forKey: activityKey) {
+            await tokenClear?(deviceSessionID)
+        }
     }
 
     // MARK: - Push token monitoring

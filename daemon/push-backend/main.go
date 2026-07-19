@@ -719,15 +719,26 @@ func sendAPNsAlert(deviceToken, bundleID, jwt string, payload []byte, priority s
 
 // registerActivityTokenRequest is the body for POST /register-activity-token.
 type registerActivityTokenRequest struct {
-	SessionID      string `json:"sessionId"`
-	ActivityToken  string `json:"activityToken,omitempty"`
-	IsPushToStart  bool   `json:"isPushToStart,omitempty"`
+	SessionID     string `json:"sessionId"`
+	ActivityToken string `json:"activityToken,omitempty"`
+	IsPushToStart bool   `json:"isPushToStart,omitempty"`
+	// Clear requests dropping the per-activity update token (never the
+	// push-to-start token) for this session — sent by the app when its Live
+	// Activity ends. Without this, an empty ActivityToken was always rejected
+	// as invalid, so a per-activity token could never be cleared once set:
+	// pushLiveActivityStart's "existingActivityToken != \"\" ⇒ no-op"
+	// heuristic then permanently suppressed app-closed push-to-start after
+	// the FIRST activity ever ran, until a lucky backend restart coincidentally
+	// wiped the map (2026-07-19 root cause b).
+	Clear bool `json:"clear,omitempty"`
 }
 
 // handleRegisterActivityToken: POST /register-activity-token
 // Guarded by the same Tier-1 control-plane secret as /register.
 // The iOS app posts here whenever its Live Activity push token (or the
-// push-to-start token) changes.
+// push-to-start token) changes, or when it wants to clear the per-activity
+// token after ending the activity (Clear=true, ActivityToken="",
+// IsPushToStart=false).
 func handleRegisterActivityToken(w http.ResponseWriter, r *http.Request) {
 	if !relayAuthorized(w, r) {
 		return
@@ -736,12 +747,19 @@ func handleRegisterActivityToken(w http.ResponseWriter, r *http.Request) {
 	if !decodeRelayJSON(w, r, &req) {
 		return
 	}
-	if req.SessionID == "" || req.ActivityToken == "" {
+	validClear := req.Clear && req.ActivityToken == "" && !req.IsPushToStart
+	if req.SessionID == "" || (req.ActivityToken == "" && !validClear) {
 		http.Error(w, "sessionId and activityToken required", http.StatusBadRequest)
 		return
 	}
 	if len(req.SessionID) > maxSessionIDLen || len(req.ActivityToken) > maxDeviceTokenLen {
 		http.Error(w, "field too large", http.StatusBadRequest)
+		return
+	}
+	if validClear {
+		clearActivityToken(req.SessionID)
+		log.Printf("cleared per-activity token for session %s", req.SessionID)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	registerActivityToken(req.SessionID, req.ActivityToken, req.IsPushToStart)

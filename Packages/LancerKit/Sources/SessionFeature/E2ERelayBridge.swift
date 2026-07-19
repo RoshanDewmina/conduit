@@ -294,12 +294,12 @@ public final class E2ERelayBridge: ObservableObject {
     /// follow-up to complete the round trip to push-backend.
     @discardableResult
     public func registerActivityToken(
-        sessionID: String, activityToken: String, isPushToStart: Bool, pushBackendURL: String
+        sessionID: String, activityToken: String, isPushToStart: Bool, pushBackendURL: String, clear: Bool = false
     ) async -> Bool {
         guard isActive else { return false }
         do {
             try await relayClient.send(type: "activityTokenRegister", payload: E2ERelayMessage.ActivityTokenRegisterData(
-                sessionId: sessionID, activityToken: activityToken, isPushToStart: isPushToStart, pushBackendURL: pushBackendURL
+                sessionId: sessionID, activityToken: activityToken, isPushToStart: isPushToStart, pushBackendURL: pushBackendURL, clear: clear
             ))
             return true
         } catch {

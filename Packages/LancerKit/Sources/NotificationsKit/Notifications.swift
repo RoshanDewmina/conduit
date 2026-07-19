@@ -22,6 +22,10 @@ public extension Notification.Name {
     /// register with push-backend. userInfo: ["sessionID": String, "activityToken":
     /// String (hex), "isPushToStart": Bool]
     static let lancerLiveActivityTokenReady = Notification.Name("dev.lancer.liveActivityTokenReady")
+    /// Posted when a Live Activity ends and its per-activity push token on
+    /// push-backend should be cleared (never the push-to-start token).
+    /// userInfo: ["sessionID": String]
+    static let lancerLiveActivityTokenClear = Notification.Name("dev.lancer.liveActivityTokenClear")
     /// Posted when the user taps a notification/Live-Activity BODY (not an action
     /// button) to REVIEW an approval. userInfo: ["approvalId": String]. Distinct
     /// from lancerApprovalAction, which decides. Opens the detail sheet.

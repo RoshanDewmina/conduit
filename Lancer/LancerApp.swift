@@ -127,6 +127,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
                     ]
                 )
             }
+            manager.tokenClear = { sessionID in
+                NotificationCenter.default.post(
+                    name: .lancerLiveActivityTokenClear,
+                    object: nil,
+                    userInfo: ["sessionID": sessionID]
+                )
+            }
         }
         #endif
     }

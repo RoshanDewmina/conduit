@@ -153,6 +153,22 @@ public final class DevicePushRegistrationCoordinator {
                 await self.registerActivityOnAllConnected()
             }
         })
+        observerTokens.append(NotificationCenter.default.addObserver(
+            forName: .lancerLiveActivityTokenClear, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let sessionID = note.userInfo?["sessionID"] as? String, !sessionID.isEmpty else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // The activity is gone; drop it from the per-activity dedup
+                // tracker too, so a NEW activity for the same session on the
+                // same machine can register its (different) token without the
+                // stale-value guard in sendActivity silently skipping it.
+                for machine in self.connectedMachines() {
+                    self.sentActivityByMachine[machine.id] = nil
+                }
+                await self.clearActivityOnAllConnected(sessionID: sessionID)
+            }
+        })
         listenTask = Task { [weak self] in
             guard let self else { return }
             // A token captured before the observers above were registered is
@@ -232,6 +248,26 @@ public final class DevicePushRegistrationCoordinator {
             for machine in machines {
                 await sendActivity(pushToStart, to: machine, sentTracker: \.sentPushToStartByMachine)
             }
+        }
+    }
+
+    /// Sends the per-activity token clear to every currently-connected
+    /// machine — best-effort, fire-and-forget, matching `sendActivity`'s own
+    /// no-ack contract. Not deduped by dictionary the way registration is:
+    /// a clear that loses its race (bridge not yet active) has no further
+    /// trigger to retry it, but `sendActivity`'s own registration attempts
+    /// for the SAME (now ended) session won't fire again either, so no future
+    /// registration for that session is at risk of being skipped by this.
+    private func clearActivityOnAllConnected(sessionID: String) async {
+        for machine in connectedMachines() {
+            guard await waitForBridgeActive(machine) else { continue }
+            _ = await machine.bridge.registerActivityToken(
+                sessionID: sessionID,
+                activityToken: "",
+                isPushToStart: false,
+                pushBackendURL: Self.pushBackendURLString(),
+                clear: true
+            )
         }
     }
 

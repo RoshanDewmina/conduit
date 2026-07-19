@@ -88,6 +88,75 @@ func (s *server) loadPersistedDevice() *registeredDevice {
 	return &dev
 }
 
+// registeredActivityPushToStart is the persisted push-to-start Live Activity
+// registration — the token that lets push-backend START a brand-new Live
+// Activity purely from a server push when the app is fully closed and no
+// relay/SSH connection exists (see liveactivity.go's pushLiveActivityStart in
+// push-backend). Unlike the per-activity update token (activityToken, which
+// changes on every new Activity and is intentionally NOT persisted — a stale
+// one would just get discarded on next use, but re-forwarding it here would
+// recreate the "existingActivityToken != \"\" forever suppresses a future
+// push-to-start" bug), the push-to-start token is stable per install and is
+// exactly what needs to survive both a lancerd restart AND a push-backend
+// deploy/restart (which wipes its in-memory liveActivityRegistry — 2026-07-19
+// live debugging: a backend restart silently and permanently broke
+// app-closed push-to-start with no user-visible signal).
+type registeredActivityPushToStart struct {
+	PushBackendURL   string `json:"pushBackendURL"`
+	SessionID        string `json:"sessionId"`
+	PushToStartToken string `json:"pushToStartToken"`
+}
+
+func persistedActivityPath(home string) string {
+	if home == "" {
+		return ""
+	}
+	return filepath.Join(home, "push-activity.json")
+}
+
+func (s *server) savePersistedActivity(rec *registeredActivityPushToStart) {
+	path := persistedActivityPath(s.home)
+	if path == "" || rec == nil {
+		return
+	}
+	data, err := json.Marshal(rec)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, data, 0o600)
+}
+
+func (s *server) loadPersistedActivity() *registeredActivityPushToStart {
+	path := persistedActivityPath(s.home)
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var rec registeredActivityPushToStart
+	if json.Unmarshal(data, &rec) != nil || rec.SessionID == "" || rec.PushToStartToken == "" {
+		return nil
+	}
+	return &rec
+}
+
+// reforwardPersistedActivityToken re-POSTs the persisted push-to-start token
+// to push-backend. Called on daemon startup (rehydrate) and on every relay
+// (re)pair (e2eRouter's pairedHandler, mirroring resendPendingApprovals'
+// after-reconnect recovery) — a push-backend restart wipes its in-memory
+// registry with no signal to the daemon, so periodic re-forwarding on our own
+// reconnect events is the only way to heal it without waiting for the app to
+// happen to resend on its own next foreground/reconnect.
+func (s *server) reforwardPersistedActivityToken() {
+	rec := s.loadPersistedActivity()
+	if rec == nil || rec.PushBackendURL == "" {
+		return
+	}
+	go s.postActivityTokenRegistration(rec.PushBackendURL, rec.SessionID, rec.PushToStartToken, true, false)
+}
+
 type policyEngine struct {
 	mu         sync.RWMutex
 	home       string
@@ -472,6 +541,11 @@ func newServer(home string) *server {
 			log.Printf("push: rehydrated device registration (session %s)", dev.SessionID)
 		}
 	}
+	// Rehydrate + re-forward the push-to-start token independently of the
+	// device registration above: it survives a lancerd restart AND heals a
+	// push-backend restart that wiped its in-memory registry (see
+	// reforwardPersistedActivityToken's doc comment).
+	s.reforwardPersistedActivityToken()
 	// Run-control actions (pause/resume/stop/budget-exceeded) feed the same audit log.
 	s.dispatcher.audit = s.auditEntry
 	// Launch-time policy "ask" gates (dispatch/continueRun/resumeObservedSession/
@@ -1899,13 +1973,36 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			SessionID      string `json:"sessionId"`
 			ActivityToken  string `json:"activityToken"`
 			IsPushToStart  bool   `json:"isPushToStart"`
+			// Clear requests push-backend drop its per-activity update token
+			// (rec.activityToken) for this session — sent by the app when its
+			// Live Activity ends, so a future run-start push isn't suppressed
+			// forever by a stale token (see push-backend's pushLiveActivityStart
+			// no-op heuristic). Only valid with an empty ActivityToken and
+			// IsPushToStart=false; the push-to-start token is never cleared this way.
+			Clear bool `json:"clear"`
 		}
-		if err := json.Unmarshal(msg.Params, &p); err != nil || p.ActivityToken == "" || p.SessionID == "" {
+		if err := json.Unmarshal(msg.Params, &p); err != nil || p.SessionID == "" {
+			s.writeError(msg.ID, -32602, "invalid params")
+			return
+		}
+		validClear := p.Clear && p.ActivityToken == "" && !p.IsPushToStart
+		if p.ActivityToken == "" && !validClear {
 			s.writeError(msg.ID, -32602, "invalid params")
 			return
 		}
 		if p.PushBackendURL != "" {
-			go s.postActivityTokenRegistration(p.PushBackendURL, p.SessionID, p.ActivityToken, p.IsPushToStart)
+			go s.postActivityTokenRegistration(p.PushBackendURL, p.SessionID, p.ActivityToken, p.IsPushToStart, p.Clear)
+		}
+		// Only the push-to-start token is durably persisted + re-forwarded on
+		// reconnect — the per-activity token is ephemeral by design (see
+		// registeredActivityPushToStart's doc comment); re-forwarding it (or a
+		// clear) would race a legitimate concurrent registration.
+		if p.IsPushToStart && p.ActivityToken != "" {
+			s.savePersistedActivity(&registeredActivityPushToStart{
+				PushBackendURL:   p.PushBackendURL,
+				SessionID:        p.SessionID,
+				PushToStartToken: p.ActivityToken,
+			})
 		}
 		s.writeResult(msg.ID, map[string]string{"ok": "true"})
 
@@ -2703,11 +2800,12 @@ func (s *server) postDeviceTokenRegistration(backendURL, sessionID, hexToken str
 	}
 }
 
-func (s *server) postActivityTokenRegistration(backendURL, sessionID, activityToken string, isPushToStart bool) {
+func (s *server) postActivityTokenRegistration(backendURL, sessionID, activityToken string, isPushToStart bool, clear bool) {
 	body, err := json.Marshal(map[string]interface{}{
 		"sessionId":     sessionID,
 		"activityToken": activityToken,
 		"isPushToStart": isPushToStart,
+		"clear":         clear,
 	})
 	if err != nil {
 		return
