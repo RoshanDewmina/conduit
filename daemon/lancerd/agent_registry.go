@@ -24,6 +24,8 @@ func normalizeAgentSource(agent string) string {
 		return "kimi"
 	case "opencode", "open-code", "sst-opencode":
 		return "opencode"
+	case "pi", "pi-coding-agent", "earendil-pi":
+		return "pi"
 	case "copilot", "github-copilot":
 		return "copilot"
 	default:

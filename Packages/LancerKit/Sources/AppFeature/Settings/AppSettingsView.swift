@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import AccountKit
 import LancerCore
 
 /// Workspaces shell settings hierarchy — Profile pushes this onto one NavigationStack,
@@ -82,6 +83,18 @@ public struct AppSettingsView: View {
                 }
             }
             .accessibilityIdentifier("cursor.settings.row.trusted-machines")
+
+            NavigationLink {
+                AccountsUsageView()
+                    .environment(relayFleetStore)
+            } label: {
+                Label {
+                    Text("Accounts & Usage")
+                } icon: {
+                    Image(systemName: "person.crop.circle")
+                }
+            }
+            .accessibilityIdentifier("cursor.settings.row.accounts-usage")
         }
     }
 

@@ -646,7 +646,15 @@ func (s *server) policyEffect(event ApprovalEvent) (string, string, bool) {
 // Claude checks its hooks.json wiring; OpenCode checks its tool.execute.before
 // plugin (see opencode_plugin_install.go — the old hooks.json-based mechanism
 // this used to point at was never real OpenCode config, found 2026-07-01/02).
-// Codex/Kimi have no per-action hook, so those stay fail-closed.
+// Codex checks BOTH its hooks.json entry AND a persisted hook-trust record in
+// config.toml (see codexHookWired in codex_hook_install.go) — an untrusted
+// hook entry is silently skipped by Codex, so JSON presence alone would be a
+// false positive. Kimi has an install path (kimi_hook_install.go) but stays
+// fail-closed here deliberately: `kimi --output-format stream-json` returns
+// provider.api_error: 402 (membership) on this machine, so per-action gating
+// has never been live-fire verified. Flip this to call kimiHookInstalled (or
+// a future kimiHookWired) only after a real approval round-trips through a
+// live Kimi run — see docs/CHANGELOG.md 2026-07-18 entry.
 func hookWiredForAgent(home string) func(string) bool {
 	return func(bin string) bool {
 		switch bin {
@@ -654,6 +662,20 @@ func hookWiredForAgent(home string) func(string) bool {
 			return claudeHookWired(claudeSettingsPath(home))
 		case "opencode":
 			return opencodeGateWired(home)
+		case "codex":
+			return codexHookWired(home)
+		case "pi":
+			// Pi's gate is the -e extension realLauncher appends
+			// (appendPiExtension) whenever the extension file exists. The
+			// mechanism is structurally verified (2026-07-18: extension loads
+			// error-free in pi 0.80.10; handler logic blocks fail-closed under
+			// Node; ToolCallEvent/ToolCallResult shapes match the installed
+			// package's type defs) but a model-driven tool_call veto has NOT
+			// been observed end-to-end — the OpenRouter account ran out of
+			// credits mid-session (402). Same discipline as kimi: stay
+			// fail-closed until a real run proves the veto, then flip this to
+			// piExtensionInstalled(home).
+			return false
 		default:
 			return false
 		}

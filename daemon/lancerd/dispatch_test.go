@@ -67,7 +67,7 @@ func TestContinueArgv(t *testing.T) {
 		t.Fatalf("claude argv mismatch:\n got %v\nwant %v", claude, want)
 	}
 	oc, ok := continueArgv("opencode", "next step", "gpt-5", false)
-	if !ok || !reflect.DeepEqual(oc, []string{"opencode", "run", "--continue", "--format", "json", "--model", "gpt-5", "next step"}) {
+	if !ok || !reflect.DeepEqual(oc, []string{"opencode", "run", "--continue", "--format", "json", "--thinking", "--model", "gpt-5", "next step"}) {
 		t.Fatalf("opencode argv mismatch: %v ok=%v", oc, ok)
 	}
 	if _, ok := continueArgv("codex", "x", "", false); !ok {
@@ -128,12 +128,12 @@ func TestResumeArgv(t *testing.T) {
 		t.Fatalf("claude resume argv mismatch:\n got %v (ok=%v)\nwant %v", claude, ok, want)
 	}
 	codex, ok := resumeArgv("codex", "sess-123", "next step", "", false)
-	wantCodex := []string{"codex", "exec", "resume", "sess-123", "--json", "next step"}
+	wantCodex := []string{"codex", "exec", "resume", "sess-123", "--json", "-c", "model_reasoning_summary=auto", "next step"}
 	if !ok || !reflect.DeepEqual(codex, wantCodex) {
 		t.Fatalf("codex resume argv mismatch:\n got %v (ok=%v)\nwant %v", codex, ok, wantCodex)
 	}
 	oc, ok := resumeArgv("opencode", "sess-123", "next step", "gpt-5", false)
-	wantOC := []string{"opencode", "run", "--session", "sess-123", "--format", "json", "--model", "gpt-5", "next step"}
+	wantOC := []string{"opencode", "run", "--session", "sess-123", "--format", "json", "--thinking", "--model", "gpt-5", "next step"}
 	if !ok || !reflect.DeepEqual(oc, wantOC) {
 		t.Fatalf("opencode resume argv mismatch:\n got %v (ok=%v)\nwant %v", oc, ok, wantOC)
 	}

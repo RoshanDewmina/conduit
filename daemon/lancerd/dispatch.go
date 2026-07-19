@@ -164,7 +164,12 @@ func agentArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 	case "codex":
 		// --json emits structured NDJSON events; --dangerously-bypass flag is
 		// required for headless dispatch (no TTY) — see docs/audit/CODEX_GATING.md.
-		argv := []string{"codex", "exec", "--json"}
+		// -c model_reasoning_summary=auto unlocks reasoning items on the same
+		// stream — verified live 2026-07-18 against codex-cli 0.144.6: without
+		// this flag no item.completed{item:{type:"reasoning"}} line ever
+		// appears; with it one does (see streamJSONOutput's "item.completed"
+		// case, itemType=="reasoning").
+		argv := []string{"codex", "exec", "--json", "-c", "model_reasoning_summary=auto"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -179,14 +184,62 @@ func agentArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 		}
 		return argv, true
 	case "opencode":
-		argv := []string{"opencode", "run", "--format", "json"}
+		// --thinking unlocks "reasoning" events on the same stream — verified
+		// live 2026-07-18 against opencode 1.17.18: without this flag no
+		// {"type":"reasoning",...} line ever appears; with it one does (see
+		// streamJSONOutput's "reasoning" case).
+		argv := []string{"opencode", "run", "--format", "json", "--thinking"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
 		return append(argv, prompt), true
+	case "pi":
+		// --mode json emits one structured event per line (session, agent_start,
+		// turn_start, message_start/end, message_update{assistantMessageEvent},
+		// turn_end, agent_end, agent_settled, tool_execution_*) — verified live
+		// 2026-07-18 against pi 0.80.10 (scratchpad/pi-smoke/pi-stream.jsonl,
+		// pi-tool-stream.jsonl — see streamJSONOutput's pi cases). splitPiModel
+		// separates a "provider/model-id" string into pi's own --provider and
+		// --model flags (pi's --model alone also accepts a "provider/id"
+		// pattern per --help, but the live-verified invocation this mirrors
+		// used both flags explicitly: `pi --provider openrouter --model
+		// deepseek/deepseek-v4-flash --mode json -p "..."`).
+		//
+		// The approval-extension `-e <path>` flag is NOT appended here — see
+		// resumeArgv's pi case / installPiExtension (Phase 3(d)) for why it's
+		// threaded in at the dispatcher level instead of baked into every
+		// argv builder.
+		argv := []string{"pi", "--mode", "json"}
+		provider, modelID := splitPiModel(model)
+		if provider != "" {
+			argv = append(argv, "--provider", provider)
+		}
+		if modelID != "" {
+			argv = append(argv, "--model", modelID)
+		}
+		return append(argv, "-p", prompt), true
 	default:
 		return nil, false
 	}
+}
+
+// splitPiModel splits a Lancer model string of the form "provider/model-id"
+// (e.g. "openrouter/deepseek/deepseek-v4-flash") into (provider, modelID) for
+// pi's separate --provider/--model flags. A model with no "/" is returned as
+// (provider="", modelID=model) — pi's own --model flag also accepts a bare
+// "provider/id" pattern, but Lancer's model plumbing consistently prefixes
+// with the provider (see normalizeClaudeModel's doc comment for the same
+// convention on the claudeCode side), so a bare string with no separator is
+// treated as a model id with no provider override.
+func splitPiModel(model string) (provider, modelID string) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "", ""
+	}
+	if i := strings.Index(model, "/"); i > 0 {
+		return model[:i], model[i+1:]
+	}
+	return "", model
 }
 
 // continueArgv builds an explicit, shell-free argv that continues the most-recent
@@ -214,7 +267,8 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 		// Resume the most-recent codex session non-interactively. Same headless
 		// gating as agentArgv: codex needs the bypass env when no TTY is attached
 		// (see docs/audit/CODEX_GATING.md). No new blast radius beyond dispatch.
-		argv := []string{"codex", "exec", "resume", "--last", "--json"}
+		// -c model_reasoning_summary=auto: see agentArgv's codex case doc comment.
+		argv := []string{"codex", "exec", "resume", "--last", "--json", "-c", "model_reasoning_summary=auto"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -229,11 +283,28 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 		}
 		return argv, true
 	case "opencode":
-		argv := []string{"opencode", "run", "--continue", "--format", "json"}
+		// --thinking: see agentArgv's opencode case doc comment.
+		argv := []string{"opencode", "run", "--continue", "--format", "json", "--thinking"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
 		return append(argv, prompt), true
+	case "pi":
+		// --continue/-c continues the most-recently-modified session for the
+		// launch cwd — verified live 2026-07-18 against pi 0.80.10 (per
+		// --help; agentArgv's pi case doc comment covers the shared
+		// --mode/--provider/--model shape). Unlike resumeArgv's pi case,
+		// this does NOT target an exact session id — same
+		// "latestInCwdFallback" semantics as every other vendor's continueArgv.
+		argv := []string{"pi", "--continue", "--mode", "json"}
+		provider, modelID := splitPiModel(model)
+		if provider != "" {
+			argv = append(argv, "--provider", provider)
+		}
+		if modelID != "" {
+			argv = append(argv, "--model", modelID)
+		}
+		return append(argv, "-p", prompt), true
 	default:
 		return nil, false
 	}
@@ -256,7 +327,14 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 //   - opencode: run -s/--session <id>  (verified live: same sessionID retained)
 //   - kimi:     -S/--session <id>  (from --help only; kimi CLI errored on an
 //     unrelated account/billing check during this session, so resume-by-id was
-//     not live-smoke-tested — re-verify before relying on it in production)
+//     not live-smoke-tested — re-verify before relying on it in production.
+//     Re-confirmed 2026-07-18: `kimi --prompt ... --output-format
+//     stream-json` still returns provider.api_error: 402 (membership) on
+//     this machine — an account/billing issue the owner must fix; nothing
+//     in this codebase can resolve it. Still not live-smoke-tested.)
+//   - pi:       --session <id>  (verified live 2026-07-18 against pi 0.80.10:
+//     same session id retained, prior-turn context recalled — see this
+//     function's pi case doc comment)
 func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
@@ -278,7 +356,8 @@ func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]strin
 		// codex exec resume <SESSION_ID> [PROMPT] resumes that exact conversation
 		// (positional session id, not a flag). Same headless-bypass gating as
 		// agentArgv/continueArgv — see docs/audit/CODEX_GATING.md.
-		argv := []string{"codex", "exec", "resume", sessionID, "--json"}
+		// -c model_reasoning_summary=auto: see agentArgv's codex case doc comment.
+		argv := []string{"codex", "exec", "resume", sessionID, "--json", "-c", "model_reasoning_summary=auto"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
@@ -293,11 +372,30 @@ func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]strin
 		}
 		return argv, true
 	case "opencode":
-		argv := []string{"opencode", "run", "--session", sessionID, "--format", "json"}
+		// --thinking: see agentArgv's opencode case doc comment.
+		argv := []string{"opencode", "run", "--session", sessionID, "--format", "json", "--thinking"}
 		if model != "" {
 			argv = append(argv, "--model", model)
 		}
 		return append(argv, prompt), true
+	case "pi":
+		// --session <id> resumes that EXACT session (not "most recent") —
+		// live-verified 2026-07-18 against pi 0.80.10: the session event on
+		// the resumed run's stdout repeated the SAME id, and the model
+		// recalled prior-turn context (captured: scratchpad/pi-smoke/
+		// pi-resume.jsonl; the two-turn on-disk session file this produced is
+		// pi_session_reader_test.go's TestPiInspectAndSessionsDiscovery-style
+		// evidence). NEVER use -r/--resume (interactive picker, hangs
+		// headless — see agentArgv's pi case / the module doc comment above).
+		argv := []string{"pi", "--session", sessionID, "--mode", "json"}
+		provider, modelID := splitPiModel(model)
+		if provider != "" {
+			argv = append(argv, "--provider", provider)
+		}
+		if modelID != "" {
+			argv = append(argv, "--model", modelID)
+		}
+		return append(argv, "-p", prompt), true
 	default:
 		return nil, false
 	}
@@ -587,6 +685,14 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 		env = lancerGateEnvironment(env)
 	}
 
+	// Pi's per-action approval gate is an extension loaded per-run via
+	// "-e <path>" (installPiExtension, Phase 3(d)). It is threaded here at
+	// the single exec choke point — not in each argv builder — so every pi
+	// launch path (new/continue/resume) picks it up exactly when the
+	// extension file is installed, and the argv-builder tests stay pinned to
+	// the pure CLI shape.
+	argv = appendPiExtension(argv)
+
 	// A claudeCode argv built with --input-format stream-json (agentArgv's
 	// doc comment) needs its prompt delivered over stdin, not positionally —
 	// see claudeStdinPromptArgv. execArgv is what actually gets exec'd;
@@ -806,7 +912,18 @@ func requiresLancerGate(argv []string) bool {
 	if len(argv) == 0 {
 		return false
 	}
-	return argv[0] == "claude" || argv[0] == "opencode"
+	// codex/kimi joined this list when their PreToolUse hook scripts landed
+	// (codex_hook_install.go / kimi_hook_install.go): both scripts exit 0
+	// unless LANCER_GATE=1, so omitting them here would make a trusted hook
+	// silently no-op on dispatched runs — fail-open once hookWiredForAgent
+	// relaxes the launch gate. Pi is deliberately absent: its gate is the
+	// -e extension appended per-run by realLauncher (appendPiExtension),
+	// which is its own opt-in — no env gating needed.
+	switch argv[0] {
+	case "claude", "opencode", "codex", "kimi":
+		return true
+	}
+	return false
 }
 
 // relaxLaunchEscalation decides whether an agent *launch* (dispatch or continue)
@@ -1280,6 +1397,14 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			emit("agent.run.output", map[string]any{
 				"runId": runID, "stream": "stdout", "chunk": text, "seq": int(n),
 			})
+		case "reasoning":
+			// opencode: {"type":"reasoning","part":{"type":"reasoning","text":"..."}}
+			// — only appears on the wire with --thinking on the argv (see
+			// agentArgv's opencode case doc comment) — verified live
+			// 2026-07-18 against opencode 1.17.18. No text is forwarded to
+			// chat output (same as Claude's thinking_delta / codex's
+			// reasoning item below) — only the live-status state changes.
+			emitLiveStatusThinking(emit, runID)
 		case "tool_use":
 			// opencode: complete tool event (input already resolved, not streaming deltas).
 			part, _ := obj["part"].(map[string]any)
@@ -1320,7 +1445,8 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			if item == nil {
 				continue
 			}
-			if itemType, _ := item["type"].(string); itemType == "agent_message" {
+			switch itemType, _ := item["type"].(string); itemType {
+			case "agent_message":
 				text, _ := item["text"].(string)
 				if text != "" {
 					emitLiveStatusStreaming(emit, runID)
@@ -1329,6 +1455,15 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 						"runId": runID, "stream": "stdout", "chunk": text + "\n", "seq": int(n),
 					})
 				}
+			case "reasoning":
+				// codex --json: {"item":{"type":"reasoning","text":"**...**"}}
+				// — only appears on the wire with -c model_reasoning_summary=auto
+				// on the argv (see agentArgv's codex case doc comment) —
+				// verified live 2026-07-18 against codex-cli 0.144.6. No text
+				// is forwarded to chat output (same as Claude's thinking_delta
+				// / opencode's reasoning event above) — only the live-status
+				// state changes.
+				emitLiveStatusThinking(emit, runID)
 			}
 		case "thread.started":
 			// Codex: {"type":"thread.started","thread_id":"..."} — the exact
@@ -1345,12 +1480,118 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 			"step_start", "step_finish", "tool", "tool_result",
 			"session_event", "message_start", "message_stop":
 			// lifecycle/metadata events (opencode + codex) — suppress
+		case "session":
+			// Pi: {"type":"session","version":3,"id":"...","timestamp":...,
+			// "cwd":"..."} — ALWAYS the first line pi emits in --mode json
+			// (verified live 2026-07-18 against pi 0.80.10,
+			// scratchpad/pi-smoke/pi-stream.jsonl line 0). The exact id
+			// `pi ... --session <id>` resumes (see resumeArgv's pi case,
+			// Phase 3(c), and pi_session_reader.go's on-disk format proof).
+			if !sessionCaptured {
+				if sid, _ := obj["id"].(string); sid != "" {
+					emitVendorSession(emit, runID, sid)
+					sessionCaptured = true
+				}
+			}
+		case "agent_start", "turn_start", "message_end", "turn_end", "agent_end", "agent_settled",
+			"tool_execution_start", "tool_execution_update", "tool_execution_end":
+			// Pi lifecycle/metadata events — verified live 2026-07-18 against
+			// pi 0.80.10. tool_execution_* duplicate what toolcall_end (below)
+			// already reports via emitToolArtifact (same toolCallId/toolName/
+			// arguments, just re-announced once the tool actually runs), so no
+			// separate live-status or artifact emission is needed here.
+		case "message_update":
+			// Pi: {"type":"message_update","assistantMessageEvent":{"type":
+			// thinking_start|thinking_delta|thinking_end|toolcall_start|
+			// toolcall_delta|toolcall_end|text_start|text_delta|text_end,...}}
+			// — verified live 2026-07-18 against pi 0.80.10 with a
+			// bash-tool-triggering prompt (scratchpad/pi-smoke/pi-tool-stream.jsonl).
+			ame, _ := obj["assistantMessageEvent"].(map[string]any)
+			if ame == nil {
+				break
+			}
+			switch ameType, _ := ame["type"].(string); ameType {
+			case "thinking_start", "thinking_delta":
+				emitLiveStatusThinking(emit, runID)
+			case "text_delta":
+				delta, _ := ame["delta"].(string)
+				if delta == "" {
+					break
+				}
+				emitLiveStatusStreaming(emit, runID)
+				n := atomic.AddInt64(seq, 1)
+				emit("agent.run.output", map[string]any{
+					"runId": runID, "stream": "stdout", "chunk": delta, "seq": int(n),
+				})
+			case "toolcall_end":
+				// The complete, resolved tool call — {id,name,arguments} — no
+				// need to accumulate toolcall_delta's partialArgs fragments
+				// (unlike Claude's content_block_delta/input_json_delta path)
+				// since pi hands back the fully-parsed arguments object here.
+				tc, _ := ame["toolCall"].(map[string]any)
+				if tc == nil {
+					break
+				}
+				toolID, _ := tc["id"].(string)
+				toolName, _ := tc["name"].(string)
+				if toolName == "" {
+					break
+				}
+				argsObj, _ := tc["arguments"].(map[string]any)
+				argsBytes, _ := json.Marshal(argsObj)
+				emitToolArtifact(emit, runID, toolID, toolName, string(argsBytes))
+			case "toolcall_start", "toolcall_delta", "thinking_end", "text_start", "text_end":
+				// No new information to forward: toolcall_end (above) carries
+				// the complete args; thinking_end/text_end are stream-closing
+				// markers only.
+			default:
+				// Unknown assistantMessageEvent type — suppress (forward-compat).
+			}
+		case "context.append_message":
+			// Kimi: {"type":"context.append_message","message":{"role":...,
+			// "content":[{"type":"text","text":"..."}],"toolCalls":[...]}} —
+			// the SAME wrapped shape kimi_session_reader.go's
+			// kimiMessagesFromLine already proves from real
+			// ~/.kimi-code/sessions/**/wire.jsonl captures (see
+			// TestKimiTranscriptToolCallInputJSON). Kimi's live
+			// `--output-format stream-json` stdout shape could NOT be
+			// live-verified this session — the installed kimi CLI (0.18.0)
+			// hits `provider.api_error: 402` (membership) before emitting any
+			// stdout, re-confirmed 2026-07-18 (see resumeArgv's doc comment
+			// for the same caveat). This mapping is shape-from-prior-captures
+			// only, NOT live-verified 2026-07-18 (402). No thinking/reasoning
+			// content type has ever been observed for kimi anywhere in this
+			// codebase (unlike codex's "reasoning" item or opencode's
+			// "reasoning" event, both live-verified above), so — per the
+			// "don't invent event types" constraint — no emitLiveStatusThinking
+			// call is wired here; only streaming (assistant text) and tool
+			// (toolCalls) are mapped, both grounded in kimiMessagesFromLine's
+			// existing, tested parsing.
+			for _, m := range kimiMessagesFromLine([]byte(line)) {
+				switch m.Role {
+				case "assistant":
+					if m.Text != "" {
+						emitLiveStatusStreaming(emit, runID)
+						n := atomic.AddInt64(seq, 1)
+						emit("agent.run.output", map[string]any{
+							"runId": runID, "stream": "stdout", "chunk": m.Text + "\n", "seq": int(n),
+						})
+					}
+				case "toolCall":
+					emitToolArtifact(emit, runID, m.ToolUseID, m.ToolName, m.InputJSON)
+				}
+			}
 		case "":
 			// kimi stream-json uses {"role":"..."} instead of {"type":"..."}.
+			// Flat shape kept alongside the "context.append_message" case
+			// above (uncertain which one, if either, the live stream-json
+			// output actually uses — see that case's doc comment on why kimi
+			// could not be live-verified this session).
 			role, _ := obj["role"].(string)
 			if role == "assistant" {
 				content, _ := obj["content"].(string)
 				if content != "" {
+					emitLiveStatusStreaming(emit, runID)
 					n := atomic.AddInt64(seq, 1)
 					emit("agent.run.output", map[string]any{
 						"runId": runID, "stream": "stdout", "chunk": content, "seq": int(n),

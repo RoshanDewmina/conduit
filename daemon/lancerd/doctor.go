@@ -116,6 +116,9 @@ func collectDoctorResults(lancerDir, exePath, home string, look lookPathFunc, di
 		checkAgentCLIs(look),
 		checkPython(look),
 		checkHooks(home),
+		checkCodexHooks(home),
+		checkKimiHooks(home),
+		checkPiExtension(home),
 		checkAuditLog(lancerDir),
 		checkQueue(lancerDir),
 		checkOSArch(),
@@ -226,7 +229,7 @@ func checkResidentDaemon(lancerDir string, dial dialFunc) checkResult {
 }
 
 func checkAgentCLIs(look lookPathFunc) checkResult {
-	agents := []string{"claude", "codex", "opencode"}
+	agents := []string{"claude", "codex", "opencode", "kimi", "pi"}
 	var found []string
 	for _, a := range agents {
 		if _, err := look(a); err == nil {
@@ -237,7 +240,7 @@ func checkAgentCLIs(look lookPathFunc) checkResult {
 		return checkResult{
 			name:    "agent CLIs",
 			status:  statusWarn,
-			message: "none of claude/codex/opencode on PATH",
+			message: "none of claude/codex/opencode/kimi/pi on PATH",
 			hint:    "install at least one agent CLI",
 		}
 	}
@@ -293,6 +296,96 @@ func checkHooks(home string) checkResult {
 			message: "settings.json references the hook but the script is missing",
 			hint:    "run: lancerd install (rewrites ~/.claude/hooks/lancer-hook.sh)",
 		}
+	}
+}
+
+// checkCodexHooks reports the Codex PreToolUse hook's install AND trust
+// state. Unlike Claude, hooks.json presence alone is not enough — Codex
+// silently skips an untrusted hook, so relaxLaunchEscalation only relaxes
+// Codex once codexHookWired (script + hooks.json entry + config.toml trust
+// record) is true. See codex_hook_install.go for the trust-key format.
+func checkCodexHooks(home string) checkResult {
+	scriptPath := codexHookScriptPath(home)
+	scriptPresent := false
+	if _, err := os.Stat(scriptPath); err == nil {
+		scriptPresent = true
+	}
+	matchers, _, err := parseCodexHooksJSON(codexHooksJSONPath(home))
+	jsonWired := err == nil
+	if jsonWired {
+		_, _, jsonWired = findCodexHookIndex(matchers, codexHookCommand)
+	}
+	trusted := codexHookWired(home)
+
+	switch {
+	case scriptPresent && jsonWired && trusted:
+		return checkResult{name: "codex hooks", status: statusOK, message: "Codex approval hook installed and trusted"}
+	case scriptPresent && jsonWired && !trusted:
+		return checkResult{
+			name:    "codex hooks",
+			status:  statusWarn,
+			message: "Codex hook installed but NOT trusted — Codex silently skips it, dispatches still use the coarse launch gate",
+			hint:    "run codex, then /hooks, and trust the lancer-hook.sh entry",
+		}
+	case !scriptPresent && !jsonWired:
+		return checkResult{
+			name:    "codex hooks",
+			status:  statusWarn,
+			message: "Codex hook not installed (script + hooks.json wiring both missing)",
+			hint:    "run: lancerd install",
+		}
+	default:
+		return checkResult{
+			name:    "codex hooks",
+			status:  statusWarn,
+			message: "Codex hook partially installed (script/hooks.json mismatch)",
+			hint:    "run: lancerd install (rewrites ~/.codex/hooks/lancer-hook.sh + hooks.json)",
+		}
+	}
+}
+
+// checkKimiHooks reports whether the Kimi PreToolUse hook script/config are
+// installed. This is deliberately weaker than checkCodexHooks: Kimi's
+// per-action gating has never live-fire verified (kimi CLI returns
+// provider.api_error: 402 — a billing/membership issue, not something this
+// code can fix), so hookWiredForAgent keeps kimi fail-closed regardless of
+// what this check reports. It exists so `lancerd doctor` shows install state
+// instead of silence.
+func checkKimiHooks(home string) checkResult {
+	if kimiHookInstalled(home) {
+		return checkResult{
+			name:    "kimi hooks",
+			status:  statusWarn,
+			message: "Kimi hook installed but UNVERIFIED (membership 402, fail-closed) — dispatches still use the coarse launch gate",
+			hint:    "fix Kimi account/billing, then live-fire test before trusting per-action Kimi approval",
+		}
+	}
+	return checkResult{
+		name:    "kimi hooks",
+		status:  statusWarn,
+		message: "Kimi hook not installed (script + hooks.json wiring both missing)",
+		hint:    "run: lancerd install",
+	}
+}
+
+// checkPiExtension reports whether the Pi approval extension is installed.
+// Unlike Claude/Codex there is no vendor-side settings or trust step: the
+// extension only loads when realLauncher passes "-e <path>" (appendPiExtension),
+// so file presence == every lancerd-launched pi run is gated.
+func checkPiExtension(home string) checkResult {
+	if piExtensionInstalled(home) {
+		return checkResult{
+			name:    "pi extension",
+			status:  statusWarn,
+			message: "Pi approval extension installed but UNVERIFIED (veto not live-fire tested — OpenRouter 402, fail-closed) — pi dispatches still use the coarse launch gate",
+			hint:    "top up OpenRouter credits, live-fire test the veto, then flip hookWiredForAgent's pi case",
+		}
+	}
+	return checkResult{
+		name:    "pi extension",
+		status:  statusWarn,
+		message: "Pi approval extension not installed — pi dispatches stay on the coarse launch gate",
+		hint:    "run: lancerd install",
 	}
 }
 

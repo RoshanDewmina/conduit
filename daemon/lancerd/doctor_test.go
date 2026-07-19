@@ -193,8 +193,8 @@ func TestCollectDoctorResultsOrderAndCount(t *testing.T) {
 	results := collectDoctorResults(dir, "/tmp/lancerd", dir, lookPathFor(), func(string, string, time.Duration) (net.Conn, error) {
 		return nil, errors.New("nope")
 	})
-	if len(results) != 13 {
-		t.Fatalf("expected 13 checks, got %d", len(results))
+	if len(results) != 16 {
+		t.Fatalf("expected 16 checks, got %d", len(results))
 	}
 	if results[0].name != "version" {
 		t.Fatalf("first check = %q", results[0].name)
