@@ -52,6 +52,11 @@ public final class RelayApprovalIngest {
 
     private let database: AppDatabase
     private var listenTask: Task<Void, Never>?
+    /// Dedup for Live Activity pending-count pushes so identical ingest/decide
+    /// refreshes don't spam ActivityKit.
+    private var lastLiveActivityPendingCount: Int?
+    private var lastLiveActivityHighestRisk: Int?
+    private var lastLiveActivityPendingID: String?
 
     public init(database: AppDatabase) {
         self.database = database
@@ -98,17 +103,33 @@ public final class RelayApprovalIngest {
             contentHash: approvalData.contentHash
         )
 
+        let repository = ApprovalRepository(database)
         do {
-            try await ApprovalRepository(database).upsert(approval)
+            try await repository.upsert(approval)
         } catch {
             return
         }
+
+        // Refresh the Home Screen PendingApprovalsWidget now that a new
+        // approval is pending. This is the ONLY production "new approval
+        // arrives" path — the SSH-based `ApprovalIngest` actor that also
+        // calls this is only reachable through the dead `FleetStore`/`Slot`
+        // type, never constructed by AppRoot/WorkspacesView — so without
+        // this call the widget's count/summary in UserDefaults never
+        // updates on arrival and only ever changes as a side effect of a
+        // later in-app decision (`ApprovalRelay.enqueue`), leaving the
+        // widget stale until then.
+        await repository.writeApprovalWidgetSnapshot()
 
         // Do not skip this — without a registered origin, `ApprovalRelay
         // .forwardDecisionOnly` falls through to SSH/backend-relay paths that
         // don't exist in this app and the decision is queued forever.
         ApprovalRelay.shared.registerRelayOrigin(approvalID: approval.id.uuidString, machineID: machineID)
         latestPendingApproval[machineID] = approval
+
+        // Keep any running Live Activity's pending count in sync with the
+        // fleet-wide DB (same signal Dynamic Island exists for).
+        await publishLiveActivityPendingApprovals(using: repository)
     }
 
     /// Entry point for the in-thread Approve/Deny buttons. Forwards through
@@ -126,6 +147,35 @@ public final class RelayApprovalIngest {
         if latestPendingApproval[machineID]?.id == approval.id {
             latestPendingApproval[machineID] = nil
         }
+        await publishLiveActivityPendingApprovals(using: ApprovalRepository(database))
+    }
+
+    /// Pushes fleet-wide pending count + highest risk + the most recent
+    /// pending approval's ID to every running Live Activity. The ID drives
+    /// the Lock Screen / Dynamic Island Approve/Reject buttons (they only
+    /// render when non-nil — MAJOR-14) so it must be included in the dedup
+    /// key, not just count/risk: a resolved approval replaced by a different
+    /// pending one of the same count/risk must still refresh which ID the
+    /// buttons act on. Deduped so identical refreshes are no-ops.
+    private func publishLiveActivityPendingApprovals(using repository: ApprovalRepository) async {
+        guard #available(iOS 16.2, *) else { return }
+        let pending = (try? await repository.pending()) ?? []
+        let count = pending.count
+        let highestRisk: Int? = count > 0 ? pending.map(\.risk.rawValue).max() : nil
+        // `pending()` orders by createdAt DESC — the most recently arrived
+        // pending approval is the one surfaced for the buttons.
+        let mostRecentID: String? = count > 0 ? pending.first?.id.uuidString : nil
+        if count == lastLiveActivityPendingCount,
+           highestRisk == lastLiveActivityHighestRisk,
+           mostRecentID == lastLiveActivityPendingID {
+            return
+        }
+        lastLiveActivityPendingCount = count
+        lastLiveActivityHighestRisk = highestRisk
+        lastLiveActivityPendingID = mostRecentID
+        await LancerLiveActivityManager.shared.updatePendingApprovals(
+            count, highestRisk: highestRisk, pendingApprovalID: mostRecentID
+        )
     }
 
     #if DEBUG

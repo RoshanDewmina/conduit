@@ -32,6 +32,7 @@
 //     (added via `xcodegen generate` once the widget target is declared).
 
 import Foundation
+import os
 #if os(iOS)
 import ActivityKit
 
@@ -120,6 +121,7 @@ public typealias ActivityTokenRegistration = @Sendable (
 @MainActor
 public final class LancerLiveActivityManager {
     public static let shared = LancerLiveActivityManager()
+    fileprivate static let diagLogger = Logger(subsystem: "dev.lancer.mobile", category: "LiveActivity")
 
     private var activities: [String: Activity<LancerSessionAttributes>] = [:]
     // Last content pushed per activityKey, so partial updates (e.g. approval
@@ -129,6 +131,14 @@ public final class LancerLiveActivityManager {
     private var tokenTasks: [String: Task<Void, Never>] = [:]
     // Push-to-start token monitor (one per app lifetime).
     private var pushToStartTask: Task<Void, Never>?
+    // Fleet-wide pending-approval state, remembered even when no activity is
+    // currently running (2026-07-18 review finding): an approval can arrive
+    // before the run that will own its Live Activity starts, so a freshly
+    // started activity needs to seed from this instead of always opening at
+    // pendingApprovals: 0 and under-reporting until the next count change.
+    private var fleetPendingCount = 0
+    private var fleetPendingRisk: Int?
+    private var fleetPendingID: String?
 
     /// Closure called when an activity or push-to-start push token is ready.
     /// Set by LancerApp at launch (alongside the APNs device-token path).
@@ -170,14 +180,31 @@ public final class LancerLiveActivityManager {
         pendingApprovalID: String? = nil,
         pendingApprovalRisk: Int? = nil
     ) async {
-        guard isEnabled else { return }
+        Self.diagLogger.info("start() called, isEnabled=\(self.isEnabled, privacy: .public)")
+        guard isEnabled else {
+            Self.diagLogger.error("start() aborted — Live Activities disabled (Settings → Notifications → Lancer, or system-wide)")
+            return
+        }
+
+        // Callers on the production relay path (`ShellLiveBridge.startLiveActivity`)
+        // never know the fleet-wide pending count themselves — that's
+        // `RelayApprovalIngest`'s job via `updatePendingApprovals` — so they pass
+        // the parameter defaults. Seed a brand-new activity from the fleet-wide
+        // cache in that case instead of always opening at 0/nil, which under-
+        // reported an approval that arrived before this activity existed
+        // (2026-07-18 review finding). A caller passing explicit values (the
+        // legacy per-session path) is left alone.
+        let usesFleetDefaults = pendingApprovals == 0 && pendingApprovalID == nil && pendingApprovalRisk == nil
+        let resolvedApprovals = usesFleetDefaults ? fleetPendingCount : pendingApprovals
+        let resolvedApprovalID = usesFleetDefaults ? fleetPendingID : pendingApprovalID
+        let resolvedApprovalRisk = usesFleetDefaults ? fleetPendingRisk : pendingApprovalRisk
 
         let content = LancerSessionAttributes.ContentState(
             status: status,
-            pendingApprovals: pendingApprovals,
+            pendingApprovals: resolvedApprovals,
             agentName: agentName,
-            pendingApprovalID: pendingApprovalID,
-            pendingApprovalRisk: pendingApprovalRisk,
+            pendingApprovalID: resolvedApprovalID,
+            pendingApprovalRisk: resolvedApprovalRisk,
             cost: lastContent[activityKey]?.cost
         )
 
@@ -196,10 +223,12 @@ public final class LancerLiveActivityManager {
             )
             activities[activityKey] = activity
             lastContent[activityKey] = content
+            Self.diagLogger.info("Activity.request succeeded, id=\(activity.id, privacy: .public)")
             startTokenMonitor(for: activity, activityKey: activityKey, deviceSessionID: deviceSessionID)
         } catch {
             // ActivityKit refuses (off in Settings, system busy, etc.) —
             // silent failure is correct; the in-app inbox still works.
+            Self.diagLogger.error("Activity.request FAILED: \(error, privacy: .public)")
         }
     }
 
@@ -240,6 +269,29 @@ public final class LancerLiveActivityManager {
         lastContent[activityKey] = content
     }
 
+    /// Status/agent-only update that preserves the pending-approval fields from
+    /// the activity's current content. `ShellLiveBridge` owns status transitions
+    /// while `RelayApprovalIngest.updatePendingApprovals` owns the pending
+    /// count/ID/risk — a full `update(...)` from the status side would rewrite
+    /// pendingApprovals back to 0 and drop `pendingApprovalID` (hiding the
+    /// Approve/Reject buttons, the exact MAJOR-14 failure) on every mid-run
+    /// status change.
+    public func updateStatus(activityKey: String, status: String, agentName: String? = nil) async {
+        guard let activity = activities[activityKey] else { return }
+        let base = lastContent[activityKey]
+        let content = LancerSessionAttributes.ContentState(
+            status: status,
+            pendingApprovals: base?.pendingApprovals ?? 0,
+            agentName: agentName ?? base?.agentName,
+            pendingApprovalID: base?.pendingApprovalID,
+            pendingApprovalRisk: base?.pendingApprovalRisk,
+            isStreaming: base?.isStreaming ?? false,
+            cost: base?.cost
+        )
+        await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
+        lastContent[activityKey] = content
+    }
+
     /// Update the pending-approval count on every running activity, preserving
     /// each one's other fields. This is the glanceable signal the Dynamic Island
     /// exists for, so it must stay live while the app is backgrounded. No-ops
@@ -254,7 +306,15 @@ public final class LancerLiveActivityManager {
     ///   `ContentState.pendingApprovalRisk`) among the current fleet-wide
     ///   pending approvals, or nil when `count` is 0. Same fleet-wide caveat
     ///   as `count` above — not attributed to a specific session/host.
-    public func updatePendingApprovals(_ count: Int, highestRisk: Int? = nil) async {
+    public func updatePendingApprovals(_ count: Int, highestRisk: Int? = nil, pendingApprovalID: String? = nil) async {
+        // Remembered fleet-wide even when NO activity is currently running:
+        // an approval can arrive before the run's activity starts, and `start`
+        // seeds from this so the new activity doesn't under-report 0 pending
+        // (2026-07-18 review finding — the caller-side dedup this replaces
+        // cached the count without knowing nobody had received it).
+        fleetPendingCount = count
+        fleetPendingRisk = count > 0 ? highestRisk : nil
+        fleetPendingID = count > 0 ? (pendingApprovalID ?? fleetPendingID) : nil
         for (activityKey, activity) in activities {
             guard let base = lastContent[activityKey] else { continue }
             // Construct a fresh value (not a mutated copy of stored actor state)
@@ -269,7 +329,7 @@ public final class LancerLiveActivityManager {
                 status: base.status,
                 pendingApprovals: count,
                 agentName: base.agentName,
-                pendingApprovalID: count > 0 ? base.pendingApprovalID : nil,
+                pendingApprovalID: count > 0 ? (pendingApprovalID ?? base.pendingApprovalID) : nil,
                 pendingApprovalRisk: count > 0 ? highestRisk : nil,
                 isStreaming: base.isStreaming,
                 cost: base.cost
@@ -330,9 +390,11 @@ public final class LancerLiveActivityManager {
         deviceSessionID: String
     ) {
         tokenTasks[activityKey]?.cancel()
+        Self.diagLogger.info("startTokenMonitor watching pushTokenUpdates for activityKey=\(activityKey, privacy: .public)")
         tokenTasks[activityKey] = Task { [weak self] in
             for await tokenData in activity.pushTokenUpdates {
                 let hexToken = tokenData.map { String(format: "%02x", $0) }.joined()
+                Self.diagLogger.info("pushTokenUpdates delivered token, len=\(hexToken.count)")
                 await self?.tokenRegistration?(deviceSessionID, hexToken, false)
             }
         }

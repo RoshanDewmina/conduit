@@ -1,0 +1,10 @@
+2026/07/18 20:25:58 e2e: paired with phone
+2026/07/18 20:28:55 e2e: paired with phone
+2026/07/18 20:30:00 e2e: paired with phone
+2026/07/18 20:33:14 e2e: paired with phone
+2026/07/18 20:34:23 e2e: paired with phone
+2026/07/18 20:36:35 e2e: paired with phone
+2026/07/18 20:49:43 e2e: paired with phone
+lancerd daemon: relay pairing identity changed — dropping the previous relay session; phones on it are orphaned until re-paired
+2026/07/18 21:02:10 e2e: paired with phone
+2026/07/18 21:02:10 e2e: device registered for push (session 77AD3B93-E777-424A-95D1-5C79F6010AA6, apnsToken=true)

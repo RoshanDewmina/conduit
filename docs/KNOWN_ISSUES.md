@@ -432,3 +432,135 @@ were **purged 2026-07-06** with the rest of `docs/_archive/`.
   new pairing code, re-pair". Second observation from the same logs: an additional daemon dials
   the relay hourly on code `504109` (pk `n_dtq…`) from somewhere other than this Mac's launchd
   daemon — likely a stale test/remote instance; harmless but worth identifying.
+
+---
+
+## 7. Live device dogfood session — 2026-07-18 (rolling log)
+
+> Started when the owner asked to rebuild master on their physical iPhone and walk the remaining
+> App Store publish-readiness checks (see `docs/PUBLISH_READINESS_CHECKLIST.md` §B/§C/§D). Findings
+> below surfaced from actually watching the app live on-device, not from code review. Appended to
+> as the session continues — newest at the bottom of the section, same as `docs/CHANGELOG.md`.
+
+- **P1 (found + fixed same session):** a message the owner typed mid-turn into an *observed*
+  desktop session (watching an already-running Claude Code CLI session mirrored onto the phone)
+  never appeared in the thread — the assistant's reply rendered, the owner's own question bubble
+  did not. Root cause: Claude Code's "queue a message while I'm working" feature persists the
+  message as a `type:"attachment"` JSONL record (`{"attachment":{"type":"queued_command","prompt":
+  …,"origin":{"kind":"human"}}}`), not a normal `type:"user"` line. `parseClaudeLine`
+  (`daemon/lancerd/claude_transcript_adapter.go`) had never seen that shape and bucketed it with
+  pure harness bookkeeping (`queue-operation`, `summary`, `mode`, …) — silently dropped before it
+  ever reached the ledger, not just hidden by a display filter. **Fix:** `attachment` records with
+  `attachment.type=="queued_command"` and `attachment.origin.kind=="human"` now render as a real
+  user-role `SessionMessage`; the sibling `queue-operation` enqueue/remove bookkeeping lines (same
+  text, different record) stay ignored so the message isn't duplicated. Two regression tests added
+  using the exact JSONL shape captured from the live session
+  (`TestParseClaudeTranscriptQueuedMidTurnMessageRenders`,
+  `TestParseClaudeTranscriptQueuedAttachmentIgnoresNonHumanOrigin`); full `go test ./...` from
+  `daemon/lancerd` green. Verified live: rebuilt + reinstalled on the owner's iPhone via
+  `XcodeBuildMCP build_run_device`.
+- **P2 (found + fixed same session):** no visual indicator that the agent was still working while
+  watching a live observed session — the thread looked frozen between completed tool-call chips
+  even though the underlying CLI process was actively producing output. Root cause:
+  `LiveThreadView`'s working indicator is driven entirely by `ShellLiveBridge.sendState`, which
+  only models Lancer-*dispatched* sends; the observed-session follow loop
+  (`observedFollowLoop`/`startObservedFollow`) updates `transcriptTurns` on a timer but never
+  touches `sendState`, so it stayed `.idle` for the whole watch. **Fix:** added
+  `ShellLiveBridge.isObservedSessionWorking` — set true when a follow poll returns new messages,
+  cleared after `LivePollPolicy.observedFollowIdleGracePolls` (4) consecutive empty polls so it
+  goes honest-idle once activity actually stops rather than claiming "Working…" over stale data
+  (same rule already applied to the `.degraded` send state). `LiveThreadView`'s `.idle` reply-state
+  case now shows the existing `workingIndicator` when this flag is set. Verified: `swift build` +
+  targeted `swift test` (note: both touched files are `#if os(iOS)`-gated, so validation that
+  actually matters is the `XcodeBuildMCP` app-target device build, which succeeded and is what's
+  running on-device now — plain SPM `swift build` silently skips this code, see `CLAUDE.md`
+  "Tooling gotchas").
+- **P0 (found live, fix in progress):** app-closed lock-screen APNs push — the last open item on
+  `docs/PUBLISH_READINESS_CHECKLIST.md` §C2/D3 — reproduced FAIL live. Fired a real approval
+  escalation (`lancerd agent-hook`) with the owner's phone locked; waited 4+ minutes, no push
+  banner ever arrived; the pending approval only surfaced once the owner manually unlocked and
+  opened the app (fetched over the live relay connection on reconnect, not push). Root cause
+  traced fully: `Lancer/LancerApp.swift`'s `AppDelegate` correctly captures the APNs device token
+  and posts `.lancerAPNSTokenReceived` — **nothing in the app observes that notification.**
+  `SessionFeature/E2ERelayBridge.swift`'s `registerDevice(apnsToken:sessionID:pushBackendURL:)`
+  exists specifically to forward the token to the paired daemon over the relay (its own doc
+  comment says so) but **is never called from anywhere.** Same dead-end for Live Activity push
+  updates: `registerActivityToken(...)` and the `.lancerLiveActivityTokenReady` notification are
+  equally unwired. Net effect: the daemon never learns the phone's real push token, so every
+  approval delivery has silently depended on the live relay WebSocket staying connected — which
+  iOS kills once the app backgrounds/locks long enough, with no APNs fallback ever configured.
+  **Fix implemented:** new `DevicePushRegistrationCoordinator` (`AppFeature/Bridge/`, 202 lines)
+  observes both triggers — a `RelayFleetStore` connection transition to `.connected` (covers
+  pairing-before-token AND reconnect after background/relay-drop/daemon-restart, since the daemon
+  itself never persists the raw APNs token — see `server.go` `savePersistedDevice` — only
+  session+relayToken, so a phone-side resend on every reconnect is load-bearing, not optional) and
+  the `.lancerAPNSTokenReceived`/`.lancerLiveActivityTokenReady` notifications (covers
+  token-after-pairing) — and forwards to `E2ERelayBridge.registerDevice`/`.registerActivityToken`
+  on **every** currently-connected machine (push delivery is per-daemon; each paired Mac needs its
+  own copy of the token to push for runs on that specific host). Wired into `AppRoot` alongside its
+  sibling ingest coordinators. Daemon-side `e2e_router.go`'s `deviceRegister` handler (line 627)
+  was independently confirmed already-correct — it forwards the APNs token via
+  `postDeviceTokenRegistration`, no daemon change was needed. 8 new unit tests covering both
+  orderings, reconnect re-registration, and the no-op cases (untestable via plain `swift test` —
+  `#if os(iOS)`-gated like the rest of `AppFeature`); the real-iOS-target app build (XcodeBuildMCP,
+  simulator) compiles clean with the coordinator included. Rebuilt and installed on the owner's
+  physical iPhone 2026-07-18 21:45 ET — **live lock-screen re-proof still owed**, only the owner
+  watching their own locked phone can confirm the banner actually arrives.
+- **P1 (found + fixed same session):** two independent, compounding bugs behind the widget-count
+  bug above — both go deeper than the widget. **Bug A, the more consequential one:**
+  `AppDatabase.openShared()` (`PersistenceKit/AppDatabase.swift`) resolved the local GRDB database
+  inside `.applicationSupportDirectory` — a path scoped to the *calling process's own sandbox
+  container*. `ApprovalActionIntent` (the Lock Screen / Dynamic Island Approve/Reject button) is a
+  `LiveActivityIntent`, which iOS runs inside the `LancerWidgets` extension's own process, not the
+  main app's — so every lock-screen decision wrote its resolved-row update into a database the main
+  app could never see. The decision still correctly reached the daemon over the network
+  (`ApprovalRelay.enqueue` is unaffected — this is why the daemon's own approval queue was always
+  right), but the main app's local row stayed permanently "pending," producing an ever-growing ghost
+  count with a summary frozen on whatever was newest when the ghost accumulation started. **Fix:**
+  `openShared()` now resolves the database inside the App Group container
+  (`group.dev.lancer.mobile`, confirmed matching both `Lancer.entitlements` and
+  `LancerWidgets.entitlements`) so every process — main app, widget extension, Watch companion —
+  shares one physical file; `busyMode = .timeout(5)` added since multiple processes now write
+  concurrently. A one-time, non-destructive copy migration (DB + WAL/SHM sidecars) moves existing
+  installs' history from the old private-container location so upgrading users don't lose data.
+  This changes where the *entire* app's local data lives (chat history, hosts, snippets — not just
+  approvals), not just approvals — reviewed carefully given the blast radius before merging.
+  **Bug B:** the doc comment on `ApprovalRepository+WidgetSnapshot.swift`'s writer claimed it fires
+  on both "new approval arrives" and "decision resolves," but the "arrives" call site only existed
+  on a dead `ApprovalIngest`/`FleetStore` code path never constructed in production (`AppRoot`/
+  `WorkspacesView` exclusively use `RelayFleetStore`) — the real production entry point,
+  `RelayApprovalIngest.handle(_:)`, never called the writer at all, so the widget only ever
+  refreshed as a side effect of a later in-app decision, never on arrival. Fixed:
+  `RelayApprovalIngest.handle(_:)` now calls `writeApprovalWidgetSnapshot()` after persisting.
+  Third finding, flagged but explicitly not fixed (dormant in production, not a live contributor):
+  `SessionViewModel.writeWidgetSnapshot` writes the same `WidgetSnapshot.pendingApprovalsKey` with a
+  narrower single-session count — a real key collision between two widgets' data, currently inert
+  only because `SessionViewModel` is itself only reachable through the same dead `FleetStore` path.
+  Verified: new `WidgetSnapshotWriterTests.swift` (two suites, arrive→arrive→resolve→resolve
+  sequencing + the real `RelayApprovalIngest.handle()` call site) — both pass on the real iOS target
+  via `XcodeBuildMCP test_sim` (this file is `#if os(iOS)`-gated end-to-end, so plain `swift test`
+  silently compiles it out entirely — confirmed by checking the compiled binary contained zero
+  matching symbols; this is a real gotcha worth remembering, not just a caching hiccup). Nine
+  pre-existing approval/relay regression tests re-run alongside, all still passing. Rebuilt and
+  installed on the owner's physical iPhone 2026-07-18 21:45 ET.
+- **P1 (found + fixed same session):** `agent.observedSession.continue` (`dispatch.go`'s
+  `resumeObservedSession`) launched a brand-new `claude --resume <sessionId>` process with **zero
+  check** for whether that exact vendor+session was already being resumed — two overlapping calls
+  (a slow first reply plus an impatient second follow-up, or a client-side race) could spawn two OS
+  processes concurrently appending the same on-disk session transcript file, a real corruption risk.
+  Root cause of the client-side half: `ShellLiveBridge.isSendInFlight` only reflected
+  Lancer-*dispatched* sends (`sendState`), never the observed-follow signal, so `sendFollowUp` would
+  skip its own local queue and fire the resume RPC immediately even while the transcript showed the
+  session actively still writing. **Fix:** daemon-side reservation guard
+  (`dispatcher.activeObservedResumes`, a vendor+sessionID→runID map checked-and-set atomically,
+  released on terminal status) rejects a second concurrent resume of the same session with
+  `Status: "busy"`; client-side, `isSendInFlight` now folds in `isObservedSessionWorking` (a new
+  narrower `isDispatchSendInFlight` keeps the observed-follow loop's own internal "don't
+  double-render" check from self-locking against its own busy signal) so a follow-up typed while an
+  observed session looks busy queues locally and flushes once activity actually stops — real
+  Claude-Code-style queue-while-working parity for the observed-session path, not just the
+  Lancer-dispatched one. Verified: 2 new Go tests (`TestResumeObservedSessionSameSessionBusy
+  RejectsSecondLaunch`, `...ReservationReleasedOnTerminal`), full `go test ./... -race` green from
+  `daemon/lancerd`; Swift side confirmed via a real iOS-target sim build (`XcodeBuildMCP build_sim`)
+  after merge — plain `swift build`/`swift test` skip the touched `#if os(iOS)` files entirely.
+  Rebuilt and installed on the owner's physical iPhone 2026-07-18 21:45 ET.

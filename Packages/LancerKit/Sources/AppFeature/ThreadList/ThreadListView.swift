@@ -305,6 +305,18 @@ public struct ThreadListView: View {
         .onChange(of: filterPrefs) { _, newValue in
             ThreadListFilters.save(newValue)
         }
+        // `loadObservedSessions()` only fires once (initial `.task`) or on a
+        // manual Retry tap — a fetch that lands mid-reconnect (the machine
+        // wasn't connected yet, or `relayListSessions` timed out) leaves
+        // `observedSessionsError` stuck forever with no self-heal, even after
+        // the relay recovers seconds later (owner report, 2026-07-18: banner
+        // still showing "machine didn't respond" well after the daemon log
+        // confirmed a successful re-pair). Retry automatically the moment a
+        // machine becomes connected while an error is currently showing.
+        .onChange(of: relayFleetStore.firstConnectedMachine != nil) { _, isConnected in
+            guard isConnected, observedSessionsError != nil else { return }
+            Task { await loadObservedSessions() }
+        }
         .sheet(isPresented: $isSearchPresented) {
             SearchView()
         }
@@ -351,7 +363,7 @@ public struct ThreadListView: View {
     private var workspaceCwdRepo: WorkspaceRepo? {
         switch workspace {
         case .allRepos:
-            return workspaceData.repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) }
+            return workspaceData.defaultRepo
         case .repo(let repo):
             if WorkspaceRepoCatalog.isAbsoluteSendTarget(repo.cwd) {
                 return repo

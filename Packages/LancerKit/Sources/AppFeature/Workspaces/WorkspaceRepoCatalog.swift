@@ -412,6 +412,43 @@ public enum WorkspaceRepoCatalog {
         }
     }
 
+    /// Default composer / thread-list send target: most-recently-active absolute
+    /// cwd that is not in `failedCwdKeys`, mapped to a `WorkspaceRepo` row;
+    /// falls back to the first absolute repo row not marked failed.
+    public static func preferredDefaultRepo(
+        repos: [WorkspaceRepo],
+        conversations: [ChatConversation],
+        added: [AddedRepo] = [],
+        failedCwdKeys: Set<String> = []
+    ) -> WorkspaceRepo? {
+        func isFailed(_ cwd: String) -> Bool {
+            let key = pathKey(cwd)
+            return !key.isEmpty && failedCwdKeys.contains(key)
+        }
+
+        let roots = computeRoots(
+            conversationCwds: conversations.map(\.cwd),
+            addedCwds: added.map(\.cwd)
+        )
+
+        func repo(matchingConversationCwd cwd: String) -> WorkspaceRepo? {
+            guard let bucket = bucketKey(forCwd: cwd, among: roots) else { return nil }
+            let key = pathKey(bucket)
+            return repos.first { pathKey($0.cwd) == key }
+        }
+
+        let sorted = conversations.sorted { $0.lastActivityAt > $1.lastActivityAt }
+        for conversation in sorted {
+            let cwd = normalizeCwd(conversation.cwd)
+            guard isAbsoluteSendTarget(cwd), !isFailed(cwd) else { continue }
+            if let match = repo(matchingConversationCwd: cwd) {
+                return match
+            }
+        }
+
+        return repos.first { isAbsoluteSendTarget($0.cwd) && !isFailed($0.cwd) }
+    }
+
     public static func conversations(
         forCwd cwd: String?,
         allRepos: Bool,
@@ -668,6 +705,48 @@ public final class AddedRepoStore {
     }
 }
 
+/// Host cwds rejected by `resolveDispatchCWD` (`cwd does not exist`) — excluded
+/// from default composer selection until the user picks another folder.
+@MainActor
+@Observable
+public final class FailedCwdStore {
+    private static let defaultsKey = "dev.lancer.failedCwds"
+
+    public private(set) var pathKeys: Set<String>
+
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        self.pathKeys = Self.load(from: userDefaults)
+    }
+
+    private let userDefaults: UserDefaults
+
+    public func contains(cwd: String) -> Bool {
+        let key = WorkspaceRepoCatalog.pathKey(cwd)
+        guard !key.isEmpty else { return false }
+        return pathKeys.contains(key)
+    }
+
+    public func markFailed(_ cwd: String) {
+        let key = WorkspaceRepoCatalog.pathKey(cwd)
+        guard !key.isEmpty else { return }
+        guard pathKeys.insert(key).inserted else { return }
+        persist()
+    }
+
+    private func persist() {
+        let sorted = Array(pathKeys).sorted()
+        userDefaults.set(sorted, forKey: Self.defaultsKey)
+    }
+
+    private static func load(from defaults: UserDefaults) -> Set<String> {
+        guard let stored = defaults.array(forKey: defaultsKey) as? [String] else {
+            return []
+        }
+        return Set(stored)
+    }
+}
+
 /// Catalog list/search fetch honesty — first paint vs failed refresh vs ready.
 public enum WorkspaceCatalogFetchPhase: Equatable, Sendable {
     /// No successful load yet; not currently fetching.
@@ -706,6 +785,7 @@ public final class WorkspaceDataStore {
     /// First-paint / refresh honesty for Workspaces, ThreadList, and Search.
     public private(set) var fetchPhase: WorkspaceCatalogFetchPhase = .pending
     public let addedRepos: AddedRepoStore
+    public let failedCwds: FailedCwdStore
     public let readReceipts: ConversationReadReceiptStore
 
     private let chatRepo: ChatConversationRepository
@@ -727,10 +807,12 @@ public final class WorkspaceDataStore {
     public init(
         chatRepo: ChatConversationRepository,
         addedRepos: AddedRepoStore = AddedRepoStore(),
+        failedCwds: FailedCwdStore = FailedCwdStore(),
         readReceipts: ConversationReadReceiptStore = ConversationReadReceiptStore()
     ) {
         self.chatRepo = chatRepo
         self.addedRepos = addedRepos
+        self.failedCwds = failedCwds
         self.readReceipts = readReceipts
     }
 
@@ -738,6 +820,17 @@ public final class WorkspaceDataStore {
         WorkspaceRepoCatalog.deriveRepos(
             conversations: conversations,
             added: addedRepos.repos
+        )
+    }
+
+    /// Composer / thread-list default — recency-first absolute send target,
+    /// skipping host paths previously rejected with `cwd does not exist`.
+    public var defaultRepo: WorkspaceRepo? {
+        WorkspaceRepoCatalog.preferredDefaultRepo(
+            repos: repos,
+            conversations: conversations,
+            added: addedRepos.repos,
+            failedCwdKeys: failedCwds.pathKeys
         )
     }
 

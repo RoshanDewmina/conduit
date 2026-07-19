@@ -60,6 +60,17 @@ public final class ShellLiveBridge {
     }
 
     public private(set) var sendState: SendState = .idle
+    /// True while a followed *observed* session (one Lancer didn't dispatch —
+    /// see `startObservedFollow`) has appended new transcript lines within
+    /// the last few poll ticks. `sendState` stays `.idle` for the whole
+    /// observed-follow lifetime (it only models Lancer-dispatched sends), so
+    /// without this the reply area shows nothing while a remote agent is
+    /// visibly still working — no spinner, no "Working…" (owner report,
+    /// 2026-07-18). Cleared after `observedFollowIdleGracePolls` consecutive
+    /// empty polls so it goes honest-idle once activity actually stops,
+    /// matching the "never claim Working… over stale data" rule already
+    /// applied to `sendState.degraded` above.
+    public private(set) var isObservedSessionWorking = false
     public private(set) var activeConversationID: String?
     /// Full conversation transcript from `ChatConversationRepository`, refreshed
     /// on every poll tick. `LiveThreadView` renders these in order so follow-ups
@@ -113,6 +124,22 @@ public final class ShellLiveBridge {
     /// Bumped by `resetForNewThread` so abandoned poll loops stop mutating UI.
     private var sessionEpoch: UInt64 = 0
 
+    /// Live Activity key for the conversation currently surfaced on the Lock
+    /// Screen / Dynamic Island. Stable per conversation so follow-ups reuse
+    /// rather than stack. Nil when no activity is owned by this bridge.
+    private var liveActivityKey: String?
+    private var liveActivityAgentName: String?
+    private var lastLiveActivitySnapshot: LiveActivitySnapshot?
+
+    /// Equality-dedup payload for Live Activity status updates so identical
+    /// polls don't spam ActivityKit. Pending-approval fields deliberately
+    /// absent: `RelayApprovalIngest` owns those and the bridge's updates go
+    /// through the field-preserving `updateStatus`, never full `update`.
+    private struct LiveActivitySnapshot: Equatable {
+        let status: String
+        let agentName: String?
+    }
+
     /// Live follow of an adopted observed session's vendor transcript, so
     /// desktop-side activity appears while the thread is open. Cancelled by
     /// `resetForNewThread` (LiveThreadPresentation binding-clear path).
@@ -135,16 +162,38 @@ public final class ShellLiveBridge {
     /// follow-ups (found in the 2026-07-15 reconnect re-proof investigation).
     private var isSendDispatchInFlight = false
 
-    /// True while a send/follow-up is still awaiting a terminal turn
-    /// (including degraded unreachable polling). Mid-run feedback may still
-    /// be typed and enqueued; the bridge flushes the queue when this flips false.
-    public var isSendInFlight: Bool {
+    /// True while a Lancer-dispatched send/follow-up itself is still awaiting
+    /// a terminal turn (including degraded unreachable polling) — `sendState`
+    /// only, deliberately excluding `isObservedSessionWorking`. This is the
+    /// guard `observedFollowLoop` checks internally ("don't double-render
+    /// while a real send is happening"); if it included the observed-session
+    /// signal too, the loop would see itself as permanently in-flight the
+    /// moment it sets `isObservedSessionWorking = true` and could never poll
+    /// again to notice the session going idle. Use `isSendInFlight` (below)
+    /// everywhere else — this one is for the loop only.
+    private var isDispatchSendInFlight: Bool {
         switch sendState {
         case .working, .awaitingApproval, .streaming, .degraded:
             return true
         case .idle, .adoptedNoHistory, .completed, .failed:
             return false
         }
+    }
+
+    /// True while a send/follow-up is in flight OR the currently-followed
+    /// observed session looks busy (`isObservedSessionWorking`). `sendFollowUp`
+    /// gates on this so a follow-up typed while watching a still-running
+    /// observed session queues locally (`enqueueFeedback`) instead of firing
+    /// `agent.observedSession.continue` immediately — Claude Code's CLI has no
+    /// "inject into a live process" mechanism, so `resumeObservedSession`
+    /// launches a brand-new `--resume` invocation every time; racing that
+    /// against a session the daemon can't see is busy is what the 2026-07-18
+    /// investigation found (daemon-side reservation guard added in
+    /// `dispatch.go` covers overlapping Lancer-initiated resumes; this client
+    /// gate is the only signal for "busy in the original terminal it was
+    /// started in", which the daemon has no handle on at all).
+    public var isSendInFlight: Bool {
+        isDispatchSendInFlight || isObservedSessionWorking
     }
 
     /// Follow-ups typed while a turn is still in flight (FIFO). Survives view
@@ -183,7 +232,11 @@ public final class ShellLiveBridge {
         let machine = activeMachineID.flatMap { relayFleetStore.machine($0) }
             ?? relayFleetStore.firstConnectedMachine
         guard let machine else { return false }
-        return await machine.bridge.sendRunControl(runId: runID, action: "stop")
+        let stopped = await machine.bridge.sendRunControl(runId: runID, action: "stop")
+        if stopped {
+            await endLiveActivity()
+        }
+        return stopped
     }
 
     /// Pops and sends the next queued follow-up when the agent is idle.
@@ -291,6 +344,7 @@ public final class ShellLiveBridge {
     private let relayFleetStore: RelayFleetStore
     private let conversationSyncCoordinator: ConversationSyncCoordinator
     private let chatRepo: ChatConversationRepository
+    private let failedCwds: FailedCwdStore
 
     public struct ObservedContinueTarget: Equatable, Sendable {
         public let vendor: String
@@ -321,11 +375,13 @@ public final class ShellLiveBridge {
     public init(
         relayFleetStore: RelayFleetStore,
         conversationSyncCoordinator: ConversationSyncCoordinator,
-        chatRepo: ChatConversationRepository
+        chatRepo: ChatConversationRepository,
+        failedCwds: FailedCwdStore = FailedCwdStore()
     ) {
         self.relayFleetStore = relayFleetStore
         self.conversationSyncCoordinator = conversationSyncCoordinator
         self.chatRepo = chatRepo
+        self.failedCwds = failedCwds
     }
 
     /// Clears in-flight UI state when the live thread pops so the next New
@@ -335,6 +391,7 @@ public final class ShellLiveBridge {
         sessionEpoch &+= 1
         observedFollowTask?.cancel()
         observedFollowTask = nil
+        isObservedSessionWorking = false
         isRetryDispatchInFlight = false
         isSendDispatchInFlight = false
         sendState = .idle
@@ -348,6 +405,15 @@ public final class ShellLiveBridge {
         pendingObservedContinue = nil
         boundObservedContinue = nil
         queuedFeedback = MidRunFeedbackQueue()
+        // Dismiss any Lock Screen / Dynamic Island activity owned by this
+        // thread — same teardown role as SessionViewModel.disconnect().
+        let activityKeyToEnd = liveActivityKey
+        liveActivityKey = nil
+        liveActivityAgentName = nil
+        lastLiveActivitySnapshot = nil
+        if #available(iOS 16.2, *), let activityKeyToEnd {
+            Task { await LancerLiveActivityManager.shared.end(activityKey: activityKeyToEnd) }
+        }
     }
 
     /// Re-dispatches `lastAttempt` without inventing a brand-new conversation
@@ -572,12 +638,13 @@ public final class ShellLiveBridge {
         var buffered: [SessionMessage] = []
         var baselineTurnCount = transcriptTurns.count
         var failures = 0
+        var idlePolls = 0
 
         let tick = testObservedFollowIntervalNanoseconds ?? LivePollPolicy.observedFollowIntervalNanoseconds
         while !Task.isCancelled, epoch == sessionEpoch {
             try? await Task.sleep(nanoseconds: tick)
             guard !Task.isCancelled, epoch == sessionEpoch else { return }
-            if isSendInFlight || isSendDispatchInFlight {
+            if isDispatchSendInFlight || isSendDispatchInFlight {
                 // The send path renders its own reply turn; whatever lands in
                 // the vendor transcript meanwhile must not be double-rendered.
                 nextLine = -1
@@ -589,7 +656,7 @@ public final class ShellLiveBridge {
                         machine: machine, sessionId: sessionId, sinceLine: 0
                     )
                     guard !Task.isCancelled, epoch == sessionEpoch else { return }
-                    if isSendInFlight || isSendDispatchInFlight { continue }
+                    if isDispatchSendInFlight || isSendDispatchInFlight { continue }
                     nextLine = baseline.nextLine
                     buffered = []
                     baselineTurnCount = transcriptTurns.count
@@ -600,7 +667,7 @@ public final class ShellLiveBridge {
                     machine: machine, sessionId: sessionId, sinceLine: nextLine
                 )
                 guard !Task.isCancelled, epoch == sessionEpoch else { return }
-                if isSendInFlight || isSendDispatchInFlight {
+                if isDispatchSendInFlight || isSendDispatchInFlight {
                     nextLine = -1
                     continue
                 }
@@ -610,7 +677,15 @@ public final class ShellLiveBridge {
                     continue
                 }
                 nextLine = delta.nextLine
-                guard !delta.messages.isEmpty else { continue }
+                guard !delta.messages.isEmpty else {
+                    idlePolls += 1
+                    if idlePolls >= LivePollPolicy.observedFollowIdleGracePolls {
+                        isObservedSessionWorking = false
+                    }
+                    continue
+                }
+                idlePolls = 0
+                isObservedSessionWorking = true
                 buffered.append(contentsOf: delta.messages)
                 renderObservedFollowSuffix(
                     buffered: buffered,
@@ -619,9 +694,13 @@ public final class ShellLiveBridge {
                 )
             } catch {
                 failures += 1
-                if failures >= LivePollPolicy.consecutiveFailureLimit { return }
+                if failures >= LivePollPolicy.consecutiveFailureLimit {
+                    isObservedSessionWorking = false
+                    return
+                }
             }
         }
+        isObservedSessionWorking = false
     }
 
     /// Re-renders the post-baseline suffix from the full buffered delta each
@@ -735,6 +814,12 @@ public final class ShellLiveBridge {
         case .started(let started):
             activeConversationID = started.conversationID
             inFlightRunID = started.runID
+            await startLiveActivity(
+                activityKey: started.conversationID,
+                hostID: machine.id.uuidString,
+                hostName: machine.record.displayName,
+                agentName: vendor.displayName
+            )
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
             await flushNextQueuedFeedback()
@@ -742,18 +827,37 @@ public final class ShellLiveBridge {
             activeConversationID = started.conversationID
             inFlightRunID = started.runID
             sendState = .awaitingApproval(message)
+            await startLiveActivity(
+                activityKey: started.conversationID,
+                hostID: machine.id.uuidString,
+                hostName: machine.record.displayName,
+                agentName: vendor.displayName
+            )
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
             await flushNextQueuedFeedback()
         case .blocked(let message):
             // Blocked reasons from startConversation (policy / approval /
             // budget / transport) are surfaced via `.failed` — not silent.
-            inFlightPrompt = nil
-            inFlightAttachments = []
-            inFlightRunID = nil
-            sendState = .failed(message)
+            surfaceBlockedSendFailure(message: message, cwd: cwd)
+            await endLiveActivity()
             await flushNextQueuedFeedback()
         }
+    }
+
+    /// Maps daemon `cwd does not exist` into a failed-cwd record + clearer copy.
+    /// Fail-closed: no auto-retry to a different cwd without user intent.
+    private func surfaceBlockedSendFailure(message: String, cwd: String) {
+        var userMessage = message
+        if message.localizedCaseInsensitiveContains("cwd does not exist") {
+            failedCwds.markFailed(cwd)
+            let label = WorkspaceRepoCatalog.displayName(forCwd: cwd)
+            userMessage = "Repo path \"\(label)\" isn't on the host anymore — pick another folder."
+        }
+        inFlightPrompt = nil
+        inFlightAttachments = []
+        inFlightRunID = nil
+        sendState = .failed(userMessage)
     }
 
     /// Resumes an observed (terminal-started) session via
@@ -796,6 +900,12 @@ public final class ShellLiveBridge {
         case "started":
             let runID = result.startedRunId ?? UUID().uuidString
             inFlightRunID = runID
+            await startLiveActivity(
+                activityKey: conversationID,
+                hostID: machine.id.uuidString,
+                hostName: machine.record.displayName,
+                agentName: DispatchVendorSelection.resolve(target.vendor).displayName
+            )
             await pollObservedTranscriptReply(
                 sessionId: target.sessionId,
                 prompt: prompt,
@@ -808,22 +918,26 @@ public final class ShellLiveBridge {
             inFlightAttachments = []
             inFlightRunID = nil
             sendState = .failed("Waiting for approval on \(machine.record.displayName).")
+            await endLiveActivity()
         case "denied":
             inFlightPrompt = nil
             inFlightAttachments = []
             inFlightRunID = nil
             let rule = result.rule.map { " (\($0))" } ?? ""
             sendState = .failed("Denied by policy on \(machine.record.displayName)\(rule).")
+            await endLiveActivity()
         case "budgetExceeded":
             inFlightPrompt = nil
             inFlightAttachments = []
             inFlightRunID = nil
             sendState = .failed("Daily budget reached on \(machine.record.displayName).")
+            await endLiveActivity()
         default:
             inFlightPrompt = nil
             inFlightAttachments = []
             inFlightRunID = nil
             sendState = .failed(result.message ?? "Couldn't continue session on \(machine.record.displayName).")
+            await endLiveActivity()
         }
     }
 
@@ -907,9 +1021,11 @@ public final class ShellLiveBridge {
                         guard epoch == sessionEpoch else { return }
                         transcriptTurns = priorTurns + [turn]
                         sendState = .streaming(turn)
+                        await updateLiveActivityIfNeeded()
                     } else if !tracker.isDegraded {
                         guard epoch == sessionEpoch else { return }
                         sendState = .working
+                        await updateLiveActivityIfNeeded()
                     }
                 } else if !assistantText.isEmpty {
                     stagnantPolls += 1
@@ -932,6 +1048,7 @@ public final class ShellLiveBridge {
                             guard epoch == sessionEpoch else { return }
                             transcriptTurns = priorTurns + [turn]
                             sendState = .completed(turn)
+                            await endLiveActivity()
                         case .failed(let message):
                             turn.status = .failed
                             turn.errorMessage = message
@@ -940,6 +1057,7 @@ public final class ShellLiveBridge {
                             guard epoch == sessionEpoch else { return }
                             transcriptTurns = priorTurns + [turn]
                             sendState = .failed(message)
+                            await endLiveActivity()
                         }
                         return
                     }
@@ -954,6 +1072,7 @@ public final class ShellLiveBridge {
                     )
                     guard epoch == sessionEpoch else { return }
                     sendState = .degraded(message: message, turn: turn.assistantText.isEmpty ? nil : turn)
+                    await updateLiveActivityIfNeeded()
                 case .failing, .healthy, .recovered:
                     break
                 }
@@ -1110,6 +1229,12 @@ public final class ShellLiveBridge {
         case .started(let started):
             activeConversationID = started.conversationID
             inFlightRunID = started.runID
+            await startLiveActivity(
+                activityKey: started.conversationID,
+                hostID: machine.id.uuidString,
+                hostName: machine.record.displayName,
+                agentName: followUpVendor.displayName
+            )
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
             await flushNextQueuedFeedback()
@@ -1117,15 +1242,19 @@ public final class ShellLiveBridge {
             activeConversationID = started.conversationID
             inFlightRunID = started.runID
             sendState = .awaitingApproval(message)
+            await startLiveActivity(
+                activityKey: started.conversationID,
+                hostID: machine.id.uuidString,
+                hostName: machine.record.displayName,
+                agentName: followUpVendor.displayName
+            )
             await refreshTranscript(conversationID: started.conversationID, epoch: epoch)
             await pollUntilTerminal(runID: started.runID, conversationID: started.conversationID, transport: transport)
             await flushNextQueuedFeedback()
         case .blocked(let message):
             // Surface blocked reason in the UI (same `.failed` path as send).
-            inFlightPrompt = nil
-            inFlightAttachments = []
-            inFlightRunID = nil
-            sendState = .failed(message)
+            surfaceBlockedSendFailure(message: message, cwd: cwd)
+            await endLiveActivity()
             await flushNextQueuedFeedback()
         }
     }
@@ -1166,6 +1295,7 @@ public final class ShellLiveBridge {
                     )
                     guard epoch == sessionEpoch else { return }
                     sendState = .degraded(message: message, turn: turn)
+                    await updateLiveActivityIfNeeded()
                 case .failing, .healthy, .recovered:
                     break
                 }
@@ -1190,6 +1320,7 @@ public final class ShellLiveBridge {
                     inFlightRunID = nil
                     guard epoch == sessionEpoch else { return }
                     sendState = .completed(turn)
+                    await endLiveActivity()
                     await refreshTranscript(conversationID: conversationID, epoch: epoch)
                     return
                 case .failed:
@@ -1204,6 +1335,7 @@ public final class ShellLiveBridge {
                         failMessage = turn.errorMessage ?? "Run failed"
                     }
                     sendState = .failed(failMessage)
+                    await endLiveActivity()
                     await refreshTranscript(conversationID: conversationID, epoch: epoch)
                     return
                 case .running:
@@ -1225,6 +1357,7 @@ public final class ShellLiveBridge {
                             }
                         }
                     }
+                    await updateLiveActivityIfNeeded()
                 }
             } else {
                 await refreshTranscript(conversationID: conversationID, epoch: epoch)
@@ -1294,6 +1427,92 @@ public final class ShellLiveBridge {
             fetch: { try await bridge.relayFetchConversation($0) },
             archive: { try await bridge.relayArchiveConversation($0) }
         )
+    }
+
+    // MARK: - Live Activity (production relay path)
+
+    /// Maps in-flight `SendState` to a Live Activity status string. Nil means
+    /// the activity should end (terminal / idle). Package-visible for tests.
+    nonisolated static func liveActivityStatus(for state: SendState) -> String? {
+        switch state {
+        case .working, .streaming, .awaitingApproval, .degraded:
+            return "running"
+        case .idle, .adoptedNoHistory, .completed, .failed:
+            return nil
+        }
+    }
+
+    /// Starts (or reuses) a Live Activity keyed by conversation so follow-ups
+    /// don't stack. Mirrors `SessionViewModel.connect()` success.
+    private func startLiveActivity(
+        activityKey: String,
+        hostID: String,
+        hostName: String,
+        agentName: String
+    ) async {
+        guard #available(iOS 16.2, *) else { return }
+        // Same conversation follow-up — keep the existing activity; don't
+        // re-`start` (that would rewrite content and clobber pending-approval
+        // counts pushed by `RelayApprovalIngest`).
+        if liveActivityKey == activityKey {
+            liveActivityAgentName = agentName
+            await updateLiveActivityIfNeeded()
+            return
+        }
+        if let previous = liveActivityKey, previous != activityKey {
+            await LancerLiveActivityManager.shared.end(activityKey: previous)
+            lastLiveActivitySnapshot = nil
+        }
+        liveActivityKey = activityKey
+        liveActivityAgentName = agentName
+        lastLiveActivitySnapshot = nil
+        await LancerLiveActivityManager.shared.start(
+            hostID: hostID,
+            hostName: hostName,
+            activityKey: activityKey,
+            deviceSessionID: DeviceIdentity.sessionID(),
+            status: "running",
+            agentName: agentName,
+            pendingApprovals: 0,
+            pendingApprovalID: nil
+        )
+        await updateLiveActivityIfNeeded()
+    }
+
+    /// Equality-deduped content update — same pattern as
+    /// `SessionViewModel.updateLiveActivityIfNeeded`. Pending-approval count
+    /// is owned by `RelayApprovalIngest.updatePendingApprovals` and is not
+    /// rewritten here (snapshot pending stays at the last value we ourselves
+    /// wrote, usually 0, so dedup prevents mid-poll clobbers).
+    private func updateLiveActivityIfNeeded() async {
+        guard #available(iOS 16.2, *),
+              let activityKey = liveActivityKey,
+              let liveStatus = Self.liveActivityStatus(for: sendState)
+        else { return }
+        let snapshot = LiveActivitySnapshot(
+            status: liveStatus,
+            agentName: liveActivityAgentName
+        )
+        guard snapshot != lastLiveActivitySnapshot else { return }
+        lastLiveActivitySnapshot = snapshot
+        await LancerLiveActivityManager.shared.updateStatus(
+            activityKey: activityKey,
+            status: snapshot.status,
+            agentName: snapshot.agentName
+        )
+    }
+
+    private func endLiveActivity() async {
+        guard #available(iOS 16.2, *), let activityKey = liveActivityKey else {
+            liveActivityKey = nil
+            liveActivityAgentName = nil
+            lastLiveActivitySnapshot = nil
+            return
+        }
+        liveActivityKey = nil
+        liveActivityAgentName = nil
+        lastLiveActivitySnapshot = nil
+        await LancerLiveActivityManager.shared.end(activityKey: activityKey)
     }
 
     /// Focuses a paired machine so `LiveThreadView` can render that machine's
