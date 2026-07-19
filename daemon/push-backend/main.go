@@ -767,14 +767,37 @@ func handleRegisterActivityToken(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// apnsJWTCache reuses one provider token per key for ~40 min. APNs requires
+// provider-token reuse (20–60 min window) and throttles frequent re-issuance
+// with 429 TooManyProviderTokenUpdates — live-hit 2026-07-19 when every Live
+// Activity push minted a fresh JWT.
+var apnsJWTCache = struct {
+	sync.Mutex
+	token    string
+	keyID    string
+	issuedAt time.Time
+}{}
+
 func makeJWT(keyID, teamID string, key *ecdsa.PrivateKey) (string, error) {
+	apnsJWTCache.Lock()
+	defer apnsJWTCache.Unlock()
+	if apnsJWTCache.token != "" && apnsJWTCache.keyID == keyID && time.Since(apnsJWTCache.issuedAt) < 40*time.Minute {
+		return apnsJWTCache.token, nil
+	}
 	claims := jwt.RegisteredClaims{
 		Issuer:   teamID,
 		IssuedAt: jwt.NewNumericDate(time.Now()),
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 	t.Header["kid"] = keyID
-	return t.SignedString(key)
+	signed, err := t.SignedString(key)
+	if err != nil {
+		return "", err
+	}
+	apnsJWTCache.token = signed
+	apnsJWTCache.keyID = keyID
+	apnsJWTCache.issuedAt = time.Now()
+	return signed, nil
 }
 
 func loadP8Key(path string) (*ecdsa.PrivateKey, error) {
