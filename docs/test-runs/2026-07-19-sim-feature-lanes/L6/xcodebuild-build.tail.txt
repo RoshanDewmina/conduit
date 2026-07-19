@@ -1,0 +1,6 @@
+simurgh exec: replacing caller -destination with lease-scoped simulator destination
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -clonedSourcePackagesDirPath /Users/roshansilva/.simurgh/leases/lease-231/SwiftPM -destination "platform=iOS Simulator,id=A309154D-51C0-40F2-8616-52AC4C34279B" -project Lancer.xcodeproj -scheme Lancer -derivedDataPath /Users/roshansilva/.simurgh/leases/lease-231/DerivedData build
+
+2026-07-19 16:52:23.074 xcodebuild[56429:1255504] Writing error result bundle to /var/folders/34/9ls7nc390jv1r4ppn1pgc96r0000gn/T/ResultBundle_2026-19-07_16-52-0023.xcresult
+xcodebuild: error: 'Lancer.xcodeproj' does not exist.
