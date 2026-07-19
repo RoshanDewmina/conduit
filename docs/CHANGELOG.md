@@ -9,6 +9,10 @@ re-deriving it from git archaeology. Do not rewrite or delete old lines.
 
 Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
+## 2026-07-19
+
+- 10:54 Cursor Grok — daemon poller push-starts Live Activities for locally-observed (terminal-started) agent sessions via existing `postRunStartPush` (phone `dev.SessionID`, not vendor transcript id); wired beside `startScheduler` in resident + legacy serve (`feat/live-activity-observed-trigger`)
+
 ## 2026-07-18
 
 - 22:23 Cursor Grok — closed Goal 1 Live Activity visual gap on sim (`lease-222`): Lock Screen LA banner + Island indicator captured while `Activity.request succeeded` (`F593D5C9-…`); IslandCapture UITest waits 25s foreground before Home; SET-failure alert still not obtained (daemon-kill UITest failed + watchdog); accidental `lancerd pair --help` rotated prod code to `190799` — phone needs re-pair; evidence in `docs/test-runs/2026-07-18-live-activity-sim/` (uncommitted worktree)

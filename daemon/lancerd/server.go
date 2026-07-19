@@ -333,6 +333,15 @@ type server struct {
 	emit       func([]byte) error
 	deviceMu   sync.RWMutex
 	device     *registeredDevice
+	// observedPushed tracks vendor observed-session IDs for which this process
+	// has already fired postRunStartPush (Live Activity push-to-start for
+	// terminal-started agents). Cleared when a session leaves the active set
+	// so a later burst can re-trigger. Guarded by observedPushMu.
+	observedPushMu sync.Mutex
+	observedPushed map[string]struct{}
+	// listObservedSessions is a test seam for the observed-activity poller;
+	// nil ⇒ buildSessionIndex(s.home).
+	listObservedSessions func(home string) ([]SessionInfo, error)
 	// approvalRetired removes one resolved approval from the resident-owned
 	// delivery queue. It is nil outside the resident daemon (for example, in
 	// stdio-only tests). Removing by ID avoids whole-store snapshot races when
@@ -413,6 +422,7 @@ func newServer(home string) *server {
 		loopsPath:      filepath.Join(home, ".lancer", "loops.json"),
 		runStderr:      map[string]string{},
 		runResultError: map[string]string{},
+		observedPushed: map[string]struct{}{},
 	}
 	s.loadLoops()
 	// The conversation ledger opens its own SQLite file under <home>/.lancer —
@@ -910,6 +920,7 @@ func runServeLegacy() error {
 	s := newServer(serverHome())
 	ensureClaudeHookWiredOnBoot() // plain dispatches launch immediately (hook still gates tools)
 	s.startScheduler(make(chan struct{}))
+	s.startObservedActivityPush(make(chan struct{}))
 
 	sockPath, err := socketPath()
 	if err != nil {
