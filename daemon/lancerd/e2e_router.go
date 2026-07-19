@@ -524,6 +524,18 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 		data, _ := json.Marshal(msg)
 		_ = r.client.sendMessage("emergencyStopResult", data)
 
+	case "agentEmergencyStopClear":
+		payloadOut := map[string]interface{}{"emergencyStopped": false}
+		if err := r.server.clearEmergencyStop(); err != nil {
+			payloadOut["error"] = err.Error()
+		}
+		msg := map[string]interface{}{
+			"type":    "emergencyStopClearResult",
+			"payload": payloadOut,
+		}
+		data, _ := json.Marshal(msg)
+		_ = r.client.sendMessage("emergencyStopClearResult", data)
+
 	case "agentStatusQuery":
 		// On-demand status for a relay-only phone (no SSH DaemonChannel), mirroring
 		// the SSH agent.status RPC (server.go). Uses the same s.queryAgentStatus so

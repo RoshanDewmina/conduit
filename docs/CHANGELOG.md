@@ -11,6 +11,8 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- Claude Sonnet 5 — B2 emergency-stop daemon-side atomic primitive: persisted stop latch (`~/.lancer/emergency_stop.json`) survives daemon restart, fail-closed deny for new/late PreToolUse escalations raised while stopped (`handleHookWithNotify`), explicit `agent.emergencyStop.clear` RPC (local + relay) as the only way it lifts; process-group kill and pending-approval deny were already landed on master and are now covered by an OS-level kill test (branch `feat/b2-estop-daemon-atomic`, PR TBD)
+
 - 12:15 Claude Fable (orchestrator) — land owner SSOT docs: SHIP_PLAN.md (A1/A2 marked done: night stack merged @7b888f78, phone pair 676174 confirmed 14:26:47Z), 07-19 daily-driver roadmap, away-mode wireframes, 07-18 fable briefs, policy/audit relay port map, device-proof publish status (PR: docs/ship-plan-2026-07-19)
 - 10:55 Cursor Grok — wire Live Activity push-to-start for Lancer-dispatched runs: `onRunStarted` callback fires once from `wrapEmitForRun` on first `"running"` status → `handleRunStarted` → `postRunStartPush(dev.SessionID)` (feat/live-activity-dispatch-trigger)
 - 10:54 Cursor Grok — daemon poller push-starts Live Activities for locally-observed (terminal-started) agent sessions via existing `postRunStartPush` (phone `dev.SessionID`, not vendor transcript id); wired beside `startScheduler` in resident + legacy serve (`feat/live-activity-observed-trigger`)
