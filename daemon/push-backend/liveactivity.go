@@ -19,7 +19,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -294,28 +297,43 @@ func sendLiveActivityPush(activityToken string, payload liveActivityPayload, pri
 		return fmt.Errorf("marshal Live Activity payload: %w", err)
 	}
 
-	url := fmt.Sprintf("https://api.push.apple.com/3/device/%s", activityToken)
-	req, err := http.NewRequest("POST", url, bytes.NewReader(buf))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("authorization", "bearer "+jwtToken)
-	// apns-topic MUST be "<bundleID>.push-type.liveactivity" — the bare bundle id silently fails.
-	req.Header.Set("apns-topic", bundleID+".push-type.liveactivity")
-	req.Header.Set("apns-push-type", "liveactivity")
-	req.Header.Set("apns-priority", fmt.Sprintf("%d", priority))
-	req.Header.Set("content-type", "application/json")
+	// Production first, sandbox on 400 BadDeviceToken — same two-host strategy
+	// and rationale as sendAPNsAlert (main.go): development-signed builds get
+	// sandbox activity tokens that api.push.apple.com rejects with 400.
+	hosts := []string{"api.push.apple.com", "api.sandbox.push.apple.com"}
+	var lastStatus int
+	var lastReason string
+	for _, host := range hosts {
+		url := fmt.Sprintf("https://%s/3/device/%s", host, activityToken)
+		req, err := http.NewRequest("POST", url, bytes.NewReader(buf))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("authorization", "bearer "+jwtToken)
+		// apns-topic MUST be "<bundleID>.push-type.liveactivity" — the bare bundle id silently fails.
+		req.Header.Set("apns-topic", bundleID+".push-type.liveactivity")
+		req.Header.Set("apns-push-type", "liveactivity")
+		req.Header.Set("apns-priority", fmt.Sprintf("%d", priority))
+		req.Header.Set("content-type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			return nil
+		}
+		lastStatus = resp.StatusCode
+		lastReason = strings.TrimSpace(string(body))
+		if resp.StatusCode != http.StatusBadRequest {
+			break
+		}
+		log.Printf("APNs %s rejected Live Activity token (HTTP %d: %s) — trying next host", host, lastStatus, lastReason)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("APNs Live Activity returned %d", resp.StatusCode)
-	}
-	return nil
+	return fmt.Errorf("APNs Live Activity returned %d: %s", lastStatus, lastReason)
 }
 
 // redactSummary returns a non-sensitive summary string for APNs payloads.
