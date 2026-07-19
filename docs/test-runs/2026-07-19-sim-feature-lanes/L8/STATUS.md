@@ -1,5 +1,3 @@
-# L8 — FAIL
+# L8 — PASS
 
-swift test build failed PermissionModeSetResult; simurgh acquire hung.
-
-See [ROLLUP.md](../ROLLUP.md).
+See [REPORT.md](REPORT.md).

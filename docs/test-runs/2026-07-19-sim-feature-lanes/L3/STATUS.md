@@ -1,5 +1,3 @@
-# L3 — MISSING
+# L3 — PASS
 
-No lane report produced by fan-out agent.
-
-See [ROLLUP.md](../ROLLUP.md).
+See [REPORT.md](REPORT.md).

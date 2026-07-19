@@ -1,5 +1,3 @@
-# L2 — PARTIAL
+# L2 — PASS
 
-disk-budget FAIL (worktree hygiene); no UITest evidence.
-
-See [ROLLUP.md](../ROLLUP.md).
+See [REPORT.md](REPORT.md).

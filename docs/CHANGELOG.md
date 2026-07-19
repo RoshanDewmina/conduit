@@ -11,6 +11,8 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 19:10 Cursor Grok 4.5 — remaining sim lanes L8/L2/L3/L7 → PASS on `lease-247`; L8 prior compile FAIL was truncated SPM log; L7 restored DEBUG review fixture destination (evidence + ROLLUP update, PR #189)
+
 - 18:40 Composer — feature-sweep rollup current truth: L1 PASS (#193), L4/L6 PASS (#192), L5 PASS (#194 TTL fixtures), vendor Codex/OpenCode PASS (#191); L2 PARTIAL, L3/L7 MISSING, L8 FAIL; Cursor NEEDS-FABLE (#190); open PRs #185–#194 (ROLLUP.md, PR #189)
 
 - 17:20 Cursor Grok 4.5 — 2026-07-19 fan-out rollup: L1–L8/vendor/Cursor inventory PASS/FAIL/PARTIAL/MISSING + B1 next actions (docs/test-runs/2026-07-19-sim-feature-lanes/ROLLUP.md, branch docs/2026-07-19-feature-sweep-rollup)

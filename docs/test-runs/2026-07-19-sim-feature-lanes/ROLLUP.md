@@ -1,9 +1,9 @@
 # 2026-07-19 feature-sweep rollup
 
-**Synthesized:** 2026-07-19 ~18:40 local (UTC-4)  
-**Baseline tip:** `origin/master` @ `7c4b1eca` (+ lane branches cherry-pick #187 for L5 as noted on #192)  
-**Inventory sources:** fan-out worktrees `sim-l1-core`…`sim-l8-accounts`; serial re-run [PR #192](https://github.com/RoshanDewmina/conduit/pull/192) (`sim/serial-lanes-2026-07-19`); L1 reply fix [PR #193](https://github.com/RoshanDewmina/conduit/pull/193); L5 writer fix [PR #194](https://github.com/RoshanDewmina/conduit/pull/194); vendor smoke [PR #191](https://github.com/RoshanDewmina/conduit/pull/191); open PRs **#185–#194**  
-**Prod pairing:** **intact** (`~/.lancer/relay-pairing.json` mtime 2026-07-19 10:26 throughout serial + L1 fix runs)
+**Synthesized:** 2026-07-19 ~19:10 local (UTC-4)  
+**Baseline tip:** `origin/master` @ `7c4b1eca` (+ #193/#194 cherry-picks on remaining-lanes worktree)  
+**Inventory sources:** fan-out + serial (#192) + L1 (#193) + L5 (#194) + remaining lanes (`sim/remaining-lanes-2026-07-19`, `lease-247`); vendor (#191); Cursor (#190); open PRs **#185–#195**  
+**Prod pairing:** **intact** (`~/.lancer/relay-pairing.json` mtime 2026-07-19 10:26 throughout)
 
 Status legend: **PASS** = lane bar met with committed evidence · **PARTIAL** = some gate evidence, sim/live incomplete · **FAIL** = attempted and failed · **MISSING** = no report / agent never finished · **NEEDS-FABLE** = implementation verified locally; sensitive-path review before merge.
 
@@ -15,13 +15,13 @@ Status legend: **PASS** = lane bar met with committed evidence · **PARTIAL** = 
 |---|---|---|---|
 | **Plan matrix** | **PASS** | [PR #188](https://github.com/RoshanDewmina/conduit/pull/188) · `docs/test-runs/2026-07-19-plan-feature-matrix/` | Docs-only audit; G1 passed; G2/B1 device evidence still open |
 | **L1 Core loop** | **PASS** | [PR #193](https://github.com/RoshanDewmina/conduit/pull/193) · [`L1/REPORT.md`](L1/REPORT.md) | Isolated relay pair + dispatch + **PONG** reply; push-backend 401 env-only (does not block local relay) |
-| **L2 Chat** | **PARTIAL** | `L2/disk-budget.txt` | Disk-budget hygiene FAIL (worktree sprawl); no focused chat sim/UITest evidence |
-| **L3 Chrome** | **MISSING** | `L3/STATUS.md` · empty screenshots | Parked; no lane REPORT |
+| **L2 Chat** | **PASS** | [`L2/REPORT.md`](L2/REPORT.md) | Offline seeded transcript UITest **TEST SUCCEEDED**; follow-up dispatch offline PARTIAL (expected) |
+| **L3 Chrome** | **PASS** | [`L3/REPORT.md`](L3/REPORT.md) | Workspaces + composer/profile/settings/search/addRepo/repoPicker deep-links |
 | **L4 Governance** | **PASS** | [PR #192](https://github.com/RoshanDewmina/conduit/pull/192) · [`L4/REPORT.md`](L4/REPORT.md) | Go E2E + Swift governance filters + `SweepLaneC4Tests` **TEST SUCCEEDED** |
 | **L5 Widgets / LA** | **PASS** | [PR #194](https://github.com/RoshanDewmina/conduit/pull/194) · [`L5/REPORT.md`](L5/REPORT.md) | Stale TTL + Agents/LA writers PASS; arrive/resolve was **test fixture TTL bug** (fixed); HS widget chrome skipped on sim |
 | **L6 Siri** | **PASS** | [PR #192](https://github.com/RoshanDewmina/conduit/pull/192) · [`L6/REPORT.md`](L6/REPORT.md) | `xcodegen` before build; IntentsKit tests; AppShortcuts discovered |
-| **L7 Review** | **MISSING** | `L7/STATUS.md` | Parked; no lane REPORT |
-| **L8 Accounts** | **FAIL** | `L8/swift-test.excerpt.txt` | `PermissionModeSetResult` compile failure; not re-run on tip |
+| **L7 Review** | **PASS** | [`L7/REPORT.md`](L7/REPORT.md) | Restored DEBUG `LANCER_DESTINATION=review` fixture sheet; Edit-tool red/green still known MISSING |
+| **L8 Accounts** | **PASS** | [`L8/REPORT.md`](L8/REPORT.md) | Prior FAIL was truncated SPM log — tip already compiles; 15 Swift + accounts UITest PASS |
 | **Vendor free-model smoke** | **PASS** | [PR #191](https://github.com/RoshanDewmina/conduit/pull/191) · `docs/test-runs/2026-07-19-vendor-free-model-smoke/` | Codex + OpenCode free-model smoke PASS (isolated state) |
 | **Cursor CLI adapter** | **NEEDS-FABLE** | [PR #190](https://github.com/RoshanDewmina/conduit/pull/190) | `go test` + focused Swift 22/22 PASS locally; **Sonnet/Fable full-diff ack** on `dispatch.go` before merge |
 
@@ -50,26 +50,32 @@ Status legend: **PASS** = lane bar met with committed evidence · **PARTIAL** = 
 | L6 | FAIL | **PASS** | **PASS** |
 | L1 | MISSING → PARTIAL | PARTIAL | **PASS** (#193) |
 | L5 | MISSING → PARTIAL | PARTIAL (PendingApprovals writer) | **PASS** (#194) |
+| L8 | FAIL | — | **PASS** (`lease-247`) |
+| L2 | PARTIAL | — | **PASS** (`lease-247`) |
+| L3 | MISSING | — | **PASS** (`lease-247`) |
+| L7 | MISSING | — | **PASS** (`lease-247`; Edit-tool gap noted) |
 
-Method: one Simurgh lease (`lease-242`); isolated `LANCER_STATE_DIR`; L6 required `xcodegen generate`; L5 stacked #187 widget commits; L1 fix branch `lease-244` with harness order `pair` → `daemon` → launch + `LANCER_SKIP_NOTIFICATION_PROMPT`.
+Method: remaining lanes used one Simurgh lease (`lease-247`); tip + #193/#194; isolated `LANCER_STATE_DIR`; never bare prod `lancerd pair`. L8 prior FAIL was a false positive (SPM fetch truncated). L7 restored DEBUG `review` destination for fixture `ReviewSheetView`.
+
+See also [`ROLLUP-remaining.md`](ROLLUP-remaining.md).
 
 ---
 
-## Per-lane detail (unchanged / open lanes)
+## Per-lane detail (remaining lanes closed)
 
-### L2 — Chat — PARTIAL
-- Disk budget script FAIL is process hygiene, not product regression.
-- **Next:** focused chat UITests under Simurgh; do not block sweep on budget alone.
+### L2 — Chat — PASS
+- Focused `SimFeatureLaneL2Tests` offline seed: thread list, transcript, tool chips, follow-up UI.
+- Disk-budget hygiene FAIL remains process noise, not a product gate.
 
-### L3 — Chrome — MISSING
-- **Next:** reset worktree to tip; `LANCER_DESTINATION` deep-link UITests.
+### L3 — Chrome — PASS
+- Deep-link UITests for Workspaces root + composer/profile/settings/search/addRepo/repoPicker.
 
-### L7 — Review — MISSING
-- **Next:** `LANCER_DESTINATION=review` UITest + Edit-tool sheet status.
+### L7 — Review — PASS
+- `ReviewModelsTests` 16/16 + `LANCER_DESTINATION=review` fixture sheet UITest.
+- **Edit-tool red/green sheet** still MISSING (CursorStyle deletion) — separate follow-up.
 
-### L8 — Accounts — FAIL
-- Build error on `PermissionModeSetResult` in `DaemonChannel.swift`.
-- **Next:** compile fix on tip, then re-run filtered `swift test` under Simurgh.
+### L8 — Accounts — PASS
+- Tip compiles; VendorAccountStore + RunningAgentsMapping 15 tests; accounts destination UITest.
 
 ---
 
@@ -99,7 +105,7 @@ Unchanged by sim lanes — lock-screen approve, follow-up/receipt, Emergency Sto
 
 1. **Owner B1 device re-proof (P0)** — checklist rows in `docs/test-runs/2026-07-19-b1-tier0-reproof/`.  
 2. **Cursor #190 — Fable/Sonnet ack** then isolated Cursor model smoke.  
-3. **Parked lanes** — L3/L7 MISSING; L8 compile fix + retest; L2 chat UITests; optional owner push-backend secrets for APNs/LA push proof (not core reply).
+3. **Edit-tool red/green sheet** — optional follow-up (L7 noted MISSING); device confirm #185/#187 widgets.
 
 ---
 
@@ -109,5 +115,6 @@ Unchanged by sim lanes — lock-screen approve, follow-up/receipt, Emergency Sto
 |---|---|---|
 | `.worktrees/sim-serial-lanes` | `sim/serial-lanes-2026-07-19` | PR #192 evidence |
 | `.worktrees/widget-stale-approvals` | `fix/l1-reply-path` / `fix/l5-pending-approvals-writer-test` | PR #193 / #194 |
+| `.worktrees/sim-remaining-lanes` | `sim/remaining-lanes-2026-07-19` | L8/L2/L3/L7 + review destination fix |
 | `.worktrees/cursor-cli-adapter` | `feat/cursor-cli-adapter` | PR #190 |
 | `.worktrees/feature-sweep-rollup-2026-07-19` | `docs/2026-07-19-feature-sweep-rollup` | **this rollup** (#189) |
