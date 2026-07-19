@@ -231,6 +231,7 @@ public final class LancerLiveActivityManager {
         if let existing = activities[activityKey] {
             await existing.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
             lastContent[activityKey] = content
+            LiveActivityRunningAgentsWidget.syncFromSystemActivities()
             return
         }
 
@@ -245,6 +246,10 @@ public final class LancerLiveActivityManager {
             lastContent[activityKey] = content
             Self.diagLogger.info("Activity.request succeeded, id=\(activity.id, privacy: .public)")
             startTokenMonitor(for: activity, activityKey: activityKey, deviceSessionID: deviceSessionID)
+            // Same chokepoint as push-to-start island content — keep Home
+            // Screen AgentStatusWidget aligned without requiring Workspaces
+            // Agents to be mounted.
+            LiveActivityRunningAgentsWidget.syncFromSystemActivities()
         } catch {
             // ActivityKit refuses (off in Settings, system busy, etc.) —
             // silent failure is correct; the in-app inbox still works.
@@ -287,6 +292,7 @@ public final class LancerLiveActivityManager {
         )
         await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
         lastContent[activityKey] = content
+        LiveActivityRunningAgentsWidget.syncFromSystemActivities()
     }
 
     /// Status/agent-only update that preserves the pending-approval fields from
@@ -310,6 +316,7 @@ public final class LancerLiveActivityManager {
         )
         await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
         lastContent[activityKey] = content
+        LiveActivityRunningAgentsWidget.syncFromSystemActivities()
     }
 
     /// Update the pending-approval count on every running activity, preserving
@@ -374,6 +381,7 @@ public final class LancerLiveActivityManager {
         )
         await activity.update(.init(state: content, staleDate: Date().addingTimeInterval(1800)))
         lastContent[activityKey] = content
+        LiveActivityRunningAgentsWidget.syncFromSystemActivities()
     }
 
     /// Update the accumulated cost for a session's activity. No-ops when no
@@ -406,6 +414,14 @@ public final class LancerLiveActivityManager {
         if let deviceSessionID = deviceSessionIDs.removeValue(forKey: activityKey) {
             await tokenClear?(deviceSessionID)
         }
+        LiveActivityRunningAgentsWidget.syncFromSystemActivities()
+    }
+
+    /// Re-read ActivityKit's live activities into the Home Screen widget.
+    /// Call on foreground — covers push-to-start LAs that never went through
+    /// in-process `start(...)` while the app was closed.
+    public func syncRunningAgentsWidget() {
+        LiveActivityRunningAgentsWidget.syncFromSystemActivities()
     }
 
     // MARK: - Push token monitoring

@@ -20,9 +20,12 @@ public enum WidgetSnapshot {
     /// to the widget TTL guard.
     public static let pendingApprovalsUpdatedKey = "widgetPendingApprovalsUpdated"
 
-    /// Count of agents currently running on the paired host, written from the
-    /// same `agent.sessions.list` + `agent.status` poll that feeds Workspaces
-    /// (`RunningAgentsSection`), not from phone session-connection status.
+    /// Count of agents currently running on the paired host. Written from:
+    /// (1) Live Activity / ActivityKit sync (`LiveActivityRunningAgentsWidget`)
+    /// — same truth as the Dynamic Island, including push-to-start; and
+    /// (2) `RunningAgentsSection`'s `agent.sessions.list` + `agent.status` poll
+    /// when that reports a positive count (richer cwd lines). Not from bare
+    /// phone session-connection status.
     public static let runningAgentsCountKey = "widgetRunningAgentsCount"
     /// One-liners for the Home Screen Agents medium widget (provider · cwd).
     public static let runningAgentsLinesKey = "widgetRunningAgentsLines"

@@ -3,16 +3,15 @@ import SwiftUI
 import LancerCore
 
 // Home Screen widget #1: running-agent snapshot, read from the App Group
-// `WidgetSnapshot` keys written by
-// `RunningAgentsMapping.writeRunningAgentsWidgetSnapshot` (same
-// `agent.sessions.list` + `agent.status` poll as Workspaces Agents).
+// `WidgetSnapshot` keys written by:
+//   1. `LiveActivityRunningAgentsWidget` — same Live Activity truth as the
+//      Dynamic Island (ShellLiveBridge start/update/end + push-to-start
+//      Activities reconciled on foreground / app launch)
+//   2. `RunningAgentsMapping.writeRunningAgentsWidgetSnapshot` when the
+//      Workspaces Agents daemon poll reports running sessions (richer cwd lines)
 //
-// Do NOT key off `sessionStatusKey` / Live Activity "connected" — that is
-// phone↔daemon session liveness, not whether lancerd has active agents.
-//
-// KNOWN V1 LIMITATION: the snapshot is a single global slot (first connected
-// machine), refreshed while Workspaces Agents is mounted (~5s). Backgrounded
-// app keeps the last successful write until the next foreground poll.
+// Do NOT key off `sessionStatusKey` alone — that is phone↔daemon session
+// liveness. Prefer Live Activity / daemon running agents.
 
 struct AgentStatusEntry: TimelineEntry {
     let date: Date

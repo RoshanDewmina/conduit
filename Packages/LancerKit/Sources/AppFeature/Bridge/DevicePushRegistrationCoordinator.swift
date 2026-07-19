@@ -112,6 +112,11 @@ public final class DevicePushRegistrationCoordinator {
         if #available(iOS 17.2, *) {
             LancerLiveActivityManager.shared.startPushToStartMonitor(sessionID: DeviceIdentity.sessionID())
         }
+        // Align Home Screen Agents widget with any already-running Live
+        // Activities (push-to-start while the app was closed).
+        if #available(iOS 16.2, *) {
+            LancerLiveActivityManager.shared.syncRunningAgentsWidget()
+        }
         fleetStore.connectionStates.addObserver { [weak self] machineID, state in
             guard let self else { return }
             guard state == .connected else {
