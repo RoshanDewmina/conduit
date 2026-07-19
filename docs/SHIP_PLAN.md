@@ -56,12 +56,12 @@ gates live here. Update this file when a gate is passed or a decision changes �
 - **A2.** ~~Re-pair the owner's phone~~ **DONE 2026-07-19** — pair live: code `676174`,
   `confirmedAt 2026-07-19T14:26:47Z` in `~/.lancer/relay-pairing.json`; daemon log
   `connected to relay as daemon` 12:54:29 + `postRunStartPush … HTTP 204`.
-- **A3.** Fix the daemon `status=failed exitCode=1, zero output` bug (open since 2026-07-07).
+- **A3.** ~~Fix the daemon `status=failed exitCode=1, zero output` bug~~ **DONE 2026-07-19** (PR #179).
 - **B1. Tier 0 re-proof on physical device** per `LIVE_LOOP_RUNBOOK.md`: pair → dispatch → approval
   (app closed, lock screen) → follow-up. Evidence bundle committed this time — the 07-15 "10/10 sim
   proof" was claimed without committed evidence; do not repeat that.
-- **B2. Emergency Stop atomic daemon-side primitive** (open P0). Client-orchestrated stop is not a
-  stop. Daemon-side kill that survives relay loss, proven on device.
+- **B2. Emergency Stop atomic daemon-side primitive** — daemon side **DONE 2026-07-19** (PR #178:
+  persisted latch + fail-closed late gates + group kill, Go-proven). Device proof owner-gated (B1 row 7).
 
 **Exit bar:** G1 + G2 evidence links pasted into §7 below.
 
@@ -109,7 +109,12 @@ communities around Claude Code/Codex) · privacy/security page from
 
 ## 7. Gate evidence log (append links here as gates pass)
 
-- G1: —
+- G1: **PASSED 2026-07-19** (orchestrator session, all evidence re-run first-hand):
+  - `gh pr list --state open` → **empty**. #176 MERGED 17:13:43Z (merge `4c55e28c`; Sonnet full-diff review MERGE-READY + Fable arbitration, gates on merged tree: `go test -race` ok, LancerKit `swift build`+`swift test` ok, app-target `** BUILD SUCCEEDED ** [159.415 sec]` on Simurgh lease-224 — record in PR comment). #117 MERGED. #126 CLOSED superseded (rationale on PR). #177 (this doc) + #178 + #179 merged.
+  - Master green at tip `5f35e31f`: `go test ./...` → `ok lancer/lancerd 46.388s / policy / terminal` (re-run at each merge point).
+  - Phone pair: code `676174`, `confirmedAt 2026-07-19T14:26:47Z` (`~/.lancer/relay-pairing.json`); daemon log `connected to relay as daemon` 12:54:29 + `postRunStartPush … HTTP 204`.
+  - A3 FIXED+MERGED: PR #179 — root cause `cmd.Wait()` closing StdoutPipe readers + status-before-drain; regression test `TestZeroOutputExit1SurfacesStderrInErrorMessage` (RED confirmed pre-fix).
+  - B2 daemon primitive MERGED: PR #178 — persisted stop latch survives restart, fail-closed deny of new/late gates, explicit-clear-only RPC, OS-level process-group kill test. **Device proof = owner next step** (B1 checklist row 7, `docs/test-runs/2026-07-19-b1-tier0-reproof/CHECKLIST.md`).
 - G2: —
 - G3: —
 - G4: —
