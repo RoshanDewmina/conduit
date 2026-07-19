@@ -223,13 +223,25 @@ func agentArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 		// Verified live 2026-07-19 against agent 2026.07.16-899851b:
 		//   agent -p --output-format stream-json --trust "<prompt>"
 		// exits 0 with system/user/thinking/assistant/result NDJSON; without
-		// --trust (or -f/--yolo) headless fails fast EXIT 1 with "Workspace
-		// Trust Required" — not a TTY hang. Prompt is a trailing positional
-		// arg (never shell-interpolated).
+		// --trust headless fails fast EXIT 1 with "Workspace Trust Required"
+		// — not a TTY hang. Prompt is a trailing positional arg (never
+		// shell-interpolated).
 		//
-		// --force/--yolo is NOT default (fail-closed). Opt in with
-		// LANCER_CURSOR_FORCE=1 when unattended coding must auto-allow tools
-		// (mirrors LANCER_CODEX_UNSAFE for Codex's sandbox bypass).
+		// Tool-gating honesty (re-verified 2026-07-19): vendor `-p` "Has
+		// access to all tools, including write and shell." With --trust and
+		// WITHOUT --force, shell/write still auto-run (permissionMode
+		// default). Omitting --force is NOT fail-closed for tools.
+		// Lancer's real gate today is launch escalation only:
+		// hookWiredForAgent("agent") stays false (no PreToolUse-equivalent),
+		// so relaxLaunchEscalation keeps default-ask and launchRisk stays
+		// medium — same class as unverified Kimi/Pi. After the owner allows
+		// the *launch*, subsequent Cursor tools are ungated until a real
+		// Cursor hook exists. Vendor --mode ask|plan is read-only (live-
+		// verified) but is NOT the default argv: that would ship a planning
+		// stub, not a coding agent. LANCER_CURSOR_FORCE=1 adds --force only
+		// to skip remaining interactive denials; it is not a Lancer security
+		// boundary (mirrors LANCER_CODEX_UNSAFE naming discipline, not
+		// semantics).
 		argv := []string{"agent", "-p", "--output-format", "stream-json", "--trust"}
 		if model != "" {
 			argv = append(argv, "--model", model)
@@ -328,8 +340,9 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 	case "cursor":
 		// --continue resumes the previous session in cwd — verified live
 		// 2026-07-19 against agent 2026.07.16-899851b (same session_id
-		// retained; prior-turn context recalled). Same --trust / force
-		// gating as agentArgv.
+		// retained; prior-turn context recalled). Same --trust /
+		// LANCER_CURSOR_FORCE + launch-gate honesty as agentArgv (post-
+		// launch tools remain ungated; see agentArgv "cursor" comment).
 		argv := []string{"agent", "-p", "--continue", "--output-format", "stream-json", "--trust"}
 		if model != "" {
 			argv = append(argv, "--model", model)
@@ -434,7 +447,8 @@ func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]strin
 	case "cursor":
 		// --resume <chatId> targets that exact Cursor chat — verified live
 		// 2026-07-19 (create-chat UUID retained as session_id). Same
-		// --trust / LANCER_CURSOR_FORCE gating as agentArgv.
+		// --trust / LANCER_CURSOR_FORCE + launch-gate honesty as agentArgv
+		// (post-launch tools remain ungated).
 		argv := []string{"agent", "-p", "--resume", sessionID, "--output-format", "stream-json", "--trust"}
 		if model != "" {
 			argv = append(argv, "--model", model)

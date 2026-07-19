@@ -156,3 +156,19 @@ func TestInstalledAgentsDetectsCursorAgentBinary(t *testing.T) {
 		t.Fatalf("expected cursor detected from agent binary, got %v", got)
 	}
 }
+
+func TestCheckCursorGateWarnsWhenAgentOnPath(t *testing.T) {
+	lookFound := func(string) (string, error) { return "/bin/agent", nil }
+	got := checkCursorGate(lookFound)
+	if got.status != statusWarn {
+		t.Fatalf("status = %q, want warn", got.status)
+	}
+	if !strings.Contains(got.message, "ungated") {
+		t.Fatalf("message should state ungated tools, got %q", got.message)
+	}
+	lookMissing := func(string) (string, error) { return "", os.ErrNotExist }
+	ok := checkCursorGate(lookMissing)
+	if ok.status != statusOK {
+		t.Fatalf("missing agent should be OK skip, got %q %q", ok.status, ok.message)
+	}
+}

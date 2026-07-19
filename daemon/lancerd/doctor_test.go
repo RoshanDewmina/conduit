@@ -193,11 +193,21 @@ func TestCollectDoctorResultsOrderAndCount(t *testing.T) {
 	results := collectDoctorResults(dir, "/tmp/lancerd", dir, lookPathFor(), func(string, string, time.Duration) (net.Conn, error) {
 		return nil, errors.New("nope")
 	})
-	if len(results) != 16 {
-		t.Fatalf("expected 16 checks, got %d", len(results))
+	if len(results) != 17 {
+		t.Fatalf("expected 17 checks, got %d", len(results))
 	}
 	if results[0].name != "version" {
 		t.Fatalf("first check = %q", results[0].name)
+	}
+	foundCursorGate := false
+	for _, r := range results {
+		if r.name == "cursor gate" {
+			foundCursorGate = true
+			break
+		}
+	}
+	if !foundCursorGate {
+		t.Fatal("expected cursor gate check in doctor results")
 	}
 	if results[len(results)-1].name != "shim wrapper" {
 		t.Fatalf("last check = %q", results[len(results)-1].name)

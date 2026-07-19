@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 17:28 Cursor Grok 4.5 — PR #190 H1/M1: honest Cursor fail-closed (comments+doctor+hookWiredForAgent(agent) stay false — post-launch tools under `agent -p --trust` are ungated; omitting `--force` is NOT a tool gate); revert unrelated LancerKit Package.resolved sentry-cocoa churn (branch feat/cursor-cli-adapter)
 - 16:55 Cursor Grok 4.5 — Cursor Agent CLI as first-class vendor adapter: `agent -p --output-format stream-json --trust` argv (+ continue/resume), stream-json assistant/thinking/tool_call parsing, doctor + installedAgents detect `agent`, iOS DispatchVendorSelection/Accounts picker entry; `--force` opt-in via `LANCER_CURSOR_FORCE=1` (fail-closed default) (branch feat/cursor-cli-adapter)
 - 14:45 Claude Fable (orchestrator) — APNs provider-JWT cache (~40 min reuse) in push-backend makeJWT: per-push re-minting tripped Apple's 429 TooManyProviderTokenUpdates on Live Activity push-to-start (live-hit during today's LA debugging); deployed to conduit-push (fix/apns-jwt-cache)
 - 14:25 Claude Fable (orchestrator) — LA push-to-start unblocked: sendLiveActivityPush now falls back to sandbox APNs on 400 BadDeviceToken (mirrors sendAPNsAlert; dev-signed builds have sandbox tokens) + logs the APNs reason. Deployed to conduit-push.fly.dev and LIVE-PROVEN: closed-app dispatch -> Apple accepted push-to-start -> Live Activity appeared on owner's locked phone (fix/la-apns-sandbox-fallback)

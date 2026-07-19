@@ -761,6 +761,13 @@ func hookWiredForAgent(home string) func(string) bool {
 			// fail-closed until a real run proves the veto, then flip this to
 			// piExtensionInstalled(home).
 			return false
+		case "agent", "cursor-agent":
+			// Cursor Agent CLI — no PreToolUse-equivalent hook exists yet.
+			// Stay false so launch escalation remains the only Lancer gate;
+			// post-launch tools under `agent -p --trust` are ungated (vendor
+			// default; omitting --force does not gate shell/write). Do not
+			// flip until a real Cursor hook is installed + live-fire verified.
+			return false
 		default:
 			return false
 		}

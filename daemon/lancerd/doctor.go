@@ -120,6 +120,7 @@ func collectDoctorResults(lancerDir, exePath, home string, look lookPathFunc, di
 		checkCodexHooks(home),
 		checkKimiHooks(home),
 		checkPiExtension(home),
+		checkCursorGate(look),
 		checkAuditLog(lancerDir),
 		checkQueue(lancerDir),
 		checkOSArch(),
@@ -387,6 +388,26 @@ func checkPiExtension(home string) checkResult {
 		status:  statusWarn,
 		message: "Pi approval extension not installed — pi dispatches stay on the coarse launch gate",
 		hint:    "run: lancerd install",
+	}
+}
+
+// checkCursorGate warns that Cursor Agent has no PreToolUse-equivalent today.
+// When the `agent` binary is present, doctor must not imply governed tools:
+// hookWiredForAgent("agent") stays false (launch-ask only); after launch,
+// `agent -p --trust` auto-runs shell/write even without --force.
+func checkCursorGate(look lookPathFunc) checkResult {
+	if _, err := look("agent"); err != nil {
+		return checkResult{
+			name:    "cursor gate",
+			status:  statusOK,
+			message: "Cursor Agent CLI (agent) not on PATH — no Cursor dispatch surface",
+		}
+	}
+	return checkResult{
+		name:    "cursor gate",
+		status:  statusWarn,
+		message: "Cursor has no PreToolUse-equivalent — hookWiredForAgent(agent) stays false; post-launch tools under agent -p --trust are ungated (omitting --force is NOT fail-closed)",
+		hint:    "treat Cursor like unverified Kimi/Pi: launch approval only until a real Cursor hook exists; optional read-only: agent --mode ask|plan",
 	}
 }
 

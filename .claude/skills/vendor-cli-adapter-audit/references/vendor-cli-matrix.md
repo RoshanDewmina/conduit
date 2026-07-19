@@ -190,10 +190,13 @@ agent -p --resume <chatId> --output-format stream-json --trust <prompt>
 
 Risk:
 
-- Without `--trust` (or `-f`/`--yolo`), headless fails fast EXIT 1 with "Workspace Trust Required" — not a TTY hang.
-- `--force`/`--yolo` force-allows commands unless explicitly denied; Lancer omits by default (`LANCER_CURSOR_FORCE=1` opt-in).
-- Stream-json emits whole `assistant` messages + `tool_call` started/completed (no Claude `stream_event` deltas unless `--stream-partial-output`).
-- No Lancer PreToolUse hook for Cursor yet — policy stays fail-closed when hooks are absent.
+- Without `--trust`, headless fails fast EXIT 1 with "Workspace Trust Required" — not a TTY hang.
+- Vendor `-p` has access to write and shell. With `--trust` and without `--force`, shell/write still auto-run (re-verified 2026-07-19) — omitting `--force` is NOT fail-closed for tools.
+- Lancer's gate today is launch-ask only: `hookWiredForAgent("agent"|"cursor-agent")` stays false. After the owner allows the *launch*, post-launch tools are ungated until a PreToolUse-equivalent exists.
+- Vendor `--mode ask|plan` is real read-only (live-verified) but is not Lancer's default argv (would ship a planning stub, not a coding agent).
+- `LANCER_CURSOR_FORCE=1` adds `--force` to skip remaining interactive denials — not a Lancer security boundary.
+- Normalize alias `"agent"` → cursor is intentional; unrelated processes named `agent` may false-positive in detect.
+- Doctor `checkCursorGate` warns when `agent` is on PATH.
 
 ## Smoke Checks
 
