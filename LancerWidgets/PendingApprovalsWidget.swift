@@ -33,6 +33,21 @@ struct PendingApprovalsProvider: TimelineProvider {
 
     private func entry() -> PendingApprovalsEntry {
         let defaults = UserDefaults(suiteName: WidgetSnapshot.appGroupID)
+        // Prefer the approvals-specific timestamp; fall back to the shared
+        // lastUpdatedKey for snapshots written before this key existed.
+        let updated = defaults?.double(forKey: WidgetSnapshot.pendingApprovalsUpdatedKey)
+            ?? defaults?.double(forKey: WidgetSnapshot.lastUpdatedKey)
+            ?? 0
+        // App-Group snapshot can outlive the phone-local rows it was written
+        // from (app killed before a TTL sweep). If the snapshot itself is
+        // older than the pending TTL, treat the count as zero — same corpse
+        // window `ApprovalRepository.expireStalePending` uses.
+        if updated > 0 {
+            let age = Date().timeIntervalSince1970 - updated
+            if age > WidgetSnapshot.pendingApprovalTTL {
+                return PendingApprovalsEntry(date: .now, count: 0, newestSummary: nil)
+            }
+        }
         let count = defaults?.integer(forKey: WidgetSnapshot.pendingApprovalsKey) ?? 0
         let summary = defaults?.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)
         return PendingApprovalsEntry(date: .now, count: count, newestSummary: count > 0 ? summary : nil)
