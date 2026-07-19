@@ -1,0 +1,30 @@
+2026/07/18 20:28:56 e2e: device registered for push (session F0BC083A-7FA8-4F41-BF8D-AD5B53BC73F9, apnsToken=true)
+2026/07/18 20:30:00 e2e: paired with phone
+2026/07/18 20:30:00 e2e: device registered for push (session F0BC083A-7FA8-4F41-BF8D-AD5B53BC73F9, apnsToken=true)
+2026/07/18 20:33:14 e2e: paired with phone
+2026/07/18 20:33:14 e2e: rejecting replayed or out-of-order frame (gen="xetrtN-vSPpyIuFrfDkspA", seq=0)
+2026/07/18 20:34:23 e2e: paired with phone
+2026/07/18 20:34:23 e2e: device registered for push (session F0BC083A-7FA8-4F41-BF8D-AD5B53BC73F9, apnsToken=true)
+2026/07/18 20:36:35 e2e: paired with phone
+2026/07/18 20:36:36 e2e: device registered for push (session F0BC083A-7FA8-4F41-BF8D-AD5B53BC73F9, apnsToken=true)
+2026/07/18 20:49:43 e2e: paired with phone
+2026/07/18 20:49:43 e2e: rejecting replayed or out-of-order frame (gen="P0bZVWcWswteCZxBu1zLLA", seq=1)
+lancerd daemon: relay pairing identity changed — dropping the previous relay session; phones on it are orphaned until re-paired
+2026/07/18 21:01:44 e2e: receive error: read tcp [2607:fea8:fe00:853d:2c24:ccac:4ea0:8214]:49534->[2a09:8280:1::14b:ac3:0]:443: use of closed network connection
+lancerd daemon: E2E relay started
+2026/07/18 21:01:44 e2e: connected to relay as daemon
+2026/07/18 21:02:10 e2e: paired with phone
+2026/07/18 21:02:10 e2e: device registered for push (session 77AD3B93-E777-424A-95D1-5C79F6010AA6, apnsToken=true)
+2026/07/18 21:03:19 e2e: paired with phone
+2026/07/18 21:03:20 e2e: device registered for push (session 77AD3B93-E777-424A-95D1-5C79F6010AA6, apnsToken=true)
+2026/07/18 21:06:48 e2e: paired with phone
+2026/07/18 21:06:49 e2e: device registered for push (session 77AD3B93-E777-424A-95D1-5C79F6010AA6, apnsToken=true)
+2026/07/18 21:06:51 e2e: rejecting replayed or out-of-order frame (gen="XFyVdsXRCNqr0AE5WUnHNg", seq=4)
+2026/07/18 21:07:32 e2e: paired with phone
+2026/07/18 21:07:32 e2e: device registered for push (session 77AD3B93-E777-424A-95D1-5C79F6010AA6, apnsToken=true)
+2026/07/18 21:08:10 e2e: paired with phone
+2026/07/18 21:08:10 e2e: device registered for push (session 77AD3B93-E777-424A-95D1-5C79F6010AA6, apnsToken=true)
+2026/07/18 21:10:29 e2e: paired with phone
+2026/07/18 21:10:30 e2e: device registered for push (session 77AD3B93-E777-424A-95D1-5C79F6010AA6, apnsToken=true)
+2026/07/18 21:13:16 e2e: paired with phone
+2026/07/18 21:13:17 e2e: device registered for push (session 77AD3B93-E777-424A-95D1-5C79F6010AA6, apnsToken=true)

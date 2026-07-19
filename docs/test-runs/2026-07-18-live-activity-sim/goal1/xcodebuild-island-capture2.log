@@ -1,0 +1,112 @@
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -project Lancer.xcodeproj -scheme Lancer -configuration Debug -destination "platform=iOS Simulator,id=AC112E74-FEAC-44B7-8FA7-D0C695B6EC38" -derivedDataPath /Users/roshansilva/.simurgh/leases/lease-222/DerivedData -clonedSourcePackagesDirPath /Users/roshansilva/.simurgh/leases/lease-222/SwiftPM -resultBundlePath /tmp/island-capture2.xcresult "-only-testing:LancerUITests/LiveActivityIslandCaptureUITests/testCaptureIslandWhileRunning" test-without-building
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  SwiftTerm: https://github.com/migueldeicaza/SwiftTerm.git @ 1.13.0
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-log: https://github.com/apple/swift-log.git @ 1.14.0
+  LancerKit: /Volumes/LancerDev/worktrees/lancer/device-build/Packages/LancerKit
+  GRDB: https://github.com/groue/GRDB.swift.git @ 6.29.3
+  swift-system: https://github.com/apple/swift-system.git @ 1.7.2
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.101.2
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 3.15.1
+  BigInt: https://github.com/attaswift/BigInt.git @ 5.7.0
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.1
+  Citadel: https://github.com/orlandos-nl/Citadel.git @ 0.12.1
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-nio-ssh: https://github.com/Wellz26/swift-nio-ssh.git @ 0.3.6
+  Sentry: https://github.com/getsentry/sentry-cocoa @ 8.58.4
+
+Writing result bundle at path:
+	/tmp/island-capture2.xcresult
+
+2026-07-18 22:15:33.873055-0400 LancerUITests-Runner[5652:4714271] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-07-18 22:15:38.631.
+Test Suite 'LancerUITests.xctest' started at 2026-07-18 22:15:38.633.
+Test Suite 'LiveActivityIslandCaptureUITests' started at 2026-07-18 22:15:38.633.
+Test Case '-[LancerUITests.LiveActivityIslandCaptureUITests testCaptureIslandWhileRunning]' started.
+    t =     0.00s Start Test at 2026-07-18 22:15:38.637
+    t =     0.07s Set Up
+    t =     0.07s Open dev.lancer.mobile
+    t =     0.08s     Launch dev.lancer.mobile
+2026-07-18 22:15:39.074 xcodebuild[5336:4713084] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-18 22:15:39.076 xcodebuild[5336:4713084] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     6.56s         Setting up automation session
+objc[5652]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10a784398) and /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x10aac0310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =    14.35s         Wait for dev.lancer.mobile to idle
+    t =    20.53s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =    21.57s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    21.58s         Checking existence of `"Workspaces" StaticText`
+    t =    21.81s Waiting 20.0s for TextView (First Match) to exist
+    t =    22.84s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =    22.84s         Checking existence of `TextView (First Match)`
+    t =    22.93s Waiting 5.0s for "command-center" Button to exist
+    t =    23.96s     Checking `Expect predicate `existsNoRetry == 1` for object "command-center" Button`
+    t =    23.96s         Checking existence of `"command-center" Button`
+    t =    24.24s         Capturing element debug description
+    t =    24.96s     Checking `Expect predicate `existsNoRetry == 1` for object "command-center" Button`
+    t =    24.96s         Checking existence of `"command-center" Button`
+    t =    25.19s         Capturing element debug description
+    t =    26.02s     Checking `Expect predicate `existsNoRetry == 1` for object "command-center" Button`
+    t =    26.02s         Checking existence of `"command-center" Button`
+    t =    26.40s         Capturing element debug description
+    t =    27.02s     Checking `Expect predicate `existsNoRetry == 1` for object "command-center" Button`
+    t =    27.02s         Checking existence of `"command-center" Button`
+    t =    27.28s         Capturing element debug description
+    t =    27.93s     Checking `Expect predicate `existsNoRetry == 1` for object "command-center" Button`
+    t =    27.93s         Checking existence of `"command-center" Button`
+    t =    28.03s         Capturing element debug description
+    t =    28.03s     Checking existence of `"command-center" Button`
+    t =    28.13s Collecting debug information to assist test failure triage
+    t =    28.13s     Requesting snapshot of accessibility hierarchy for app with pid 6191
+    t =    28.25s Tap TextView (First Match)
+    t =    28.25s     Wait for dev.lancer.mobile to idle
+    t =    28.27s     Find the TextView (First Match)
+    t =    28.35s     Check for interrupting elements affecting TextView
+    t =    28.48s     Synthesize event
+    t =    28.85s     Wait for dev.lancer.mobile to idle
+    t =    29.06s Type 'Run the shell comm...' into TextView at {{27.0, 355.0}, {348.0, 120.0}}
+    t =    29.06s     Wait for dev.lancer.mobile to idle
+    t =    29.45s     Find the TextView at {{27.0, 355.0}, {348.0, 120.0}}
+    t =    29.55s     Check for interrupting elements affecting TextView
+    t =    29.63s     Synthesize event
+    t =    31.68s     Wait for dev.lancer.mobile to idle
+    t =    31.69s Waiting 5.0s for "composer.send" Button to exist
+    t =    32.72s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =    32.73s         Checking existence of `"composer.send" Button`
+    t =    32.82s Find the "composer.send" Button
+    t =    32.93s Tap "composer.send" Button
+    t =    32.93s     Wait for dev.lancer.mobile to idle
+    t =    32.93s     Find the "composer.send" Button
+    t =    33.03s     Check for interrupting elements affecting "composer.send" Button
+    t =    33.09s     Synthesize event
+    t =    33.40s     Wait for dev.lancer.mobile to idle
+    t =    59.21s Pressing Home button
+<unknown>:0: warning: -[LancerUITests.LiveActivityIslandCaptureUITests testCaptureIslandWhileRunning] : Publishing changes from background threads is not allowed; make sure to publish values from the main thread (via operators like receive(on:)) on model updates.
+    t =    61.87s Find the Application 'com.apple.springboard'
+    t =    63.84s Added attachment named 'dynamic-island-springboard'
+    t =    63.85s Pressing lock button
+    t =    66.63s Added attachment named 'lock-screen-live-activity'
+    t =    66.64s Tear Down
+Test Case '-[LancerUITests.LiveActivityIslandCaptureUITests testCaptureIslandWhileRunning]' passed (67.175 seconds).
+Test Suite 'LiveActivityIslandCaptureUITests' passed at 2026-07-18 22:16:45.812.
+	 Executed 1 test, with 0 failures (0 unexpected) in 67.175 (67.180) seconds
+Test Suite 'LancerUITests.xctest' passed at 2026-07-18 22:16:45.814.
+	 Executed 1 test, with 0 failures (0 unexpected) in 67.175 (67.181) seconds
+Test Suite 'Selected tests' passed at 2026-07-18 22:16:45.815.
+	 Executed 1 test, with 0 failures (0 unexpected) in 67.175 (67.183) seconds
+2026-07-18 22:17:11.024 xcodebuild[5336:4713084] [MT] IDETestOperationsObserverDebug: 100.723 elapsed -- Testing started completed.
+2026-07-18 22:17:11.026 xcodebuild[5336:4713084] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-07-18 22:17:11.026 xcodebuild[5336:4713084] [MT] IDETestOperationsObserverDebug: 100.724 sec, +100.724 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/island-capture2.xcresult
+
+** TEST EXECUTE SUCCEEDED ** [100.979 sec]
+
+Testing started

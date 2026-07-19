@@ -1,0 +1,191 @@
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -project Lancer.xcodeproj -scheme Lancer -configuration Debug -destination "platform=iOS Simulator,id=AC112E74-FEAC-44B7-8FA7-D0C695B6EC38" -derivedDataPath /Users/roshansilva/.simurgh/leases/lease-222/DerivedData -clonedSourcePackagesDirPath /Users/roshansilva/.simurgh/leases/lease-222/SwiftPM -resultBundlePath /tmp/goal3-set-alert4.xcresult "-only-testing:LancerUITests/PermissionSetAlertUITests/testSetFailureShowsAlertWhenDaemonDown" test-without-building
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-nio-ssh: https://github.com/Wellz26/swift-nio-ssh.git @ 0.3.6
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-log: https://github.com/apple/swift-log.git @ 1.14.0
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.101.2
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 3.15.1
+  SwiftTerm: https://github.com/migueldeicaza/SwiftTerm.git @ 1.13.0
+  GRDB: https://github.com/groue/GRDB.swift.git @ 6.29.3
+  swift-system: https://github.com/apple/swift-system.git @ 1.7.2
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  Citadel: https://github.com/orlandos-nl/Citadel.git @ 0.12.1
+  LancerKit: /Volumes/LancerDev/worktrees/lancer/device-build/Packages/LancerKit
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.1
+  BigInt: https://github.com/attaswift/BigInt.git @ 5.7.0
+  Sentry: https://github.com/getsentry/sentry-cocoa @ 8.58.4
+
+Writing result bundle at path:
+	/tmp/goal3-set-alert4.xcresult
+
+2026-07-18 22:19:54.969896-0400 LancerUITests-Runner[14592:4741903] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-07-18 22:19:56.434.
+Test Suite 'LancerUITests.xctest' started at 2026-07-18 22:19:56.435.
+Test Suite 'PermissionSetAlertUITests' started at 2026-07-18 22:19:56.435.
+Test Case '-[LancerUITests.PermissionSetAlertUITests testSetFailureShowsAlertWhenDaemonDown]' started.
+    t =     0.02s Start Test at 2026-07-18 22:19:56.455
+    t =     0.22s Set Up
+    t =     0.25s Open dev.lancer.mobile
+    t =     0.25s     Launch dev.lancer.mobile
+    t =     0.26s         Terminate dev.lancer.mobile:13415
+2026-07-18 22:19:59.885 xcodebuild[14312:4740627] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-18 22:19:59.887 xcodebuild[14312:4740627] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[14592]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x109260398) and /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x1093a4310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =    10.42s         Setting up automation session
+    t =    18.34s         Wait for dev.lancer.mobile to idle
+    t =    20.65s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =    21.68s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    21.68s         Checking existence of `"Workspaces" StaticText`
+    t =    21.75s         Capturing element debug description
+    t =    22.68s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    22.68s         Checking existence of `"Workspaces" StaticText`
+    t =    22.69s         Capturing element debug description
+    t =    23.72s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    23.72s         Checking existence of `"Workspaces" StaticText`
+    t =    23.73s         Capturing element debug description
+    t =    24.65s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    24.65s         Checking existence of `"Workspaces" StaticText`
+    t =    24.66s         Capturing element debug description
+    t =    25.69s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    25.69s         Checking existence of `"Workspaces" StaticText`
+    t =    25.70s         Capturing element debug description
+    t =    26.73s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    26.73s         Checking existence of `"Workspaces" StaticText`
+    t =    26.74s         Capturing element debug description
+    t =    27.67s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    27.67s         Checking existence of `"Workspaces" StaticText`
+    t =    27.68s         Capturing element debug description
+    t =    28.71s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    28.71s         Checking existence of `"Workspaces" StaticText`
+    t =    28.72s         Capturing element debug description
+    t =    29.65s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    29.65s         Checking existence of `"Workspaces" StaticText`
+    t =    29.66s         Capturing element debug description
+    t =    30.68s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    30.68s         Checking existence of `"Workspaces" StaticText`
+    t =    30.70s         Capturing element debug description
+    t =    31.73s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    31.74s         Checking existence of `"Workspaces" StaticText`
+    t =    31.75s         Capturing element debug description
+    t =    32.67s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    32.67s         Checking existence of `"Workspaces" StaticText`
+    t =    32.69s         Capturing element debug description
+    t =    33.72s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    33.72s         Checking existence of `"Workspaces" StaticText`
+    t =    33.73s         Capturing element debug description
+    t =    34.66s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    34.66s         Checking existence of `"Workspaces" StaticText`
+    t =    34.68s         Capturing element debug description
+    t =    35.71s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    35.71s         Checking existence of `"Workspaces" StaticText`
+    t =    35.72s         Capturing element debug description
+    t =    36.65s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    36.65s         Checking existence of `"Workspaces" StaticText`
+    t =    36.67s         Capturing element debug description
+    t =    37.70s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    37.70s         Checking existence of `"Workspaces" StaticText`
+    t =    37.72s         Capturing element debug description
+    t =    38.65s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    38.65s         Checking existence of `"Workspaces" StaticText`
+    t =    38.66s         Capturing element debug description
+    t =    39.69s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    39.69s         Checking existence of `"Workspaces" StaticText`
+    t =    39.71s         Capturing element debug description
+    t =    40.74s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    40.74s         Checking existence of `"Workspaces" StaticText`
+    t =    40.76s         Capturing element debug description
+    t =    41.68s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    41.68s         Checking existence of `"Workspaces" StaticText`
+    t =    41.70s         Capturing element debug description
+    t =    42.73s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    42.73s         Checking existence of `"Workspaces" StaticText`
+    t =    42.74s         Capturing element debug description
+    t =    43.67s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    43.67s         Checking existence of `"Workspaces" StaticText`
+    t =    43.69s         Capturing element debug description
+    t =    44.71s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    44.71s         Checking existence of `"Workspaces" StaticText`
+    t =    44.73s         Capturing element debug description
+    t =    45.66s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    45.66s         Checking existence of `"Workspaces" StaticText`
+    t =    45.67s         Capturing element debug description
+    t =    46.70s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    46.70s         Checking existence of `"Workspaces" StaticText`
+    t =    46.72s         Capturing element debug description
+    t =    47.65s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    47.65s         Checking existence of `"Workspaces" StaticText`
+    t =    47.67s         Capturing element debug description
+    t =    48.70s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    48.72s         Checking existence of `"Workspaces" StaticText`
+    t =    48.76s         Capturing element debug description
+    t =    49.69s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    49.69s         Checking existence of `"Workspaces" StaticText`
+    t =    49.71s         Capturing element debug description
+    t =    50.74s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    50.74s         Checking existence of `"Workspaces" StaticText`
+    t =    50.76s         Capturing element debug description
+    t =    51.69s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    51.69s         Checking existence of `"Workspaces" StaticText`
+    t =    51.70s         Capturing element debug description
+    t =    52.73s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    52.73s         Checking existence of `"Workspaces" StaticText`
+    t =    52.74s         Capturing element debug description
+    t =    53.66s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    53.67s         Checking existence of `"Workspaces" StaticText`
+    t =    53.68s         Capturing element debug description
+    t =    54.72s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    54.72s         Checking existence of `"Workspaces" StaticText`
+    t =    54.73s         Capturing element debug description
+    t =    55.65s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    55.65s         Checking existence of `"Workspaces" StaticText`
+    t =    55.66s         Capturing element debug description
+    t =    56.69s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    56.69s         Checking existence of `"Workspaces" StaticText`
+    t =    56.71s         Capturing element debug description
+    t =    57.73s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    57.74s         Checking existence of `"Workspaces" StaticText`
+    t =    57.75s         Capturing element debug description
+    t =    58.67s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    58.67s         Checking existence of `"Workspaces" StaticText`
+    t =    58.70s         Capturing element debug description
+    t =    59.72s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    59.72s         Checking existence of `"Workspaces" StaticText`
+    t =    59.74s         Capturing element debug description
+    t =    60.66s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    60.66s         Checking existence of `"Workspaces" StaticText`
+    t =    60.67s         Capturing element debug description
+    t =    61.70s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    61.71s         Checking existence of `"Workspaces" StaticText`
+    t =    61.72s         Capturing element debug description
+    t =    62.74s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    62.74s         Checking existence of `"Workspaces" StaticText`
+    t =    62.75s         Capturing element debug description
+    t =    63.68s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    63.68s         Checking existence of `"Workspaces" StaticText`
+    t =    63.69s         Capturing element debug description
+    t =    64.72s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    64.72s         Checking existence of `"Workspaces" StaticText`
+    t =    64.74s         Capturing element debug description
+    t =    65.65s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    65.65s         Checking existence of `"Workspaces" StaticText`
+    t =    65.67s         Capturing element debug description
+    t =    65.67s     Checking existence of `"Workspaces" StaticText`
+    t =    65.68s Collecting debug information to assist test failure triage
+    t =    65.68s     Requesting snapshot of accessibility hierarchy for app with pid 15051
+/Volumes/LancerDev/worktrees/lancer/device-build/LancerUITests/PermissionSetAlertUITests.swift:14: error: -[LancerUITests.PermissionSetAlertUITests testSetFailureShowsAlertWhenDaemonDown] : XCTAssertTrue failed
+    t =    65.83s Tear Down
+Test Case '-[LancerUITests.PermissionSetAlertUITests testSetFailureShowsAlertWhenDaemonDown]' failed (66.064 seconds).
+Test Suite 'PermissionSetAlertUITests' failed at 2026-07-18 22:21:02.519.
+	 Executed 1 test, with 1 failure (0 unexpected) in 66.064 (66.084) seconds
+Test Suite 'LancerUITests.xctest' failed at 2026-07-18 22:21:02.520.
+	 Executed 1 test, with 1 failure (0 unexpected) in 66.064 (66.085) seconds
+Test Suite 'Selected tests' failed at 2026-07-18 22:21:02.520.
+	 Executed 1 test, with 1 failure (0 unexpected) in 66.064 (66.087) seconds
+** BUILD INTERRUPTED **
