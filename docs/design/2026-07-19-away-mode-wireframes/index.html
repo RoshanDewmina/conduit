@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lancer — Away Mode wireframes (2026-07-19)</title>
+<style>
+  :root {
+    --bg: #f4f4f5;
+    --card: #ffffff;
+    --ink: #0a0a0a;
+    --muted: #6b6b73;
+    --line: #e8e8ec;
+    --accent: #1a1a1a;
+    --needs: #c2410c;
+    --needs-bg: #fff7ed;
+    --ok: #15803d;
+    --ok-bg: #f0fdf4;
+    --warn: #a16207;
+    --chip: #f3f3f5;
+    --phone: #111;
+    --screen: #fff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.35;
+  }
+  header.page {
+    padding: 28px 32px 12px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  header.page h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.02em; }
+  header.page p { margin: 0; color: var(--muted); font-size: 14px; max-width: 720px; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px;
+  }
+  .legend span {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--line);
+  }
+  .legend .new { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+  .legend .fix { background: var(--needs-bg); border-color: #fed7aa; color: var(--needs); }
+  .legend .shipped { background: var(--ok-bg); border-color: #bbf7d0; color: var(--ok); }
+
+  nav.tabs {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 8px 32px 20px; max-width: 1280px; margin: 0 auto;
+  }
+  nav.tabs button {
+    border: 1px solid var(--line); background: var(--card); color: var(--ink);
+    border-radius: 999px; padding: 8px 14px; font-size: 13px; cursor: pointer;
+  }
+  nav.tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .board {
+    display: none; gap: 28px; flex-wrap: wrap; align-items: flex-start;
+    padding: 0 32px 48px; max-width: 1280px; margin: 0 auto;
+  }
+  .board.active { display: flex; }
+
+  .frame-wrap { width: 320px; }
+  .frame-label {
+    font-size: 12px; font-weight: 600; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 2px 7px; border-radius: 6px;
+  }
+  .badge.new { background: #dbeafe; color: #1d4ed8; }
+  .badge.fix { background: #ffedd5; color: #c2410c; }
+  .badge.shipped { background: #dcfce7; color: #166534; }
+
+  .phone {
+    width: 320px; height: 640px; background: var(--phone);
+    border-radius: 36px; padding: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.18);
+  }
+  .screen {
+    height: 100%; background: var(--screen); border-radius: 28px;
+    overflow: hidden; display: flex; flex-direction: column; position: relative;
+  }
+  .status {
+    height: 44px; display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 18px 6px; font-size: 12px; font-weight: 600;
+  }
+  .nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 16px 10px;
+  }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, #93c5fd, #c4b5fd);
+  }
+  .nav-actions { display: flex; gap: 14px; color: var(--muted); font-size: 16px; }
+  .title { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; padding: 0 16px 10px; }
+  .content { flex: 1; overflow: auto; padding: 0 16px 12px; }
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px;
+  }
+  .row .meta { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .icon {
+    width: 28px; height: 28px; border-radius: 8px; background: var(--chip);
+    display: grid; place-items: center; font-size: 13px;
+  }
+  .banner {
+    margin: 0 0 12px; padding: 12px 14px; border-radius: 14px;
+    background: var(--needs-bg); border: 1px solid #fed7aa;
+  }
+  .banner strong { display: block; font-size: 14px; color: var(--needs); }
+  .banner span { font-size: 12px; color: #9a3412; }
+  .composer {
+    margin: 8px 12px 16px; padding: 10px 12px; border-radius: 22px;
+    border: 1px solid var(--line); display: flex; align-items: center; gap: 10px;
+    color: var(--muted); font-size: 14px; background: #fafafa;
+  }
+  .composer .plus {
+    width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line);
+    display: grid; place-items: center; font-size: 14px; color: var(--ink);
+  }
+  .section {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); margin: 14px 0 6px;
+  }
+  .card {
+    border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
+    margin-bottom: 10px; background: #fff;
+  }
+  .card.needs { border-color: #fdba74; background: #fffbf7; }
+  .card .kicker { font-size: 11px; font-weight: 700; color: var(--needs); text-transform: uppercase; }
+  .card h3 { margin: 4px 0 6px; font-size: 15px; font-weight: 600; }
+  .card p { margin: 0; font-size: 13px; color: var(--muted); }
+  .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .btn {
+    flex: 1; text-align: center; padding: 9px 0; border-radius: 10px;
+    font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: #fff;
+  }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.danger { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+  .pill {
+    font-size: 12px; padding: 6px 10px; border-radius: 999px;
+    background: var(--chip); border: 1px solid var(--line);
+  }
+  .pill.on { background: #111; color: #fff; border-color: #111; }
+  .note {
+    margin-top: 12px; font-size: 12px; color: var(--muted);
+    max-width: 320px;
+  }
+  /* Lock screen */
+  .lock {
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    color: #fff;
+  }
+  .lock .clock { text-align: center; padding-top: 48px; }
+  .lock .clock .time { font-size: 56px; font-weight: 300; letter-spacing: -0.02em; }
+  .lock .clock .date { font-size: 15px; opacity: .75; margin-top: 2px; }
+  .notif {
+    margin: 28px 14px 0; background: rgba(255,255,255,.14);
+    backdrop-filter: blur(12px); border-radius: 18px; padding: 12px 14px;
+  }
+  .notif .app { font-size: 11px; opacity: .8; display: flex; justify-content: space-between; }
+  .notif h4 { margin: 6px 0 4px; font-size: 14px; font-weight: 600; }
+  .notif p { margin: 0; font-size: 12px; opacity: .85; }
+  .notif .btns { display: flex; gap: 8px; margin-top: 10px; }
+  .notif .btns span {
+    flex: 1; text-align: center; padding: 8px; border-radius: 10px;
+    background: rgba(255,255,255,.18); font-size: 12px; font-weight: 600;
+  }
+  .la {
+    margin: 12px 14px; background: rgba(0,0,0,.35); border-radius: 16px; padding: 12px 14px;
+  }
+  .la .top { display: flex; justify-content: space-between; font-size: 11px; opacity: .8; }
+  .la .stage { font-size: 15px; font-weight: 600; margin-top: 6px; }
+  .la .risk {
+    display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 999px; background: #c2410c;
+  }
+  /* Sheet overlay */
+  .sheet-scrim {
+    position: absolute; inset: 0; background: rgba(0,0,0,.35);
+    display: flex; align-items: flex-end;
+  }
+  .sheet {
+    width: 100%; background: #fff; border-radius: 20px 20px 0 0;
+    padding: 10px 16px 28px;
+  }
+  .grab { width: 36px; height: 4px; border-radius: 2px; background: #d4d4d8; margin: 0 auto 14px; }
+  .sheet h2 { margin: 0 0 6px; font-size: 18px; }
+  .sheet p { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+  .machine {
+    display: flex; align-items: center; gap: 10px; padding: 12px 0;
+    border-bottom: 1px solid var(--line); font-size: 14px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+  .dot.off { background: #a1a1aa; }
+  .check { margin-left: auto; color: #111; font-weight: 700; }
+  .aside {
+    flex: 1; min-width: 260px; max-width: 420px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 16px 18px; font-size: 13px;
+  }
+  .aside h3 { margin: 0 0 8px; font-size: 14px; }
+  .aside ul { margin: 0; padding-left: 18px; color: var(--muted); }
+  .aside li { margin-bottom: 6px; }
+  .aside code { font-size: 11px; background: var(--chip); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <header class="page">
+    <h1>Lancer Away Mode — wireframes</h1>
+    <p>
+      Net-new / incomplete surfaces for the daily-driver roadmap (2026-07-19).
+      Visual language matches current Workspaces (light, repo-first, bottom composer).
+      Front door = drive &amp; unblock; governance stays substrate, not the homepage.
+    </p>
+    <div class="legend">
+      <span class="new">NEW — not in product yet</span>
+      <span class="fix">FIX — partial / tip-drift</span>
+      <span class="shipped">SHIPPED — keep / polish</span>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="active" data-tab="home">1. Home + Needs-You</button>
+    <button data-tab="hub">2. Needs-You hub</button>
+    <button data-tab="threads">3. Threads priority</button>
+    <button data-tab="composer">4. Machine picker</button>
+    <button data-tab="lock">5. Lock screen</button>
+    <button data-tab="receipt">6. Receipt glance</button>
+    <button data-tab="stop">7. Emergency stop</button>
+  </nav>
+
+  <!-- 1 HOME -->
+  <section class="board active" id="home">
+    <div class="frame-wrap">
+      <div class="frame-label">Workspaces home <span class="badge fix">Fix</span></div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="nav">
+          <div class="avatar"></div>
+          <div class="nav-actions"><span>⌕</span><span>+</span></div>
+        </div>
+        <div class="title">Workspaces</div>
+        <div class="content">
+          <div class="banner">
+            <strong>2 need you</strong>
+            <span>Approval · conduit · studio · medium risk · Tap to review</span>
+          </div>
+          <div class="row"><div class="icon">📁</div> All Repos <span class="meta">3 ›</span></div>
+          <div class="row"><div class="icon">📁</div> conduit <span class="meta">2 ›</span></div>
+          <div class="row"><div class="icon">📁</div> personal-web <span class="meta">›</span></div>
+          <div class="row"><div class="icon">＋</div> Add Repo</div>
+          <div class="section">Agents</div>
+          <div class="card">
+            <div class="kicker">Working · studio</div>
+            <h3>Fix flaky relay test</h3>
+            <p>OpenCode · waiting on nothing</p>
+          </div>
+        </div>
+        <div class="composer"><span class="plus">+</span> Plan, ask, build… <span style="margin-left:auto">🎙</span></div>
+      </div></div>
+      <p class="note">Banner is always visible when anything needs a decision — even if no thread is open. Tapping opens Needs-You hub.</p>
+    </div>
+    <div class="aside">
+      <h3>Why this screen</h3>
+      <ul>
+        <li>Today approvals often only appear inside the open live thread.</li>
+        <li>Competitors (Happier inbox, Omnara push→thread) already solve “where do I go?”</li>
+        <li>This is Phase 1 P1.5 — table stakes for Away Mode, not governance marketing.</li>
+      </ul>
+      <h3>Build notes</h3>
+      <ul>
+        <li>Extend ingest beyond machine-scoped open-thread binding.</li>
+        <li>Deep-link push → same hub.</li>
+        <li>Never show “all clear” over a stale relay.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 2 HUB -->
+  <section class="board" id="hub">
+    <div class="frame-wrap">
+      <div class="frame-label">Needs-You hub <span class="badge new">New</span></div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="nav">
+          <div style="font-size:15px">‹ Workspaces</div>
+          <div style="font-size:13px;color:var(--muted)">Filter</div>
+        </div>
+        <div class="title" style="font-size:24px">Needs you</div>
+        <div class="content">
+          <div class="section">Approvals</div>
+          <div class="card needs">
+            <div class="kicker">Medium · Bash</div>
+            <h3>git push --force-with-lease</h3>
+            <p>conduit · studio · OpenCode · 2m ago</p>
+            <div class="actions">
+              <div class="btn">Deny</div>
+              <div class="btn primary">Approve</div>
+            </div>
+          </div>
+          <div class="section">Questions</div>
+          <div class="card needs">
+            <div class="kicker">Question</div>
+            <h3>Use existing PR branch?</h3>
+            <p>personal-web · mini · Claude</p>
+            <div class="actions">
+              <div class="btn">No</div>
+              <div class="btn primary">Yes</div>
+            </div>
+          </div>
+          <div class="section">Failed</div>
+          <div class="card">
+            <div class="kicker" style="color:var(--warn)">Auth / credits</div>
+            <h3>Codex rate limited</h3>
+            <p>studio · open thread to retry</p>
+          </div>
+        </div>
+      </div></div>
+      <p class="note">Single attention surface: approvals, questions, failures. Thumb-first actions; open thread for detail.</p>
+    </div>
+    <div class="aside">
+      <h3>Why this screen</h3>
+      <ul>
+        <li>Global inbox without bringing back a tab bar.</li>
+        <li>Order: approval → question → failed → other.</li>
+        <li>Approve/deny here still uses content-hash binding under the hood.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 3 THREADS -->
+  <section class="board" id="threads">
+    <div class="frame-wrap">
+      <div class="frame-label">Threads — needs-you first <span class="badge new">New</span></div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="nav">
+          <div style="font-size:15px">‹ conduit</div>
+          <div class="nav-actions"><span>⌕</span></div>
+        </div>
+        <div class="title" style="font-size:24px">Threads</div>
+        <div class="content">
+          <div class="section">Needs you</div>
+          <div class="card needs">
+            <div class="kicker">Awaiting approval</div>
+            <h3>Fix flaky relay test</h3>
+            <p>OpenCode · studio · 2m</p>
+          </div>
+          <div class="section">Working</div>
+          <div class="row"><div class="icon">◐</div> Add pairing retries <span class="meta">now</span></div>
+          <div class="section">Recent</div>
+          <div class="row"><div class="icon">✓</div> Docs cleanup <span class="meta">1h</span></div>
+          <div class="row"><div class="icon">✓</div> Composer mic hide <span class="meta">Yesterday</span></div>
+        </div>
+      </div></div>
+      <p class="note">Replace recency-only sort with AttentionReason priority. Simple sections beat clever scoring.</p>
+    </div>
+    <div class="aside">
+      <h3>Why this screen</h3>
+      <ul>
+        <li>Phase 1 P1.6 — required once &gt;2 threads exist.</li>
+        <li>Reuse existing attention model; don’t invent a new priority engine.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 4 COMPOSER -->
+  <section class="board" id="composer">
+    <div class="frame-wrap">
+      <div class="frame-label">Composer — machine picker <span class="badge new">New</span></div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="nav">
+          <div class="avatar"></div>
+          <div class="nav-actions"><span>⌕</span><span>+</span></div>
+        </div>
+        <div class="title">Workspaces</div>
+        <div class="content">
+          <div class="row"><div class="icon">📁</div> conduit <span class="meta">›</span></div>
+          <div class="row"><div class="icon">📁</div> personal-web <span class="meta">›</span></div>
+        </div>
+        <div class="composer" style="flex-direction:column;align-items:stretch;gap:8px;border-radius:18px">
+          <div style="display:flex;gap:8px;align-items:center;color:var(--ink)">
+            <span class="plus">+</span>
+            <span style="flex:1">Plan, ask, build…</span>
+          </div>
+          <div class="pill-row" style="margin:0">
+            <span class="pill on">OpenCode</span>
+            <span class="pill">Claude</span>
+            <span class="pill">Codex</span>
+            <span class="pill on">studio ▾</span>
+            <span class="pill">Ask</span>
+          </div>
+        </div>
+        <div class="sheet-scrim">
+          <div class="sheet">
+            <div class="grab"></div>
+            <h2>Run on</h2>
+            <p>Pick which trusted machine should execute this turn.</p>
+            <div class="machine"><span class="dot"></span> studio <span class="meta" style="margin-left:8px;color:var(--muted)">Mac · online</span><span class="check">✓</span></div>
+            <div class="machine"><span class="dot"></span> mini <span class="meta" style="margin-left:8px;color:var(--muted)">Mac mini · online</span></div>
+            <div class="machine"><span class="dot off"></span> vps <span class="meta" style="margin-left:8px;color:var(--muted)">offline</span></div>
+          </div>
+        </div>
+      </div></div>
+      <p class="note">Today dispatch silently uses first connected machine. Explicit picker when fleet &gt; 1.</p>
+    </div>
+    <div class="aside">
+      <h3>Why this screen</h3>
+      <ul>
+        <li>Own-machines wedge requires intentional host choice.</li>
+        <li>Offline hosts visible but not selectable.</li>
+        <li>Default = last-used for that repo when known.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 5 LOCK -->
+  <section class="board" id="lock">
+    <div class="frame-wrap">
+      <div class="frame-label">Lock screen + Live Activity <span class="badge fix">Fix</span></div>
+      <div class="phone"><div class="screen lock">
+        <div class="clock">
+          <div class="time">9:41</div>
+          <div class="date">Sunday, July 19</div>
+        </div>
+        <div class="la">
+          <div class="top"><span>LANCER</span><span>studio · OpenCode</span></div>
+          <div class="stage">Awaiting approval</div>
+          <div class="risk">MEDIUM RISK</div>
+        </div>
+        <div class="notif">
+          <div class="app"><span>Lancer</span><span>now</span></div>
+          <h4>Approve tool call?</h4>
+          <p>Bash · git push --force-with-lease · conduit</p>
+          <div class="btns">
+            <span>Deny</span>
+            <span>Approve</span>
+          </div>
+        </div>
+      </div></div>
+      <p class="note">Phase 1 prove path. Low-risk may approve inline; medium+ deep-links into Needs-You / thread. No raw command spam above low risk.</p>
+    </div>
+    <div class="aside">
+      <h3>Why this screen</h3>
+      <ul>
+        <li>This is the Away Mode moment competitors mostly miss (WS-local push, no APNs).</li>
+        <li>Device re-proof on tip is the gate — not more UI chrome.</li>
+        <li>Live Activity must ride the <strong>relay</strong> path, not SSH-only.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 6 RECEIPT -->
+  <section class="board" id="receipt">
+    <div class="frame-wrap">
+      <div class="frame-label">Receipt / away digest <span class="badge new">New</span></div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="nav">
+          <div style="font-size:15px">‹ Thread</div>
+          <div style="font-size:13px;color:var(--muted)">•••</div>
+        </div>
+        <div class="content" style="padding-top:8px">
+          <div class="card" style="background:var(--ok-bg);border-color:#bbf7d0">
+            <div class="kicker" style="color:var(--ok)">Done · receipt</div>
+            <h3>Fix flaky relay test</h3>
+            <p>Criteria 3/3 · tests passed · 2 files · 18m away</p>
+            <div class="pill-row">
+              <span class="pill">✓ tests</span>
+              <span class="pill">✓ lint</span>
+              <span class="pill">✓ no secrets</span>
+            </div>
+            <div class="actions">
+              <div class="btn">Open diff</div>
+              <div class="btn primary">Continue</div>
+            </div>
+          </div>
+          <div class="section">While you were away</div>
+          <div class="row"><div class="icon">✓</div> 1 approval · medium <span class="meta">ok</span></div>
+          <div class="row"><div class="icon">✓</div> 0 denials <span class="meta">—</span></div>
+          <div class="row"><div class="icon">◎</div> 4 tool runs <span class="meta">›</span></div>
+        </div>
+        <div class="composer"><span class="plus">+</span> Follow up…</div>
+      </div></div>
+      <p class="note">Phase 2 — verdict-first, not raw-diff-first. Backend <code>lancer.proof/v0</code> already emits; polish the glance.</p>
+    </div>
+    <div class="aside">
+      <h3>Why this screen</h3>
+      <ul>
+        <li>“Trust what happened while I wasn’t looking” without opening Settings → Audit.</li>
+        <li>Governance as substrate: digest, not policy matrix.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 7 STOP -->
+  <section class="board" id="stop">
+    <div class="frame-wrap">
+      <div class="frame-label">Emergency stop confirm <span class="badge fix">Fix</span></div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="nav">
+          <div style="font-size:15px">‹ Settings</div>
+        </div>
+        <div class="title" style="font-size:24px">Settings</div>
+        <div class="content">
+          <div class="section">Policy &amp; safety</div>
+          <div class="row">Permission mode <span class="meta">Ask ›</span></div>
+          <div class="row">Emergency stop <span class="meta" style="color:#b91c1c">Stop ›</span></div>
+        </div>
+        <div class="sheet-scrim">
+          <div class="sheet">
+            <div class="grab"></div>
+            <h2>Stop all agents?</h2>
+            <p>Halts in-flight runs on <strong>studio</strong> and blocks new launches until you clear the latch.</p>
+            <div class="card" style="margin-bottom:12px">
+              <p style="color:var(--ink)">2 working · 1 awaiting approval</p>
+            </div>
+            <div class="actions">
+              <div class="btn">Cancel</div>
+              <div class="btn danger">Stop everything</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <p class="note">Trust floor for Away Mode. Must work on relay path; prove on device. Not the product homepage.</p>
+    </div>
+    <div class="aside">
+      <h3>Why this screen</h3>
+      <ul>
+        <li>Quiet safety valve — available, confirmed, rare.</li>
+        <li>Show blast radius (which machine, how many runs).</li>
+        <li>Clear latch path must be obvious after stop.</li>
+      </ul>
+    </div>
+  </section>
+
+<script>
+  const tabs = document.querySelectorAll('nav.tabs button');
+  const boards = document.querySelectorAll('.board');
+  tabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabs.forEach(b => b.classList.remove('active'));
+      boards.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

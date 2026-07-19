@@ -9,6 +9,10 @@ re-deriving it from git archaeology. Do not rewrite or delete old lines.
 
 Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
+## 2026-07-19
+
+- 12:15 Claude Fable (orchestrator) — land owner SSOT docs: SHIP_PLAN.md (A1/A2 marked done: night stack merged @7b888f78, phone pair 676174 confirmed 14:26:47Z), 07-19 daily-driver roadmap, away-mode wireframes, 07-18 fable briefs, policy/audit relay port map, device-proof publish status (PR: docs/ship-plan-2026-07-19)
+
 ## 2026-07-18
 
 - 20:05 Claude Fable (orchestrator) — vendor-parity brief closed: PRs #170-#174 all merged (matrix refresh, codex/kimi hooks + doctor, live-status parity, full pi adapter, iOS Accounts & Usage view); orchestrator-state updated with the 4 owner-gated follow-ups (branch claude/vendor-cli-parity-multi-account-209d7c)
