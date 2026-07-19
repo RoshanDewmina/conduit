@@ -958,6 +958,26 @@ private actor AsyncGate {
             waiters.append(continuation)
         }
     }
+    @Test("liveActivityStatus maps in-flight states to running and terminals to nil")
+    func liveActivityStatusMapping() {
+        #expect(ShellLiveBridge.liveActivityStatus(for: .working) == "running")
+        #expect(ShellLiveBridge.liveActivityStatus(for: .awaitingApproval("hold")) == "running")
+        let turn = ChatTurn(
+            id: "t1",
+            conversationID: "c1",
+            ordinal: 0,
+            prompt: "p",
+            runID: "r1",
+            status: .running,
+            assistantText: "partial"
+        )
+        #expect(ShellLiveBridge.liveActivityStatus(for: .streaming(turn)) == "running")
+        #expect(ShellLiveBridge.liveActivityStatus(for: .degraded(message: "stale", turn: turn)) == "running")
+        #expect(ShellLiveBridge.liveActivityStatus(for: .idle) == nil)
+        #expect(ShellLiveBridge.liveActivityStatus(for: .adoptedNoHistory) == nil)
+        #expect(ShellLiveBridge.liveActivityStatus(for: .completed(turn)) == nil)
+        #expect(ShellLiveBridge.liveActivityStatus(for: .failed("boom")) == nil)
+    }
 }
 
 /// Thread-safe call counter for asserting a transport closure fired exactly once.
