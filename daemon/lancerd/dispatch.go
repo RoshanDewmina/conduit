@@ -2199,6 +2199,17 @@ func (d *dispatcher) emergencyStopActive() bool {
 	return d.emergencyStopped
 }
 
+// setEmergencyStopped sets the in-memory latch directly, bypassing the
+// process-killing/approval-denying side effects in emergencyStop(). Used only
+// to (a) restore a persisted latch at daemon startup (server.newServer) and
+// (b) lift it on an explicit clear (server.clearEmergencyStop) — never from
+// the hot dispatch/hook paths themselves.
+func (d *dispatcher) setEmergencyStopped(active bool) {
+	d.mu.Lock()
+	d.emergencyStopped = active
+	d.mu.Unlock()
+}
+
 func (d *dispatcher) attachLaunchHandle(runID string, handle *procHandle) bool {
 	kill := false
 	d.mu.Lock()
