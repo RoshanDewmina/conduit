@@ -11,7 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
-- 15:50 Cursor Grok 4.5 — Agents widget still 0 while Dynamic Island showed Running: prior fix only wrote from RunningAgentsSection poll; LA (esp. push-to-start `claudeCode`) never fed App Group keys. Sync AgentStatusWidget from ActivityKit at LA start/update/end + app launch/foreground; don't let empty daemon poll clobber a live island (fix/widget-stale-approvals)
+- 16:05 Cursor Grok 4.5 — Agents widget still 0 while Dynamic Island showed Running: prior fix only wrote from RunningAgentsSection poll; LA (esp. push-to-start `claudeCode`) never fed App Group keys. Sync AgentStatusWidget from ActivityKit at LA start/update/end + launch/foreground + activityUpdates/1.5s deferred re-sync; empty daemon poll must not clobber a live island (fix/widget-stale-approvals)
 - 15:15 Cursor Grok 4.5 — fix Agents Home Screen widget stuck at 0: was keying off Live Activity session `connected`, not daemon running agents; write count/lines from RunningAgentsSection poll into dedicated WidgetSnapshot keys (fix/widget-stale-approvals)
 - 15:05 Cursor Grok 4.5 — widget stale-approvals cleanup: stop SessionViewModel overwriting pending count; dedicated pendingApprovalsUpdatedKey for TTL; RelayApprovalIngest handles lancerE2EApprovalResolved; daemon sendApprovalResolved on emergency-stop deny + no-client auto-allow (fix/widget-stale-approvals)
 - 14:55 Cursor Grok 4.5 — fix Home Screen widget "N approvals waiting" corpses: phone-local pending rows never retired on daemon-side resolution; add 10m TTL sweep (`expireStalePending` → `.expired`) at widget snapshot write + relay ingest start/arrive, plus widget-side lastUpdated TTL guard (fix/widget-stale-approvals)

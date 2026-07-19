@@ -113,7 +113,9 @@ public final class DevicePushRegistrationCoordinator {
             LancerLiveActivityManager.shared.startPushToStartMonitor(sessionID: DeviceIdentity.sessionID())
         }
         // Align Home Screen Agents widget with any already-running Live
-        // Activities (push-to-start while the app was closed).
+        // Activities (push-to-start while the app was closed). Also starts the
+        // activityUpdates monitor (deferred re-sync) so a cold-launch race
+        // against an empty Activity.activities list does not stick at 0.
         if #available(iOS 16.2, *) {
             LancerLiveActivityManager.shared.syncRunningAgentsWidget()
         }

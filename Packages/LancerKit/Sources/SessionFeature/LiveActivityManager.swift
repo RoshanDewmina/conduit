@@ -139,6 +139,10 @@ public final class LancerLiveActivityManager {
     private var tokenTasks: [String: Task<Void, Never>] = [:]
     // Push-to-start token monitor (one per app lifetime).
     private var pushToStartTask: Task<Void, Never>?
+    // Watches ActivityKit's activity set so push-to-start LAs (started while
+    // the app was closed) still feed the Home Screen Agents widget once iOS
+    // surfaces them — a one-shot sync at launch often races an empty list.
+    private var activityUpdatesTask: Task<Void, Never>?
     // Fleet-wide pending-approval state, remembered even when no activity is
     // currently running (2026-07-18 review finding): an approval can arrive
     // before the run that will own its Live Activity starts, so a freshly
@@ -268,6 +272,25 @@ public final class LancerLiveActivityManager {
                 let hexToken = tokenData.map { String(format: "%02x", $0) }.joined()
                 await self?.tokenRegistration?(sessionID, hexToken, true)
             }
+        }
+        startActivityUpdatesMonitorIfNeeded()
+    }
+
+    /// Observe ActivityKit activity create/end so Home Screen Agents widget
+    /// tracks push-to-start LAs without requiring Workspaces Agents to poll.
+    private func startActivityUpdatesMonitorIfNeeded() {
+        guard activityUpdatesTask == nil else { return }
+        activityUpdatesTask = Task { [weak self] in
+            for await _ in Activity<LancerSessionAttributes>.activityUpdates {
+                self?.syncRunningAgentsWidget()
+            }
+        }
+        // Immediate + deferred passes: Activity.activities can be empty for a
+        // beat after cold launch even when the Dynamic Island is already up.
+        syncRunningAgentsWidget()
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            self?.syncRunningAgentsWidget()
         }
     }
 
@@ -421,7 +444,25 @@ public final class LancerLiveActivityManager {
     /// Call on foreground — covers push-to-start LAs that never went through
     /// in-process `start(...)` while the app was closed.
     public func syncRunningAgentsWidget() {
-        LiveActivityRunningAgentsWidget.syncFromSystemActivities()
+        startActivityUpdatesMonitorIfNeeded()
+        let system = Activity<LancerSessionAttributes>.activities
+        if !system.isEmpty {
+            LiveActivityRunningAgentsWidget.syncFromSystemActivities()
+            return
+        }
+        // System list empty: still emit in-process ShellLiveBridge /
+        // SessionViewModel activities (Activity.activities can lag briefly
+        // after cold launch / upgrade-install).
+        let inputs: [LiveActivityRunningAgentsWidget.SnapshotInput] = lastContent.compactMap { key, state in
+            guard let activity = activities[key] else { return nil }
+            return .init(
+                agentName: state.agentName,
+                hostName: activity.attributes.hostName,
+                status: state.status,
+                isStreaming: state.isStreaming
+            )
+        }
+        LiveActivityRunningAgentsWidget.writeSnapshot(inputs: inputs)
     }
 
     // MARK: - Push token monitoring
