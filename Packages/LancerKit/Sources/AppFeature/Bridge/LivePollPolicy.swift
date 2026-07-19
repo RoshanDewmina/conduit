@@ -15,6 +15,13 @@ public enum LivePollPolicy: Sendable {
     /// Consecutive `refreshConversation` failures before entering degraded.
     public static let consecutiveFailureLimit = 5
 
+    /// Consecutive empty observed-follow polls (~`observedFollowIntervalNanoseconds`
+    /// apart) before `ShellLiveBridge.isObservedSessionWorking` drops back to
+    /// false. Debounces the natural pause between tool calls (thinking,
+    /// waiting on a slow command) so the working indicator doesn't flicker
+    /// off between bursts of activity.
+    public static let observedFollowIdleGracePolls = 4
+
     public struct Tracker: Equatable, Sendable {
         public var consecutiveRefreshFailures: Int
         public var lastSuccessfulRefreshAt: Date?

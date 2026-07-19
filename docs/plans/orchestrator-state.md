@@ -946,3 +946,30 @@ metered, STOP CI reviews and tell the owner.
 Six pieces per roadmap §1: pairing/trusted machines · thread list · chat thread finesse ·
 composer · push approvals incl. lock screen · emergency stop. Disjoint write-sets; shared
 files (Package.swift, project.yml) land first as tiny solo commits.
+
+## 2026-07-18 — APNs app-closed push + Live Activities (Fable session, device-build worktree)
+
+- **Issue 1 root cause FOUND via live device console** (LANCER-DIAG instrumentation): at cold
+  launch the APNs token beats BOTH of `DevicePushRegistrationCoordinator`'s triggers — the
+  cache-hydration read in `start()` ran before the AppDelegate's fire-and-forget cache write
+  landed (read nil), and `.lancerAPNSTokenReceived` was posted before the `for await` listener
+  began iterating (missed forever). `.connected` then fired with `haveAPNS=false` → nothing sent,
+  no trigger ever fires again. Deterministic, not flaky.
+- **Fix applied + LIVE-PROVEN (uncommitted)**: synchronous NotificationCenter observers in
+  `start()` (kills the subscription race class), AppDelegate posts after cache write,
+  `currentAPNSToken()` cache re-check per attempt, 3s bridge deadline, per-connect-epoch dedup
+  (claim-before-suspension). Proven on device 18:57: registerDevice sent → daemon
+  `device registered for push (apnsToken=true)` → `$HOME/push-device.json` written (NOT
+  `~/.lancer/` — `serverHome()` is `$HOME`) → app-closed escalation accepted by
+  conduit-push.fly.dev `/approval` (no rejection line). 20/20 iOS-sim tests green
+  (coordinator + ShellLiveBridge suites). REMAINING OWNER-GATED: visual lock-screen banner +
+  Approve round-trip; Dynamic Island appearance on a dispatched run.
+- **Issue 2 done by Cursor Grok 4.5 high + hardened by independent review** (uncommitted):
+  `LancerLiveActivityManager` wired into `ShellLiveBridge` (start/update/end keyed by
+  conversationID) + `RelayApprovalIngest` (updatePendingApprovals). Fresh-context Sonnet reviewer
+  caught 2 major bugs (pendingApprovalID never threaded through → Approve/Reject buttons never
+  render; fleet-wide pending count cached-then-dropped when no activity existed yet) + 2 minor
+  (push-to-start/per-activity token slot collision in the coordinator; ConnectionStateStore
+  observer cleanup gap) — all fixed. 20/20 iOS-sim tests green, SPM + app-target sim + physical
+  device builds all green, live re-registration re-confirmed on device post-fix.
+- Constraint honored: the three already-verified fixes in this worktree untouched.

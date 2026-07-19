@@ -1,0 +1,8 @@
+lancerd daemon: E2E relay started
+lancerd daemon listening on /tmp/la-proof-lancerd-state/lancerd.sock
+2026/07/18 22:05:56 e2e: connected to relay as daemon
+2026/07/18 22:06:23 e2e: paired with phone
+2026/07/18 22:06:23 e2e: device registered for push (session 53973AA6-7F57-45E8-BA30-AE1BF92391D1, apnsToken=true)
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401

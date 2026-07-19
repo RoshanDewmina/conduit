@@ -1,0 +1,16 @@
+690:2026-07-18 21:14:59.587 xcodebuild[20416:4478359] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+745:    t =    23.74s Checking existence of `"live-activity-dispatch-ok" StaticText`
+748:    t =    24.99s Checking existence of `"live-activity-dispatch-ok" StaticText`
+751:    t =    26.18s Checking existence of `"live-activity-dispatch-ok" StaticText`
+754:    t =    27.46s Checking existence of `"live-activity-dispatch-ok" StaticText`
+757:    t =    28.72s Checking existence of `"live-activity-dispatch-ok" StaticText`
+760:    t =    29.90s Checking existence of `"live-activity-dispatch-ok" StaticText`
+763:    t =    31.04s Checking existence of `"live-activity-dispatch-ok" StaticText`
+766:    t =    32.16s Checking existence of `"live-activity-dispatch-ok" StaticText`
+769:    t =    33.29s Checking existence of `"live-activity-dispatch-ok" StaticText`
+773:    t =    34.54s Checking existence of `"live-activity-dispatch-ok" StaticText`
+774:    t =    34.72s Added attachment named 'live-activity-dispatch-PASS'
+776:Test Case '-[LancerUITests.LiveActivityDispatchProofUITests testDispatchSucceedsWithLiveActivityWiringPresent]' passed (40.051 seconds).
+777:Test Suite 'LiveActivityDispatchProofUITests' passed at 2026-07-18 21:15:39.226.
+779:Test Suite 'LancerUITests.xctest' passed at 2026-07-18 21:15:39.227.
+781:Test Suite 'Selected tests' passed at 2026-07-18 21:15:39.228.

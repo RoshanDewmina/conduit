@@ -117,7 +117,7 @@ public struct NewChatComposerView: View {
             ))
             .onAppear {
                 if selectedRepo == nil {
-                    selectedRepo = workspaceData.repos.first
+                    selectedRepo = workspaceData.defaultRepo
                 }
                 if initiallyShowsRepoPicker {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {

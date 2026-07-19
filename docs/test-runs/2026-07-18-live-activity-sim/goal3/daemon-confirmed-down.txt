@@ -1,0 +1,2 @@
+daemon down (launch agent unloaded)
+daemon down

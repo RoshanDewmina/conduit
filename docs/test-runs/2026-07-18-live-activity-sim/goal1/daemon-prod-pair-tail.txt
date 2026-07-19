@@ -1,0 +1,20 @@
+2026/07/18 21:20:24 e2e: paired with phone
+2026/07/18 21:20:25 e2e: device registered for push (session 77AD3B93-E777-424A-95D1-5C79F6010AA6, apnsToken=true)
+2026/07/18 21:20:39 e2e: paired with phone
+2026/07/18 21:20:39 e2e: device registered for push (session 77AD3B93-E777-424A-95D1-5C79F6010AA6, apnsToken=true)
+2026/07/18 21:22:40 push: rehydrated device registration (session 77AD3B93-E777-424A-95D1-5C79F6010AA6)
+lancerd daemon: E2E relay started
+lancerd daemon listening on /Users/roshansilva/.lancer/lancerd.sock
+2026/07/18 21:22:45 e2e: connected to relay as daemon
+2026/07/18 21:23:11 push: rehydrated device registration (session 77AD3B93-E777-424A-95D1-5C79F6010AA6)
+lancerd daemon: E2E relay started
+lancerd daemon listening on /Users/roshansilva/.lancer/lancerd.sock
+2026/07/18 21:23:17 e2e: connected to relay as daemon
+2026/07/18 21:32:36 push: rehydrated device registration (session 77AD3B93-E777-424A-95D1-5C79F6010AA6)
+lancerd daemon: E2E relay started
+lancerd daemon listening on /Users/roshansilva/.lancer/lancerd.sock
+2026/07/18 21:32:36 e2e: connected to relay as daemon
+2026/07/18 21:49:48 push: rehydrated device registration (session 77AD3B93-E777-424A-95D1-5C79F6010AA6)
+lancerd daemon: E2E relay started
+lancerd daemon listening on /Users/roshansilva/.lancer/lancerd.sock
+2026/07/18 21:49:50 e2e: connected to relay as daemon

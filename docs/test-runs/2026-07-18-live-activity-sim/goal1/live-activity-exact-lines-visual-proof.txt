@@ -1,0 +1,7 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "subsystem == "dev.lancer.mobile" AND category == "LiveActivity""
+Timestamp               Ty Process[PID:TID]
+2026-07-18 22:16:15.122 I  Lancer[6191:47f63f] [dev.lancer.mobile:LiveActivity] start() called, isEnabled=true
+2026-07-18 22:16:15.197 I  Lancer[6191:47f63f] [dev.lancer.mobile:LiveActivity] Activity.request succeeded, id=F593D5C9-F297-46BD-809E-B7EF1F792AC0
+2026-07-18 22:16:15.197 I  Lancer[6191:47f63f] [dev.lancer.mobile:LiveActivity] startTokenMonitor watching pushTokenUpdates for activityKey=conv_300ec2aa-17e2-4996-9433-50a59a3bd55c
+2026-07-18 22:16:16.409 I  Lancer[6191:47f63f] [dev.lancer.mobile:LiveActivity] pushTokenUpdates delivered token, len=256

@@ -153,6 +153,12 @@ public struct AppRoot: View {
     @State private var relayQuestionIngest: RelayQuestionIngest?
     /// Live tool artifacts over relay → local mirror (background-tasks pill / chips).
     @State private var relayArtifactIngest: RelayArtifactIngest?
+    /// Forwards the APNs device token / Live Activity push token to every
+    /// currently-paired daemon once each is available — see
+    /// `DevicePushRegistrationCoordinator`. Doesn't actually need
+    /// `AppEnvironment` (only `relayFleetStore`), but is scoped optional like
+    /// its siblings above for construction-order consistency.
+    @State private var devicePushRegistration: DevicePushRegistrationCoordinator?
     /// Derived + user-added workspace repos for the Workspaces shell.
     @State private var workspaceDataStore: WorkspaceDataStore?
     /// Phase 1 interactive SSH terminal presentation.
@@ -182,6 +188,7 @@ public struct AppRoot: View {
         do {
             let env = try AppEnvironment()
             _environment = State(initialValue: .ready(env))
+            let failedCwds = FailedCwdStore()
             // M3: constructed here (not lazily in `body`) because mutating
             // `@State` during view-body evaluation is disallowed — needs
             // `env.conversationSyncCoordinator`/`env.chatRepo`, only
@@ -189,12 +196,17 @@ public struct AppRoot: View {
             _shellLiveBridge = State(initialValue: ShellLiveBridge(
                 relayFleetStore: fleetStore,
                 conversationSyncCoordinator: env.conversationSyncCoordinator,
-                chatRepo: env.chatRepo
+                chatRepo: env.chatRepo,
+                failedCwds: failedCwds
             ))
             _relayApprovalIngest = State(initialValue: RelayApprovalIngest(database: env.database))
             _relayQuestionIngest = State(initialValue: RelayQuestionIngest(chatRepo: env.chatRepo))
             _relayArtifactIngest = State(initialValue: RelayArtifactIngest(chatRepo: env.chatRepo))
-            let workspaceStore = WorkspaceDataStore(chatRepo: env.chatRepo)
+            _devicePushRegistration = State(initialValue: DevicePushRegistrationCoordinator(fleetStore: fleetStore))
+            let workspaceStore = WorkspaceDataStore(
+                chatRepo: env.chatRepo,
+                failedCwds: failedCwds
+            )
             let coordinator = env.conversationSyncCoordinator
             // Capture the same fleet instance wired into ShellLiveBridge so
             // list-status refresh uses the live relay bridge when connected.
@@ -256,6 +268,7 @@ public struct AppRoot: View {
             _relayApprovalIngest = State(initialValue: nil)
             _relayQuestionIngest = State(initialValue: nil)
             _relayArtifactIngest = State(initialValue: nil)
+            _devicePushRegistration = State(initialValue: nil)
             _workspaceDataStore = State(initialValue: nil)
             _terminalCoordinator = State(initialValue: nil)
         }
@@ -345,6 +358,18 @@ public struct AppRoot: View {
                 relayApprovalIngest.start()
                 relayQuestionIngest.start()
                 relayArtifactIngest?.start()
+                devicePushRegistration?.start()
+                // Fire-and-forget: registerForRemoteNotifications() (AppDelegate) captures a
+                // device token without this, but iOS silently drops every alert-payload push
+                // (approvals, questions, run-complete) unless the user has actually granted
+                // alert authorization — with no system UI ever surfacing to explain why, since
+                // an app that has never called this has no Notifications row in Settings at
+                // all. Found 2026-07-19 live-testing PR #176's app-closed push fix: the whole
+                // daemon->push-backend->APNs pipeline reported success (backend 204, Apple 200)
+                // but nothing ever appeared on a locked phone because this call was missing
+                // entirely. Detached so the first-launch system permission sheet doesn't block
+                // the rest of hydration below.
+                Task { _ = await Notifications.shared.requestAuthorization() }
                 await RelayFleetHydration.hydrate(into: relayFleetStore)
                 shellLiveBridge.markHydrated()
                 await workspaceDataStore.refresh()

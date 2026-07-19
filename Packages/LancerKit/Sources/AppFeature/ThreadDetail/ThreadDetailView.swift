@@ -340,10 +340,6 @@ struct ThreadDetailView: View {
                         isBackgroundTasksPresented = true
                     }
                 }
-                HStack {
-                    ChatPermissionModePill(cwd: thread.cwd)
-                    Spacer(minLength: 0)
-                }
                 ChatFollowUpComposerBar(
                     text: $followUpText,
                     isFocused: $isFollowUpFocused,
@@ -359,7 +355,8 @@ struct ThreadDetailView: View {
                     },
                     onStop: {
                         Task { await bridge.stopCurrentRun() }
-                    }
+                    },
+                    permissionMenu: { ChatPermissionModePill(cwd: thread.cwd, embedded: true) }
                 )
                 if !bridge.queuedFeedback.isEmpty {
                     Text("Will send when the agent finishes")

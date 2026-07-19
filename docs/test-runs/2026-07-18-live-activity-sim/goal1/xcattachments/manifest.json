@@ -1,0 +1,26 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "AC112E74-FEAC-44B7-8FA7-D0C695B6EC38",
+        "deviceName" : "simurgh-clone[lease-222:iPhone 17 Pro:27.0]",
+        "exportedFileName" : "D6382E3F-12C3-4FDE-A5D1-B6A7A7D3E6C6.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "lock-screen-live-activity_0_5201DF0B-32A4-44AC-9358-BB85C69B408D.png",
+        "timestamp" : 1784427405.267
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "AC112E74-FEAC-44B7-8FA7-D0C695B6EC38",
+        "deviceName" : "simurgh-clone[lease-222:iPhone 17 Pro:27.0]",
+        "exportedFileName" : "BEF7465B-9BD7-457A-AC02-327EF9AE2859.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "dynamic-island-springboard_0_0B639D26-EA7F-4495-82F5-2684FF130ABF.png",
+        "timestamp" : 1784427402.478
+      }
+    ],
+    "testIdentifier" : "LiveActivityIslandCaptureUITests/testCaptureIslandWhileRunning()",
+    "testIdentifierURL" : "test://com.apple.xcode/Lancer/LancerUITests/LiveActivityIslandCaptureUITests/testCaptureIslandWhileRunning"
+  }
+]

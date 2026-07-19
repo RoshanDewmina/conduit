@@ -439,6 +439,67 @@ struct WorkspaceRepoCatalogTests {
         #expect(!WorkspaceRepoCatalog.isAbsoluteSendTarget(""))
         #expect(!WorkspaceRepoCatalog.isAbsoluteSendTarget("   "))
     }
+
+    @Test("preferredDefaultRepo picks most-recent absolute cwd, not thread-count leader")
+    func preferredDefaultRepoRecencyOverCount() {
+        let staleCC = "/Users/dev/Documents/command-center"
+        let lancer = "/Volumes/LancerDev/lancer"
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let conversations = [
+            ChatConversation(
+                title: "stale-cc", agentID: "a", hostName: "mac", cwd: staleCC,
+                lastActivityAt: now.addingTimeInterval(-86_400)
+            ),
+            ChatConversation(
+                title: "cc-1", agentID: "a", hostName: "mac", cwd: staleCC,
+                lastActivityAt: now.addingTimeInterval(-86_400)
+            ),
+            ChatConversation(
+                title: "cc-2", agentID: "a", hostName: "mac", cwd: staleCC,
+                lastActivityAt: now.addingTimeInterval(-86_400)
+            ),
+            ChatConversation(
+                title: "lancer-recent", agentID: "a", hostName: "mac", cwd: lancer,
+                lastActivityAt: now
+            ),
+        ]
+        let repos = WorkspaceRepoCatalog.deriveRepos(conversations: conversations, added: [])
+        #expect(repos.first?.cwd == staleCC)
+        #expect(repos.first?.threadCount == 3)
+
+        let picked = WorkspaceRepoCatalog.preferredDefaultRepo(
+            repos: repos,
+            conversations: conversations
+        )
+        #expect(picked?.cwd == lancer)
+        #expect(picked?.name == "lancer")
+    }
+
+    @Test("preferredDefaultRepo skips failed cwds and falls back to next absolute")
+    func preferredDefaultRepoSkipsFailed() {
+        let staleCC = "/Users/dev/Documents/command-center"
+        let lancer = "/Volumes/LancerDev/lancer"
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let conversations = [
+            ChatConversation(
+                title: "lancer-recent", agentID: "a", hostName: "mac", cwd: lancer,
+                lastActivityAt: now
+            ),
+            ChatConversation(
+                title: "cc-old", agentID: "a", hostName: "mac", cwd: staleCC,
+                lastActivityAt: now.addingTimeInterval(-172_800)
+            ),
+        ]
+        let repos = WorkspaceRepoCatalog.deriveRepos(conversations: conversations, added: [])
+        let failedKey = WorkspaceRepoCatalog.pathKey(lancer)
+
+        let picked = WorkspaceRepoCatalog.preferredDefaultRepo(
+            repos: repos,
+            conversations: conversations,
+            failedCwdKeys: [failedKey]
+        )
+        #expect(picked?.cwd == staleCC)
+    }
 }
 
 @Suite("AddedRepoStore")
@@ -522,5 +583,36 @@ struct AddedRepoStoreTests {
         #expect(selected?.cwd == "/Users/dev/demo")
         #expect(selected?.isUserAdded == true)
         #expect(selected?.threadCount == 0)
+    }
+}
+
+@Suite("FailedCwdStore")
+@MainActor
+struct FailedCwdStoreTests {
+    @Test("persists and reloads failed cwd keys")
+    func persistRoundTrip() {
+        let suite = "dev.lancer.tests.failedCwds.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let store = FailedCwdStore(userDefaults: defaults)
+        store.markFailed("/Users/dev/Documents/command-center/")
+        #expect(store.contains(cwd: "/Users/dev/Documents/command-center"))
+        #expect(store.pathKeys.count == 1)
+
+        let reloaded = FailedCwdStore(userDefaults: defaults)
+        #expect(reloaded.contains(cwd: "/Users/dev/Documents/command-center"))
+    }
+
+    @Test("markFailed dedupes normalized paths")
+    func dedupOnMark() {
+        let suite = "dev.lancer.tests.failedCwds.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let store = FailedCwdStore(userDefaults: defaults)
+        store.markFailed("/Volumes/LancerDev/lancer")
+        store.markFailed("/Volumes/LancerDev/lancer/")
+        #expect(store.pathKeys.count == 1)
     }
 }

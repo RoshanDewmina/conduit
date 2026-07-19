@@ -1,0 +1,86 @@
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -project Lancer.xcodeproj -scheme Lancer -configuration Debug -destination "platform=iOS Simulator,id=AC112E74-FEAC-44B7-8FA7-D0C695B6EC38" -derivedDataPath /Users/roshansilva/.simurgh/leases/lease-222/DerivedData -clonedSourcePackagesDirPath /Users/roshansilva/.simurgh/leases/lease-222/SwiftPM "-only-testing:LancerUITests/LiveActivitySimSetupUITests/testAddLancerRepo" test-without-building
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-system: https://github.com/apple/swift-system.git @ 1.7.2
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  Citadel: https://github.com/orlandos-nl/Citadel.git @ 0.12.1
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-nio-ssh: https://github.com/Wellz26/swift-nio-ssh.git @ 0.3.6
+  LancerKit: /Volumes/LancerDev/worktrees/lancer/device-build/Packages/LancerKit
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  Sentry: https://github.com/getsentry/sentry-cocoa @ 8.58.4
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.101.2
+  BigInt: https://github.com/attaswift/BigInt.git @ 5.7.0
+  SwiftTerm: https://github.com/migueldeicaza/SwiftTerm.git @ 1.13.0
+  swift-log: https://github.com/apple/swift-log.git @ 1.14.0
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.1
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 3.15.1
+  GRDB: https://github.com/groue/GRDB.swift.git @ 6.29.3
+
+2026-07-18 22:14:51.556555-0400 LancerUITests-Runner[4412:4709681] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-07-18 22:14:56.088.
+Test Suite 'LancerUITests.xctest' started at 2026-07-18 22:14:56.089.
+Test Suite 'LiveActivitySimSetupUITests' started at 2026-07-18 22:14:56.089.
+Test Case '-[LancerUITests.LiveActivitySimSetupUITests testAddLancerRepo]' started.
+    t =     0.00s Start Test at 2026-07-18 22:14:56.092
+    t =     0.09s Set Up
+    t =     0.09s Open dev.lancer.mobile
+    t =     0.09s     Launch dev.lancer.mobile
+    t =     0.10s         Terminate dev.lancer.mobile:3024
+objc[4412]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x108c34398) and /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x108d78310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+2026-07-18 22:14:57.572 xcodebuild[3954:4707702] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-18 22:14:57.573 xcodebuild[3954:4707702] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     3.73s         Setting up automation session
+    t =    10.28s         Wait for dev.lancer.mobile to idle
+    t =    13.00s Waiting 20.0s for TextField (First Match) to exist
+    t =    14.02s     Checking `Expect predicate `existsNoRetry == 1` for object TextField (First Match)`
+    t =    14.02s         Checking existence of `TextField (First Match)`
+    t =    14.34s Tap TextField (First Match)
+    t =    14.34s     Wait for dev.lancer.mobile to idle
+    t =    14.41s     Find the TextField (First Match)
+    t =    14.53s     Check for interrupting elements affecting "~/Documents/my-repo" TextField
+    t =    14.85s     Synthesize event
+    t =    15.22s     Wait for dev.lancer.mobile to idle
+    t =    17.42s Type '/Volumes/LancerDev...' into "~/Documents/my-repo" TextField
+    t =    17.42s     Wait for dev.lancer.mobile to idle
+    t =    17.45s     Find the "~/Documents/my-repo" TextField
+    t =    17.57s     Check for interrupting elements affecting "~/Documents/my-repo" TextField
+    t =    17.66s     Synthesize event
+    t =    18.30s     Wait for dev.lancer.mobile to idle
+    t =    18.31s Waiting 5.0s for "Add Repo" Button to exist
+    t =    19.35s     Checking `Expect predicate `existsNoRetry == 1` for object "Add Repo" Button`
+    t =    19.35s         Checking existence of `"Add Repo" Button`
+    t =    19.47s Find the "Add Repo" Button
+    t =    19.55s Tap "Add Repo" Button
+    t =    19.55s     Wait for dev.lancer.mobile to idle
+    t =    19.56s     Find the "Add Repo" Button
+    t =    19.67s     Check for interrupting elements affecting "Add Repo" Button
+    t =    19.78s     Synthesize event
+    t =    20.12s     Wait for dev.lancer.mobile to idle
+    t =    20.18s Waiting 20.0s for "Workspaces" StaticText to exist
+    t =    21.26s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    21.26s         Checking existence of `"Workspaces" StaticText`
+    t =    21.55s Added attachment named 'setup-lancer-repo-added'
+    t =    21.55s Tear Down
+Test Case '-[LancerUITests.LiveActivitySimSetupUITests testAddLancerRepo]' passed (21.894 seconds).
+Test Suite 'LiveActivitySimSetupUITests' passed at 2026-07-18 22:15:17.988.
+	 Executed 1 test, with 0 failures (0 unexpected) in 21.894 (21.899) seconds
+Test Suite 'LancerUITests.xctest' passed at 2026-07-18 22:15:17.990.
+	 Executed 1 test, with 0 failures (0 unexpected) in 21.894 (21.901) seconds
+Test Suite 'Selected tests' passed at 2026-07-18 22:15:17.990.
+	 Executed 1 test, with 0 failures (0 unexpected) in 21.894 (21.902) seconds
+2026-07-18 22:15:18.467 xcodebuild[3954:4707702] [MT] IDETestOperationsObserverDebug: 28.971 elapsed -- Testing started completed.
+2026-07-18 22:15:18.467 xcodebuild[3954:4707702] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-07-18 22:15:18.467 xcodebuild[3954:4707702] [MT] IDETestOperationsObserverDebug: 28.971 sec, +28.971 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/roshansilva/.simurgh/leases/lease-222/DerivedData/Logs/Test/Test-Lancer-2026.07.18_22-14-49--0400.xcresult
+
+** TEST EXECUTE SUCCEEDED ** [29.251 sec]
+
+Testing started

@@ -1,0 +1,421 @@
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-07-18 21:01:55.095 E  launchd_sim[43620:432fba] [UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:01:55.095 E  launchd_sim[43620:432fba] [UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:01:55.095 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:01:55.095 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:01:55.095 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy]:] service state: spawning
+2026-07-18 21:01:55.095 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy]:] launching: launch job demand
+2026-07-18 21:01:55.097 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] xpcproxy_sim spawned with pid 90733
+2026-07-18 21:01:55.097 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] internal event: SPAWNED, code = 0
+2026-07-18 21:01:55.097 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] service state: xpcproxy
+2026-07-18 21:01:55.098 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:01:55.126 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] service state: running
+2026-07-18 21:01:55.130 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] internal event: INIT, code = 0
+2026-07-18 21:01:55.130 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] job state = running
+2026-07-18 21:01:55.131 Df launchd_sim[43620:432fba] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] Successfully spawned Lancer[90733] because launch job demand
+2026-07-18 21:01:56.338 Df launchd_sim[43620:432fb0] [dev.lancer.mobile.widgets:] Unknown key for Boolean: EnableTransactions
+2026-07-18 21:01:56.338 Df launchd_sim[43620:432fb0] [dev.lancer.mobile.widgets:] setting launch watchdog timeout to 0 secs from overlay
+2026-07-18 21:01:56.338 Df launchd_sim[43620:432fb0] [dev.lancer.mobile.widgets:] Unknown key for Boolean: EnablePressuredExit
+2026-07-18 21:01:56.338 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets:] draining messages from dev.lancer.mobile.widgets.xpc-session
+2026-07-18 21:01:56.339 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets:] initialized endpoint after lookup
+2026-07-18 21:01:56.339 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:01:56.339 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] service state: spawn scheduled
+2026-07-18 21:01:56.339 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] service state: spawning
+2026-07-18 21:01:56.339 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] launching: launch job demand
+2026-07-18 21:01:56.343 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] xpcproxy_sim spawned with pid 90759
+2026-07-18 21:01:56.343 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] internal event: SPAWNED, code = 0
+2026-07-18 21:01:56.343 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] service state: xpcproxy
+2026-07-18 21:01:56.350 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:01:56.533 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] service state: running
+2026-07-18 21:01:56.533 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] internal event: INIT, code = 0
+2026-07-18 21:01:56.533 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] job state = running
+2026-07-18 21:01:56.533 Df launchd_sim[43620:432fb0] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] Successfully spawned LancerWidgets[90759] because launch job demand
+2026-07-18 21:01:58.953 Df launchd_sim[43620:432fb9] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] extension checked in as alive
+2026-07-18 21:01:59.580 Df launchd_sim[43620:432fc6] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] Mismatched binprefs: 2: [16777228.0, 16777223.-1] != (null)
+2026-07-18 21:02:02.275 Df Lancer[90733:4330cf] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=0 elapsedMs=569.597541
+2026-07-18 21:02:02.301 Df Lancer[90733:4330cf] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=0 elapsedMs=286.355667
+2026-07-18 21:02:02.313 Df Lancer[90733:4330cf] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=0 elapsedMs=87.945584
+2026-07-18 21:02:03.099 Df launchd_sim[43620:432fb7] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] Mismatched binprefs: 2: [16777228.0, 16777223.-1] != (null)
+2026-07-18 21:02:10.436 Df Lancer[90733:4330cf] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=0 elapsedMs=6.673208
+2026-07-18 21:02:18.784 Df siriactionsd[43907:433594] [com.apple.CoreTelephony:Packet] Calling _CTServerConnectionGetCellularDataSettings(): isCapable = 0 isEnabled = -1 isAirplaneMode = -1
+2026-07-18 21:02:18.863 Df siriactionsd[43907:433594] [com.apple.CoreTelephony:Packet] Calling _CTServerConnectionGetCellularDataSettings(): isCapable = 0 isEnabled = -1 isAirplaneMode = -1
+2026-07-18 21:03:11.443 Df launchd_sim[43620:434b81] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] exited with exit reason (namespace: 10 code: 0xfbfbfbfb) - OS_REASON_SPRINGBOARD | <RBSTerminateContext| domain:10 code:0xFBFBFBFB explanation:Termination requested by simulator host
+
+ProcessVisibility: Foreground
+ProcessState: Running reportType:None maxTerminationResistance:Interactive>, ran for 76318ms
+2026-07-18 21:03:11.443 Df launchd_sim[43620:434b81] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] service state: exited
+2026-07-18 21:03:11.443 Df launchd_sim[43620:434b81] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] internal event: EXITED, code = 0
+2026-07-18 21:03:11.443 Df launchd_sim[43620:434b81] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] job state = exited
+2026-07-18 21:03:11.443 Df launchd_sim[43620:434b81] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy] [90733]:] service state: not running
+2026-07-18 21:03:11.449 Df launchd_sim[43620:434b81] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:03:11.449 Df launchd_sim[43620:434b81] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:03:11.449 Df launchd_sim[43620:434b81] [user/501/UIKitApplication:dev.lancer.mobile[2f1f][rb-legacy]:] job state = removed
+2026-07-18 21:03:12.706 E  launchd_sim[43620:434df5] [UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:03:12.706 E  launchd_sim[43620:434df5] [UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:03:12.706 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:03:12.706 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:03:12.706 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy]:] service state: spawning
+2026-07-18 21:03:12.706 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy]:] launching: launch job demand
+2026-07-18 21:03:12.709 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] xpcproxy_sim spawned with pid 94631
+2026-07-18 21:03:12.709 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] internal event: SPAWNED, code = 0
+2026-07-18 21:03:12.709 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] service state: xpcproxy
+2026-07-18 21:03:12.712 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:03:12.756 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] service state: running
+2026-07-18 21:03:12.756 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] internal event: INIT, code = 0
+2026-07-18 21:03:12.756 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] job state = running
+2026-07-18 21:03:12.797 Df launchd_sim[43620:434df5] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] Successfully spawned Lancer[94631] because launch job demand
+2026-07-18 21:03:19.576 Df Lancer[94631:434f4c] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=0 elapsedMs=773.185125
+2026-07-18 21:03:19.600 Df Lancer[94631:434f4c] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=0 elapsedMs=300.070958
+2026-07-18 21:03:19.615 Df Lancer[94631:434f4c] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=0 elapsedMs=69.563833
+2026-07-18 21:03:20.396 Df Lancer[94631:434f4c] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=8.109917
+2026-07-18 21:05:11.053 E  launchd_sim[43620:4381e4] [UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:05:11.053 E  launchd_sim[43620:4381e4] [UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:05:11.053 Df launchd_sim[43620:4381e4] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:05:11.053 Df launchd_sim[43620:4381e4] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:05:11.053 Df launchd_sim[43620:4381e4] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy]:] service state: spawning
+2026-07-18 21:05:11.053 Df launchd_sim[43620:4381e4] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy]:] launching: launch job demand
+2026-07-18 21:05:11.056 Df launchd_sim[43620:4381e4] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] xpcproxy_sim spawned with pid 1264
+2026-07-18 21:05:11.056 Df launchd_sim[43620:4381e4] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] internal event: SPAWNED, code = 0
+2026-07-18 21:05:11.056 Df launchd_sim[43620:4381e4] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] service state: xpcproxy
+2026-07-18 21:05:11.153 Df launchd_sim[43620:4381e4] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:05:11.672 Df launchd_sim[43620:437c99] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] service state: running
+2026-07-18 21:05:11.672 Df launchd_sim[43620:437c99] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] internal event: INIT, code = 0
+2026-07-18 21:05:11.672 Df launchd_sim[43620:437c99] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] job state = running
+2026-07-18 21:05:11.675 Df launchd_sim[43620:437c99] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] Successfully spawned LancerUITests-Runner[1264] because launch job demand
+2026-07-18 21:06:22.867 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] exited with exit reason (namespace: 15 code: 0x0) - OS_REASON_RUNNINGBOARD | <RBSTerminateContext| explanation:Terminating for automation testing. reportType:None maxTerminationResistance:Absolute>, ran for 266512ms
+2026-07-18 21:06:22.867 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] service state: exited
+2026-07-18 21:06:22.867 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] internal event: EXITED, code = 0
+2026-07-18 21:06:22.867 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] job state = exited
+2026-07-18 21:06:22.873 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:06:22.873 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] job state = removed
+2026-07-18 21:06:22.873 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [90759]:] service state: not running
+2026-07-18 21:06:22.885 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] exited with exit reason (namespace: 15 code: 0x0) - OS_REASON_RUNNINGBOARD | <RBSTerminateContext| explanation:Terminating for automation testing. reportType:None maxTerminationResistance:Absolute>, ran for 190129ms
+2026-07-18 21:06:22.886 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] service state: exited
+2026-07-18 21:06:22.886 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] internal event: EXITED, code = 0
+2026-07-18 21:06:22.886 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] job state = exited
+2026-07-18 21:06:22.886 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy] [94631]:] service state: not running
+2026-07-18 21:06:22.890 Df launchd_sim[43620:439c68] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:06:22.890 Df launchd_sim[43620:439c68] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:06:22.890 Df launchd_sim[43620:439c68] [user/501/UIKitApplication:dev.lancer.mobile[b4f5][rb-legacy]:] job state = removed
+2026-07-18 21:06:26.238 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets:] internal event: PETRIFIED, code = 0
+2026-07-18 21:06:26.238 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets:] job state = removed
+2026-07-18 21:06:30.542 E  launchd_sim[43620:439991] [UIKitApplication:dev.lancer.mobile[9135][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:06:30.542 E  launchd_sim[43620:439991] [UIKitApplication:dev.lancer.mobile[9135][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:06:30.543 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:06:30.543 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:06:30.543 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy]:] service state: spawning
+2026-07-18 21:06:30.543 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy]:] launching: launch job demand
+2026-07-18 21:06:30.545 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] xpcproxy_sim spawned with pid 4247
+2026-07-18 21:06:30.545 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] internal event: SPAWNED, code = 0
+2026-07-18 21:06:30.545 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] service state: xpcproxy
+2026-07-18 21:06:30.564 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:06:33.465 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] service state: running
+2026-07-18 21:06:33.465 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] internal event: INIT, code = 0
+2026-07-18 21:06:33.465 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] job state = running
+2026-07-18 21:06:33.465 Df launchd_sim[43620:439991] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] Successfully spawned Lancer[4247] because launch job demand
+2026-07-18 21:06:33.546 Df launchd_sim[43620:439991] [dev.lancer.mobile.widgets:] Unknown key for Boolean: EnableTransactions
+2026-07-18 21:06:33.553 Df launchd_sim[43620:439991] [dev.lancer.mobile.widgets:] setting launch watchdog timeout to 0 secs from overlay
+2026-07-18 21:06:33.553 Df launchd_sim[43620:439991] [dev.lancer.mobile.widgets:] Unknown key for Boolean: EnablePressuredExit
+2026-07-18 21:06:33.553 Df launchd_sim[43620:439991] [pid/61806/dev.lancer.mobile.widgets:] draining messages from dev.lancer.mobile.widgets.xpc-session
+2026-07-18 21:06:33.553 Df launchd_sim[43620:439991] [pid/61806/dev.lancer.mobile.widgets:] initialized endpoint after lookup
+2026-07-18 21:06:33.554 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:06:33.554 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] service state: spawn scheduled
+2026-07-18 21:06:33.554 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] service state: spawning
+2026-07-18 21:06:33.554 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] launching: launch job demand
+2026-07-18 21:06:33.556 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] xpcproxy_sim spawned with pid 4364
+2026-07-18 21:06:33.556 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] internal event: SPAWNED, code = 0
+2026-07-18 21:06:33.556 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] service state: xpcproxy
+2026-07-18 21:06:33.558 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:06:33.717 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] service state: running
+2026-07-18 21:06:33.717 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] internal event: INIT, code = 0
+2026-07-18 21:06:33.717 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] job state = running
+2026-07-18 21:06:33.717 Df launchd_sim[43620:439c71] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] Successfully spawned LancerWidgets[4364] because launch job demand
+2026-07-18 21:06:36.508 Df launchd_sim[43620:439995] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] extension checked in as alive
+2026-07-18 21:06:37.007 Df launchd_sim[43620:43a32d] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] Mismatched binprefs: 2: [16777228.0, 16777223.-1] != (null)
+2026-07-18 21:06:47.609 Df Lancer[4247:43a24c] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=960.025292
+2026-07-18 21:06:47.902 Df Lancer[4247:43a24c] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=843.605834
+2026-07-18 21:06:48.129 Df Lancer[4247:43a24c] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=620.150542
+2026-07-18 21:06:49.596 Df Lancer[4247:43a24c] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=9.049667
+2026-07-18 21:07:03.196 Df Lancer[4247:43a24c] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=418.519709
+2026-07-18 21:07:05.203 Df Lancer[4247:43a24c] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=8.401875
+2026-07-18 21:07:16.217 Df launchd_sim[43620:43ac48] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] exited due to SIGTERM | sent by xcodebuild[96449], ran for 45619ms
+2026-07-18 21:07:16.217 Df launchd_sim[43620:43ac48] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] service state: exited
+2026-07-18 21:07:16.217 Df launchd_sim[43620:43ac48] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] internal event: EXITED, code = 0
+2026-07-18 21:07:16.217 Df launchd_sim[43620:43ac48] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] job state = exited
+2026-07-18 21:07:16.217 Df launchd_sim[43620:43ac48] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy] [4247]:] service state: not running
+2026-07-18 21:07:16.224 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:07:16.224 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:07:16.224 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[9135][rb-legacy]:] job state = removed
+2026-07-18 21:07:17.466 E  launchd_sim[43620:43a79f] [UIKitApplication:dev.lancer.mobile[8002][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:07:17.466 E  launchd_sim[43620:43a79f] [UIKitApplication:dev.lancer.mobile[8002][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:07:17.467 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:07:17.467 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:07:17.467 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy]:] service state: spawning
+2026-07-18 21:07:17.467 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy]:] launching: launch job demand
+2026-07-18 21:07:17.469 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] xpcproxy_sim spawned with pid 5700
+2026-07-18 21:07:17.469 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] internal event: SPAWNED, code = 0
+2026-07-18 21:07:17.469 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] service state: xpcproxy
+2026-07-18 21:07:17.469 Df launchd_sim[43620:43a79f] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:07:17.490 Df launchd_sim[43620:43a7b2] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] service state: running
+2026-07-18 21:07:17.490 Df launchd_sim[43620:43a7b2] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] internal event: INIT, code = 0
+2026-07-18 21:07:17.490 Df launchd_sim[43620:43a7b2] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] job state = running
+2026-07-18 21:07:17.490 Df launchd_sim[43620:43a7b2] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] Successfully spawned Lancer[5700] because launch job demand
+2026-07-18 21:07:30.957 Df Lancer[5700:43b008] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=1038.647667
+2026-07-18 21:07:31.339 Df Lancer[5700:43b008] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=749.286958
+2026-07-18 21:07:31.606 Df Lancer[5700:43b008] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=815.601292
+2026-07-18 21:07:34.097 Df Lancer[5700:43b008] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=36.891708
+2026-07-18 21:07:44.621 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] exited due to SIGTERM | sent by xcodebuild[96449], ran for 27116ms
+2026-07-18 21:07:44.622 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] service state: exited
+2026-07-18 21:07:44.622 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] internal event: EXITED, code = 0
+2026-07-18 21:07:44.622 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] job state = exited
+2026-07-18 21:07:44.622 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy] [5700]:] service state: not running
+2026-07-18 21:07:44.680 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] exited due to exit(1), ran for 153578ms
+2026-07-18 21:07:44.680 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] service state: exited
+2026-07-18 21:07:44.680 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] internal event: EXITED, code = 0
+2026-07-18 21:07:44.680 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] job state = exited
+2026-07-18 21:07:44.680 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy] [1264]:] service state: not running
+2026-07-18 21:07:44.700 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:07:44.700 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:07:44.700 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile[8002][rb-legacy]:] job state = removed
+2026-07-18 21:07:44.717 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:07:44.717 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:07:44.717 Df launchd_sim[43620:43b4a3] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[2536][rb-legacy]:] job state = removed
+2026-07-18 21:08:01.543 E  launchd_sim[43620:43b4af] [UIKitApplication:dev.lancer.mobile[186c][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:08:01.543 E  launchd_sim[43620:43b4af] [UIKitApplication:dev.lancer.mobile[186c][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:08:01.543 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:08:01.543 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:08:01.543 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy]:] service state: spawning
+2026-07-18 21:08:01.543 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy]:] launching: launch job demand
+2026-07-18 21:08:01.546 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] xpcproxy_sim spawned with pid 6936
+2026-07-18 21:08:01.546 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] internal event: SPAWNED, code = 0
+2026-07-18 21:08:01.546 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] service state: xpcproxy
+2026-07-18 21:08:01.546 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:08:01.567 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] service state: running
+2026-07-18 21:08:01.567 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] internal event: INIT, code = 0
+2026-07-18 21:08:01.567 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] job state = running
+2026-07-18 21:08:01.567 Df launchd_sim[43620:43b4af] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] Successfully spawned Lancer[6936] because launch job demand
+2026-07-18 21:08:10.100 Df Lancer[6936:43bc71] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=348.200084
+2026-07-18 21:08:10.376 Df Lancer[6936:43bc71] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=323.903000
+2026-07-18 21:08:10.590 Df Lancer[6936:43bc71] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=490.259667
+2026-07-18 21:08:11.180 Df Lancer[6936:43bc71] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=7.639459
+2026-07-18 21:10:05.058 E  launchd_sim[43620:43e7fe] [UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:10:05.058 E  launchd_sim[43620:43e7fe] [UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:10:05.058 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:10:05.058 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:10:05.058 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy]:] service state: spawning
+2026-07-18 21:10:05.058 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy]:] launching: launch job demand
+2026-07-18 21:10:05.060 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] xpcproxy_sim spawned with pid 11492
+2026-07-18 21:10:05.060 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] internal event: SPAWNED, code = 0
+2026-07-18 21:10:05.060 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] service state: xpcproxy
+2026-07-18 21:10:05.060 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:10:05.088 Df launchd_sim[43620:43e81c] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] service state: running
+2026-07-18 21:10:05.088 Df launchd_sim[43620:43e81c] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] internal event: INIT, code = 0
+2026-07-18 21:10:05.088 Df launchd_sim[43620:43e81c] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] job state = running
+2026-07-18 21:10:05.088 Df launchd_sim[43620:43e81c] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] Successfully spawned LancerUITests-Runner[11492] because launch job demand
+2026-07-18 21:10:17.880 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] exited with exit reason (namespace: 15 code: 0x0) - OS_REASON_RUNNINGBOARD | <RBSTerminateContext| explanation:Terminating for automation testing. reportType:None maxTerminationResistance:Absolute>, ran for 224289ms
+2026-07-18 21:10:17.880 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] service state: exited
+2026-07-18 21:10:17.880 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] internal event: EXITED, code = 0
+2026-07-18 21:10:17.880 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] job state = exited
+2026-07-18 21:10:17.880 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [4364]:] service state: not running
+2026-07-18 21:10:17.882 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] internal event: PETRIFIED, code = 0
+2026-07-18 21:10:17.882 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] job state = removed
+2026-07-18 21:10:17.951 Df launchd_sim[43620:43e31b] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] exited with exit reason (namespace: 15 code: 0x0) - OS_REASON_RUNNINGBOARD | <RBSTerminateContext| explanation:Terminating for automation testing. reportType:None maxTerminationResistance:Absolute>, ran for 136300ms
+2026-07-18 21:10:17.951 Df launchd_sim[43620:43e31b] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] service state: exited
+2026-07-18 21:10:17.951 Df launchd_sim[43620:43e31b] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] internal event: EXITED, code = 0
+2026-07-18 21:10:17.951 Df launchd_sim[43620:43e31b] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] job state = exited
+2026-07-18 21:10:17.951 Df launchd_sim[43620:43e31b] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy] [6936]:] service state: not running
+2026-07-18 21:10:17.961 Df launchd_sim[43620:43e31b] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:10:17.961 Df launchd_sim[43620:43e31b] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:10:17.961 Df launchd_sim[43620:43e31b] [user/501/UIKitApplication:dev.lancer.mobile[186c][rb-legacy]:] job state = removed
+2026-07-18 21:10:20.156 Df launchd_sim[43620:43e7fe] [pid/61806/dev.lancer.mobile.widgets:] internal event: PETRIFIED, code = 0
+2026-07-18 21:10:20.156 Df launchd_sim[43620:43e7fe] [pid/61806/dev.lancer.mobile.widgets:] job state = removed
+2026-07-18 21:10:21.767 E  launchd_sim[43620:43e7fe] [UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:10:21.767 E  launchd_sim[43620:43e7fe] [UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:10:21.767 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:10:21.767 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:10:21.767 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy]:] service state: spawning
+2026-07-18 21:10:21.767 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy]:] launching: launch job demand
+2026-07-18 21:10:21.769 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] xpcproxy_sim spawned with pid 12118
+2026-07-18 21:10:21.769 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] internal event: SPAWNED, code = 0
+2026-07-18 21:10:21.769 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] service state: xpcproxy
+2026-07-18 21:10:21.769 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:10:21.850 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] service state: running
+2026-07-18 21:10:21.850 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] internal event: INIT, code = 0
+2026-07-18 21:10:21.850 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] job state = running
+2026-07-18 21:10:21.850 Df launchd_sim[43620:43e7fe] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] Successfully spawned Lancer[12118] because launch job demand
+2026-07-18 21:10:22.353 Df launchd_sim[43620:43e31b] [dev.lancer.mobile.widgets:] Unknown key for Boolean: EnableTransactions
+2026-07-18 21:10:22.353 Df launchd_sim[43620:43e31b] [dev.lancer.mobile.widgets:] setting launch watchdog timeout to 0 secs from overlay
+2026-07-18 21:10:22.353 Df launchd_sim[43620:43e31b] [dev.lancer.mobile.widgets:] Unknown key for Boolean: EnablePressuredExit
+2026-07-18 21:10:22.353 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets:] draining messages from dev.lancer.mobile.widgets.xpc-session
+2026-07-18 21:10:22.354 Df launchd_sim[43620:43e7fe] [pid/61806/dev.lancer.mobile.widgets:] initialized endpoint after lookup
+2026-07-18 21:10:22.355 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:10:22.355 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] service state: spawn scheduled
+2026-07-18 21:10:22.355 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] service state: spawning
+2026-07-18 21:10:22.355 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72:] launching: launch job demand
+2026-07-18 21:10:22.357 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] xpcproxy_sim spawned with pid 12131
+2026-07-18 21:10:22.357 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] internal event: SPAWNED, code = 0
+2026-07-18 21:10:22.357 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] service state: xpcproxy
+2026-07-18 21:10:22.357 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:10:22.454 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] service state: running
+2026-07-18 21:10:22.454 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] internal event: INIT, code = 0
+2026-07-18 21:10:22.454 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] job state = running
+2026-07-18 21:10:22.454 Df launchd_sim[43620:43e31b] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] Successfully spawned LancerWidgets[12131] because launch job demand
+2026-07-18 21:10:23.947 Df launchd_sim[43620:43eeae] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] extension checked in as alive
+2026-07-18 21:10:24.426 Df launchd_sim[43620:43f537] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] Mismatched binprefs: 2: [16777228.0, 16777223.-1] != (null)
+2026-07-18 21:10:29.498 Df Lancer[12118:43f424] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=1329.706000
+2026-07-18 21:10:29.827 Df Lancer[12118:43f424] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=1383.383792
+2026-07-18 21:10:30.014 Df Lancer[12118:43f424] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=481.672208
+2026-07-18 21:10:30.370 Sd Lancer[12118:0] (B14730B2-D557-3683-9D57-2D4FBF56C912) UAUserActivity
+UAUserActivityManager supportsActivityContinuation=1 isEnabled=1 serverPid=0 PROJECT:UserActivity-551
+2026-07-18 21:10:30.630 Df Lancer[12118:43f424] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=7.801042
+2026-07-18 21:10:36.352 Df Lancer[12118:43f424] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=203.453834
+2026-07-18 21:10:36.776 Df Lancer[12118:43f424] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=3.427292
+2026-07-18 21:10:57.274 Df launchd_sim[43620:4402eb] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] exited due to SIGTERM | sent by xcodebuild[10618], ran for 35492ms
+2026-07-18 21:10:57.274 Df launchd_sim[43620:4402eb] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] service state: exited
+2026-07-18 21:10:57.274 Df launchd_sim[43620:4402eb] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] internal event: EXITED, code = 0
+2026-07-18 21:10:57.274 Df launchd_sim[43620:4402eb] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] job state = exited
+2026-07-18 21:10:57.274 Df launchd_sim[43620:4402eb] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy] [12118]:] service state: not running
+2026-07-18 21:10:57.280 Df launchd_sim[43620:4402eb] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:10:57.280 Df launchd_sim[43620:4402eb] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:10:57.280 Df launchd_sim[43620:4402eb] [user/501/UIKitApplication:dev.lancer.mobile[5c0d][rb-legacy]:] job state = removed
+2026-07-18 21:10:57.318 Df launchd_sim[43620:440320] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] exited due to exit(1), ran for 52246ms
+2026-07-18 21:10:57.318 Df launchd_sim[43620:440320] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] service state: exited
+2026-07-18 21:10:57.318 Df launchd_sim[43620:440320] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] internal event: EXITED, code = 0
+2026-07-18 21:10:57.318 Df launchd_sim[43620:440320] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] job state = exited
+2026-07-18 21:10:57.318 Df launchd_sim[43620:440320] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy] [11492]:] service state: not running
+2026-07-18 21:10:57.332 Df launchd_sim[43620:440320] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:10:57.332 Df launchd_sim[43620:440320] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:10:57.332 Df launchd_sim[43620:440320] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[17d0][rb-legacy]:] job state = removed
+2026-07-18 21:12:56.023 E  launchd_sim[43620:442bee] [UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:12:56.023 E  launchd_sim[43620:442bee] [UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:12:56.023 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:12:56.023 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:12:56.023 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy]:] service state: spawning
+2026-07-18 21:12:56.023 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy]:] launching: launch job demand
+2026-07-18 21:12:56.026 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] xpcproxy_sim spawned with pid 17455
+2026-07-18 21:12:56.026 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] internal event: SPAWNED, code = 0
+2026-07-18 21:12:56.026 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] service state: xpcproxy
+2026-07-18 21:12:56.050 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:12:56.084 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] service state: running
+2026-07-18 21:12:56.084 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] internal event: INIT, code = 0
+2026-07-18 21:12:56.084 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] job state = running
+2026-07-18 21:12:56.085 Df launchd_sim[43620:442bee] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] Successfully spawned LancerUITests-Runner[17455] because launch job demand
+2026-07-18 21:13:08.037 Df launchd_sim[43620:44379f] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] signaled service: Killed: 9
+2026-07-18 21:13:08.037 Df launchd_sim[43620:44379f] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] service state: SIGKILLed
+2026-07-18 21:13:08.037 Df launchd_sim[43620:44379f] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] scheduling cleanup in 9 sec after sending Killed: 9
+2026-07-18 21:13:08.037 Df launchd_sim[43620:44379f] [pid/61806/dev.lancer.mobile.widgets:] internal event: PETRIFIED, code = 0
+2026-07-18 21:13:08.037 Df launchd_sim[43620:44379f] [pid/61806/dev.lancer.mobile.widgets:] job state = removed
+2026-07-18 21:13:08.043 Df launchd_sim[43620:4437a6] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] exited due to SIGKILL | sent by launchd_sim[43620], ran for 165682ms
+2026-07-18 21:13:08.043 Df launchd_sim[43620:4437a6] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] service state: exited
+2026-07-18 21:13:08.043 Df launchd_sim[43620:4437a6] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] internal event: EXITED, code = 0
+2026-07-18 21:13:08.043 Df launchd_sim[43620:4437a6] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] job state = exited
+2026-07-18 21:13:08.043 Df launchd_sim[43620:4437a6] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:13:08.043 Df launchd_sim[43620:4437a6] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] job state = removed
+2026-07-18 21:13:08.043 Df launchd_sim[43620:4437a6] [pid/61806/dev.lancer.mobile.widgets.420582E4-9C23-49C9-B892-DA8F05F70E72 [12131]:] service state: not running
+2026-07-18 21:13:09.585 E  launchd_sim[43620:4437c3] [UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:13:09.585 E  launchd_sim[43620:4437c3] [UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:13:09.586 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:13:09.586 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:13:09.586 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy]:] service state: spawning
+2026-07-18 21:13:09.586 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy]:] launching: launch job demand
+2026-07-18 21:13:09.587 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] xpcproxy_sim spawned with pid 18020
+2026-07-18 21:13:09.587 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] internal event: SPAWNED, code = 0
+2026-07-18 21:13:09.587 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] service state: xpcproxy
+2026-07-18 21:13:09.592 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:13:09.604 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] service state: running
+2026-07-18 21:13:09.604 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] internal event: INIT, code = 0
+2026-07-18 21:13:09.604 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] job state = running
+2026-07-18 21:13:09.605 Df launchd_sim[43620:4437c3] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] Successfully spawned Lancer[18020] because launch job demand
+2026-07-18 21:13:16.033 Df Lancer[18020:443ac9] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=352.988458
+2026-07-18 21:13:16.383 Df Lancer[18020:443ac9] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=484.220917
+2026-07-18 21:13:17.160 Df Lancer[18020:443ac9] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=1142.878000
+2026-07-18 21:13:17.608 Df Lancer[18020:443ac9] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=72.121542
+2026-07-18 21:13:25.161 Df Lancer[18020:443ac9] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=200.042041
+2026-07-18 21:13:25.557 Df Lancer[18020:443ac9] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=3.006000
+2026-07-18 21:13:35.875 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] exited due to SIGTERM | sent by xcodebuild[15262], ran for 26271ms
+2026-07-18 21:13:35.875 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] service state: exited
+2026-07-18 21:13:35.875 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] internal event: EXITED, code = 0
+2026-07-18 21:13:35.875 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] job state = exited
+2026-07-18 21:13:35.875 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy] [18020]:] service state: not running
+2026-07-18 21:13:35.877 Df launchd_sim[43620:443e8d] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:13:35.877 Df launchd_sim[43620:443e8d] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:13:35.877 Df launchd_sim[43620:443e8d] [user/501/UIKitApplication:dev.lancer.mobile[ee6c][rb-legacy]:] job state = removed
+2026-07-18 21:13:35.927 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] exited due to exit(1), ran for 39886ms
+2026-07-18 21:13:35.927 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] service state: exited
+2026-07-18 21:13:35.927 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] internal event: EXITED, code = 0
+2026-07-18 21:13:35.927 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] job state = exited
+2026-07-18 21:13:35.927 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy] [17455]:] service state: not running
+2026-07-18 21:13:35.933 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:13:35.933 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:13:35.933 Df launchd_sim[43620:443e98] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[c2f8][rb-legacy]:] job state = removed
+2026-07-18 21:14:51.411 E  launchd_sim[43620:445f09] [UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:14:51.412 E  launchd_sim[43620:445f09] [UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:14:51.412 Df launchd_sim[43620:445f09] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:14:51.412 Df launchd_sim[43620:445f09] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:14:51.412 Df launchd_sim[43620:445f09] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy]:] service state: spawning
+2026-07-18 21:14:51.412 Df launchd_sim[43620:445f09] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy]:] launching: launch job demand
+2026-07-18 21:14:51.413 Df launchd_sim[43620:445f09] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] xpcproxy_sim spawned with pid 21253
+2026-07-18 21:14:51.413 Df launchd_sim[43620:445f09] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] internal event: SPAWNED, code = 0
+2026-07-18 21:14:51.413 Df launchd_sim[43620:445f09] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] service state: xpcproxy
+2026-07-18 21:14:51.413 Df launchd_sim[43620:445f09] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:14:51.465 Df launchd_sim[43620:44598d] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] service state: running
+2026-07-18 21:14:51.465 Df launchd_sim[43620:44598d] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] internal event: INIT, code = 0
+2026-07-18 21:14:51.465 Df launchd_sim[43620:44598d] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] job state = running
+2026-07-18 21:14:51.465 Df launchd_sim[43620:44598d] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] Successfully spawned LancerUITests-Runner[21253] because launch job demand
+2026-07-18 21:15:00.729 E  launchd_sim[43620:4461f7] [UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy]:] Unknown key for plist importer (key: _ResourceCoalition type: string)
+2026-07-18 21:15:00.729 E  launchd_sim[43620:4461f7] [UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy]:] Service tried to set environment variable with reserved name: TERM
+2026-07-18 21:15:00.730 Df launchd_sim[43620:4461f7] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy]:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:15:00.730 Df launchd_sim[43620:4461f7] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy]:] service state: spawn scheduled
+2026-07-18 21:15:00.730 Df launchd_sim[43620:4461f7] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy]:] service state: spawning
+2026-07-18 21:15:00.730 Df launchd_sim[43620:4461f7] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy]:] launching: launch job demand
+2026-07-18 21:15:00.731 Df launchd_sim[43620:4461f7] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] xpcproxy_sim spawned with pid 21655
+2026-07-18 21:15:00.731 Df launchd_sim[43620:4461f7] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] internal event: SPAWNED, code = 0
+2026-07-18 21:15:00.731 Df launchd_sim[43620:4461f7] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] service state: xpcproxy
+2026-07-18 21:15:00.732 Df launchd_sim[43620:4461f7] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:15:00.752 Df launchd_sim[43620:446213] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] service state: running
+2026-07-18 21:15:00.752 Df launchd_sim[43620:446213] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] internal event: INIT, code = 0
+2026-07-18 21:15:00.752 Df launchd_sim[43620:446213] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] job state = running
+2026-07-18 21:15:00.752 Df launchd_sim[43620:446213] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] Successfully spawned Lancer[21655] because launch job demand
+2026-07-18 21:15:06.761 Df Lancer[21655:446464] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=387.458041
+2026-07-18 21:15:06.998 Df Lancer[21655:446464] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=369.395959
+2026-07-18 21:15:07.858 Df Lancer[21655:446464] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=1096.353291
+2026-07-18 21:15:08.901 Df Lancer[21655:446464] [dev.lancer.mobile:WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=50 elapsedMs=6.237458
+2026-07-18 21:15:29.569 Df launchd_sim[43620:446e2a] [dev.lancer.mobile.widgets:] Unknown key for Boolean: EnableTransactions
+2026-07-18 21:15:29.569 Df launchd_sim[43620:446e2a] [dev.lancer.mobile.widgets:] setting launch watchdog timeout to 0 secs from overlay
+2026-07-18 21:15:29.569 Df launchd_sim[43620:446e2a] [dev.lancer.mobile.widgets:] Unknown key for Boolean: EnablePressuredExit
+2026-07-18 21:15:29.569 Df launchd_sim[43620:446e2a] [pid/61806/dev.lancer.mobile.widgets:] draining messages from dev.lancer.mobile.widgets.xpc-session
+2026-07-18 21:15:29.569 Df launchd_sim[43620:446ffd] [pid/61806/dev.lancer.mobile.widgets:] initialized endpoint after lookup
+2026-07-18 21:15:29.569 Df launchd_sim[43620:446e2a] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6:] internal event: WILL_SPAWN, code = 0
+2026-07-18 21:15:29.569 Df launchd_sim[43620:446e2a] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6:] service state: spawn scheduled
+2026-07-18 21:15:29.569 Df launchd_sim[43620:446e2a] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6:] service state: spawning
+2026-07-18 21:15:29.569 Df launchd_sim[43620:446e2a] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6:] launching: launch job demand
+2026-07-18 21:15:29.570 Df launchd_sim[43620:446e2a] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6 [22928]:] xpcproxy_sim spawned with pid 22928
+2026-07-18 21:15:29.570 Df launchd_sim[43620:446e2a] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6 [22928]:] internal event: SPAWNED, code = 0
+2026-07-18 21:15:29.570 Df launchd_sim[43620:446e2a] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6 [22928]:] service state: xpcproxy
+2026-07-18 21:15:29.570 Df launchd_sim[43620:446e2a] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6 [22928]:] internal event: SOURCE_ATTACH, code = 0
+2026-07-18 21:15:29.580 Df launchd_sim[43620:446ffd] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6 [22928]:] service state: running
+2026-07-18 21:15:29.580 Df launchd_sim[43620:446ffd] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6 [22928]:] internal event: INIT, code = 0
+2026-07-18 21:15:29.580 Df launchd_sim[43620:446ffd] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6 [22928]:] job state = running
+2026-07-18 21:15:29.580 Df launchd_sim[43620:446ffd] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6 [22928]:] Successfully spawned LancerWidgets[22928] because launch job demand
+2026-07-18 21:15:30.059 Df launchd_sim[43620:446ffd] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6 [22928]:] extension checked in as alive
+2026-07-18 21:15:30.327 Df launchd_sim[43620:447329] [pid/61806/dev.lancer.mobile.widgets.924AB914-FCED-429D-85CF-8FDD5011C0B6 [22928]:] Mismatched binprefs: 2: [16777228.0, 16777223.-1] != (null)
+2026-07-18 21:15:32.574 Sd Lancer[21655:0] (B14730B2-D557-3683-9D57-2D4FBF56C912) UAUserActivity
+UAUserActivityManager supportsActivityContinuation=1 isEnabled=1 serverPid=0 PROJECT:UserActivity-551
+2026-07-18 21:15:39.237 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] exited due to SIGTERM | sent by xcodebuild[20416], ran for 38470ms
+2026-07-18 21:15:39.237 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] service state: exited
+2026-07-18 21:15:39.237 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] internal event: EXITED, code = 0
+2026-07-18 21:15:39.237 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] job state = exited
+2026-07-18 21:15:39.237 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy] [21655]:] service state: not running
+2026-07-18 21:15:39.240 Df launchd_sim[43620:44735d] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:15:39.240 Df launchd_sim[43620:44735d] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:15:39.240 Df launchd_sim[43620:44735d] [user/501/UIKitApplication:dev.lancer.mobile[2dcc][rb-legacy]:] job state = removed
+2026-07-18 21:15:39.315 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] exited due to exit(0), ran for 47875ms
+2026-07-18 21:15:39.315 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] service state: exited
+2026-07-18 21:15:39.315 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] internal event: EXITED, code = 0
+2026-07-18 21:15:39.315 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] job state = exited
+2026-07-18 21:15:39.315 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy] [21253]:] service state: not running
+2026-07-18 21:15:39.320 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy]:] removing job: caller = runningboardd
+2026-07-18 21:15:39.320 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy]:] internal event: PETRIFIED, code = 0
+2026-07-18 21:15:39.320 Df launchd_sim[43620:447325] [user/501/UIKitApplication:dev.lancer.mobile.uitests.xctrunner[6c51][rb-legacy]:] job state = removed
+2026-07-18 21:16:01.268 Df log[24208:0] [com.apple.log:] log run noninteractively, parent: 43620 (launchd_sim), args: 'log' 'show' '--last' '15m' '--predicate' 'subsystem CONTAINS "lancer" OR category CONTAINS "LiveActivity" OR eventMessage CONTAINS "Activity.request" OR eventMessage CONTAINS "isEnabled"' '--st

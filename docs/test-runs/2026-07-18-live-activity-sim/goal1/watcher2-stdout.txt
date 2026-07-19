@@ -1,0 +1,18 @@
+watcher2 start Sat Jul 18 22:14:37 EDT 2026
+SUCCESS iter=89 Sat Jul 18 22:16:15 EDT 2026
+Filtering the log data using "subsystem == "dev.lancer.mobile" AND category == "LiveActivity""
+2026-07-18 22:16:15.122 I  Lancer[6191:47f63f] [dev.lancer.mobile:LiveActivity] start() called, isEnabled=true
+2026-07-18 22:16:15.197 I  Lancer[6191:47f63f] [dev.lancer.mobile:LiveActivity] Activity.request succeeded, id=F593D5C9-F297-46BD-809E-B7EF1F792AC0
+2026-07-18 22:16:15.197 I  Lancer[6191:47f63f] [dev.lancer.mobile:LiveActivity] startTokenMonitor watching pushTokenUpdates for activityKey=conv_300ec2aa-17e2-4996-9433-50a59a3bd55c
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: 49D27DA9-FFBC-492C-80E0-472B71321752 (screenID: 1, name: LCD)
+Wrote screenshot to: /tmp/la-g1-fg.png
+fg ok
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: 49D27DA9-FFBC-492C-80E0-472B71321752 (screenID: 1, name: LCD)
+Wrote screenshot to: /tmp/la-g1-island.png
+island ok
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: 49D27DA9-FFBC-492C-80E0-472B71321752 (screenID: 1, name: LCD)
+Wrote screenshot to: /tmp/la-g1-lock.png
+lock ok

@@ -270,12 +270,6 @@ public struct LiveThreadView: View {
                         .padding(.bottom, 6)
                     }
                     followUpAttachmentChips
-                    HStack {
-                        ChatPermissionModePill(cwd: cwd)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 26)
-                    .padding(.bottom, 2)
                     ChatFollowUpComposerBar(
                         text: $followUpText,
                         isFocused: $isFollowUpFocused,
@@ -290,7 +284,8 @@ public struct LiveThreadView: View {
                         onStop: {
                             Task { await bridge.stopCurrentRun() }
                         },
-                        onAddContext: { isContextPresented = true }
+                        onAddContext: { isContextPresented = true },
+                        permissionMenu: { ChatPermissionModePill(cwd: cwd, embedded: true) }
                     )
                     if !bridge.queuedFeedback.isEmpty {
                         Text("Will send when the agent finishes")
@@ -878,7 +873,16 @@ public struct LiveThreadView: View {
     private var replyState: some View {
         switch bridge.sendState {
         case .idle:
-            EmptyView()
+            // `sendState` only models Lancer-dispatched sends — an observed
+            // (not-dispatched) session stays `.idle` for its whole follow
+            // lifetime, so this is the one place that signal has to come from
+            // `isObservedSessionWorking` instead (owner report, 2026-07-18:
+            // watching a live desktop session showed no indicator at all).
+            if bridge.isObservedSessionWorking {
+                workingIndicator
+            } else {
+                EmptyView()
+            }
         case .adoptedNoHistory:
             Text("Connected to this session — no history synced yet. Send a message to continue.")
                 .font(.subheadline)
