@@ -284,7 +284,7 @@ struct ChatOutlinePillLabel: View {
 /// Live follow-up composer styled like Cursor's docked bar; keeps TextField + send path.
 /// While a turn is in flight, the trailing control is Stop (■) — CC-8 parity —
 /// and keyboard submit still queues via `onSend`.
-struct ChatFollowUpComposerBar: View {
+struct ChatFollowUpComposerBar<PermissionMenu: View>: View {
     @Binding var text: String
     var isFocused: FocusState<Bool>.Binding
     var placeholder: String = "Follow up…"
@@ -297,11 +297,23 @@ struct ChatFollowUpComposerBar: View {
     var onStop: (() -> Void)? = nil
     /// Opens context attach (Photos / Files). Same affordance as New Chat `+`.
     var onAddContext: (() -> Void)? = nil
+    /// Permission-mode picker, folded into the `+` menu instead of its own
+    /// row above the composer (owner request 2026-07-18 — "looks cleaner
+    /// that way"). Pass `ChatPermissionModePill(cwd:, embedded: true)`.
+    /// `EmptyView` when the caller has nothing to show there.
+    @ViewBuilder var permissionMenu: () -> PermissionMenu
 
     var body: some View {
         HStack(spacing: 10) {
-            Button {
-                onAddContext?()
+            Menu {
+                Button {
+                    onAddContext?()
+                } label: {
+                    Label("Add context", systemImage: "paperclip")
+                }
+                .disabled(onAddContext == nil)
+
+                permissionMenu()
             } label: {
                 Circle()
                     .strokeBorder(Color(.separator), lineWidth: 1)
@@ -313,7 +325,7 @@ struct ChatFollowUpComposerBar: View {
                     )
             }
             .buttonStyle(.plain)
-            .disabled(onAddContext == nil || isDisabled)
+            .disabled(isDisabled)
             .accessibilityLabel(Text("Add context"))
 
             TextField(placeholder, text: $text)
