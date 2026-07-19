@@ -81,7 +81,8 @@ struct LiveTerminalStateRegressionTests {
         let rows = BackgroundTasksPresentation.rows(
             items: adjusted,
             events: events,
-            artifacts: []
+            artifacts: [],
+            turnIsTerminal: turnIsTerminal
         )
         return DerivedUI(
             turnStatus: turn.status,
@@ -242,5 +243,43 @@ struct LiveTerminalStateRegressionTests {
 
         let forced = ToolChipGrouping.withTerminalTurnStatus(chips, turnIsTerminal: true)
         #expect(forced[0].status == .done)
+    }
+
+    /// FX10 path: pill fed by a still-`.running` ChatArtifact with no tool_result
+    /// event. Host turn status alone must clear the running count (phone bug).
+    @Test("live path: running relay artifact clears when host turn exits")
+    func terminalDeltaClearsRunningRelayArtifact() {
+        let model = OpenThreadModel(
+            turns: [runningTurn()],
+            eventsByTurnID: [turnID: []]
+        )
+        let artifact = ChatArtifact(
+            id: toolUseID,
+            conversationID: convID,
+            turnID: turnID,
+            runID: runID,
+            kind: .tool,
+            title: "Bash",
+            payloadJSON: #"{"name":"Bash","toolUseId":"\#(toolUseID)","input":{"command":"sleep 1"}}"#,
+            status: .running,
+            createdAt: t0
+        )
+
+        func pillCount(turnIsTerminal: Bool) -> Int {
+            let rows = BackgroundTasksPresentation.rows(
+                items: [],
+                events: model.eventsByTurnID[turnID] ?? [],
+                artifacts: [artifact],
+                turnIsTerminal: turnIsTerminal
+            )
+            return BackgroundTasksPresentation.runningCount(in: rows)
+        }
+
+        #expect(model.turns[0].status == .running)
+        #expect(pillCount(turnIsTerminal: false) == 1)
+
+        model.applyHostTurnStatus(turnID: turnID, hostStatus: "exited")
+        #expect(model.turns[0].status == .completed)
+        #expect(pillCount(turnIsTerminal: model.turns[0].status != .running) == 0)
     }
 }
