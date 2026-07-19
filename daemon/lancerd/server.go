@@ -2473,10 +2473,11 @@ func (s *server) postRunStartPush(dev *registeredDevice, sessionID string, agent
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "push-backend /run-start POST failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "push-diag: postRunStartPush session=%s POST failed: %v\n", sessionID, err)
 		return
 	}
 	defer resp.Body.Close()
+	fmt.Fprintf(os.Stderr, "push-diag: postRunStartPush session=%s HTTP %d\n", sessionID, resp.StatusCode)
 	if resp.StatusCode/100 != 2 {
 		fmt.Fprintf(os.Stderr, "push-backend /run-start rejected: HTTP %d\n", resp.StatusCode)
 	}

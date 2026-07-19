@@ -365,19 +365,36 @@ func TestPushLiveActivityStartNoOpsWithoutPushToStartToken(t *testing.T) {
 	}
 }
 
-// TestPushLiveActivityStartNoOpsWhenAlreadyRunning asserts the "don't
-// duplicate the Lock Screen card" heuristic: a session with BOTH a
-// push-to-start token and an existing activity (update) token is treated as
-// already having a locally-running Activity, so push-to-start is skipped.
-func TestPushLiveActivityStartNoOpsWhenAlreadyRunning(t *testing.T) {
+// TestTakePushToStartTokenClearsStaleActivityToken asserts that a session with
+// BOTH push-to-start and a leftover activity update token still yields the
+// push-to-start token (so /run-start can fire), and clears the stale update
+// token. The old "already running" heuristic permanently suppressed observed-
+// session starts after any phone-dispatched Live Activity.
+func TestTakePushToStartTokenClearsStaleActivityToken(t *testing.T) {
 	liveActivityRegistry.Lock()
-	liveActivityRegistry.sessions["sess-p2s-running"] = &liveActivityRecord{
+	liveActivityRegistry.sessions["sess-p2s-stale"] = &liveActivityRecord{
 		activityToken: "existing-activity-token", pushToStartToken: "p2s-token", seen: time.Now().Unix(),
 	}
 	liveActivityRegistry.Unlock()
 
-	if err := pushLiveActivityStart("sess-p2s-running", "host-1", "devbox", nil, nil, ""); err != nil {
-		t.Fatalf("expected nil (silent no-op), got: %v", err)
+	tok, ok := takePushToStartToken("sess-p2s-stale")
+	if !ok {
+		t.Fatal("expected ok=true when push-to-start token is present")
+	}
+	if tok != "p2s-token" {
+		t.Fatalf("token = %q, want p2s-token", tok)
+	}
+
+	liveActivityRegistry.RLock()
+	rec := liveActivityRegistry.sessions["sess-p2s-stale"]
+	activityTok := rec.activityToken
+	p2s := rec.pushToStartToken
+	liveActivityRegistry.RUnlock()
+	if activityTok != "" {
+		t.Fatalf("activityToken = %q, want cleared", activityTok)
+	}
+	if p2s != "p2s-token" {
+		t.Fatalf("pushToStartToken = %q, want preserved", p2s)
 	}
 }
 

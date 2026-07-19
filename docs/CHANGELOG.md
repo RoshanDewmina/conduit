@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 11:45 Cursor Grok — Live Activity observed-session auto-start: stop treating stale activity update tokens as "already running" on push-backend `/run-start` (clears them via `takePushToStartToken`); add `push-diag` logging on lancerd `postRunStartPush`; deployed conduit-push + reinstalled local lancerd (`fix/apns-live-activity-device-proof-2026-07-18`)
 - 11:30 Cursor Grok — merge Goal 3 SET-failure alert fix onto `fix/apns-live-activity-device-proof-2026-07-18` (PR #176 tip)
 - 11:25 Cursor Grok — restore Edit/Write/MultiEdit red/green diff sheet in Workspaces chat: parse tool `inputJSON` → `EditToolDiffSheet` via existing `DiffLineRow`; wire **View diff** on expanded tool chips (no CursorStyle resurrection). Tests 6/6; AppFeature iOS Simulator build SUCCEEDED (`fix/apns-live-activity-device-proof-2026-07-18`)
 - 11:05 Cursor Grok 4.5 — Goal 3 SET-failure alert fix: moved "Couldn't change permission mode" alert state + `.alert` from nested `ChatPermissionModePill(embedded:)` onto `ChatFollowUpComposerBar` (survives Menu dismiss-on-select), with `onApplyError` callback from the pill's `apply()` catch. Non-embedded pill path unchanged. (`test/goal3-set-alert-2026-07-19`)

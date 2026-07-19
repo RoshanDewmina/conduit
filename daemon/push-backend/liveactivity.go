@@ -206,6 +206,23 @@ func pushLiveActivityDecision(sessionID, decision string) error {
 	return sendLiveActivityPush(activityToken, payload, 10)
 }
 
+// takePushToStartToken returns the push-to-start token for sessionID and clears
+// any stale per-Activity update token. Ending a local Live Activity never
+// clears the registry, so leaving activityToken set permanently suppressed
+// /run-start after phone-dispatched runs (2026-07-19 live miss).
+//
+// ok is false when the session is unknown or has no push-to-start token.
+func takePushToStartToken(sessionID string) (token string, ok bool) {
+	liveActivityRegistry.Lock()
+	defer liveActivityRegistry.Unlock()
+	rec, exists := liveActivityRegistry.sessions[sessionID]
+	if !exists || rec.pushToStartToken == "" {
+		return "", false
+	}
+	rec.activityToken = ""
+	return rec.pushToStartToken, true
+}
+
 // pushLiveActivityStart originates a NEW Live Activity purely from a server
 // push, via the registered push-to-start token — the only way to start one
 // when the app is fully closed and no local daemon connection exists (relay-
@@ -213,28 +230,13 @@ func pushLiveActivityDecision(sessionID, decision string) error {
 // activities-and-dynamic-island.md Gap #3).
 //
 // No-ops (returns nil) when there's no push-to-start token on file for the
-// session, or when an activity update token IS on file — a heuristic for "a
-// local Activity is probably already running," since starting a second one
-// for the same session would just duplicate the Lock Screen card. This is a
-// best-effort signal, not a guarantee: the registry has no explicit "the app
-// ended its local Activity" event, so a stale activityToken can suppress a
-// start this heuristic should have allowed. Reusing the existing per-session
-// registry (rather than adding a new store) keeps this consistent with
-// pushLiveActivityApproval/pushLiveActivityDecision above.
+// session. See takePushToStartToken for the stale-update-token policy.
 //
 // PRIVACY: content-state and the alert body carry only the redacted summary,
 // never the raw command — same contract as pushLiveActivityApproval.
 func pushLiveActivityStart(sessionID, hostID, hostName string, agentName *string, approvalID *string, redactedSummary string) error {
-	liveActivityRegistry.RLock()
-	rec, ok := liveActivityRegistry.sessions[sessionID]
-	var pushToStartToken, existingActivityToken string
-	if ok {
-		pushToStartToken = rec.pushToStartToken
-		existingActivityToken = rec.activityToken
-	}
-	liveActivityRegistry.RUnlock()
-
-	if !ok || pushToStartToken == "" || existingActivityToken != "" {
+	pushToStartToken, ok := takePushToStartToken(sessionID)
+	if !ok {
 		return nil
 	}
 
