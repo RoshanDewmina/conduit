@@ -85,6 +85,10 @@ public enum DebugSeeder {
     public static func autoPairRelayIfRequested(into store: RelayFleetStore) async {
         guard let code = ProcessInfo.processInfo.environment["LANCER_RELAY_PAIR_CODE"],
               code.count == 6 else { return }
+        // Already connected — do not mint a second machine ID for the same
+        // code (L1 serial 2026-07-19: relaunch with pair code + restore churned
+        // two clients and raced firstConnectedMachine).
+        if store.firstConnectedMachine != nil { return }
         let client = E2ERelayClient(relayURL: RelaySettings.url(), pairingCode: code)
         client.connect()
         for _ in 0..<100 {

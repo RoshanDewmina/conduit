@@ -1,0 +1,16 @@
+===== RELAUNCH Sun Jul 19 18:23:58 EDT 2026 =====
+2026/07/19 18:24:42 push: rehydrated device registration (session DF4A72D4-A148-4B46-85D9-98C9826A6D53)
+lancerd daemon: E2E relay started
+lancerd daemon listening on /tmp/l1-reply-fix-state/lancerd.sock
+relay-token registration rejected: HTTP 401
+2026/07/19 18:24:42 e2e: connected to relay as daemon
+activity-token registration rejected: HTTP 401
+2026/07/19 18:24:42 e2e: paired with phone
+activity-token registration rejected: HTTP 401
+2026/07/19 18:24:42 e2e: device registered for push (session DF4A72D4-A148-4B46-85D9-98C9826A6D53, apnsToken=true)
+relay-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+push-backend /run-start rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
