@@ -60,21 +60,93 @@ public final class AppDatabase: Sendable {
         // first time this runs, so upgrading users keep their history
         // instead of silently starting from an empty database.
         if !FileManager.default.fileExists(atPath: newURL.path) {
-            let legacyURL = try? FileManager.default
-                .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
-                .appendingPathComponent("Lancer/db.sqlite")
-            if let legacyURL, FileManager.default.fileExists(atPath: legacyURL.path) {
-                try? FileManager.default.copyItem(at: legacyURL, to: newURL)
-                for suffix in ["-wal", "-shm"] {
-                    let src = URL(fileURLWithPath: legacyURL.path + suffix)
-                    let dst = URL(fileURLWithPath: newURL.path + suffix)
-                    if FileManager.default.fileExists(atPath: src.path) {
-                        try? FileManager.default.copyItem(at: src, to: dst)
-                    }
-                }
-            }
+            migrateLegacyDatabaseIfNeeded(into: dir, newURL: newURL, legacyURLOverride: nil)
         }
         return newURL
+    }
+
+    /// Performs the one-time legacy-database migration `sharedDatabaseURL()`
+    /// triggers. Failure-safe by construction, unlike a naive `try?`-per-file
+    /// copy: every file that exists at the legacy location is first copied to
+    /// a `.migrating-<uuid>` temp name inside the SAME destination directory
+    /// (so the later rename is a same-volume atomic move, not a cross-volume
+    /// copy), and only once every copy has fully succeeded are any of them
+    /// renamed into their real names — sidecars (`-wal`/`-shm`) before
+    /// `db.sqlite` itself, so no other process can ever observe `db.sqlite`
+    /// at its final path before its sidecars are already there (matters
+    /// because `sharedDatabaseURL()`'s caller gates entirely on whether
+    /// `db.sqlite` exists). If any copy fails partway, every staged temp file
+    /// is removed and the function returns with `newURL` still not
+    /// existing — the legacy source is never touched, and `openShared()`
+    /// will simply retry this same migration on the next launch rather than
+    /// silently leaving a partial or empty database at the real path (the
+    /// failure mode a bare `try?` produced before this fix: a disk-pressure
+    /// or interrupted-copy error was swallowed, `db.sqlite` could end up
+    /// present-but-empty, and the "does the file exist" completion check
+    /// would treat that as "already migrated" forever, permanently losing
+    /// the user's local history with no error surfaced anywhere).
+    /// `legacyURLOverride` exists purely so tests can point this at a temp
+    /// directory instead of the real per-app Application Support directory —
+    /// production always passes `nil` (the real path is resolved below).
+    /// `internal` (not `private`) for the same reason: `@testable import`
+    /// only reaches non-`private` declarations.
+    static func migrateLegacyDatabaseIfNeeded(into dir: URL, newURL: URL, legacyURLOverride: URL?) {
+        let resolvedLegacyURL = legacyURLOverride ?? (try? FileManager.default
+            .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+            .appendingPathComponent("Lancer/db.sqlite"))
+        guard let legacyURL = resolvedLegacyURL,
+            FileManager.default.fileExists(atPath: legacyURL.path)
+        else { return }
+
+        let tempSuffix = "migrating-\(UUID().uuidString)"
+        var staged: [(temp: URL, finalName: String)] = []
+
+        func stageIfPresent(sourcePath: String, finalName: String) -> Bool {
+            guard FileManager.default.fileExists(atPath: sourcePath) else {
+                return true // sidecar legitimately absent; not a failure
+            }
+            let temp = dir.appendingPathComponent("\(finalName).\(tempSuffix)")
+            do {
+                try FileManager.default.copyItem(at: URL(fileURLWithPath: sourcePath), to: temp)
+                staged.append((temp, finalName))
+                return true
+            } catch {
+                return false
+            }
+        }
+
+        func cleanupStaged() {
+            for entry in staged {
+                try? FileManager.default.removeItem(at: entry.temp)
+            }
+        }
+
+        // Stage sidecars and the main file under temp names before renaming
+        // anything — a failure here leaves zero trace at the final paths.
+        let sidecarsOK = stageIfPresent(sourcePath: legacyURL.path + "-wal", finalName: "db.sqlite-wal")
+            && stageIfPresent(sourcePath: legacyURL.path + "-shm", finalName: "db.sqlite-shm")
+        guard sidecarsOK, stageIfPresent(sourcePath: legacyURL.path, finalName: "db.sqlite") else {
+            cleanupStaged()
+            return
+        }
+
+        // Rename into place: sidecars first, `db.sqlite` last.
+        let sidecarEntries = staged.filter { $0.finalName != "db.sqlite" }
+        let mainEntry = staged.first { $0.finalName == "db.sqlite" }
+        for entry in sidecarEntries + (mainEntry.map { [$0] } ?? []) {
+            do {
+                try FileManager.default.moveItem(at: entry.temp, to: dir.appendingPathComponent(entry.finalName))
+            } catch {
+                // A sidecar or the main file failed to rename after a
+                // successful copy (rare — same-volume rename after we just
+                // wrote the temp file). Clean up whatever is still staged;
+                // any sidecar(s) already renamed before this failure are
+                // harmless orphans (inert without db.sqlite present) until a
+                // future successful migration attempt overwrites them.
+                cleanupStaged()
+                return
+            }
+        }
     }
 
     public static func inMemory() throws -> AppDatabase {
