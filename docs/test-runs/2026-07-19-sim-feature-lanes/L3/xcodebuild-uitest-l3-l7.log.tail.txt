@@ -1,0 +1,120 @@
+    t =    10.66s Waiting 20.0s for Any (First Match) to exist
+    t =    11.72s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    11.72s         Checking existence of `Any (First Match)`
+    t =    11.79s Find the Target Application 'dev.lancer.mobile'
+    t =    11.91s Added attachment named 'L3-02-composer'
+    t =    11.91s Find the Target Application 'dev.lancer.mobile'
+    t =    12.01s Terminate dev.lancer.mobile:33233
+    t =    13.08s Open dev.lancer.mobile
+    t =    13.09s     Launch dev.lancer.mobile
+2026-07-19 18:49:06.075 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 18:49:06.075 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    13.30s         Setting up automation session
+    t =    15.19s         Wait for dev.lancer.mobile to idle
+    t =    16.39s Waiting 20.0s for Any (First Match) to exist
+    t =    17.45s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    17.45s         Checking existence of `Any (First Match)`
+    t =    17.48s Find the Target Application 'dev.lancer.mobile'
+    t =    17.58s Added attachment named 'L3-03-profile'
+    t =    17.58s Find the Target Application 'dev.lancer.mobile'
+    t =    17.66s Terminate dev.lancer.mobile:33264
+    t =    18.72s Open dev.lancer.mobile
+    t =    18.72s     Launch dev.lancer.mobile
+2026-07-19 18:49:11.708 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 18:49:11.708 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    18.94s         Setting up automation session
+    t =    20.81s         Wait for dev.lancer.mobile to idle
+    t =    22.00s Waiting 20.0s for Any (First Match) to exist
+    t =    23.08s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    23.08s         Checking existence of `Any (First Match)`
+    t =    23.13s Find the Target Application 'dev.lancer.mobile'
+    t =    23.27s Added attachment named 'L3-04-settings'
+    t =    23.27s Find the Target Application 'dev.lancer.mobile'
+    t =    23.36s Terminate dev.lancer.mobile:33299
+    t =    24.43s Open dev.lancer.mobile
+    t =    24.44s     Launch dev.lancer.mobile
+2026-07-19 18:49:17.426 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 18:49:17.426 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    24.65s         Setting up automation session
+    t =    26.52s         Wait for dev.lancer.mobile to idle
+    t =    27.71s Waiting 20.0s for Any (First Match) to exist
+    t =    28.75s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    28.75s         Checking existence of `Any (First Match)`
+    t =    28.79s Find the Target Application 'dev.lancer.mobile'
+    t =    28.88s Added attachment named 'L3-05-search'
+    t =    28.88s Find the Target Application 'dev.lancer.mobile'
+    t =    28.96s Terminate dev.lancer.mobile:33407
+    t =    30.02s Open dev.lancer.mobile
+    t =    30.02s     Launch dev.lancer.mobile
+2026-07-19 18:49:23.009 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 18:49:23.009 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    30.24s         Setting up automation session
+    t =    32.09s         Wait for dev.lancer.mobile to idle
+    t =    33.29s Waiting 20.0s for Any (First Match) to exist
+    t =    34.35s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    34.35s         Checking existence of `Any (First Match)`
+    t =    34.41s Find the Target Application 'dev.lancer.mobile'
+    t =    34.51s Added attachment named 'L3-06-add-repo'
+    t =    34.52s Find the Target Application 'dev.lancer.mobile'
+    t =    34.60s Terminate dev.lancer.mobile:33444
+    t =    35.65s Open dev.lancer.mobile
+    t =    35.65s     Launch dev.lancer.mobile
+2026-07-19 18:49:28.644 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 18:49:28.644 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    35.87s         Setting up automation session
+    t =    37.74s         Wait for dev.lancer.mobile to idle
+    t =    38.94s Waiting 20.0s for Any (First Match) to exist
+    t =    39.98s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    39.98s         Checking existence of `Any (First Match)`
+    t =    40.01s Find the Target Application 'dev.lancer.mobile'
+    t =    40.11s Added attachment named 'L3-07-repo-picker'
+    t =    40.11s Find the Target Application 'dev.lancer.mobile'
+    t =    40.18s Terminate dev.lancer.mobile:33475
+L3_SUMMARY addRepo=PASS composer=PASS profile=PASS repoPickerDirect=PASS root=PASS search=PASS settings=PASS
+    t =    41.23s Tear Down
+Test Case '-[LancerUITests.SimRemainingLanesUITests testL3_WorkspacesChromeDeepLinks]' passed (41.310 seconds).
+Test Case '-[LancerUITests.SimRemainingLanesUITests testL7_ReviewSheetFixtureDestination]' started.
+    t =     0.00s Start Test at 2026-07-19 18:49:34.298
+    t =     0.01s Set Up
+    t =     0.01s Open dev.lancer.mobile
+    t =     0.01s     Launch dev.lancer.mobile
+2026-07-19 18:49:34.313 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 18:49:34.313 xcodebuild[32922:471139] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     0.23s         Setting up automation session
+    t =     2.01s         Wait for dev.lancer.mobile to idle
+    t =     3.24s Waiting 25.0s for "Modified" Button to exist
+    t =     4.29s     Checking `Expect predicate `existsNoRetry == 1` for object "Modified" Button`
+    t =     4.29s         Checking existence of `"Modified" Button`
+    t =     4.39s Find the Target Application 'dev.lancer.mobile'
+    t =     4.51s Added attachment named 'L7-01-review-sheet-modified'
+    t =     4.51s Find the Target Application 'dev.lancer.mobile'
+    t =     4.61s Checking existence of `"All Files" Button`
+    t =     4.64s Tap "All Files" Button
+    t =     4.64s     Wait for dev.lancer.mobile to idle
+    t =     4.64s     Find the "All Files" Button
+    t =     4.67s     Check for interrupting elements affecting "All Files" Button
+    t =     4.75s     Synthesize event
+    t =     5.17s     Wait for dev.lancer.mobile to idle
+    t =     7.49s Find the Target Application 'dev.lancer.mobile'
+    t =     7.61s Added attachment named 'L7-02-review-sheet-all-files'
+    t =     7.61s Find the Target Application 'dev.lancer.mobile'
+    t =     7.70s Added attachment of type 'public.plain-text'
+    t =     7.70s Terminate dev.lancer.mobile:33511
+    t =     8.78s Tear Down
+Test Case '-[LancerUITests.SimRemainingLanesUITests testL7_ReviewSheetFixtureDestination]' passed (8.802 seconds).
+Test Suite 'SimRemainingLanesUITests' passed at 2026-07-19 18:49:43.101.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 50.112 (50.114) seconds
+Test Suite 'LancerUITests.xctest' passed at 2026-07-19 18:49:43.102.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 50.112 (50.115) seconds
+Test Suite 'Selected tests' passed at 2026-07-19 18:49:43.103.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 50.112 (50.117) seconds
+2026-07-19 18:49:43.380 xcodebuild[32922:471139] [MT] IDETestOperationsObserverDebug: 53.699 elapsed -- Testing started completed.
+2026-07-19 18:49:43.380 xcodebuild[32922:471139] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-07-19 18:49:43.380 xcodebuild[32922:471139] [MT] IDETestOperationsObserverDebug: 53.699 sec, +53.699 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/roshansilva/.simurgh/leases/lease-247/Results/run-20260719T224837.970972000.xcresult
+
+** TEST SUCCEEDED ** [58.651 sec]
+
+Testing started

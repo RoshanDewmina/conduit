@@ -1,0 +1,120 @@
+    t =    88.19s     Wait for dev.lancer.mobile to idle
+    t =    88.42s Type 'Quick follow-up fr...' into "Follow up…" TextField
+    t =    88.42s     Wait for dev.lancer.mobile to idle
+    t =    88.80s     Find the "Follow up…" TextField
+    t =    88.86s     Check for interrupting elements affecting "Follow up…" TextField
+    t =    88.89s     Synthesize event
+    t =    89.56s     Wait for dev.lancer.mobile to idle
+    t =    89.56s Waiting 5.0s for "Send" Button to exist
+    t =    90.63s     Checking `Expect predicate `existsNoRetry == 1` for object "Send" Button`
+    t =    90.63s         Checking existence of `"Send" Button`
+    t =    90.68s Find the "Send" Button
+    t =    90.70s Tap "Send" Button
+    t =    90.70s     Wait for dev.lancer.mobile to idle
+    t =    90.71s     Find the "Send" Button
+    t =    90.73s     Check for interrupting elements affecting "Send" Button
+    t =    90.77s     Synthesize event
+    t =    91.06s     Wait for dev.lancer.mobile to idle
+    t =    94.35s Checking existence of `"thread-detail-pending-followup" Other`
+    t =    94.41s Checking existence of `StaticText (First Match)`
+    t =    94.44s Find the Target Application 'dev.lancer.mobile'
+    t =    94.53s Added attachment named 'L2-04-follow-up'
+    t =    94.53s Find the Target Application 'dev.lancer.mobile'
+    t =    94.62s Terminate dev.lancer.mobile:36684
+    t =    95.66s Open dev.lancer.mobile
+    t =    95.66s     Launch dev.lancer.mobile
+2026-07-19 18:52:06.242 xcodebuild[34426:477772] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 18:52:06.242 xcodebuild[34426:477772] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    95.87s         Setting up automation session
+    t =    97.78s         Wait for dev.lancer.mobile to idle
+    t =    98.97s Waiting 30.0s for Button (First Match) to exist
+    t =   100.02s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   100.02s         Checking existence of `Button (First Match)`
+    t =   100.09s Waiting 5.0s for Button (First Match) to exist
+    t =   101.12s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   101.12s         Checking existence of `Button (First Match)`
+    t =   101.16s Tap Button (First Match)
+    t =   101.16s     Wait for dev.lancer.mobile to idle
+    t =   101.16s     Find the Button (First Match)
+    t =   101.18s     Check for interrupting elements affecting "Perf seed — 40 turns, Perf seed turn 39 — make a small change and verify., Completed, · in 0 secs" Button
+    t =   101.19s     Synthesize event
+    t =   101.49s     Wait for dev.lancer.mobile to idle
+    t =   101.86s Waiting 20.0s for Button (First Match) to exist
+    t =   102.91s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   102.91s         Checking existence of `Button (First Match)`
+    t =   103.02s         Capturing element debug description
+    t =   103.87s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   103.87s         Checking existence of `Button (First Match)`
+    t =   103.95s         Capturing element debug description
+    t =   104.89s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   104.89s         Checking existence of `Button (First Match)`
+    t =   104.98s         Capturing element debug description
+    t =   105.91s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   105.91s         Checking existence of `Button (First Match)`
+    t =   106.01s         Capturing element debug description
+    t =   106.95s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   106.95s         Checking existence of `Button (First Match)`
+    t =   107.02s         Capturing element debug description
+    t =   107.95s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   107.95s         Checking existence of `Button (First Match)`
+    t =   108.03s         Capturing element debug description
+    t =   108.86s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   108.86s         Checking existence of `Button (First Match)`
+    t =   108.94s         Capturing element debug description
+    t =   109.95s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   109.95s         Checking existence of `Button (First Match)`
+    t =   110.03s         Capturing element debug description
+    t =   110.86s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   110.86s         Checking existence of `Button (First Match)`
+    t =   110.94s         Capturing element debug description
+    t =   111.87s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   111.87s         Checking existence of `Button (First Match)`
+    t =   111.97s         Capturing element debug description
+    t =   112.93s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   112.93s         Checking existence of `Button (First Match)`
+    t =   113.02s         Capturing element debug description
+    t =   113.95s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   113.95s         Checking existence of `Button (First Match)`
+    t =   114.05s         Capturing element debug description
+    t =   114.89s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   114.89s         Checking existence of `Button (First Match)`
+    t =   114.97s         Capturing element debug description
+    t =   115.90s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   115.91s         Checking existence of `Button (First Match)`
+    t =   115.99s         Capturing element debug description
+    t =   116.94s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   116.94s         Checking existence of `Button (First Match)`
+    t =   117.01s         Capturing element debug description
+    t =   117.95s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   117.95s         Checking existence of `Button (First Match)`
+    t =   118.04s         Capturing element debug description
+    t =   118.87s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   118.87s         Checking existence of `Button (First Match)`
+    t =   118.97s         Capturing element debug description
+    t =   119.91s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   119.91s         Checking existence of `Button (First Match)`
+    t =   119.99s         Capturing element debug description
+    t =   120.94s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   120.94s         Checking existence of `Button (First Match)`
+    t =   121.02s         Capturing element debug description
+    t =   121.86s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   121.87s         Checking existence of `Button (First Match)`
+    t =   121.94s         Capturing element debug description
+    t =   121.94s     Checking existence of `Button (First Match)`
+    t =   122.01s Collecting debug information to assist test failure triage
+    t =   122.01s     Requesting snapshot of accessibility hierarchy for app with pid 37209
+    t =   122.07s Find the Target Application 'dev.lancer.mobile'
+    t =   122.17s Added attachment named 'L2-05-scroll-history'
+    t =   122.17s Find the Target Application 'dev.lancer.mobile'
+    t =   122.27s Terminate dev.lancer.mobile:37209
+    t =   123.34s Added attachment of type 'public.plain-text'
+L2_SUMMARY backgroundTasksPill=N/A-completed-seed followUpDispatch=PARTIAL-sending followUpUI=PASS openThread=PASS scrollHistory=PARTIAL-no-window threadList=PASS toolChips=FAIL transcriptRender=PASS
+    t =   123.34s Tear Down
+Test Case '-[LancerUITests.SimFeatureLaneL2Tests testL2_ChatTranscriptOfflineSeed]' failed (123.459 seconds).
+Test Suite 'SimFeatureLaneL2Tests' failed at 2026-07-19 18:52:34.041.
+	 Executed 1 test, with 1 failure (0 unexpected) in 123.459 (123.462) seconds
+Test Suite 'LancerUITests.xctest' failed at 2026-07-19 18:52:34.043.
+	 Executed 1 test, with 1 failure (0 unexpected) in 123.459 (123.463) seconds
+Test Suite 'Selected tests' failed at 2026-07-19 18:52:34.043.
+	 Executed 1 test, with 1 failure (0 unexpected) in 123.459 (123.465) seconds
+** BUILD INTERRUPTED **

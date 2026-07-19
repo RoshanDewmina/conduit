@@ -31,6 +31,7 @@ public struct WorkspacesView: View {
     @State private var isPRDetailDirectPresented = false
     @State private var isTrustedMachinesDirectPresented = false
     @State private var isAttachmentPreviewDirectPresented = false
+    @State private var isReviewPresented = false
     #endif
 
     public init() {}
@@ -225,6 +226,13 @@ public struct WorkspacesView: View {
         .sheet(isPresented: $isAttachmentPreviewDirectPresented) {
             AttachmentPreviewDemoView()
         }
+        .sheet(isPresented: $isReviewPresented) {
+            ReviewSheetView(
+                conversationID: "debug-review-fixture",
+                scope: .session,
+                dataSource: FixtureReviewDataSource.shared
+            )
+        }
         .navigationDestination(isPresented: $isThreadListDirectPresented) {
             if let first = repos.first {
                 ThreadListView(workspace: .repo(first))
@@ -262,6 +270,10 @@ public struct WorkspacesView: View {
                 isSettingsPresented = true
             case "accounts":
                 isAccountsPresented = true
+            case "review":
+                // DEBUG fixture seam for ReviewSheetView (LANCER_DESTINATION=review
+                // was removed with CursorStyle; restore for sim/UITest without host diffs).
+                isReviewPresented = true
             case "approval":
                 Task {
                     await relayApprovalIngest.hydratePendingForUITestIfRequested()

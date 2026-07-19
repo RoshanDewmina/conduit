@@ -1,0 +1,52 @@
+{
+  "lease": {
+    "acquiredAt": "2026-07-19T18:40:39.359341-04:00",
+    "connection": {
+      "transport": "local"
+    },
+    "device": {
+      "booted": true,
+      "cloneOf": "D01C2165-CBE8-411C-A09F-44124173B4A9",
+      "name": "simurgh-clone[lease-247:iPhone 17 Pro:27.0]",
+      "runtime": "27.0",
+      "udid": "30DEF4E3-60A4-4F22-AC1B-0AB60664FA77"
+    },
+    "env": {
+      "env": {
+        "CLANG_MODULE_CACHE_PATH": "/Users/roshansilva/.simurgh/leases/lease-247/ModuleCache",
+        "SIMURGH_DERIVED_DATA": "/Users/roshansilva/.simurgh/leases/lease-247/DerivedData",
+        "SIMURGH_LEASE_ID": "lease-247",
+        "SIMURGH_RESULT_BUNDLE_DIR": "/Users/roshansilva/.simurgh/leases/lease-247/Results",
+        "SIMURGH_SWIFTPM_DIR": "/Users/roshansilva/.simurgh/leases/lease-247/SwiftPM",
+        "SIMURGH_UDID": "30DEF4E3-60A4-4F22-AC1B-0AB60664FA77"
+      },
+      "shellSnippet": "eval \"$(simurgh env lease-247)\"",
+      "xcodebuildFlags": [
+        "-derivedDataPath",
+        "/Users/roshansilva/.simurgh/leases/lease-247/DerivedData",
+        "-clonedSourcePackagesDirPath",
+        "/Users/roshansilva/.simurgh/leases/lease-247/SwiftPM",
+        "-destination",
+        "platform=iOS Simulator,id=30DEF4E3-60A4-4F22-AC1B-0AB60664FA77"
+      ]
+    },
+    "expiresAt": "2026-07-19T19:25:39.359341-04:00",
+    "heartbeatAt": "2026-07-19T18:40:39.359341-04:00",
+    "heldUntil": "0001-01-01T00:00:00Z",
+    "id": "lease-247",
+    "owner": {
+      "agent": "simurgh-cli",
+      "pid": 13227,
+      "sessionId": "cli:f96d33548a242fa9d8e057bed777f044"
+    },
+    "releaseOnPIDExit": false,
+    "spec": {
+      "model": "iPhone 17 Pro",
+      "platform": "iOS"
+    },
+    "state": "active",
+    "timeouts": {},
+    "ttl": "45m0s"
+  },
+  "reused": false
+}
