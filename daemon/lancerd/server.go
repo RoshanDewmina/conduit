@@ -478,6 +478,7 @@ func newServer(home string) *server {
 	// same serialized writer the approval-pending notification uses.
 	s.dispatcher.emit = s.emitNotification
 	s.dispatcher.onRunTerminal = s.handleRunTerminal
+	s.dispatcher.onRunStarted = s.handleRunStarted
 	return s
 }
 
@@ -495,6 +496,20 @@ func (s *server) handleRunTerminal(runID, status string, exitCode int) {
 	if status == "exited" && exitCode == 0 {
 		_, _ = s.removeManagedWorktree(repoRoot, wtPath)
 	}
+}
+
+// handleRunStarted fires when a Lancer-dispatched run first becomes "running".
+// It push-to-starts a Live Activity via the push-backend when a phone is
+// registered — sessionID MUST be the phone's persistent device session
+// (dev.SessionID), not the agent run ID (same ID space as postApprovalPush).
+func (s *server) handleRunStarted(runID, agent string) {
+	s.deviceMu.RLock()
+	dev := s.device
+	s.deviceMu.RUnlock()
+	if dev == nil || dev.PushBackendURL == "" {
+		return
+	}
+	go s.postRunStartPush(dev, dev.SessionID, &agent, nil, "")
 }
 
 // deliverApprovalEvent is the single delivery chokepoint for an ApprovalEvent

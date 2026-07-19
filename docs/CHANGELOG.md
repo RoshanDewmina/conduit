@@ -9,6 +9,10 @@ re-deriving it from git archaeology. Do not rewrite or delete old lines.
 
 Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
+## 2026-07-19
+
+- 10:55 Cursor Grok — wire Live Activity push-to-start for Lancer-dispatched runs: `onRunStarted` callback fires once from `wrapEmitForRun` on first `"running"` status → `handleRunStarted` → `postRunStartPush(dev.SessionID)` (feat/live-activity-dispatch-trigger, uncommitted)
+
 ## 2026-07-18
 
 - 22:23 Cursor Grok — closed Goal 1 Live Activity visual gap on sim (`lease-222`): Lock Screen LA banner + Island indicator captured while `Activity.request succeeded` (`F593D5C9-…`); IslandCapture UITest waits 25s foreground before Home; SET-failure alert still not obtained (daemon-kill UITest failed + watchdog); accidental `lancerd pair --help` rotated prod code to `190799` — phone needs re-pair; evidence in `docs/test-runs/2026-07-18-live-activity-sim/` (uncommitted worktree)
