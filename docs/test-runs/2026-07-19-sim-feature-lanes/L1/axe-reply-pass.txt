@@ -1,0 +1,5 @@
+Assistant label: PONG
+Proof: Worked 4s. Proof available in menu.
+User prompt bubble + title present.
+Notification permission alert: ABSENT (LANCER_SKIP_NOTIFICATION_PROMPT=1).
+push-backend: /run-start rejected HTTP 401 (env-only; local relay reply still delivered).

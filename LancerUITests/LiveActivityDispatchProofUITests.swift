@@ -34,6 +34,7 @@ final class LiveActivityDispatchProofUITests: XCTestCase {
     func testDispatchSucceedsWithLiveActivityWiringPresent() throws {
         let app = XCUIApplication()
         app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
+        app.launchEnvironment["LANCER_SKIP_NOTIFICATION_PROMPT"] = "1"
         // Open the expanded composer via DEBUG destination — more reliable than
         // tapping the collapsed morph pill on iOS 27 sims (2026-07-18 fail:
         // cursor-composer-tap succeeded but TextEditor never appeared).
