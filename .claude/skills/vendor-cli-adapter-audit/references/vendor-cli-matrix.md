@@ -74,6 +74,10 @@ kimi --prompt "hi" --help 2>/dev/null || true
 which pi
 pi --version
 pi --help
+
+which agent
+agent -v
+agent --help
 ```
 
 ## Current Lancer Code Entry Points
@@ -174,6 +178,23 @@ Sessions: JSONL under `~/.pi/agent/sessions/--<sanitized-cwd>--/<ts>_<id>.jsonl`
 Hooks: `.pi/extensions/*.ts` with `on("tool_call")` returning `{block?, reason?}`.
 `-r/--resume` is an interactive picker — never usable headless.
 
+### Cursor Agent (CLI `agent` / `cursor-agent`)
+
+Current as of 2026-07-19 (local `agent` 2026.07.16-899851b, logged in):
+
+```text
+agent -p --output-format stream-json --trust <prompt>
+agent -p --continue --output-format stream-json --trust <prompt>
+agent -p --resume <chatId> --output-format stream-json --trust <prompt>
+```
+
+Risk:
+
+- Without `--trust` (or `-f`/`--yolo`), headless fails fast EXIT 1 with "Workspace Trust Required" — not a TTY hang.
+- `--force`/`--yolo` force-allows commands unless explicitly denied; Lancer omits by default (`LANCER_CURSOR_FORCE=1` opt-in).
+- Stream-json emits whole `assistant` messages + `tool_call` started/completed (no Claude `stream_event` deltas unless `--stream-partial-output`).
+- No Lancer PreToolUse hook for Cursor yet — policy stays fail-closed when hooks are absent.
+
 ## Smoke Checks
 
 Run smoke checks in a temp directory with harmless prompts and a timeout. Capture stdout format and exit code.
@@ -185,6 +206,7 @@ timeout 45s claude --output-format stream-json --verbose --include-partial-messa
 timeout 45s codex exec --json "Reply with the word ok and do not edit files."
 timeout 45s opencode run --format json "Reply with the word ok and do not edit files."
 timeout 45s kimi --prompt "Reply with the word ok and do not edit files." --output-format stream-json
+timeout 45s agent -p --output-format stream-json --trust "Reply with the word ok and do not edit files."
 ```
 
 For continue/resume, create a first harmless session in the same temp directory, then run the continue flag. Do not use production repos for first-pass adapter experiments.

@@ -66,6 +66,7 @@ public struct AgentVendorStatus: Codable, Sendable, Equatable, Identifiable {
         case "opencode": return "OpenCode"
         case "kimi": return "Kimi"
         case "pi": return "Pi"
+        case "cursor": return "Cursor"
         default: return agent
         }
     }

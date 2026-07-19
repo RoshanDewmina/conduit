@@ -12,6 +12,7 @@ struct RunningAgentsMappingTests {
         #expect(RunningAgentsMapping.providerLabel("codex") == "Codex")
         #expect(RunningAgentsMapping.providerLabel("kimi") == "Kimi")
         #expect(RunningAgentsMapping.providerLabel("opencode") == "OpenCode")
+        #expect(RunningAgentsMapping.providerLabel("cursor") == "Cursor")
         #expect(RunningAgentsMapping.providerLabel("other") == "other")
     }
 

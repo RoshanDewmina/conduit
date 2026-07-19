@@ -98,6 +98,8 @@ public enum RunningAgentsMapping: Sendable {
         case "codex": return "Codex"
         case "kimi": return "Kimi"
         case "opencode": return "OpenCode"
+        case "cursor": return "Cursor"
+        case "pi": return "Pi"
         default: return provider
         }
     }
@@ -120,6 +122,8 @@ public enum RunningAgentsMapping: Sendable {
         case "codex": return "chevron.left.forwardslash.chevron.right"
         case "opencode": return "terminal"
         case "kimi": return "moon.stars"
+        case "cursor": return "hammer"
+        case "pi": return "circle.hexagongrid"
         default: return "cpu"
         }
     }

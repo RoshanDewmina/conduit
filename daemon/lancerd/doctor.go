@@ -49,6 +49,7 @@ var agentBinaries = []struct{ vendor, binary string }{
 	{"codex", "codex"},
 	{"opencode", "opencode"},
 	{"kimi", "kimi"},
+	{"cursor", "agent"},
 }
 
 // installedAgents returns the vendor ids whose CLI is resolvable, so the phone only
@@ -229,7 +230,7 @@ func checkResidentDaemon(lancerDir string, dial dialFunc) checkResult {
 }
 
 func checkAgentCLIs(look lookPathFunc) checkResult {
-	agents := []string{"claude", "codex", "opencode", "kimi", "pi"}
+	agents := []string{"claude", "codex", "opencode", "kimi", "pi", "agent"}
 	var found []string
 	for _, a := range agents {
 		if _, err := look(a); err == nil {
@@ -240,7 +241,7 @@ func checkAgentCLIs(look lookPathFunc) checkResult {
 		return checkResult{
 			name:    "agent CLIs",
 			status:  statusWarn,
-			message: "none of claude/codex/opencode/kimi/pi on PATH",
+			message: "none of claude/codex/opencode/kimi/pi/agent on PATH",
 			hint:    "install at least one agent CLI",
 		}
 	}

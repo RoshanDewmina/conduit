@@ -15,8 +15,8 @@ func normalizeAgentSource(agent string) string {
 		return "claudeCode"
 	case "codex", "openai-codex":
 		return "codex"
-	case "cursor", "cursor-agent", "cursor-cli":
-		// Placeholder for upcoming Cursor hook integration.
+	case "cursor", "cursor-agent", "cursor-cli", "agent":
+		// Cursor Agent CLI (`agent` / `cursor-agent`); dispatch via agentArgv.
 		return "cursor"
 	case "gemini", "google-gemini":
 		return "gemini"
