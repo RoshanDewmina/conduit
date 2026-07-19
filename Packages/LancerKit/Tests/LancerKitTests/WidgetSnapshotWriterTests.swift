@@ -49,6 +49,12 @@ struct WidgetSnapshotWriterTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
+        // Use wall-clock timestamps inside the 10m pending TTL.
+        // `writeApprovalWidgetSnapshot` always runs `expireStalePending` first —
+        // the historical epoch fixtures (1970) were immediately retired and left
+        // the App Group count at 0 (L5 sim FAIL after the stale-approvals fix).
+        let now = Date()
+
         // 1. A first approval arrives.
         let older = Approval(
             sessionID: SessionID(),
@@ -57,7 +63,7 @@ struct WidgetSnapshotWriterTests {
             command: "date +lockscreen-proof-1",
             cwd: "/repo",
             risk: .low,
-            createdAt: Date(timeIntervalSince1970: 1_000)
+            createdAt: now.addingTimeInterval(-120)
         )
         try await repo.upsert(older)
         await repo.writeApprovalWidgetSnapshot(suiteName: suite)
@@ -76,7 +82,7 @@ struct WidgetSnapshotWriterTests {
             command: "cat go.mod",
             cwd: "/repo",
             risk: .medium,
-            createdAt: Date(timeIntervalSince1970: 2_000)
+            createdAt: now.addingTimeInterval(-60)
         )
         try await repo.upsert(newer)
         await repo.writeApprovalWidgetSnapshot(suiteName: suite)
@@ -102,6 +108,79 @@ struct WidgetSnapshotWriterTests {
 
         #expect(defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) == 0)
         #expect(defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey) == nil)
+    }
+
+    @Test("stale pending row past TTL is expired and excluded from the widget snapshot")
+    func writerExpiresStalePendingRow() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ApprovalRepository(db)
+        let suite = "widget-snapshot-stale-ttl-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let now = Date()
+        let stale = Approval(
+            sessionID: SessionID(),
+            agent: .claudeCode,
+            kind: .command,
+            command: "date +lockscreen-stale",
+            cwd: "/repo",
+            risk: .low,
+            createdAt: now.addingTimeInterval(-(WidgetSnapshot.pendingApprovalTTL + 60))
+        )
+        let fresh = Approval(
+            sessionID: SessionID(),
+            agent: .codex,
+            kind: .command,
+            command: "echo still-live",
+            cwd: "/repo",
+            risk: .medium,
+            createdAt: now.addingTimeInterval(-60)
+        )
+        try await repo.upsert(stale)
+        try await repo.upsert(fresh)
+
+        // Must fail without expireStalePending inside writeApprovalWidgetSnapshot:
+        // both rows would still be pending and count would be 2.
+        await repo.writeApprovalWidgetSnapshot(suiteName: suite)
+
+        #expect(defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) == 1)
+        #expect(defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("echo still-live") == true)
+
+        let pending = try await repo.pending()
+        #expect(pending.count == 1)
+        #expect(pending.first?.id == fresh.id)
+
+        let staleRow = try await repo.find(id: stale.id)
+        #expect(staleRow?.decision == .expired)
+        #expect(staleRow?.decidedAt != nil)
+    }
+
+    @Test("fresh pending row under TTL survives the snapshot write sweep")
+    func writerKeepsFreshPendingRow() async throws {
+        let db = try AppDatabase.inMemory()
+        let repo = ApprovalRepository(db)
+        let suite = "widget-snapshot-fresh-ttl-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let fresh = Approval(
+            sessionID: SessionID(),
+            agent: .claudeCode,
+            kind: .command,
+            command: "date +fresh",
+            cwd: "/repo",
+            risk: .low,
+            createdAt: Date().addingTimeInterval(-60)
+        )
+        try await repo.upsert(fresh)
+        await repo.writeApprovalWidgetSnapshot(suiteName: suite)
+
+        #expect(defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) == 1)
+        #expect(defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("date +fresh") == true)
+        let pending = try await repo.pending()
+        #expect(pending.count == 1)
+        #expect(pending.first?.decision == nil)
     }
 }
 

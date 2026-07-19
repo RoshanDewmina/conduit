@@ -169,6 +169,31 @@ public actor ApprovalRepository {
         }
     }
 
+    /// Retire phone-local pending rows whose `createdAt` is older than `ttl`.
+    /// Reuses `decide`'s first-decision-wins semantics via a bulk UPDATE with
+    /// the same `decision IS NULL` guard — external resolutions (daemon
+    /// timeout, restart prune) never reach the phone, so corpses otherwise
+    /// inflate `pending()` / the Home Screen widget forever. Returns the
+    /// number of rows marked `.expired`.
+    @discardableResult
+    public func expireStalePending(
+        olderThan ttl: TimeInterval = WidgetSnapshot.pendingApprovalTTL,
+        now: Date = .now
+    ) async throws -> Int {
+        let cutoff = now.addingTimeInterval(-ttl)
+        return try await db.dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE approvals
+                    SET decision = ?, decidedAt = ?
+                    WHERE decision IS NULL AND createdAt < ?
+                    """,
+                arguments: [Approval.Decision.expired.rawValue, now, cutoff]
+            )
+            return db.changesCount
+        }
+    }
+
     // Returns a stream that emits the full approvals list whenever the DB changes.
     // Uses GRDB ValueObservation via callback API.
     public func observe() -> AsyncThrowingStream<[Approval], any Error> {

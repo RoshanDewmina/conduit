@@ -369,8 +369,26 @@ public struct AppRoot: View {
                 // but nothing ever appeared on a locked phone because this call was missing
                 // entirely. Detached so the first-launch system permission sheet doesn't block
                 // the rest of hydration below.
-                Task { _ = await Notifications.shared.requestAuthorization() }
+                //
+                // Sim / UITest harness: `LANCER_SKIP_NOTIFICATION_PROMPT=1` suppresses the
+                // system sheet (it blocked HID + hid the live-thread Retry path on the
+                // 2026-07-19 L1 serial run). Production still requests authorization.
+                #if DEBUG
+                let skipNotificationPrompt =
+                    ProcessInfo.processInfo.environment["LANCER_SKIP_NOTIFICATION_PROMPT"] == "1"
+                #else
+                let skipNotificationPrompt = false
+                #endif
+                if !skipNotificationPrompt {
+                    Task { _ = await Notifications.shared.requestAuthorization() }
+                }
                 await RelayFleetHydration.hydrate(into: relayFleetStore)
+                // Auto-pair BEFORE markHydrated: `liveThread` / first send used to race an
+                // empty fleet (waitForConnectedMachine fail-fast) while auto-pair still
+                // ran after the 8s connected wait + agent refresh (L1 serial 2026-07-19).
+                #if DEBUG
+                await DebugSeeder.autoPairRelayIfRequested(into: relayFleetStore)
+                #endif
                 shellLiveBridge.markHydrated()
                 await workspaceDataStore.refresh()
                 // Wait briefly for the relay to become connected, then
@@ -382,9 +400,6 @@ public struct AppRoot: View {
                     connected = relayFleetStore.firstConnectedMachine
                 }
                 await RelayFleetHydration.refreshInstalledAgents(into: relayFleetStore)
-                #if DEBUG
-                await DebugSeeder.autoPairRelayIfRequested(into: relayFleetStore)
-                #endif
             }
         }
     }

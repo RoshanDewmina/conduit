@@ -84,6 +84,76 @@ struct RunningAgentsMappingTests {
         #expect(RunningAgentsMapping.totalRunningCount(from: snap) == 3)
         #expect(RunningAgentsMapping.totalRunningCount(from: nil) == 0)
     }
+
+    @Test("resolvedRunningCount takes max of status total and running rows")
+    func resolvedRunningCount() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let rows = RunningAgentsMapping.rows(from: [
+            ObservedSession(
+                sessionId: "run",
+                provider: "claudeCode",
+                title: "Live",
+                cwd: "/tmp/c",
+                state: .working,
+                source: .transcriptObserved,
+                lastActivity: now,
+                messageCount: 1
+            ),
+        ])
+        let statusLow = AgentStatusSnapshot(agents: [
+            AgentVendorStatus(agent: "claudeCode", sessionCount: 1, runningCount: 0),
+        ])
+        let statusHigh = AgentStatusSnapshot(agents: [
+            AgentVendorStatus(agent: "claudeCode", sessionCount: 3, runningCount: 3),
+        ])
+        #expect(RunningAgentsMapping.resolvedRunningCount(rows: rows, status: statusLow) == 1)
+        #expect(RunningAgentsMapping.resolvedRunningCount(rows: rows, status: statusHigh) == 3)
+        #expect(RunningAgentsMapping.resolvedRunningCount(rows: [], status: statusHigh) == 3)
+        #expect(RunningAgentsMapping.resolvedRunningCount(rows: [], status: nil) == 0)
+    }
+
+    @Test("widgetLines prefer running rows then status fallback")
+    func widgetLines() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let rows = RunningAgentsMapping.rows(from: [
+            ObservedSession(
+                sessionId: "run",
+                provider: "claudeCode",
+                title: "Live",
+                cwd: "/Users/dev/lancer-ios",
+                state: .working,
+                source: .transcriptObserved,
+                lastActivity: now,
+                messageCount: 1
+            ),
+            ObservedSession(
+                sessionId: "idle",
+                provider: "codex",
+                title: "Idle",
+                cwd: "/tmp/x",
+                state: .idle,
+                source: .providerManaged,
+                lastActivity: now,
+                messageCount: 1
+            ),
+        ])
+        let lines = RunningAgentsMapping.widgetLines(
+            from: rows,
+            status: nil,
+            hostName: "MacBook"
+        )
+        #expect(lines == ["Claude Code · lancer-ios · MacBook"])
+
+        let statusOnly = AgentStatusSnapshot(agents: [
+            AgentVendorStatus(agent: "codex", sessionCount: 2, runningCount: 2),
+        ])
+        let fallback = RunningAgentsMapping.widgetLines(
+            from: [],
+            status: statusOnly,
+            hostName: nil
+        )
+        #expect(fallback == ["Codex · 2 running"])
+    }
 }
 
 @Suite("RunningAgentsFreshness")

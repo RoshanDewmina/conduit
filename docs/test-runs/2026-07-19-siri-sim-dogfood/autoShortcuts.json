@@ -1,0 +1,65 @@
+[
+  {
+    "actionIdentifier": "AgentStatusQueryIntent",
+    "shortTitle": {
+      "alternatives": [],
+      "key": "Agent Status"
+    }
+  },
+  {
+    "actionIdentifier": "PendingApprovalsQueryIntent",
+    "shortTitle": {
+      "alternatives": [],
+      "key": "Pending Approvals"
+    }
+  },
+  {
+    "actionIdentifier": "PauseRunIntent",
+    "shortTitle": {
+      "alternatives": [],
+      "key": "Pause Run"
+    }
+  },
+  {
+    "actionIdentifier": "StopRunIntent",
+    "shortTitle": {
+      "alternatives": [],
+      "key": "Stop Run"
+    }
+  },
+  {
+    "actionIdentifier": "DenyApprovalIntent",
+    "shortTitle": {
+      "alternatives": [],
+      "key": "Deny Approval"
+    }
+  },
+  {
+    "actionIdentifier": "SearchLancerIntent",
+    "shortTitle": {
+      "alternatives": [],
+      "key": "Search"
+    }
+  },
+  {
+    "actionIdentifier": "OpenConversationIntent",
+    "shortTitle": {
+      "alternatives": [],
+      "key": "Open Conversation"
+    }
+  },
+  {
+    "actionIdentifier": "StartAgentRunIntent",
+    "shortTitle": {
+      "alternatives": [],
+      "key": "Start Agent Run"
+    }
+  },
+  {
+    "actionIdentifier": "AnswerQuestionIntent",
+    "shortTitle": {
+      "alternatives": [],
+      "key": "Answer Question"
+    }
+  }
+]

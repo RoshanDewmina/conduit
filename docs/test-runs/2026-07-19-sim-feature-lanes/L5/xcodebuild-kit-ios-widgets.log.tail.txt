@@ -1,0 +1,80 @@
+AppIntentsSSUTraining (in target 'LancerKitTests-product' from project 'LancerKit')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets/Packages/LancerKit
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/LancerKitTests.xctest/Info.plist --temp-dir-path /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Intermediates.noindex/LancerKit.build/Debug-iphonesimulator/LancerKitTests-p.build/ssu --bundle-id lancerkit.LancerKitTests --product-path /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/LancerKitTests.xctest --extracted-metadata-path /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/LancerKitTests.xctest/Metadata.appintents --metadata-file-list /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Intermediates.noindex/LancerKit.build/Debug-iphonesimulator/LancerKitTests-p.build/LancerKitTests.DependencyMetadataFileList --source-file /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/LancerKitTests.xctest/Info.plist --archive-ssu-assets
+2026-07-19 18:35:21.602 appintentsnltrainingprocessor[6771:386309] Parsing options for appintentsnltrainingprocessor
+2026-07-19 18:35:21.603 appintentsnltrainingprocessor[6771:386309] Starting AppIntents SSU YAML Generation
+2026-07-19 18:35:21.610 appintentsnltrainingprocessor[6771:386309] No AppShortcuts found - Skipping.
+
+CodeSign /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/LancerKitTests.xctest (in target 'LancerKitTests-product' from project 'LancerKit')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets/Packages/LancerKit
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/LancerKitTests.xctest
+
+RegisterExecutionPolicyException /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/LancerKitTests.xctest (in target 'LancerKitTests-product' from project 'LancerKit')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets/Packages/LancerKit
+    builtin-RegisterExecutionPolicyException /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/LancerKitTests.xctest
+
+Touch /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/LancerKitTests.xctest (in target 'LancerKitTests-product' from project 'LancerKit')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets/Packages/LancerKit
+    /usr/bin/touch -c /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Products/Debug-iphonesimulator/LancerKitTests.xctest
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-246/DerivedData/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+Test Suite 'Selected tests' started at 2026-07-19 18:35:26.241.
+Test Suite 'LancerKitTests.xctest' started at 2026-07-19 18:35:26.243.
+Test Suite 'LancerKitTests.xctest' passed at 2026-07-19 18:35:26.243.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-07-19 18:35:26.243.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.002) seconds
+◇ Test run started.
+↳ Testing Library Version: 2073
+↳ Target Platform: arm64-apple-ios17.0-simulator
+◇ Suite "Live Activity → AgentStatusWidget snapshot" started.
+◇ Test "running status maps to count/lines; idle clears" started.
+◇ Suite "ApprovalRepository stale pending TTL" started.
+◇ Suite "AgentStatusWidget running-agents snapshot writer" started.
+◇ Suite "PendingApprovalsWidget snapshot writer — arrive/resolve sequence" started.
+◇ Test "multiple running activities produce multiple lines" started.
+◇ Test "isStreaming counts as running even when status is connected" started.
+◇ Test "duplicate ActivityKit rows for one run collapse to count 1" started.
+◇ Test "same agent on distinct hosts stays as two agents" started.
+◇ Test "already-decided rows are not flipped by the TTL sweep" started.
+◇ Test "row older than TTL is marked expired; fresh row survives" started.
+◇ Test "writes count and lines from running rows; clears lines at zero" started.
+◇ Test "status-only runningCount still populates the widget" started.
+◇ Test "fresh pending row under TTL survives the snapshot write sweep" started.
+◇ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" started.
+◇ Test "stale pending row past TTL is expired and excluded from the widget snapshot" started.
+✔ Test "isStreaming counts as running even when status is connected" passed after 0.001 seconds.
+✔ Test "same agent on distinct hosts stays as two agents" passed after 0.001 seconds.
+✔ Test "duplicate ActivityKit rows for one run collapse to count 1" passed after 0.001 seconds.
+✔ Test "multiple running activities produce multiple lines" passed after 0.001 seconds.
+✔ Test "status-only runningCount still populates the widget" passed after 0.010 seconds.
+✔ Test "running status maps to count/lines; idle clears" passed after 0.012 seconds.
+✔ Suite "Live Activity → AgentStatusWidget snapshot" passed after 0.013 seconds.
+✔ Test "writes count and lines from running rows; clears lines at zero" passed after 0.013 seconds.
+✔ Suite "AgentStatusWidget running-agents snapshot writer" passed after 0.013 seconds.
+✔ Test "row older than TTL is marked expired; fresh row survives" passed after 0.023 seconds.
+✔ Test "already-decided rows are not flipped by the TTL sweep" passed after 0.024 seconds.
+✔ Suite "ApprovalRepository stale pending TTL" passed after 0.024 seconds.
+✔ Test "fresh pending row under TTL survives the snapshot write sweep" passed after 0.026 seconds.
+✔ Test "stale pending row past TTL is expired and excluded from the widget snapshot" passed after 0.027 seconds.
+✔ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" passed after 0.030 seconds.
+✔ Suite "PendingApprovalsWidget snapshot writer — arrive/resolve sequence" passed after 0.030 seconds.
+✔ Test run with 12 tests in 4 suites passed after 0.030 seconds.
+2026-07-19 18:35:26.572 xcodebuild[3803:372578] [MT] IDETestOperationsObserverDebug: 4.545 elapsed -- Testing started completed.
+2026-07-19 18:35:26.572 xcodebuild[3803:372578] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-07-19 18:35:26.572 xcodebuild[3803:372578] [MT] IDETestOperationsObserverDebug: 4.545 sec, +4.545 sec -- end
+
+Test session results, code coverage, and logs:
+	/Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets/docs/test-runs/2026-07-19-sim-feature-lanes/L5/L5-kit-ios-widgets.xcresult
+
+** TEST SUCCEEDED ** [130.578 sec]
+
+Testing started

@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 import PersistenceKit
 import LancerCore
+import SessionFeature
 
 /// Workspaces launch screen — real repos derived from conversations +
 /// user-added paths; honest empty state when none exist.
@@ -173,10 +174,21 @@ public struct WorkspacesView: View {
         .animation(composerMorphSpring, value: isComposerPresented)
         .task {
             await workspaceData.refresh()
+            if #available(iOS 16.2, *) {
+                LancerLiveActivityManager.shared.syncRunningAgentsWidget()
+            }
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
-            Task { await workspaceData.refresh() }
+            Task {
+                await workspaceData.refresh()
+                // Push-to-start / APNs-updated Live Activities can exist while
+                // the app was closed — mirror them into AgentStatusWidget on
+                // every foreground without requiring Agents section polling.
+                if #available(iOS 16.2, *) {
+                    LancerLiveActivityManager.shared.syncRunningAgentsWidget()
+                }
+            }
         }
         .sheet(isPresented: $isProfilePresented) {
             ProfileView()
@@ -295,13 +307,24 @@ public struct WorkspacesView: View {
             case "attachmentPreview":
                 isAttachmentPreviewDirectPresented = true
             case "liveThread":
-                let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
-                    ?? "Can you take a look at the onboarding flow?"
-                let cwd = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_CWD"]
-                    ?? workspaceData.defaultRepo?.cwd
-                    ?? ""
-                guard !cwd.isEmpty else { break }
-                activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: cwd)
+                Task {
+                    // Match `terminal`: hydrate + auto-pair can take >20s; opening
+                    // the thread immediately raced `waitForConnectedMachine`'s
+                    // empty-fleet fail-fast (L1 serial 2026-07-19).
+                    var connected = relayFleetStore.firstConnectedMachine
+                    let deadline = Date().addingTimeInterval(45)
+                    while connected == nil, Date() < deadline {
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        connected = relayFleetStore.firstConnectedMachine
+                    }
+                    let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
+                        ?? "Can you take a look at the onboarding flow?"
+                    let cwd = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_CWD"]
+                        ?? workspaceData.defaultRepo?.cwd
+                        ?? ""
+                    guard !cwd.isEmpty else { return }
+                    activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: cwd)
+                }
             case "search":
                 isSearchPresented = true
             case "terminal":
