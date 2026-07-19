@@ -1,0 +1,345 @@
+warning: 'grdb.swift': /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets/Packages/LancerKit/.build/checkouts/GRDB.swift/Package.swift:40:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+38 |         .macOS(.v10_13),
+39 |         .tvOS(.v11),
+40 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+41 |     ],
+42 |     products: [
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+warning: 'bigint': /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets/Packages/LancerKit/.build/checkouts/BigInt/Package.swift:18:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+16 |         .iOS(.v12),
+17 |         .tvOS(.v12),
+18 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+19 |         .macCatalyst(.v13),
+20 |         .visionOS(.v1),
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Building for debugging...
+[Computing dependencies]
+[Provisioning 1 / 99]
+[Constructing description]
+[Pre-planning 1 / 2442]
+[Planning 1 / 2442]
+[Planning 1391 / 2442]
+[Planning deferred tasks]
+[Constructing 293 / 5483]
+[Constructing 4478 / 5483]
+[Starting]
+[97 / 1267] SessionFeature
+[322 / 1267] CNIOWindows
+[429 / 1267] LancerKit_TerminalEngine
+[446 / 1267] swift-crypto_CCryptoBoringSSL
+[449 / 1267]
+[462 / 1279] SwiftASN1
+[470 / 1298] BigInt
+[471 / 1298] _NIOBase64
+[484 / 1298] CNIOWindows
+[490 / 1298] InternalCollectionsUtilities
+[503 / 1298] CCryptoBoringSSL
+[504 / 1306]
+[507 / 1306] CCryptoBoringSSL
+[508 / 1306] NIOConcurrencyHelpers
+[509 / 1306] CryptoBoringWrapper
+[516 / 1306] CCryptoBoringSSL
+[519 / 1306] NIOConcurrencyHelpers
+[528 / 1306] CCryptoBoringSSL
+[530 / 1306] CCryptoBoringSSL
+[539 / 1306] Atomics
+[544 / 1306] CCryptoBoringSSL
+[545 / 1306] BigInt
+[549 / 1306] BigInt
+[554 / 1306] CCryptoBoringSSL
+[556 / 1306] CCryptoBoringSSL
+[558 / 1306] CCryptoBoringSSL
+[565 / 1306] LancerCore
+[572 / 1306] CCryptoBoringSSL
+[574 / 1306] CCryptoBoringSSL
+[576 / 1306] CCryptoBoringSSL
+[577 / 1306] CCryptoBoringSSL
+[578 / 1306] CCryptoBoringSSL
+[587 / 1306] CCryptoBoringSSL
+[593 / 1306] CCryptoBoringSSL
+[601 / 1306] CCryptoBoringSSL
+[603 / 1306] CCryptoBoringSSL
+[604 / 1306] CCryptoBoringSSL
+[609 / 1306] CCryptoBoringSSL
+[611 / 1306] CCryptoBoringSSL
+[612 / 1306] CCryptoBoringSSL
+[614 / 1306] CCryptoBoringSSL
+[617 / 1306] CCryptoBoringSSL
+[619 / 1306] CCryptoBoringSSL
+[622 / 1306] CCryptoBoringSSL
+[623 / 1306] CCryptoBoringSSL
+[625 / 1306] CCryptoBoringSSL
+[626 / 1306] CCryptoBoringSSL
+[629 / 1306] CCryptoBoringSSL
+[634 / 1306] CCryptoBoringSSL
+[636 / 1306] CCryptoBoringSSL
+[637 / 1306] CCryptoBoringSSL
+[639 / 1306] CCryptoBoringSSL
+[641 / 1306] CCryptoBoringSSL
+[642 / 1306] CCryptoBoringSSL
+[645 / 1306] CCryptoBoringSSL
+[650 / 1306] CCryptoBoringSSL
+[656 / 1306] CCryptoBoringSSL
+[659 / 1306] CCryptoBoringSSL
+[667 / 1306] CCryptoBoringSSL
+[676 / 1306] CCryptoBoringSSL
+[678 / 1306] CCryptoBoringSSL
+[679 / 1306] CCryptoBoringSSL
+[681 / 1306] CCryptoBoringSSL
+[684 / 1306] CCryptoBoringSSL
+[690 / 1306] CCryptoBoringSSL
+[693 / 1306] CCryptoBoringSSL
+[696 / 1306] CCryptoBoringSSL
+[700 / 1306] CCryptoBoringSSL
+[701 / 1306] CCryptoBoringSSL
+[703 / 1306] CCryptoBoringSSL
+[704 / 1306] CCryptoBoringSSL
+[706 / 1306] CCryptoBoringSSL
+[707 / 1306] CCryptoBoringSSL
+[711 / 1306] CCryptoBoringSSL
+[713 / 1306] CCryptoBoringSSL
+[714 / 1306] CCryptoBoringSSL
+[718 / 1306] CCryptoBoringSSL
+[719 / 1306] CCryptoBoringSSL
+[720 / 1306] CCryptoBoringSSL
+[721 / 1306] CCryptoBoringSSL
+[723 / 1306] CCryptoBoringSSL
+[731 / 1306] CCryptoBoringSSL
+[738 / 1306] CCryptoBoringSSL
+[739 / 1306] CCryptoBoringSSL
+[742 / 1306] CCryptoBoringSSL
+[745 / 1306] CCryptoBoringSSL
+[746 / 1306] CCryptoBoringSSL
+[749 / 1306] CCryptoBoringSSL
+[750 / 1306] CCryptoBoringSSL
+[755 / 1306] CCryptoBoringSSL
+[757 / 1306] CCryptoBoringSSL
+[761 / 1306] CCryptoBoringSSL
+[767 / 1306] CCryptoBoringSSL
+[773 / 1306] CCryptoBoringSSL
+[774 / 1306] CCryptoBoringSSL
+[775 / 1306] CCryptoBoringSSL
+[778 / 1306] CCryptoBoringSSL
+[781 / 1306] CCryptoBoringSSL
+[782 / 1306] CCryptoBoringSSL
+[784 / 1306] CCryptoBoringSSL
+[789 / 1306] CCryptoBoringSSL
+[790 / 1306] CCryptoBoringSSL
+[791 / 1306] CCryptoBoringSSL
+[792 / 1306] CCryptoBoringSSL
+[793 / 1306] CCryptoBoringSSL
+[794 / 1306] CCryptoBoringSSL
+[796 / 1306] CCryptoBoringSSL
+[798 / 1306] CCryptoBoringSSL
+[801 / 1306] CCryptoBoringSSL
+[803 / 1306] CCryptoBoringSSL
+[804 / 1306] CCryptoBoringSSL
+[805 / 1306] CCryptoBoringSSL
+[806 / 1306] CCryptoBoringSSL
+[808 / 1306] CCryptoBoringSSL
+[810 / 1306] CCryptoBoringSSL
+[813 / 1306] CCryptoBoringSSL
+[814 / 1306] CCryptoBoringSSL
+[815 / 1306] CCryptoBoringSSL
+[816 / 1306] CCryptoBoringSSL
+[818 / 1306] CCryptoBoringSSL
+[819 / 1306] CCryptoBoringSSL
+[821 / 1306] CCryptoBoringSSL
+[823 / 1306] CCryptoBoringSSL
+[824 / 1306] CCryptoBoringSSL
+[825 / 1306] CCryptoBoringSSL
+[826 / 1306] CCryptoBoringSSL
+[828 / 1306] CCryptoBoringSSL
+[831 / 1306] CCryptoBoringSSL
+[835 / 1306] CCryptoBoringSSL
+[837 / 1306] CCryptoBoringSSL
+[838 / 1306] CCryptoBoringSSL
+[846 / 1306] CCryptoBoringSSL
+[850 / 1306] CCryptoBoringSSL
+[851 / 1306] CCryptoBoringSSL
+[852 / 1306] CCryptoBoringSSL
+[857 / 1306] CCryptoBoringSSL
+[861 / 1306] CCryptoBoringSSL
+[863 / 1306] CCryptoBoringSSL
+[865 / 1306] CCryptoBoringSSL
+[868 / 1306] CCryptoBoringSSL
+[871 / 1306] CCryptoBoringSSL
+[875 / 1306] CCryptoBoringSSL
+[880 / 1306] CCryptoBoringSSL
+[885 / 1306] CCryptoBoringSSL
+[894 / 1306] CCryptoBoringSSL
+[897 / 1306] CCryptoBoringSSL
+[898 / 1306] CCryptoBoringSSL
+[900 / 1306] CCryptoBoringSSL
+[902 / 1306] CCryptoBoringSSL
+[904 / 1306] CCryptoBoringSSL
+[905 / 1306] CCryptoBoringSSL
+[906 / 1306] CCryptoBoringSSL
+[910 / 1306] CCryptoBoringSSL
+[911 / 1306] CCryptoBoringSSL
+[918 / 1306]
+[929 / 1306] SwiftASN1-product
+[930 / 1306] SwiftASN1-product
+[937 / 1306] _AtomicsShims
+[944 / 1306] LancerCore
+[950 / 1306] _CryptoExtras
+[968 / 1308] CCitadelBcrypt
+[977 / 1321]
+[982 / 1333] CNIOAtomics
+[990 / 1333] LancerCore
+[999 / 1335]
+[1005 / 1336]
+[1018 / 1336] NotificationsKit
+[1023 / 1338] ContainersPreview
+[1026 / 1338]
+[1050 / 1338]
+[1060 / 1338]
+[1065 / 1339] DequeModule
+[1069 / 1340] CNIODarwin
+[1077 / 1340] DequeModule
+[1079 / 1341] HostControlKitTests-product
+[1081 / 1343] HostControlKitTests-product
+[1095 / 1354] NIOCore
+[1096 / 1354] NIOCore
+[1098 / 1354] NIOCore
+[1099 / 1354] NIOCore
+[1101 / 1354] HostControlKitTests-product
+[1103 / 1354] NIOCore
+[1103 / 1354] CCryptoBoringSSL
+[1104 / 1354] CCryptoBoringSSL
+[1105 / 1354] CCryptoBoringSSLShims
+[1107 / 1354] NIOCore
+[1117 / 1357] NIOEmbedded
+[1124 / 1364] NIOFoundationEssentialsCompat
+[1130 / 1364] NIOPosix
+[1136 / 1379] NIOEmbedded
+[1146 / 1379] NIOPosix
+[1149 / 1379] NIOPosix
+[1150 / 1379] NIOPosix
+[1151 / 1379] NIOPosix
+[1152 / 1379] NIOFoundationEssentialsCompat
+[1153 / 1379] NIOPosix
+[1160 / 1380] NIO
+[1162 / 1382] NIO
+[1170 / 1383] NIOPosix
+[1174 / 1387] NIOFoundationCompat
+[1175 / 1387] NIOFoundationCompat
+[1185 / 1388] NIOCore
+[1187 / 1388] NIOSSH
+[1192 / 1404]
+[1202 / 1404] NIOSSH
+[1203 / 1404] NIOSSH
+[1210 / 1405] NIOSSH
+[1210 / 1405] Citadel
+[1217 / 1421] Citadel
+[1224 / 1421] Citadel
+[1227 / 1421] Citadel
+[1234 / 1422] Citadel
+[1242 / 1434] NIOPosix
+[1252 / 1434] NIOSSH
+[1253 / 1434] SecurityKit
+[1261 / 1436] SecurityKit
+[1261 / 1436] AccountKit
+[1271 / 1451] SSHTransport
+[1275 / 1451] SSHTransport
+[1278 / 1451] SSHTransport
+[1285 / 1451] SSHTransport
+[1294 / 1454] SecurityKit-product
+[1294 / 1454] SSHTransport
+[1294 / 1454] AccountKit
+[1296 / 1454] AccountKit
+[1297 / 1454] AgentKit
+[1304 / 1465] PreviewKit
+[1307 / 1478] TerminalEngine
+[1308 / 1478] TerminalEngine
+[1310 / 1478] TerminalEngine
+[1313 / 1478] PreviewKit
+[1320 / 1478] AgentKit
+[1327 / 1478] PreviewKit
+[1337 / 1478] TerminalEngine-product
+[1339 / 1478] TerminalEngine
+[1341 / 1478] AccountKit-product
+[1343 / 1479] PreviewKit
+[1346 / 1479] AgentKit
+[1350 / 1479] TerminalEngine
+[1352 / 1479] TerminalEngine-product
+[1363 / 1490] PersistenceKit
+[1374 / 1495]
+[1383 / 1500] WorkspacesFeature
+[1403 / 1503] PersistenceKit
+[1412 / 1503] PersistenceKit-product
+[1412 / 1503] SyncKit
+[1422 / 1519] SessionFeature
+[1425 / 1530] SessionFeature
+[1441 / 1530] SessionFeature
+[1446 / 1530] IntentsKit
+[1448 / 1530] IntentsKit
+[1464 / 1531] SessionFeature
+[1470 / 1535] SyncKit-product
+[1493 / 1537] IntentsKitTests-product
+[1494 / 1537] SettingsFeature-product
+[1494 / 1537] IntentsKitTests-product
+[1504 / 1548] IntentsKitTests-product
+[1504 / 1559] IntentsKitTests-product
+[1507 / 1559] AppFeature
+[1509 / 1559] IntentsKitTests-product
+[1511 / 1559] IntentsKitTests-product
+[1516 / 1559] IntentsKitTests-product
+[1519 / 1559] AppFeature
+[1521 / 1559] AppFeature
+[1523 / 1559] AppFeature
+[1531 / 1559] AppFeature
+[1532 / 1559] AppFeature
+[1533 / 1559] IntentsKitTests-product
+[1535 / 1559] AppFeature
+[1548 / 1560]
+[1549 / 1560] AppFeature-product
+[1549 / 1560] LancerKitTests-product
+[1560 / 1571] LancerKitTests-product
+[1565 / 1571] LancerKitTests-product
+[1567 / 1571] LancerKitTests-product
+[1568 / 1571] LancerKitTests-product
+[1569 / 1571] LancerKitTests-product
+Build complete! (88.55 secs.)
+◇ Test run started.
+↳ Testing Library Version: 2073
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "RunningAgentsMapping" started.
+◇ Suite "RunningAgentsFreshness" started.
+◇ Suite "ApprovalRepository stale pending TTL" started.
+◇ Test "displayTitle falls back to cwd basename" started.
+◇ Test "rows drop historical and sort running first" started.
+◇ Test "resolvedRunningCount takes max of status total and running rows" started.
+◇ Test "No agents running only from fresh success with zero rows" started.
+◇ Test "poll interval is ~5s" started.
+◇ Test "totalRunningCount sums vendor runningCount" started.
+◇ Test "widgetLines prefer running rows then status fallback" started.
+◇ Test "providerLabel maps known vendors" started.
+◇ Test "two consecutive failures yield degraded unreachable copy" started.
+◇ Test "row older than TTL is marked expired; fresh row survives" started.
+◇ Test "one pre-first-success failure stays neutral (nil statusMessage)" started.
+◇ Test "stale/unreachable surfaces data age — never all-clear" started.
+◇ Test "recovery clears degraded and allows all-clear again" started.
+◇ Test "already-decided rows are not flipped by the TTL sweep" started.
+✔ Test "widgetLines prefer running rows then status fallback" passed after 0.001 seconds.
+✔ Test "displayTitle falls back to cwd basename" passed after 0.001 seconds.
+✔ Test "totalRunningCount sums vendor runningCount" passed after 0.001 seconds.
+✔ Test "providerLabel maps known vendors" passed after 0.001 seconds.
+✔ Test "No agents running only from fresh success with zero rows" passed after 0.001 seconds.
+✔ Test "resolvedRunningCount takes max of status total and running rows" passed after 0.001 seconds.
+✔ Test "rows drop historical and sort running first" passed after 0.001 seconds.
+✔ Test "poll interval is ~5s" passed after 0.001 seconds.
+✔ Test "two consecutive failures yield degraded unreachable copy" passed after 0.001 seconds.
+✔ Test "recovery clears degraded and allows all-clear again" passed after 0.001 seconds.
+✔ Test "stale/unreachable surfaces data age — never all-clear" passed after 0.001 seconds.
+✔ Test "one pre-first-success failure stays neutral (nil statusMessage)" passed after 0.001 seconds.
+✔ Suite "RunningAgentsMapping" passed after 0.001 seconds.
+✔ Suite "RunningAgentsFreshness" passed after 0.001 seconds.
+✔ Test "already-decided rows are not flipped by the TTL sweep" passed after 0.016 seconds.
+✔ Test "row older than TTL is marked expired; fresh row survives" passed after 0.016 seconds.
+✔ Suite "ApprovalRepository stale pending TTL" passed after 0.016 seconds.
+✔ Test run with 14 tests in 3 suites passed after 0.016 seconds.

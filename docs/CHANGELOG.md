@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 18:40 Cursor Grok 4.5 — L5 PendingApprovals writer arrive/resolve: root cause was test fixtures using 1970 `createdAt` that `expireStalePending` (10m TTL) immediately retired; use wall-clock ages inside TTL. Tip = #187 aesthetics + #193 L1 cherry-pick. Simurgh `lease-246` re-proof PASS (iOS 12/12 widget suites + macOS 14 + app/widgets build). L5 → PASS (branch `fix/l5-pending-approvals-writer-test`)
 - 18:25 Cursor Grok 4.5 — L1 core-loop reply path: honor `LANCER_SKIP_NOTIFICATION_PROMPT`, auto-pair before hydrate mark, wait for connected on `liveThread`/empty-fleet+pair-code, skip duplicate auto-pair; sim re-proof PASS (assistant PONG) with isolated `LANCER_STATE_DIR`; push-backend 401 documented env-only (branch `fix/l1-reply-path`)
 - 14:45 Claude Fable (orchestrator) — APNs provider-JWT cache (~40 min reuse) in push-backend makeJWT: per-push re-minting tripped Apple's 429 TooManyProviderTokenUpdates on Live Activity push-to-start (live-hit during today's LA debugging); deployed to conduit-push (fix/apns-jwt-cache)
 - 14:25 Claude Fable (orchestrator) — LA push-to-start unblocked: sendLiveActivityPush now falls back to sandbox APNs on 400 BadDeviceToken (mirrors sendAPNsAlert; dev-signed builds have sandbox tokens) + logs the APNs reason. Deployed to conduit-push.fly.dev and LIVE-PROVEN: closed-app dispatch -> Apple accepted push-to-start -> Live Activity appeared on owner's locked phone (fix/la-apns-sandbox-fallback)
