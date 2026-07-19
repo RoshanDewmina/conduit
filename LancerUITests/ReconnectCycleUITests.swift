@@ -22,6 +22,7 @@ final class ReconnectCycleUITests: XCTestCase {
     func testTenConsecutiveReconnectFirstSendCycles() throws {
         let app = XCUIApplication()
         app.launchEnvironment["LANCER_SKIP_CURSOR_ONBOARDING"] = "1"
+        app.launchEnvironment["LANCER_SKIP_NOTIFICATION_PROMPT"] = "1"
         app.launchArguments += ["-onboardingSeen", "YES"]
 
         for cycle in 1...10 {

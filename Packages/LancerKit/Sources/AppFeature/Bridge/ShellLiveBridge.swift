@@ -1404,16 +1404,28 @@ public final class ShellLiveBridge {
     /// a 2026-07-16 daily-use audit measured auto-pair completion at ~21s from
     /// launch under the same conditions, so the previous 8s default raced the
     /// first send and surfaced a spurious "No connected machine" even though
-    /// the pair finished moments later. Skips the wait entirely when no
-    /// machine is paired at all, so the true no-host path still fails fast
-    /// instead of stalling for `timeout`.
+    /// the pair finished moments later.
+    ///
+    /// Fail-fast only when the fleet is empty **and** no DEBUG auto-pair code
+    /// is pending — otherwise an empty index + `LANCER_RELAY_PAIR_CODE` used to
+    /// return nil immediately before `DebugSeeder.autoPairRelayIfRequested`
+    /// could add the machine (L1 serial 2026-07-19: "Couldn't get a reply" /
+    /// "No connected machine" under the notification sheet).
     private func waitForConnectedMachine(timeout: TimeInterval = 30) async -> RelayFleetStore.Machine? {
         let deadline = Date().addingTimeInterval(timeout)
         while !isHydrated, Date() < deadline {
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
         if let machine = relayFleetStore.firstConnectedMachine { return machine }
-        guard !relayFleetStore.machines.isEmpty else { return nil }
+        let expectingAutoPair: Bool = {
+            #if DEBUG
+            let code = ProcessInfo.processInfo.environment["LANCER_RELAY_PAIR_CODE"]
+            return code?.count == 6
+            #else
+            return false
+            #endif
+        }()
+        guard !relayFleetStore.machines.isEmpty || expectingAutoPair else { return nil }
         while Date() < deadline {
             try? await Task.sleep(nanoseconds: 300_000_000)
             if let machine = relayFleetStore.firstConnectedMachine { return machine }
