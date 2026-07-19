@@ -458,6 +458,7 @@ public final class LancerLiveActivityManager {
             return .init(
                 agentName: state.agentName,
                 hostName: activity.attributes.hostName,
+                hostID: activity.attributes.hostID,
                 status: state.status,
                 isStreaming: state.isStreaming
             )

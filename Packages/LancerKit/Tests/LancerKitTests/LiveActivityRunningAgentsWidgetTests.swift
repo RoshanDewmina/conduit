@@ -77,5 +77,43 @@ struct LiveActivityRunningAgentsWidgetTests {
             ]) == 2
         )
     }
+
+    @Test("duplicate ActivityKit rows for one run collapse to count 1")
+    func dedupesSameAgentHost() {
+        let inputs: [LiveActivityRunningAgentsWidget.SnapshotInput] = [
+            .init(
+                agentName: "claudeCode",
+                hostName: "Roshans-MacBook-Air.local",
+                hostID: "host-1",
+                status: "running",
+                isStreaming: false
+            ),
+            .init(
+                agentName: "Claude Code",
+                hostName: "Roshans-MacBook-Air.local",
+                hostID: "host-1",
+                status: "running",
+                isStreaming: true
+            ),
+        ]
+        #expect(LiveActivityRunningAgentsWidget.resolvedCount(from: inputs) == 1)
+        #expect(
+            LiveActivityRunningAgentsWidget.widgetLines(from: inputs)
+                == ["Claude Code · Roshans-MacBook-Air.local"]
+        )
+    }
+
+    @Test("same agent on distinct hosts stays as two agents")
+    func distinctHostsStaySeparate() {
+        let inputs: [LiveActivityRunningAgentsWidget.SnapshotInput] = [
+            .init(agentName: "claudeCode", hostName: "HostA", hostID: "a", status: "running", isStreaming: false),
+            .init(agentName: "claudeCode", hostName: "HostB", hostID: "b", status: "running", isStreaming: false),
+        ]
+        #expect(LiveActivityRunningAgentsWidget.resolvedCount(from: inputs) == 2)
+        #expect(LiveActivityRunningAgentsWidget.widgetLines(from: inputs) == [
+            "Claude Code · HostA",
+            "Claude Code · HostB",
+        ])
+    }
 }
 #endif

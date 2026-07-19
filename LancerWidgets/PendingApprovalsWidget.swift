@@ -9,6 +9,17 @@ import LancerCore
 // `ApprovalRelay.enqueue` (a decision resolves one), and calls
 // `WidgetCenter.shared.reloadTimelines(ofKind: "PendingApprovalsWidget")` —
 // the `kind` string below MUST stay in sync with that literal.
+//
+// Palette mirrors `LancerLiveActivityWidget` / `AgentStatusWidget`: orange for
+// waiting, green for clear — same meanings as the island approval glyph.
+
+private enum PendingApprovalsPalette {
+    static let background = Color.black
+    static let accent = Color.orange
+    static let clear = Color.green.opacity(0.85)
+    static let primaryText = Color.white
+    static let secondaryText = Color(white: 0.65)
+}
 
 struct PendingApprovalsEntry: TimelineEntry {
     let date: Date
@@ -57,28 +68,31 @@ struct PendingApprovalsProvider: TimelineProvider {
 struct PendingApprovalsWidgetView: View {
     let entry: PendingApprovalsEntry
 
+    private var isWaiting: Bool { entry.count > 0 }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: entry.count > 0 ? "exclamationmark.shield.fill" : "checkmark.shield.fill")
+            Image(systemName: isWaiting ? "exclamationmark.shield.fill" : "checkmark.shield.fill")
                 .font(.title2)
-                .foregroundStyle(entry.count > 0 ? Color.orange : Color.green.opacity(0.8))
+                .foregroundStyle(isWaiting ? PendingApprovalsPalette.accent : PendingApprovalsPalette.clear)
             Spacer(minLength: 0)
             Text("\(entry.count)")
                 .font(.system(.title, design: .rounded).weight(.bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(PendingApprovalsPalette.primaryText)
             Text(entry.count == 1 ? "approval waiting" : "approvals waiting")
                 .font(.caption2)
-                .foregroundStyle(Color(white: 0.65))
+                .foregroundStyle(PendingApprovalsPalette.secondaryText)
             if let summary = entry.newestSummary {
                 Text(summary)
-                    .font(.caption2)
-                    .foregroundStyle(Color.orange)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(PendingApprovalsPalette.accent)
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(12)
-        .containerBackground(.black, for: .widget)
+        .containerBackground(PendingApprovalsPalette.background, for: .widget)
         .widgetURL(URL(string: "lancer://open"))
         .accessibilityElement(children: .combine)
     }

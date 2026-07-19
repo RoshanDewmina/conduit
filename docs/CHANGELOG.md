@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 16:35 Cursor Grok 4.5 — Siri sim dogfood on Simurgh `lease-229` + Agents widget aesthetics: dedupe ActivityKit duplicate runs (count/lines), polish Agents/Pending Approvals widgets to match island palette; sim results in `docs/test-runs/2026-07-19-siri-sim-dogfood/` (live `intent.run()` Code=800 on sim; discovery + no-Approve metadata PASS) (fix/siri-sim-and-aesthetics)
 - 16:05 Cursor Grok 4.5 — Agents widget still 0 while Dynamic Island showed Running: prior fix only wrote from RunningAgentsSection poll; LA (esp. push-to-start `claudeCode`) never fed App Group keys. Sync AgentStatusWidget from ActivityKit at LA start/update/end + launch/foreground + activityUpdates/1.5s deferred re-sync; empty daemon poll must not clobber a live island (fix/widget-stale-approvals)
 - 15:45 Cursor Composer — Siri/Shortcuts phrase dogfood on device: add `LancerShortcutsPhraseLiveExecutionTests` (AppIntentsTesting phrases 1–9 + negative Approve) and results write-up `docs/test-runs/2026-07-19-siri-shortcuts-phrase-dogfood.md` (test/siri-shortcuts-phrase-dogfood-2026-07-19)
 - 15:15 Cursor Grok 4.5 — fix Agents Home Screen widget stuck at 0: was keying off Live Activity session `connected`, not daemon running agents; write count/lines from RunningAgentsSection poll into dedicated WidgetSnapshot keys (fix/widget-stale-approvals)
