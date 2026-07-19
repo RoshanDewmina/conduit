@@ -124,10 +124,15 @@ public enum BackgroundTasksPresentation: Sendable {
     }
 
     /// Collect chip rows + start times from assembled transcript items and events.
+    ///
+    /// When `turnIsTerminal` is true, WT-B forces every still-`.running` chip
+    /// (including relay-mirrored artifacts that never received a done/failed
+    /// status update) to `.done` so the pill cannot stick after the turn exits.
     public static func rows(
         items: [TurnTranscriptItem],
         events: [ChatEvent],
-        artifacts: [ChatArtifact] = []
+        artifacts: [ChatArtifact] = [],
+        turnIsTerminal: Bool = false
     ) -> [TaskRow] {
         var chips: [ToolChipItem] = []
         for item in items {
@@ -156,7 +161,11 @@ public enum BackgroundTasksPresentation: Sendable {
         for chip in chips {
             byToolUseId[chip.toolUseId] = chip
         }
-        return rows(from: Array(byToolUseId.values), startedAtByToolUseId: startedAt)
+        let resolved = ToolChipGrouping.withTerminalTurnStatus(
+            Array(byToolUseId.values),
+            turnIsTerminal: turnIsTerminal
+        )
+        return rows(from: resolved, startedAtByToolUseId: startedAt)
     }
 
     // MARK: - Private
