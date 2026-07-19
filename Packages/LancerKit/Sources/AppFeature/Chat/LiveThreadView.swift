@@ -563,21 +563,15 @@ public struct LiveThreadView: View {
     private var backgroundTaskRows: [BackgroundTasksPresentation.TaskRow] {
         var rows: [BackgroundTasksPresentation.TaskRow] = []
         for turn in bridge.transcriptTurns {
-            let eventItems = transcriptItems(for: turn)
-            // WT-B: a terminal turn cannot have running tasks — a tool_call
-            // whose result never landed must not spin the pill forever.
-            let terminalAdjusted: [TurnTranscriptItem] = eventItems.map { item in
-                guard case .toolChip(let chip) = item else { return item }
-                let forced = ToolChipGrouping.withTerminalTurnStatus(
-                    [chip], turnIsTerminal: turn.status != .running
-                )
-                return .toolChip(forced[0])
-            }
+            // WT-B: a terminal turn cannot have running tasks — tool_call events
+            // without a result *and* relay artifacts stuck at `.running` must
+            // not spin the pill forever after the turn exits.
             let artifacts = toolArtifactsByTurnID[turn.id] ?? []
             rows.append(contentsOf: BackgroundTasksPresentation.rows(
-                items: terminalAdjusted,
+                items: transcriptItems(for: turn),
                 events: eventsByTurnID[turn.id] ?? [],
-                artifacts: artifacts
+                artifacts: artifacts,
+                turnIsTerminal: turn.status != .running
             ))
         }
         var byID: [String: BackgroundTasksPresentation.TaskRow] = [:]
