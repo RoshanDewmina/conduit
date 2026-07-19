@@ -1,0 +1,214 @@
+warning: 'grdb.swift': /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/Packages/LancerKit/.build/checkouts/GRDB.swift/Package.swift:40:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+38 |         .macOS(.v10_13),
+39 |         .tvOS(.v11),
+40 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+41 |     ],
+42 |     products: [
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+warning: 'bigint': /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/Packages/LancerKit/.build/checkouts/BigInt/Package.swift:18:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+16 |         .iOS(.v12),
+17 |         .tvOS(.v12),
+18 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+19 |         .macCatalyst(.v13),
+20 |         .visionOS(.v1),
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Building for debugging...
+[Computing dependencies]
+[Constructing description]
+[Pre-planning 1 / 2442]
+[Planning 1881 / 2442]
+[Planning deferred tasks]
+[Writing build description]
+[1 / 5]
+[3 / 4] HostControlKitTests-product
+[3 / 8] _CryptoExtras
+[3 / 6] swift-nio_NIOPosix
+[11 / 22] GRDB
+[21 / 22] IntentsKitTests-product
+[31 / 32] LancerKitTests-product
+Build complete! (3.15 secs.)
+◇ Test run started.
+↳ Testing Library Version: 2073
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "SiriNavigationPayload" started.
+◇ Suite "SiriNavigationDispatch" started.
+◇ Test "unknown action raw value fails to construct" started.
+◇ Suite "SiriNavigationBuffer" started.
+◇ Test "malformed userInfo (missing action) fails to construct" started.
+◇ Test "post both records to the buffer and broadcasts the notification" started.
+◇ Test "search payload carries the query" started.
+◇ Test "payload round-trips through userInfo" started.
+◇ Test "drain empties the buffer" started.
+◇ Test "record then drain returns payloads in order" started.
+✔ Test "malformed userInfo (missing action) fails to construct" passed after 0.001 seconds.
+✔ Test "unknown action raw value fails to construct" passed after 0.001 seconds.
+✔ Test "search payload carries the query" passed after 0.001 seconds.
+✔ Test "payload round-trips through userInfo" passed after 0.001 seconds.
+✔ Test "record then drain returns payloads in order" passed after 0.001 seconds.
+✔ Test "drain empties the buffer" passed after 0.001 seconds.
+✔ Suite "SiriNavigationPayload" passed after 0.001 seconds.
+✔ Suite "SiriNavigationBuffer" passed after 0.001 seconds.
+✔ Test "post both records to the buffer and broadcasts the notification" passed after 0.001 seconds.
+✔ Suite "SiriNavigationDispatch" passed after 0.001 seconds.
+✔ Test run with 7 tests in 3 suites passed after 0.001 seconds.
+◇ Test run started.
+↳ Testing Library Version: 2073
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "SiriIndexedEntityQuery" started.
+◇ Suite "SiriSpotlightSupport" started.
+◇ Suite "RunEntityQuery.resolveActiveRun" started.
+◇ Suite "ConversationEntityQuery" started.
+◇ Suite "ApprovalEntityQuery.resolveMostRecentPending" started.
+◇ Suite "ApprovalEntityQuery" started.
+◇ Suite "SiriSyncableEntity" started.
+◇ Test "reindexEntities for empty identifier list is a no-op" started.
+◇ Suite "RunEntityQuery" started.
+◇ Suite "MachineEntityQuery" started.
+◇ Test "MachineEntityQuery conforms to IndexedEntityQuery on iOS/macOS 27+" started.
+◇ Suite "WorkspaceEntityQuery" started.
+◇ Suite "StartAgentRunPreparer" started.
+◇ Test "WorkspaceEntityQuery conforms to IndexedEntityQuery on iOS/macOS 27+" started.
+◇ Test "reindexAllEntities for conversations filters secrets before the index step" started.
+◇ Test "reindexAllEntities for runs filters secrets before the index step" started.
+◇ Test "ConversationEntityQuery conforms to IndexedEntityQuery on iOS/macOS 27+" started.
+◇ Test "safeEntities filters only the entities whose indexable text trips the heuristic" started.
+◇ Test "RunEntityQuery conforms to IndexedEntityQuery on iOS/macOS 27+" started.
+◇ Test "a run whose prompt embeds a secret is excluded from the indexable set" started.
+◇ Test "plain text is not flagged as forbidden" started.
+◇ Test "sole active run resolves without disambiguation" started.
+◇ Test "zero active runs resolves to .none" started.
+◇ Test "entity carries the Host row's UUID so deny audits under the real host" started.
+◇ Test "multiple active runs surface all candidates for disambiguation" started.
+◇ Test "an approval whose command embeds a secret is excluded from the indexable set" started.
+◇ Test "common secret shapes are flagged as forbidden" started.
+◇ Test "hostID stays nil when the approval matches no Host row" started.
+◇ Test "no pending approvals resolves to .none" started.
+◇ Test "single pending approval resolves directly" started.
+◇ Test "multiple pending approvals resolve to the newest one" started.
+◇ Test "exact ID resolves the conversation" started.
+◇ Test "fuzzy title matches command text" started.
+◇ Test "exact ID resolves the pending approval" started.
+◇ Test "ambiguous query returns multiple conversations" started.
+◇ Test "ambiguous query returns multiple pending approvals" started.
+◇ Test "empty store returns no approvals" started.
+◇ Test "empty store returns no conversations" started.
+◇ Test "fuzzy title matches FTS-backed conversation" started.
+◇ Test "RunEntity conforms to SyncableEntity on iOS/macOS 27+" started.
+◇ Test "RunEntity id exactly mirrors the run ID from the relay" started.
+◇ Test "ConversationEntity id is a non-empty stable UUID string" started.
+◇ Test "empty store returns no runs" started.
+◇ Test "ConversationEntity conforms to SyncableEntity on iOS/macOS 27+" started.
+◇ Test "fuzzy title matches run prompt" started.
+◇ Test "sshHost entity has nil relayMachineID" started.
+◇ Test "ambiguous query returns multiple machines" started.
+◇ Test "fuzzy match hits relay display name" started.
+◇ Test "ambiguous query returns multiple active runs" started.
+◇ Test "relay machines merge with SSH hosts" started.
+◇ Test "fuzzy title matches host name" started.
+◇ Test "exact ID resolves the active run" started.
+◇ Test "ambiguous query spans SSH hosts and relay machines" started.
+◇ Test case passing 1 argument text → "export API_KEY=sk-live-abc123" to "common secret shapes are flagged as forbidden" started.
+◇ Test "exact ID resolves the machine" started.
+◇ Test "empty store returns no machines" started.
+◇ Test "relay-prefixed ID resolves and round-trips relayMachineID" started.
+◇ Test "results sort most-recently-used first across machines" started.
+◇ Test "suggestions cap at 8" started.
+◇ Test "empty store returns no workspaces" started.
+◇ Test "exact ID resolves the workspace" started.
+◇ Test case passing 1 argument text → "curl -H "Authorization: Bearer eyJhbGciOi"" to "common secret shapes are flagged as forbidden" started.
+◇ Test "fuzzy match hits name and path" started.
+◇ Test "workspaces on unpaired machines are invisible" started.
+◇ Test "fails closed when relay machine is stale and bridge is inactive" started.
+◇ Test case passing 1 argument text → "set the password to hunter2" to "common secret shapes are flagged as forbidden" started.
+◇ Test "reports workspace-not-found when explicit workspace id is stale" started.
+◇ Test "empty prompt asks for one instead of dispatching" started.
+◇ Test case passing 1 argument text → "here is my ssh-rsa AAAAB3NzaC1yc2E..." to "common secret shapes are flagged as forbidden" started.
+◇ Test "no paired machines fails closed with pairing guidance" started.
+◇ Test "sshHost machine (nil relay ID) is rejected with relay guidance" started.
+◇ Test "happy path resolves relay machine, workspace, and prompt" started.
+◇ Test case passing 1 argument text → "-----BEGIN PRIVATE KEY-----" to "common secret shapes are flagged as forbidden" started.
+◇ Test case passing 1 argument text → "rotate the apikey before shipping" to "common secret shapes are flagged as forbidden" started.
+◇ Test "connectivity label: online within 10 minutes, stale after, offline when never seen" started.
+◇ Test "no explicit workspace falls back to the machine's MRU workspace" started.
+◇ Test "rejects a workspace that belongs to a different machine" started.
+◇ Test "active bridge overrides stale lastConnectedAt and falls back to recent conversation cwd" started.
+◇ Test "no workspace and no conversation history asks to pick a folder" started.
+✔ Test "MachineEntityQuery conforms to IndexedEntityQuery on iOS/macOS 27+" passed after 0.034 seconds.
+✔ Test "WorkspaceEntityQuery conforms to IndexedEntityQuery on iOS/macOS 27+" passed after 0.034 seconds.
+✔ Test "RunEntityQuery conforms to IndexedEntityQuery on iOS/macOS 27+" passed after 0.036 seconds.
+✔ Test "ConversationEntityQuery conforms to IndexedEntityQuery on iOS/macOS 27+" passed after 0.037 seconds.
+✔ Test "safeEntities filters only the entities whose indexable text trips the heuristic" passed after 0.037 seconds.
+✔ Test "plain text is not flagged as forbidden" passed after 0.040 seconds.
+✔ Test "zero active runs resolves to .none" passed after 0.044 seconds.
+✔ Test "common secret shapes are flagged as forbidden" with 6 test cases passed after 0.060 seconds.
+✔ Test "reindexEntities for empty identifier list is a no-op" passed after 0.078 seconds.
+✔ Test "empty store returns no runs" passed after 0.098 seconds.
+✔ Test "connectivity label: online within 10 minutes, stale after, offline when never seen" passed after 0.075 seconds.
+✔ Test "empty store returns no workspaces" passed after 0.078 seconds.
+✔ Test "fails closed when relay machine is stale and bridge is inactive" passed after 0.078 seconds.
+✔ Test "sole active run resolves without disambiguation" passed after 0.099 seconds.
+✔ Test "no pending approvals resolves to .none" passed after 0.099 seconds.
+✔ Test "sshHost machine (nil relay ID) is rejected with relay guidance" passed after 0.075 seconds.
+✔ Test "empty prompt asks for one instead of dispatching" passed after 0.078 seconds.
+✔ Test "no paired machines fails closed with pairing guidance" passed after 0.075 seconds.
+✔ Test "ConversationEntity id is a non-empty stable UUID string" passed after 0.099 seconds.
+✔ Test "exact ID resolves the active run" passed after 0.079 seconds.
+✔ Test "relay-prefixed ID resolves and round-trips relayMachineID" passed after 0.078 seconds.
+✔ Test "reports workspace-not-found when explicit workspace id is stale" passed after 0.078 seconds.
+✔ Test "ConversationEntity conforms to SyncableEntity on iOS/macOS 27+" passed after 0.099 seconds.
+✔ Test "exact ID resolves the conversation" passed after 0.099 seconds.
+✔ Test "fuzzy match hits relay display name" passed after 0.080 seconds.
+✔ Test "multiple active runs surface all candidates for disambiguation" passed after 0.101 seconds.
+✔ Test "exact ID resolves the workspace" passed after 0.080 seconds.
+✔ Test "fuzzy title matches FTS-backed conversation" passed after 0.100 seconds.
+✔ Test "fuzzy title matches host name" passed after 0.080 seconds.
+✔ Test "relay machines merge with SSH hosts" passed after 0.080 seconds.
+✔ Test "empty store returns no approvals" passed after 0.101 seconds.
+✔ Test "rejects a workspace that belongs to a different machine" passed after 0.076 seconds.
+✔ Test "exact ID resolves the machine" passed after 0.080 seconds.
+✔ Test "ambiguous query returns multiple conversations" passed after 0.101 seconds.
+✔ Test "happy path resolves relay machine, workspace, and prompt" passed after 0.077 seconds.
+✔ Test "empty store returns no conversations" passed after 0.101 seconds.
+✔ Suite "RunEntityQuery.resolveActiveRun" passed after 0.101 seconds.
+✔ Suite "ConversationEntityQuery" passed after 0.101 seconds.
+✔ Test "workspaces on unpaired machines are invisible" passed after 0.080 seconds.
+✔ Test "ambiguous query spans SSH hosts and relay machines" passed after 0.080 seconds.
+✔ Test "sshHost entity has nil relayMachineID" passed after 0.081 seconds.
+✔ Test "ambiguous query returns multiple machines" passed after 0.081 seconds.
+✔ Test "fuzzy match hits name and path" passed after 0.081 seconds.
+✔ Test "fuzzy title matches run prompt" passed after 0.101 seconds.
+✔ Test "reindexAllEntities for conversations filters secrets before the index step" passed after 0.102 seconds.
+✔ Test "RunEntity id exactly mirrors the run ID from the relay" passed after 0.101 seconds.
+✔ Test "RunEntity conforms to SyncableEntity on iOS/macOS 27+" passed after 0.101 seconds.
+✔ Suite "SiriSyncableEntity" passed after 0.102 seconds.
+✔ Test "hostID stays nil when the approval matches no Host row" passed after 0.103 seconds.
+✔ Test "suggestions cap at 8" passed after 0.082 seconds.
+✔ Test "entity carries the Host row's UUID so deny audits under the real host" passed after 0.103 seconds.
+✔ Test "empty store returns no machines" passed after 0.082 seconds.
+✔ Suite "MachineEntityQuery" passed after 0.103 seconds.
+✔ Test "a run whose prompt embeds a secret is excluded from the indexable set" passed after 0.103 seconds.
+✔ Test "no workspace and no conversation history asks to pick a folder" passed after 0.077 seconds.
+✔ Test "an approval whose command embeds a secret is excluded from the indexable set" passed after 0.104 seconds.
+✔ Suite "SiriSpotlightSupport" passed after 0.104 seconds.
+✔ Test "exact ID resolves the pending approval" passed after 0.104 seconds.
+✔ Test "multiple pending approvals resolve to the newest one" passed after 0.104 seconds.
+✔ Test "reindexAllEntities for runs filters secrets before the index step" passed after 0.104 seconds.
+✔ Suite "SiriIndexedEntityQuery" passed after 0.104 seconds.
+✔ Test "ambiguous query returns multiple pending approvals" passed after 0.104 seconds.
+✔ Test "ambiguous query returns multiple active runs" passed after 0.084 seconds.
+✔ Suite "RunEntityQuery" passed after 0.104 seconds.
+✔ Test "fuzzy title matches command text" passed after 0.104 seconds.
+✔ Test "single pending approval resolves directly" passed after 0.105 seconds.
+✔ Suite "ApprovalEntityQuery" passed after 0.105 seconds.
+✔ Suite "ApprovalEntityQuery.resolveMostRecentPending" passed after 0.105 seconds.
+✔ Test "active bridge overrides stale lastConnectedAt and falls back to recent conversation cwd" passed after 0.079 seconds.
+✔ Test "no explicit workspace falls back to the machine's MRU workspace" passed after 0.098 seconds.
+✔ Suite "StartAgentRunPreparer" passed after 0.122 seconds.
+✔ Test "results sort most-recently-used first across machines" passed after 0.101 seconds.
+✔ Suite "WorkspaceEntityQuery" passed after 0.122 seconds.
+✔ Test run with 62 tests in 11 suites passed after 0.123 seconds.
+EXIT:0

@@ -1,0 +1,615 @@
+Fetching https://github.com/Wellz26/swift-nio-ssh.git from cache
+Fetching https://github.com/migueldeicaza/SwiftTerm.git from cache
+Fetching https://github.com/groue/GRDB.swift.git from cache
+Fetching https://github.com/apple/swift-atomics.git from cache
+Fetching https://github.com/apple/swift-system.git from cache
+Fetching https://github.com/apple/swift-argument-parser from cache
+Fetching https://github.com/apple/swift-collections.git from cache
+Fetched https://github.com/apple/swift-system.git from cache (0.47s)
+Fetching https://github.com/orlandos-nl/Citadel.git from cache
+Fetched https://github.com/apple/swift-atomics.git from cache (0.57s)
+Fetched https://github.com/Wellz26/swift-nio-ssh.git from cache (0.57s)
+Fetching https://github.com/attaswift/BigInt.git from cache
+Fetching https://github.com/apple/swift-asn1.git from cache
+Fetched https://github.com/apple/swift-collections.git from cache (0.63s)
+Fetched https://github.com/apple/swift-argument-parser from cache (0.67s)
+Fetching https://github.com/apple/swift-crypto.git from cache
+Fetched https://github.com/migueldeicaza/SwiftTerm.git from cache (0.77s)
+Fetching https://github.com/apple/swift-log.git from cache
+Fetched https://github.com/orlandos-nl/Citadel.git from cache (0.38s)
+Fetching https://github.com/getsentry/sentry-cocoa from cache
+Fetched https://github.com/groue/GRDB.swift.git from cache (1.01s)
+Fetched https://github.com/attaswift/BigInt.git from cache (0.44s)
+Fetching https://github.com/apple/swift-nio.git from cache
+Fetched https://github.com/apple/swift-asn1.git from cache (0.52s)
+Fetched https://github.com/apple/swift-log.git from cache (0.43s)
+Fetched https://github.com/apple/swift-crypto.git from cache (1.04s)
+warning: 'swift-nio': skipping cache due to an error: The file “maintenance.lock” doesn’t exist.
+warning: 'sentry-cocoa': skipping cache due to an error: The file “maintenance.lock” doesn’t exist.
+[1/84598] Fetching swift-nio
+[35533/326405] Fetching swift-nio, sentry-cocoa
+Fetched https://github.com/apple/swift-nio.git (5.93s)
+Computing version for https://github.com/migueldeicaza/SwiftTerm.git
+[229717/241807] Fetching sentry-cocoa
+Computed https://github.com/migueldeicaza/SwiftTerm.git at 1.13.0 (8.45s)
+Computing version for https://github.com/apple/swift-nio.git
+Computed https://github.com/apple/swift-nio.git at 2.101.2 (1.15s)
+Computing version for https://github.com/Wellz26/swift-nio-ssh.git
+Computed https://github.com/Wellz26/swift-nio-ssh.git at 0.3.6 (0.64s)
+Computing version for https://github.com/orlandos-nl/Citadel.git
+Computed https://github.com/orlandos-nl/Citadel.git at 0.12.1 (0.68s)
+Computing version for https://github.com/groue/GRDB.swift.git
+warning: 'grdb.swift': /Package.swift:40:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+38 |         .macOS(.v10_13),
+39 |         .tvOS(.v11),
+40 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+41 |     ],
+42 |     products: [
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Computed https://github.com/groue/GRDB.swift.git at 6.29.3 (0.88s)
+Computing version for https://github.com/apple/swift-argument-parser
+Fetched https://github.com/getsentry/sentry-cocoa (10.89s)
+Computed https://github.com/apple/swift-argument-parser at 1.8.2 (0.62s)
+Computing version for https://github.com/apple/swift-system.git
+Computed https://github.com/apple/swift-system.git at 1.7.2 (0.66s)
+Computing version for https://github.com/apple/swift-collections.git
+Computed https://github.com/apple/swift-collections.git at 1.6.0 (0.77s)
+Computing version for https://github.com/apple/swift-atomics.git
+Computed https://github.com/apple/swift-atomics.git at 1.3.1 (0.63s)
+Computing version for https://github.com/apple/swift-crypto.git
+Computed https://github.com/apple/swift-crypto.git at 3.15.1 (0.83s)
+Computing version for https://github.com/attaswift/BigInt.git
+warning: 'bigint': /Package.swift:18:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+16 |         .iOS(.v12),
+17 |         .tvOS(.v12),
+18 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+19 |         .macCatalyst(.v13),
+20 |         .visionOS(.v1),
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Computed https://github.com/attaswift/BigInt.git at 5.7.0 (0.54s)
+Computing version for https://github.com/apple/swift-log.git
+Computed https://github.com/apple/swift-log.git at 1.14.0 (0.57s)
+Computing version for https://github.com/apple/swift-asn1.git
+Computed https://github.com/apple/swift-asn1.git at 1.7.1 (0.75s)
+Creating working copy for https://github.com/attaswift/BigInt.git
+Working copy of https://github.com/attaswift/BigInt.git resolved at 5.7.0
+Creating working copy for https://github.com/apple/swift-crypto.git
+Working copy of https://github.com/apple/swift-crypto.git resolved at 3.15.1
+Creating working copy for https://github.com/apple/swift-asn1.git
+Working copy of https://github.com/apple/swift-asn1.git resolved at 1.7.1
+Creating working copy for https://github.com/migueldeicaza/SwiftTerm.git
+Working copy of https://github.com/migueldeicaza/SwiftTerm.git resolved at 1.13.0
+Creating working copy for https://github.com/apple/swift-nio.git
+Working copy of https://github.com/apple/swift-nio.git resolved at 2.101.2
+Creating working copy for https://github.com/groue/GRDB.swift.git
+Working copy of https://github.com/groue/GRDB.swift.git resolved at 6.29.3
+Creating working copy for https://github.com/apple/swift-argument-parser
+Working copy of https://github.com/apple/swift-argument-parser resolved at 1.8.2
+Creating working copy for https://github.com/apple/swift-atomics.git
+Working copy of https://github.com/apple/swift-atomics.git resolved at 1.3.1
+Creating working copy for https://github.com/apple/swift-system.git
+Working copy of https://github.com/apple/swift-system.git resolved at 1.7.2
+Creating working copy for https://github.com/apple/swift-collections.git
+Working copy of https://github.com/apple/swift-collections.git resolved at 1.6.0
+Creating working copy for https://github.com/Wellz26/swift-nio-ssh.git
+Working copy of https://github.com/Wellz26/swift-nio-ssh.git resolved at 0.3.6
+Creating working copy for https://github.com/orlandos-nl/Citadel.git
+Working copy of https://github.com/orlandos-nl/Citadel.git resolved at 0.12.1
+Creating working copy for https://github.com/apple/swift-log.git
+Working copy of https://github.com/apple/swift-log.git resolved at 1.14.0
+warning: 'grdb.swift': /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/Packages/LancerKit/.build/checkouts/GRDB.swift/Package.swift:40:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+38 |         .macOS(.v10_13),
+39 |         .tvOS(.v11),
+40 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+41 |     ],
+42 |     products: [
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+warning: 'bigint': /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/Packages/LancerKit/.build/checkouts/BigInt/Package.swift:18:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+16 |         .iOS(.v12),
+17 |         .tvOS(.v12),
+18 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+19 |         .macCatalyst(.v13),
+20 |         .visionOS(.v1),
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Building for debugging...
+[Computing dependencies]
+[Provisioning 1 / 99]
+[Pre-planning 1 / 2442]
+[Planning 133 / 2442]
+[Planning 1921 / 2442]
+[Planning deferred tasks]
+[Constructing 102 / 5483]
+[Constructing 5022 / 5483]
+[Starting]
+[103 / 1267] SessionFeature
+[408 / 1267]
+[443 / 1267] swift-crypto_Crypto
+[449 / 1267]
+[460 / 1279] BigInt
+[461 / 1283] Atomics
+[464 / 1296] _NIODataStructures
+[465 / 1332] Atomics
+[468 / 1354]
+[470 / 1354]
+[474 / 1413]
+[482 / 1442]
+[493 / 1486] _NIOBase64
+[503 / 1486]
+[508 / 1500]
+[522 / 1500]
+[529 / 1500]
+[534 / 1500] CCryptoBoringSSL
+[543 / 1500] CCryptoBoringSSL
+[546 / 1500]
+[548 / 1500]
+[550 / 1500] CCryptoBoringSSL
+[553 / 1500] CCryptoBoringSSL
+[555 / 1500] CCryptoBoringSSL
+[562 / 1500]
+[565 / 1500] Logging
+[566 / 1500]
+[567 / 1500] _NIODataStructures
+[575 / 1500]
+[577 / 1500] NIOConcurrencyHelpers
+[593 / 1500] Atomics
+[594 / 1500]
+[609 / 1500] CCryptoBoringSSL
+[611 / 1500]
+[613 / 1500]
+[615 / 1500]
+[618 / 1500]
+[619 / 1500]
+[620 / 1500]
+[623 / 1500]
+[626 / 1500]
+[627 / 1500]
+[630 / 1500] CCryptoBoringSSL
+[632 / 1500]
+[635 / 1500]
+[637 / 1500] CCryptoBoringSSL
+[639 / 1500]
+[641 / 1500]
+[643 / 1500] CCryptoBoringSSL
+[646 / 1500]
+[648 / 1500]
+[651 / 1500] CCryptoBoringSSL
+[653 / 1500] CCryptoBoringSSL
+[657 / 1500] CCryptoBoringSSL
+[660 / 1500] CCryptoBoringSSL
+[661 / 1500] CCryptoBoringSSL
+[663 / 1500]
+[664 / 1500]
+[667 / 1500] CCryptoBoringSSL
+[672 / 1500] CCryptoBoringSSL
+[675 / 1500] SwiftASN1
+[677 / 1500] CCryptoBoringSSL
+[680 / 1500] GRDB
+[686 / 1500] CCryptoBoringSSL
+[688 / 1500] CCryptoBoringSSL
+[689 / 1500] Crypto
+[693 / 1500] CryptoBoringWrapper
+[704 / 1500] CCryptoBoringSSL
+[706 / 1500] CCryptoBoringSSL
+[708 / 1500] CCryptoBoringSSL
+[714 / 1500] SwiftASN1
+[718 / 1500] SwiftASN1
+[724 / 1500] CCryptoBoringSSL
+[727 / 1500] CCryptoBoringSSL
+[728 / 1500] CCryptoBoringSSL
+[733 / 1500] CCryptoBoringSSL
+[735 / 1500] CCryptoBoringSSL
+[737 / 1500] CCryptoBoringSSL
+[738 / 1500] CCryptoBoringSSL
+[740 / 1500] LancerCore
+[743 / 1500] LancerCore
+[750 / 1500] CCryptoBoringSSL
+[754 / 1500] CCryptoBoringSSL
+[759 / 1500] CCryptoBoringSSL
+[765 / 1500] CCryptoBoringSSL
+[776 / 1500] CCryptoBoringSSL
+[785 / 1500] CCryptoBoringSSL
+[787 / 1500] CCryptoBoringSSL
+[789 / 1500] CCryptoBoringSSL
+[794 / 1500] CCryptoBoringSSL
+[797 / 1500] CCryptoBoringSSL
+[801 / 1500] CCryptoBoringSSL
+[804 / 1500] CCryptoBoringSSL
+[805 / 1500] CCryptoBoringSSL
+[808 / 1500] GRDB
+[819 / 1500] CCryptoBoringSSL
+[820 / 1500] CCryptoBoringSSL
+[822 / 1500] CCryptoBoringSSL
+[824 / 1500] CCryptoBoringSSL
+[826 / 1500] CCryptoBoringSSL
+[828 / 1500] CCryptoBoringSSL
+[830 / 1500] CCryptoBoringSSL
+[833 / 1500] CCryptoBoringSSL
+[834 / 1500] CCryptoBoringSSL
+[837 / 1500] CCryptoBoringSSL
+[841 / 1500] CCryptoBoringSSL
+[849 / 1500] CCryptoBoringSSL
+[852 / 1500] CCryptoBoringSSL
+[857 / 1500] CCryptoBoringSSL
+[858 / 1500] CCryptoBoringSSL
+[860 / 1500] CCryptoBoringSSL
+[865 / 1500] CCryptoBoringSSL
+[866 / 1500] CCryptoBoringSSL
+[871 / 1500] CCryptoBoringSSL
+[883 / 1500] CCryptoBoringSSL
+[889 / 1500] CCryptoBoringSSL
+[894 / 1500] CCryptoBoringSSL
+[897 / 1500] CCryptoBoringSSL
+[901 / 1500] CCryptoBoringSSL
+[902 / 1500] CCryptoBoringSSL
+[906 / 1500] CCryptoBoringSSL
+[907 / 1500] CCryptoBoringSSL
+[909 / 1500] CCryptoBoringSSL
+[914 / 1500] CCryptoBoringSSL
+[917 / 1500] CCryptoBoringSSL
+[918 / 1500] CCryptoBoringSSL
+[923 / 1500] CCryptoBoringSSL
+[927 / 1500] CCryptoBoringSSL
+[928 / 1500] CCryptoBoringSSL
+[933 / 1500] CCryptoBoringSSL
+[937 / 1500] CCryptoBoringSSL
+[942 / 1500] CCryptoBoringSSL
+[952 / 1500] CCryptoBoringSSL
+[961 / 1500] CCryptoBoringSSL
+[966 / 1500] CCryptoBoringSSL
+[972 / 1500] CCryptoBoringSSL
+[974 / 1500] CCryptoBoringSSL
+[976 / 1500] CCryptoBoringSSL
+[978 / 1500] CCryptoBoringSSL
+[982 / 1500] CCryptoBoringSSL
+[987 / 1500] CCryptoBoringSSL
+[993 / 1500] CCryptoBoringSSL
+[1001 / 1500] CCryptoBoringSSL
+[1009 / 1500] CCryptoBoringSSL
+[1011 / 1500] CCryptoBoringSSL
+[1014 / 1500] CCryptoBoringSSL
+[1017 / 1500] CCryptoBoringSSL
+[1021 / 1500] CCryptoBoringSSL
+[1022 / 1500] _NIODataStructures
+[1024 / 1500] _NIODataStructures
+[1028 / 1500] SwiftASN1
+[1029 / 1500] SwiftASN1
+[1031 / 1509]
+[1036 / 1509]
+[1040 / 1509]
+[1043 / 1509]
+[1050 / 1509] NIOConcurrencyHelpers
+[1051 / 1509] NIOConcurrencyHelpers
+[1052 / 1509] NIOConcurrencyHelpers-product
+[1053 / 1509] NIOConcurrencyHelpers-product
+[1059 / 1509] Logging
+[1062 / 1509] Logging-product
+[1067 / 1509] LancerCore
+[1069 / 1509] NIOConcurrencyHelpers
+[1073 / 1509] LancerCore
+[1075 / 1509] LancerCore
+[1076 / 1509] Logging
+[1083 / 1509] InternalCollectionsUtilities
+[1085 / 1509] InternalCollectionsUtilities
+[1089 / 1509] InternalCollectionsUtilities
+[1092 / 1509] GRDB
+[1093 / 1509] GRDB
+[1094 / 1509] GRDB
+[1097 / 1509] GRDB-product
+[1099 / 1509] GRDB
+[1101 / 1509] GRDB
+[1101 / 1509] DiffKit
+[1104 / 1509] CryptoBoringWrapper
+[1104 / 1509] GRDB
+[1106 / 1509] CryptoBoringWrapper
+[1108 / 1509] CryptoBoringWrapper
+[1110 / 1509] CryptoBoringWrapper
+[1111 / 1509] CryptoBoringWrapper
+[1113 / 1509] Crypto
+[1115 / 1509] GRDB
+[1117 / 1509] _CryptoExtras
+[1118 / 1509] Crypto-product
+[1125 / 1509] CNIOWASI
+[1136 / 1509] CNIOLinux
+[1147 / 1519]
+[1155 / 1521]
+[1159 / 1530]
+[1175 / 1546]
+[1184 / 1546] BigInt
+[1186 / 1546]
+[1188 / 1546] BigInt
+[1193 / 1546] CCitadelBcrypt
+[1195 / 1546]
+[1197 / 1546] BigInt
+[1204 / 1546] CCitadelBcrypt
+[1205 / 1546] CCitadelBcrypt
+[1206 / 1546] GRDB
+[1210 / 1546] CNIODarwin
+[1212 / 1546] Atomics
+[1213 / 1546] Atomics-product
+[1214 / 1546] Atomics-product
+[1218 / 1546] BigInt
+[1227 / 1546] BigInt
+[1233 / 1551] Crypto
+[1234 / 1551] CCryptoBoringSSLShims
+[1235 / 1551]
+[1236 / 1551] ContainersPreview
+[1240 / 1562] ContainersPreview
+[1242 / 1562] ContainersPreview
+[1252 / 1567]
+[1256 / 1573] HostControlKit
+[1258 / 1585] ContainersPreview
+[1270 / 1585] DiffKit
+[1276 / 1585] _CryptoExtras
+[1277 / 1585] _CryptoExtras
+[1278 / 1585] NotificationsKit
+[1286 / 1585] _CryptoExtras
+[1287 / 1585] _CryptoExtras
+[1288 / 1585] _CryptoExtras
+[1289 / 1585] _CryptoExtras
+[1290 / 1585] _CryptoExtras
+[1297 / 1585] _CryptoExtras
+[1299 / 1585] HostControlKit
+[1304 / 1585] Atomics
+[1315 / 1585]
+[1319 / 1587] _CryptoExtras
+[1323 / 1598] DequeModule
+[1324 / 1598] DequeModule
+[1325 / 1598] DequeModule
+[1326 / 1604]
+[1330 / 1604] DequeModule
+[1331 / 1604] DequeModule
+[1331 / 1604]
+[1332 / 1604] DequeModule
+[1338 / 1604] _CryptoExtras
+[1338 / 1604] HostControlKitTests-product
+[1343 / 1604] HostControlKitTests-product
+[1343 / 1604] DequeModule
+[1352 / 1605] HostControlKitTests-product
+[1355 / 1617]
+[1363 / 1617] NIOCore
+[1364 / 1617] NIOCore
+[1366 / 1617] NIOCore
+[1366 / 1617] HostControlKitTests-product
+[1367 / 1617]
+[1368 / 1617] HostControlKitTests-product
+[1370 / 1617] HostControlKitTests-product
+[1370 / 1617] NIOCore
+[1370 / 1617] CNIOAtomics
+[1372 / 1617] NIOCore
+[1383 / 1620] NIOEmbedded
+[1387 / 1624] NIOFoundationEssentialsCompat
+[1390 / 1627] NIOPosix
+[1394 / 1643]
+[1395 / 1643] NIOFoundationEssentialsCompat
+[1407 / 1643]
+[1415 / 1643] NIOPosix
+[1416 / 1643] NIOPosix
+[1418 / 1643] NIOPosix
+[1419 / 1643] NIOFoundationEssentialsCompat
+[1422 / 1643] NIOPosix
+[1423 / 1643] NIOPosix
+[1429 / 1644] NIOPosix
+[1429 / 1644] NIO
+[1431 / 1646] NIO
+[1439 / 1647] NIOPosix
+[1443 / 1651] NIOFoundationCompat
+[1451 / 1652] NIOSSH
+[1457 / 1669]
+[1467 / 1669] NIOSSH
+[1473 / 1669] NIOSSH
+[1475 / 1670] NIOSSH
+[1475 / 1670] Citadel
+[1481 / 1682] Citadel
+[1482 / 1682] Citadel
+[1483 / 1682] Citadel
+[1485 / 1682] Citadel
+[1488 / 1682] Citadel
+[1489 / 1682] Citadel
+[1494 / 1683]
+[1494 / 1683] Citadel
+[1494 / 1683] SecurityKit
+[1498 / 1693] NIOPosix
+[1501 / 1693] NIOFoundationCompat
+[1503 / 1693]
+[1510 / 1693] Citadel
+[1510 / 1693] SecurityKit
+[1520 / 1695] Citadel
+[1520 / 1695] SecurityKit
+[1520 / 1695] AccountKit
+[1523 / 1714]
+[1528 / 1714]
+[1536 / 1714] SSHTransport
+[1537 / 1714] SecurityKit
+[1538 / 1714] SecurityKit
+[1541 / 1714] SSHTransport
+[1548 / 1714] SSHTransport
+[1555 / 1715]
+[1557 / 1717]
+[1557 / 1717] AgentKit
+[1560 / 1728] SSHTransport
+[1564 / 1765]
+[1564 / 1772]
+[1568 / 1772]
+[1571 / 1772]
+[1573 / 1772]
+[1575 / 1772]
+[1577 / 1772] AccountKit
+[1580 / 1772]
+[1581 / 1772]
+[1584 / 1772]
+[1593 / 1772] AgentKit
+[1596 / 1772] AgentKit
+[1598 / 1772]
+[1601 / 1772] AgentKit
+[1606 / 1773]
+[1607 / 1773] AgentKit
+[1607 / 1773] PersistenceKit
+[1608 / 1786] AgentKit
+[1609 / 1786]
+[1616 / 1786] PersistenceKit
+[1621 / 1786] PersistenceKit
+[1628 / 1786] PersistenceKit
+[1630 / 1786] OnboardingFeature
+[1635 / 1788] WorkspacesFeature
+[1638 / 1790] WorkspacesFeature
+[1639 / 1790] WorkspacesFeature
+[1642 / 1790] TerminalEngine
+[1651 / 1790] PreviewKit
+[1657 / 1795] PreviewKit
+[1669 / 1795] TerminalEngine-product
+[1674 / 1795] SyncKit
+[1683 / 1804] IntentsKit
+[1691 / 1809] SettingsFeature
+[1695 / 1809] OnboardingFeature
+[1710 / 1809] OnboardingFeature-product
+[1716 / 1809] AgentKit
+[1723 / 1809] InboxFeature
+[1728 / 1820] SyncKit
+[1733 / 1838] SyncKit
+[1734 / 1838] InboxFeature-product
+[1737 / 1838]
+[1750 / 1838] SessionFeature
+[1755 / 1838] SettingsFeature
+[1758 / 1838] IntentsKit
+[1760 / 1838] IntentsKit
+[1761 / 1838] IntentsKit
+[1769 / 1838] IntentsKitTests-product
+[1770 / 1838] IntentsKit
+[1775 / 1839] AppFeature
+[1775 / 1839] PreviewKit
+[1780 / 1839] TerminalEngine
+[1785 / 1839] SessionFeature
+[1797 / 1840] SessionFeature-product
+[1797 / 1840] IntentsKitTests-product
+[1807 / 1851] IntentsKitTests-product
+[1807 / 1869] IntentsKitTests-product
+[1809 / 1869]
+[1816 / 1869]
+[1817 / 1869] IntentsKitTests-product
+[1819 / 1869]
+[1820 / 1869] IntentsKitTests-product
+[1822 / 1869]
+[1832 / 1869] AppFeature
+[1833 / 1869] AppFeature
+[1833 / 1869] IntentsKitTests-product
+[1834 / 1869] IntentsKitTests-product
+[1843 / 1869] IntentsKitTests-product
+[1845 / 1869] AppFeature
+[1859 / 1870] LancerKitTests-product
+[1860 / 1885]
+[1862 / 1885]
+[1863 / 1885]
+[1874 / 1885] LancerKitTests-product
+[1879 / 1885] LancerKitTests-product
+[1880 / 1885] LancerKitTests-product
+[1881 / 1885] LancerKitTests-product
+[1882 / 1885] LancerKitTests-product
+[1883 / 1885] LancerKitTests-product
+Build complete! (109.59 secs.)
+◇ Test run started.
+↳ Testing Library Version: 2073
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "PolicyPresetStore — presets & JSON round-trip" started.
+◇ Suite "TeamRoleStore — local persistence" started.
+◇ Suite "NormalizedPolicy — cross-provider mapping" started.
+◇ Suite "AuditFeedFormatting" started.
+◇ Suite "TeamRole — capabilities & approval" started.
+◇ Suite "DriftFinding — remediation decoding" started.
+◇ Suite "BlastRadius — command risk derivation" started.
+◇ Suite "AutonomyPreset coarse permission mode" started.
+◇ Suite "Policy + audit protocol (WS-B)" started.
+◇ Test "save then delete a custom preset" started.
+◇ Test "seeds prod-strict and dev-relaxed builtins" started.
+◇ Test "export then import is idempotent on ids" started.
+◇ Test "seeds 'you' as owner and on-call on first run" started.
+◇ Test "on-call assignment persists" started.
+◇ Test "add, role change, and remove a teammate" started.
+◇ Test "OpenCode cannot map scope-based rules" started.
+◇ Test "Codex realizes every rule as an approval gate" started.
+◇ Test "all three providers are enumerable" started.
+◇ Test "default policy has the four seeded rules" started.
+◇ Test "Claude Code realizes every rule as a hook" started.
+◇ Test "unparseable line falls back to raw row" started.
+◇ Test "keeps unparseable lines when mixed with parsed ones" started.
+◇ Test "relative-time formatting is stable with fixed now" started.
+◇ Test "parses a real JSON audit line" started.
+◇ Test "orders newest-first" started.
+◇ Test "only owner and approver can approve" started.
+◇ Test "owner has the full capability set" started.
+◇ Test "explicit apply-fix decodes" started.
+◇ Test "missing remediation field decodes to .manual (never an unsafe auto-fix)" started.
+◇ Test "rm -rf is high severity" started.
+◇ Test "deploy flags production" started.
+◇ Test "read-only command is low severity" started.
+◇ Test "a derived blast radius round-trips through Codable" started.
+◇ Test "reflecting allow always yields bypass" started.
+◇ Test "reflecting deny fail-closes to alwaysAsk" started.
+◇ Test "affectedPathCount mirrors the path list" started.
+◇ Test "AutonomySelection.coarsePermissionMode(forRaw:) uses resolve fail-closed" started.
+◇ Test "bypass maps to allow; all other presets map to ask (fail-closed)" started.
+◇ Test "reflecting ask replaces preferred bypass with balanced default" started.
+◇ Test "reflecting ask preserves preferred when it already maps to ask" started.
+◇ Test "PermissionModeScope: empty/~ are document default; repo cwd is per-chat" started.
+◇ Test "decodes blast-radius on approval pending" started.
+◇ Test "audit tail result decodes" started.
+◇ Test "policy get result decodes" started.
+◇ Test "Approval stores blast radius" started.
+◇ Test "unknown remediation value decodes to .manual" started.
+◇ Test "every AutonomyPreset maps to a valid coarse mode" started.
+✔ Test "OpenCode cannot map scope-based rules" passed after 0.012 seconds.
+✔ Test "all three providers are enumerable" passed after 0.012 seconds.
+✔ Test "Codex realizes every rule as an approval gate" passed after 0.012 seconds.
+✔ Test "Claude Code realizes every rule as a hook" passed after 0.012 seconds.
+✔ Test "default policy has the four seeded rules" passed after 0.012 seconds.
+✔ Test "unparseable line falls back to raw row" passed after 0.012 seconds.
+✔ Test "parses a real JSON audit line" passed after 0.012 seconds.
+✔ Test "owner has the full capability set" passed after 0.012 seconds.
+✔ Test "keeps unparseable lines when mixed with parsed ones" passed after 0.012 seconds.
+✔ Test "explicit apply-fix decodes" passed after 0.012 seconds.
+✔ Test "missing remediation field decodes to .manual (never an unsafe auto-fix)" passed after 0.012 seconds.
+✔ Test "rm -rf is high severity" passed after 0.012 seconds.
+✔ Test "read-only command is low severity" passed after 0.012 seconds.
+✔ Test "reflecting allow always yields bypass" passed after 0.012 seconds.
+✔ Test "reflecting deny fail-closes to alwaysAsk" passed after 0.012 seconds.
+✔ Test "affectedPathCount mirrors the path list" passed after 0.012 seconds.
+✔ Test "bypass maps to allow; all other presets map to ask (fail-closed)" passed after 0.012 seconds.
+✔ Test "reflecting ask replaces preferred bypass with balanced default" passed after 0.012 seconds.
+✔ Test "AutonomySelection.coarsePermissionMode(forRaw:) uses resolve fail-closed" passed after 0.012 seconds.
+✔ Test "a derived blast radius round-trips through Codable" passed after 0.012 seconds.
+✔ Test "reflecting ask preserves preferred when it already maps to ask" passed after 0.012 seconds.
+✔ Test "only owner and approver can approve" passed after 0.012 seconds.
+✔ Test "PermissionModeScope: empty/~ are document default; repo cwd is per-chat" passed after 0.012 seconds.
+✔ Test "decodes blast-radius on approval pending" passed after 0.012 seconds.
+✔ Test "relative-time formatting is stable with fixed now" passed after 0.012 seconds.
+✔ Test "Approval stores blast radius" passed after 0.012 seconds.
+✔ Test "unknown remediation value decodes to .manual" passed after 0.012 seconds.
+✔ Test "deploy flags production" passed after 0.012 seconds.
+✔ Test "every AutonomyPreset maps to a valid coarse mode" passed after 0.012 seconds.
+✔ Test "audit tail result decodes" passed after 0.012 seconds.
+✔ Test "seeds 'you' as owner and on-call on first run" passed after 0.013 seconds.
+✔ Test "export then import is idempotent on ids" passed after 0.013 seconds.
+✔ Suite "TeamRole — capabilities & approval" passed after 0.013 seconds.
+✔ Suite "DriftFinding — remediation decoding" passed after 0.013 seconds.
+✔ Test "policy get result decodes" passed after 0.012 seconds.
+✔ Suite "NormalizedPolicy — cross-provider mapping" passed after 0.013 seconds.
+✔ Suite "BlastRadius — command risk derivation" passed after 0.013 seconds.
+✔ Suite "AutonomyPreset coarse permission mode" passed after 0.013 seconds.
+✔ Suite "Policy + audit protocol (WS-B)" passed after 0.013 seconds.
+✔ Test "on-call assignment persists" passed after 0.013 seconds.
+✔ Test "save then delete a custom preset" passed after 0.013 seconds.
+✔ Test "add, role change, and remove a teammate" passed after 0.014 seconds.
+✔ Suite "TeamRoleStore — local persistence" passed after 0.015 seconds.
+✔ Test "orders newest-first" passed after 0.015 seconds.
+✔ Suite "AuditFeedFormatting" passed after 0.016 seconds.
+✔ Test "seeds prod-strict and dev-relaxed builtins" passed after 0.020 seconds.
+✔ Suite "PolicyPresetStore — presets & JSON round-trip" passed after 0.021 seconds.
+✔ Test run with 38 tests in 9 suites passed after 0.021 seconds.
+EXIT:0

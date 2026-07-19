@@ -1,0 +1,33 @@
+warning: 'grdb.swift': /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/Packages/LancerKit/.build/checkouts/GRDB.swift/Package.swift:40:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+38 |         .macOS(.v10_13),
+39 |         .tvOS(.v11),
+40 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+41 |     ],
+42 |     products: [
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+warning: 'bigint': /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/Packages/LancerKit/.build/checkouts/BigInt/Package.swift:18:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+16 |         .iOS(.v12),
+17 |         .tvOS(.v12),
+18 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+19 |         .macCatalyst(.v13),
+20 |         .visionOS(.v1),
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Building for debugging...
+[Computing dependencies]
+[Provisioning 32 / 99]
+[Pre-planning 1 / 2442]
+[Planning 1472 / 2442]
+[Planning deferred tasks]
+[Starting]
+[1 / 5]
+[3 / 7] Crypto
+[11 / 23] swift-crypto_Crypto
+[13 / 14] IntentsKitTests-product
+[15 / 16] LancerKitTests-product
+Build complete! (2.65 secs.)
+warning: No matching test cases were run
+EXIT:0

@@ -1,0 +1,19 @@
+{
+  "env": {
+    "CLANG_MODULE_CACHE_PATH": "/Users/roshansilva/.simurgh/leases/lease-242/ModuleCache",
+    "SIMURGH_DERIVED_DATA": "/Users/roshansilva/.simurgh/leases/lease-242/DerivedData",
+    "SIMURGH_LEASE_ID": "lease-242",
+    "SIMURGH_RESULT_BUNDLE_DIR": "/Users/roshansilva/.simurgh/leases/lease-242/Results",
+    "SIMURGH_SWIFTPM_DIR": "/Users/roshansilva/.simurgh/leases/lease-242/SwiftPM",
+    "SIMURGH_UDID": "798BEDDF-D058-4BE5-AFD9-A48E574EE4BD"
+  },
+  "xcodebuildFlags": [
+    "-derivedDataPath",
+    "/Users/roshansilva/.simurgh/leases/lease-242/DerivedData",
+    "-clonedSourcePackagesDirPath",
+    "/Users/roshansilva/.simurgh/leases/lease-242/SwiftPM",
+    "-destination",
+    "platform=iOS Simulator,id=798BEDDF-D058-4BE5-AFD9-A48E574EE4BD"
+  ],
+  "shellSnippet": "eval \"$(simurgh env lease-242)\""
+}

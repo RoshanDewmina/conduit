@@ -11,6 +11,8 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 18:10 Cursor Grok 4.5 — serial Simurgh re-run of fan-out lanes L4→L6→L1→L5 on one lease (`lease-242`): L4 PASS, L6 PASS (xcodegen), L1 PARTIAL, L5 PARTIAL (+#187 widget cherry-pick for tests); evidence under docs/test-runs/2026-07-19-sim-feature-lanes/ (sim/serial-lanes-2026-07-19)
+
 - 14:45 Claude Fable (orchestrator) — APNs provider-JWT cache (~40 min reuse) in push-backend makeJWT: per-push re-minting tripped Apple's 429 TooManyProviderTokenUpdates on Live Activity push-to-start (live-hit during today's LA debugging); deployed to conduit-push (fix/apns-jwt-cache)
 - 14:25 Claude Fable (orchestrator) — LA push-to-start unblocked: sendLiveActivityPush now falls back to sandbox APNs on 400 BadDeviceToken (mirrors sendAPNsAlert; dev-signed builds have sandbox tokens) + logs the APNs reason. Deployed to conduit-push.fly.dev and LIVE-PROVEN: closed-app dispatch -> Apple accepted push-to-start -> Live Activity appeared on owner's locked phone (fix/la-apns-sandbox-fallback)
 - 13:20 Claude Fable (orchestrator) — G1 CLEARED: #176 reviewed (Sonnet MERGE-READY + Fable arbitration) and merged after re-run gates (go -race / swift test / app-target BUILD SUCCEEDED); #117 merged; #126 closed superseded; A3 zero-output fix merged (#179, Cursor grok impl, root cause cmd.Wait closing pipe readers); B2 atomic emergency-stop daemon primitive merged (#178, Sonnet impl); master `5f35e31f` green; phone pair 676174 verified live; B1 owner checklist scaffolded (docs/test-runs/2026-07-19-b1-tier0-reproof/) (PRs #176-#179)

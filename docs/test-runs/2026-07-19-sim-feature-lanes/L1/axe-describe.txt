@@ -1,0 +1,80 @@
+[
+  {
+    "AXFrame" : "{{0, 0}, {402, 874}}",
+    "AXUniqueId" : null,
+    "frame" : {
+      "y" : 0,
+      "x" : 0,
+      "width" : 402,
+      "height" : 874
+    },
+    "role_description" : "application",
+    "AXLabel" : " ",
+    "content_required" : false,
+    "type" : "Application",
+    "title" : null,
+    "help" : null,
+    "custom_actions" : [
+
+    ],
+    "AXValue" : null,
+    "enabled" : true,
+    "role" : "AXApplication",
+    "children" : [
+      {
+        "AXFrame" : "{{0, 0}, {402, 874}}",
+        "AXUniqueId" : null,
+        "frame" : {
+          "y" : 0,
+          "x" : 0,
+          "width" : 402,
+          "height" : 874
+        },
+        "role_description" : "group",
+        "AXLabel" : null,
+        "content_required" : false,
+        "type" : "Group",
+        "title" : null,
+        "help" : null,
+        "custom_actions" : [
+
+        ],
+        "AXValue" : null,
+        "enabled" : true,
+        "role" : "AXGroup",
+        "children" : [
+          {
+            "AXFrame" : "{{0, 0}, {402, 874}}",
+            "AXUniqueId" : null,
+            "frame" : {
+              "y" : 0,
+              "x" : 0,
+              "width" : 402,
+              "height" : 874
+            },
+            "role_description" : "group",
+            "AXLabel" : null,
+            "content_required" : false,
+            "type" : "Group",
+            "title" : null,
+            "help" : null,
+            "custom_actions" : [
+
+            ],
+            "AXValue" : null,
+            "enabled" : true,
+            "role" : "AXGroup",
+            "children" : [
+
+            ],
+            "subrole" : null,
+            "pid" : 18116
+          }
+        ],
+        "subrole" : null,
+        "pid" : 18116
+      },
+      {
+        "AXFrame" : "{{0, 0}, {402, 874}}",
+        "AXUniqueId" : null,
+        "frame" : {

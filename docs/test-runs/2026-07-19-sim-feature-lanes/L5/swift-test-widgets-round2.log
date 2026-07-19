@@ -1,0 +1,23 @@
+Building for debugging...
+[Computing dependencies]
+[Pre-planning 1 / 2442]
+[Planning 1554 / 2442]
+[Planning deferred tasks]
+[Starting]
+[1 / 5]
+[3 / 6] Crypto
+[3 / 25] swift-crypto__CryptoExtras
+[13 / 14] IntentsKitTests-product
+[15 / 16] LancerKitTests-product
+Build complete! (2.62 secs.)
+◇ Test run started.
+↳ Testing Library Version: 2073
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "ApprovalRepository stale pending TTL" started.
+◇ Test "already-decided rows are not flipped by the TTL sweep" started.
+◇ Test "row older than TTL is marked expired; fresh row survives" started.
+✔ Test "already-decided rows are not flipped by the TTL sweep" passed after 0.013 seconds.
+✔ Test "row older than TTL is marked expired; fresh row survives" passed after 0.013 seconds.
+✔ Suite "ApprovalRepository stale pending TTL" passed after 0.013 seconds.
+✔ Test run with 2 tests in 1 suite passed after 0.014 seconds.
+EXIT:0

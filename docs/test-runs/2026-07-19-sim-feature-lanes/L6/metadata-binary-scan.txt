@@ -1,0 +1,4 @@
+Metadata.appintents/extract.actionsdata :: contains ApprovalActionIntent
+Metadata.appintents/extract.actionsdata :: contains DenyApprovalIntent
+Metadata.appintents/extract.actionsdata :: contains AgentStatusQueryIntent
+PlugIns/LancerWidgets.appex/Metadata.appintents/extract.actionsdata :: contains ApprovalActionIntent

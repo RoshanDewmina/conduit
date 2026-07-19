@@ -1,0 +1,44 @@
+=== LancerAppShortcuts.swift phrase/intent inventory ===
+5:/// safety-reducing intents only. `ApprovalActionIntent` (approve/reject) is
+12:/// `AppShortcutsProvider` is only discovered by Xcode's app-intents metadata
+17:/// "No AppShortcuts found - Skipping"`) when this type lived in SessionFeature.
+19:public struct LancerAppShortcuts: AppShortcutsProvider {
+20:    public static var appShortcuts: [AppShortcut] {
+21:        AppShortcut(
+22:            intent: AgentStatusQueryIntent(),
+23:            phrases: [
+30:        AppShortcut(
+31:            intent: PendingApprovalsQueryIntent(),
+32:            phrases: [
+39:        AppShortcut(
+40:            intent: PauseRunIntent(),
+41:            phrases: [
+48:        AppShortcut(
+49:            intent: StopRunIntent(),
+50:            phrases: [
+57:        AppShortcut(
+58:            intent: DenyApprovalIntent(),
+59:            phrases: [
+68:        AppShortcut(
+69:            intent: SearchLancerIntent(),
+70:            phrases: [
+77:        AppShortcut(
+78:            intent: OpenConversationIntent(),
+79:            phrases: [
+90:        AppShortcut(
+91:            intent: StartAgentRunIntent(),
+92:            phrases: [
+100:        // why) — "if statements in an AppShortcutsBuilder can only be used
+104:            AppShortcut(
+105:                intent: AnswerQuestionIntent(),
+106:                phrases: [
+
+=== Must NOT contain ApprovalActionIntent registration ===
+PASS_NO_ApprovalActionIntent
+
+=== Must NOT contain Approve voice phrases ===
+PASS_NO_APPROVE_PHRASE
+
+=== Deny-only present ===
+58:            intent: DenyApprovalIntent(),
+62:                "Deny the latest approval in \(.applicationName)",

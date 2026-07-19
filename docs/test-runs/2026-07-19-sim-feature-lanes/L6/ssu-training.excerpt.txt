@@ -1,0 +1,11 @@
+15246:2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'How many agents are running on ${+applicationName}|Check agent status in ${+applicationName}' for en
+15247:2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Are any approvals waiting in ${+applicationName}|Check pending approvals in ${+applicationName}' for en
+15248:2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Pause the agent in ${+applicationName}|Pause my ${+applicationName} session' for en
+15249:2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Stop the agent in ${+applicationName}|Stop my ${+applicationName} session' for en
+15250:2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Deny the latest approval in ${+applicationName}|Deny an approval in ${+applicationName}' for en
+15251:2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Search ${+applicationName}|Search my ${+applicationName} conversations' for en
+15252:2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Open a conversation in ${+applicationName}' for en
+15253:2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Start an agent run in ${+applicationName}|Start Claude Code in ${+applicationName}' for en
+15254:2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Answer the question in ${+applicationName}|Answer the agent's question in ${+applicationName}' for en
+15257:2026-07-19 17:28:14.317 appintentsnltrainingprocessor[33490:120328] Generated AppIntents SSU YAML files in file:///Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/ssu/
+15258:2026-07-19 17:28:14.318 appintentsnltrainingprocessor[33490:120328] Copied AppIntents SSU YAML files to file:///Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Metadata.appintents/

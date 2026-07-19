@@ -1,0 +1,56 @@
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -list
+
+Resolve Package Graph
+
+Fetching from https://github.com/attaswift/BigInt.git (cached)
+
+Fetching from https://github.com/apple/swift-atomics.git (cached)
+
+Fetching from https://github.com/Wellz26/swift-nio-ssh.git (cached)
+
+Fetching from https://github.com/apple/swift-crypto.git (cached)
+
+Fetching from https://github.com/apple/swift-asn1.git (cached)
+
+Fetching from https://github.com/apple/swift-log.git (cached)
+
+Fetching from https://github.com/orlandos-nl/Citadel.git (cached)
+
+Fetching from https://github.com/apple/swift-system.git (cached)
+
+Fetching from https://github.com/apple/swift-nio.git (cached)
+
+Fetching from https://github.com/apple/swift-argument-parser (cached)
+
+Fetching from https://github.com/groue/GRDB.swift.git (cached)
+
+Fetching from https://github.com/apple/swift-collections.git (cached)
+
+Fetching from https://github.com/migueldeicaza/SwiftTerm.git (cached)
+
+Creating working copy of package ‘swift-system’
+
+Creating working copy of package ‘swift-nio-ssh’
+
+Creating working copy of package ‘swift-log’
+
+Creating working copy of package ‘swift-crypto’
+
+Creating working copy of package ‘swift-asn1’
+
+Creating working copy of package ‘BigInt’
+
+Creating working copy of package ‘Citadel’
+
+Checking out 0.3.6 of package ‘swift-nio-ssh’
+
+Checking out 5.7.0 of package ‘BigInt’
+
+Checking out 0.12.1 of package ‘Citadel’
+
+Checking out 1.14.0 of package ‘swift-log’
+
+Checking out 1.7.2 of package ‘swift-system’
+
+Checking out 1.7.1 of package ‘swift-asn1’

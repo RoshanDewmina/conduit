@@ -1,0 +1,220 @@
+2026/07/19 17:54:05 push: rehydrated device registration (session 09F7A4E4-1DF7-4C0C-A5FA-19D83046EF95)
+2026/07/19 17:54:05 restoreQueue: pruned 1 stale approval(s): 79214f54-c2f9-4c56-b3c5-960938a7a169/d9db0410-3e82-47cc-b4a2-c7a1249fb3ae
+lancerd daemon: E2E relay started
+lancerd daemon listening on /tmp/sweep-C4/lancerd.sock
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+2026/07/19 17:54:05 e2e: connected to relay as daemon
+2026/07/19 17:54:15 e2e: paired with phone
+2026/07/19 17:54:15 e2e: re-sending 1 pending approval(s) after (re)pair
+2026/07/19 17:54:15 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:16 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+2026/07/19 17:54:40 e2e: paired with phone
+2026/07/19 17:54:40 e2e: re-sending 1 pending approval(s) after (re)pair
+2026/07/19 17:54:40 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:40 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:40 e2e: paired with phone
+2026/07/19 17:54:40 e2e: re-sending 1 pending approval(s) after (re)pair
+2026/07/19 17:54:40 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+push-backend /run-start rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:41 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+apns-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:42 e2e: paired with phone
+2026/07/19 17:54:42 e2e: re-sending 1 pending approval(s) after (re)pair
+2026/07/19 17:54:42 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:42 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+2026/07/19 17:54:43 e2e: paired with phone
+2026/07/19 17:54:43 e2e: re-sending 1 pending approval(s) after (re)pair
+2026/07/19 17:54:43 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:43 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+2026/07/19 17:54:44 e2e: paired with phone
+2026/07/19 17:54:44 e2e: re-sending 1 pending approval(s) after (re)pair
+2026/07/19 17:54:44 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:44 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+2026/07/19 17:54:44 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+push-backend /approval rejected: HTTP 401
+2026/07/19 17:54:45 e2e: paired with phone
+2026/07/19 17:54:45 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:45 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:45 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:45 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+2026/07/19 17:54:46 e2e: paired with phone
+2026/07/19 17:54:46 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:46 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:46 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:46 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+apns-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:47 e2e: paired with phone
+2026/07/19 17:54:47 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:47 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:47 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:47 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+2026/07/19 17:54:48 e2e: paired with phone
+2026/07/19 17:54:48 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:48 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:48 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:48 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:49 e2e: paired with phone
+2026/07/19 17:54:49 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:49 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:49 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+2026/07/19 17:54:49 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:50 e2e: paired with phone
+2026/07/19 17:54:50 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:50 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:50 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:51 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:52 e2e: paired with phone
+2026/07/19 17:54:52 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:52 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+2026/07/19 17:54:52 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:52 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+2026/07/19 17:54:53 e2e: paired with phone
+2026/07/19 17:54:53 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:53 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:53 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:53 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+apns-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:54 e2e: paired with phone
+2026/07/19 17:54:54 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:54 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:54 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:54 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:55 e2e: paired with phone
+2026/07/19 17:54:55 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:55 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:55 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:55 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:56 e2e: paired with phone
+2026/07/19 17:54:56 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:56 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:56 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+2026/07/19 17:54:56 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:57 e2e: paired with phone
+2026/07/19 17:54:57 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:57 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:57 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:57 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:54:58 e2e: paired with phone
+2026/07/19 17:54:58 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:54:58 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:54:58 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+2026/07/19 17:54:58 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+activity-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+2026/07/19 17:55:06 e2e: paired with phone
+2026/07/19 17:55:06 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:55:06 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:55:06 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:55:06 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+2026/07/19 17:55:22 e2e: paired with phone
+2026/07/19 17:55:22 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:55:22 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:55:22 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:55:22 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:55:47 e2e: paired with phone
+2026/07/19 17:55:47 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:55:47 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:55:47 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:55:47 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+2026/07/19 17:55:58 e2e: paired with phone
+2026/07/19 17:55:58 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:55:58 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+2026/07/19 17:55:58 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+2026/07/19 17:55:58 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+activity-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+2026/07/19 17:56:10 e2e: paired with phone
+2026/07/19 17:56:10 e2e: re-sending 2 pending approval(s) after (re)pair
+2026/07/19 17:56:10 e2e: sent approval 41b8824a-8a06-4308-89f6-c1d7184c4564 over relay
+2026/07/19 17:56:10 e2e: sent approval 604025e0-435b-44ec-a871-a62ac58ceaba over relay
+activity-token registration rejected: HTTP 401
+2026/07/19 17:56:10 e2e: device registered for push (session F4688E3B-FD83-4837-93AC-F36973FDB865, apnsToken=true)
+relay-token registration rejected: HTTP 401
+apns-token registration rejected: HTTP 401
+activity-token registration rejected: HTTP 401

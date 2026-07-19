@@ -1,0 +1,4 @@
+✓ Tap at resolved tap point at (127.0, 518.0) completed successfully
+Warning: No accessibility element matched --label 'Allow'. Make sure the app is on the expected screen, then run `axe describe-ui --udid <SIMULATOR_UDID>` and prefer --id when available. No tap performed.
+Error: No accessibility element matched --label 'Allow'. Make sure the app is on the expected screen, then run `axe describe-ui --udid <SIMULATOR_UDID>` and prefer --id when available.
+✓ Tap at resolved tap point at (37.83333333333333, 729.1666666666666) completed successfully
