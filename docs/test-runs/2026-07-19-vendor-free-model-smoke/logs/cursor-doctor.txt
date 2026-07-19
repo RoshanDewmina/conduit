@@ -1,0 +1,53 @@
+=== CURSOR STATUS CHECK 2026-07-19T21:26:15Z ===
+agent_version: 2026.07.16-899851b
+cursor_bin: 3.12.17
+0fb762053c34788bb7760d5673f8a6d4c8589d50
+arm64
+/Users/roshansilva/.local/bin/agent
+/Users/roshansilva/.local/bin/cursor
+--- agent --help (head) ---
+Usage: agent [options] [command] [prompt...]
+
+Start the Cursor Agent
+
+Arguments:
+  prompt                       Initial prompt for the agent
+
+Options:
+  -v, --version                Output the version number
+  --api-key <key>              API key for authentication (can also use
+                               CURSOR_API_KEY env var)
+  -H, --header <header>        Add custom header to agent requests (format:
+                               'Name: Value', can be used multiple times)
+  -p, --print                  Print responses to console (for scripts or
+                               non-interactive use). Has access to all tools,
+                               including write and shell. (default: false)
+  --output-format <format>     Output format (only works with --print): text |
+                               json | stream-json (default: "text")
+  --stream-partial-output      Stream partial output as individual text deltas
+                               (only works with --print and stream-json format)
+                               (default: false)
+  --mode <mode>                Start in the given execution mode. plan:
+                               read-only/planning (analyze, propose plans, no
+                               edits). ask: Q&A style for explanations and
+                               questions (read-only). (choices: "plan", "ask")
+  --plan                       Start in plan mode (shorthand for --mode=plan).
+                               (default: false)
+  --resume [chatId]            Select a session to resume (default: false)
+  --continue                   Continue previous session (default: false)
+  --model <model>              Model to use (e.g., gpt-5, sonnet-4-thinking).
+                               Parameterized models accept quoted bracket
+                               overrides, e.g.
+                               'claude-opus-4-8[context=1m,effort=high,fast=false]'
+  --list-models                List available models and exit (default: false)
+  -f, --force                  Force allow commands unless explicitly denied
+                               (default: false)
+  --yolo                       Alias for --force (Run Everything) (default:
+                               false)
+  --auto-review                Use Auto-review (Smart Auto): a server classifier
+                               auto-runs safe tool calls and prompts for the
+--- attempting agent status with TERM=dumb and closed stdin ---
+✓ Logged in as sidewhinder2k3@gmail.com
+--- doctor note ---
+Full Cursor live smoke deferred pending PR #190 merge (per brief).
+This is a 30s doctor/status probe only.

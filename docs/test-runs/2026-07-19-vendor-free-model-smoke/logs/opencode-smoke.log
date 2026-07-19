@@ -1,0 +1,37 @@
+=== OPENCODE TRY model=opencode/deepseek-v4-flash-free 2026-07-19T21:26:00Z ===
+EXIT=0
+--- stdout ---
+opencode-smoke-OK
+--- stderr tail ---
+timestamp=2026-07-19T21:26:01.258Z level=WARN run=1805344d message="duplicate skill name" name=gsap-react existing=/Users/roshansilva/.claude/skills/gsap-react/SKILL.md duplicate=/Users/roshansilva/.agents/skills/gsap-react/SKILL.md
+timestamp=2026-07-19T21:26:01.259Z level=WARN run=1805344d message="duplicate skill name" name=shadcn existing=/Users/roshansilva/.claude/skills/shadcn/SKILL.md duplicate=/Users/roshansilva/.agents/skills/shadcn/SKILL.md
+timestamp=2026-07-19T21:26:01.259Z level=WARN run=1805344d message="duplicate skill name" name=executing-plans existing=/Users/roshansilva/.claude/skills/executing-plans/SKILL.md duplicate=/Users/roshansilva/.agents/skills/executing-plans/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=gsap-core existing=/Users/roshansilva/.agents/skills/gsap-core/SKILL.md duplicate=/Users/roshansilva/.claude/skills/gsap-core/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=subagent-driven-development existing=/Users/roshansilva/.claude/skills/subagent-driven-development/SKILL.md duplicate=/Users/roshansilva/.agents/skills/subagent-driven-development/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=gsap-utils existing=/Users/roshansilva/.claude/skills/gsap-utils/SKILL.md duplicate=/Users/roshansilva/.agents/skills/gsap-utils/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=requesting-code-review existing=/Users/roshansilva/.agents/skills/requesting-code-review/SKILL.md duplicate=/Users/roshansilva/.claude/skills/requesting-code-review/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=using-git-worktrees existing=/Users/roshansilva/.claude/skills/using-git-worktrees/SKILL.md duplicate=/Users/roshansilva/.agents/skills/using-git-worktrees/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=receiving-code-review existing=/Users/roshansilva/.claude/skills/receiving-code-review/SKILL.md duplicate=/Users/roshansilva/.agents/skills/receiving-code-review/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=gsap-performance existing=/Users/roshansilva/.claude/skills/gsap-performance/SKILL.md duplicate=/Users/roshansilva/.agents/skills/gsap-performance/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=gsap-scrolltrigger existing=/Users/roshansilva/.claude/skills/gsap-scrolltrigger/SKILL.md duplicate=/Users/roshansilva/.agents/skills/gsap-scrolltrigger/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=gsap-frameworks existing=/Users/roshansilva/.claude/skills/gsap-frameworks/SKILL.md duplicate=/Users/roshansilva/.agents/skills/gsap-frameworks/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=verification-before-completion existing=/Users/roshansilva/.claude/skills/verification-before-completion/SKILL.md duplicate=/Users/roshansilva/.agents/skills/verification-before-completion/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=dispatching-parallel-agents existing=/Users/roshansilva/.claude/skills/dispatching-parallel-agents/SKILL.md duplicate=/Users/roshansilva/.agents/skills/dispatching-parallel-agents/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=using-superpowers existing=/Users/roshansilva/.claude/skills/using-superpowers/SKILL.md duplicate=/Users/roshansilva/.agents/skills/using-superpowers/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=test-driven-development existing=/Users/roshansilva/.claude/skills/test-driven-development/SKILL.md duplicate=/Users/roshansilva/.agents/skills/test-driven-development/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=prompt-crafting existing=/Users/roshansilva/.claude/skills/prompt-crafting/SKILL.md duplicate=/Users/roshansilva/.agents/skills/prompt-crafting/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=writing-plans existing=/Users/roshansilva/.claude/skills/writing-plans/SKILL.md duplicate=/Users/roshansilva/.agents/skills/writing-plans/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=gsap-timeline existing=/Users/roshansilva/.claude/skills/gsap-timeline/SKILL.md duplicate=/Users/roshansilva/.agents/skills/gsap-timeline/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=swarm-orchestrator existing=/Users/roshansilva/.claude/skills/swarm-orchestrator/SKILL.md duplicate=/Users/roshansilva/.agents/skills/swarm-orchestrator/SKILL.md
+timestamp=2026-07-19T21:26:01.260Z level=WARN run=1805344d message="duplicate skill name" name=visual-thinking existing=/Users/roshansilva/.claude/skills/visual-thinking/SKILL.md duplicate=/Users/roshansilva/.agents/skills/visual-thinking/SKILL.md
+timestamp=2026-07-19T21:26:01.261Z level=WARN run=1805344d message="duplicate skill name" name=brainstorming existing=/Users/roshansilva/.claude/skills/brainstorming/SKILL.md duplicate=/Users/roshansilva/.agents/skills/brainstorming/SKILL.md
+timestamp=2026-07-19T21:26:01.261Z level=WARN run=1805344d message="duplicate skill name" name=systematic-debugging existing=/Users/roshansilva/.claude/skills/systematic-debugging/SKILL.md duplicate=/Users/roshansilva/.agents/skills/systematic-debugging/SKILL.md
+timestamp=2026-07-19T21:26:01.261Z level=WARN run=1805344d message="duplicate skill name" name=gsap-plugins existing=/Users/roshansilva/.claude/skills/gsap-plugins/SKILL.md duplicate=/Users/roshansilva/.agents/skills/gsap-plugins/SKILL.md
+timestamp=2026-07-19T21:26:01.261Z level=WARN run=1805344d message="duplicate skill name" name=stripe-best-practices existing=/Users/roshansilva/.agents/skills/stripe-best-practices/SKILL.md duplicate=/Users/roshansilva/.claude/skills/stripe-best-practices/SKILL.md
+timestamp=2026-07-19T21:26:01.261Z level=WARN run=1805344d message="duplicate skill name" name=agent-session-history-reader existing=/Users/roshansilva/.claude/skills/agent-session-history-reader/SKILL.md duplicate=/Users/roshansilva/.agents/skills/agent-session-history-reader/SKILL.md
+timestamp=2026-07-19T21:26:01.261Z level=WARN run=1805344d message="duplicate skill name" name=finishing-a-development-branch existing=/Users/roshansilva/.claude/skills/finishing-a-development-branch/SKILL.md duplicate=/Users/roshansilva/.agents/skills/finishing-a-development-branch/SKILL.md
+timestamp=2026-07-19T21:26:01.261Z level=WARN run=1805344d message="duplicate skill name" name=writing-skills existing=/Users/roshansilva/.claude/skills/writing-skills/SKILL.md duplicate=/Users/roshansilva/.agents/skills/writing-skills/SKILL.md
+[0m
+> build · deepseek-v4-flash-free
+[0m
+TRY_RESULT model=opencode/deepseek-v4-flash-free classify=PASS ec=0
