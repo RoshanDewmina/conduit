@@ -11,6 +11,14 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 19:10 Cursor Grok 4.5 — remaining sim lanes L8/L2/L3/L7 → PASS on `lease-247`; L8 prior compile FAIL was truncated SPM log; L7 restored DEBUG review fixture destination (evidence + ROLLUP update, PR #189)
+
+- 18:40 Composer — feature-sweep rollup current truth: L1 PASS (#193), L4/L6 PASS (#192), L5 PASS (#194 TTL fixtures), vendor Codex/OpenCode PASS (#191); L2 PARTIAL, L3/L7 MISSING, L8 FAIL; Cursor NEEDS-FABLE (#190); open PRs #185–#194 (ROLLUP.md, PR #189)
+
+- 17:20 Cursor Grok 4.5 — 2026-07-19 fan-out rollup: L1–L8/vendor/Cursor inventory PASS/FAIL/PARTIAL/MISSING + B1 next actions (docs/test-runs/2026-07-19-sim-feature-lanes/ROLLUP.md, branch docs/2026-07-19-feature-sweep-rollup)
+
+- 17:20 Cursor Grok 4.5 — 2026-07-19 fan-out rollup: L1–L8/vendor/Cursor inventory PASS/FAIL/PARTIAL/MISSING + B1 next actions (docs/test-runs/2026-07-19-sim-feature-lanes/ROLLUP.md, branch docs/2026-07-19-feature-sweep-rollup)
+
 - 14:45 Claude Fable (orchestrator) — APNs provider-JWT cache (~40 min reuse) in push-backend makeJWT: per-push re-minting tripped Apple's 429 TooManyProviderTokenUpdates on Live Activity push-to-start (live-hit during today's LA debugging); deployed to conduit-push (fix/apns-jwt-cache)
 - 14:25 Claude Fable (orchestrator) — LA push-to-start unblocked: sendLiveActivityPush now falls back to sandbox APNs on 400 BadDeviceToken (mirrors sendAPNsAlert; dev-signed builds have sandbox tokens) + logs the APNs reason. Deployed to conduit-push.fly.dev and LIVE-PROVEN: closed-app dispatch -> Apple accepted push-to-start -> Live Activity appeared on owner's locked phone (fix/la-apns-sandbox-fallback)
 - 13:20 Claude Fable (orchestrator) — G1 CLEARED: #176 reviewed (Sonnet MERGE-READY + Fable arbitration) and merged after re-run gates (go -race / swift test / app-target BUILD SUCCEEDED); #117 merged; #126 closed superseded; A3 zero-output fix merged (#179, Cursor grok impl, root cause cmd.Wait closing pipe readers); B2 atomic emergency-stop daemon primitive merged (#178, Sonnet impl); master `5f35e31f` green; phone pair 676174 verified live; B1 owner checklist scaffolded (docs/test-runs/2026-07-19-b1-tier0-reproof/) (PRs #176-#179)

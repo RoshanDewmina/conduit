@@ -1,0 +1,32 @@
+== Disk budget check ==
+
+Free space on /System/Volumes/Data: 78GB (min: 20GB)
+
+DerivedData (Lancer-*):
+  none found
+  total: 0GB (max: 15GB)
+
+Worktrees outside /Volumes/LancerDev/worktrees:
+  /Volumes/LancerDev/lancer  branch=cursor/desktop-history-and-terminal-3510  not merged
+  /Volumes/LancerDev/lancer/.claude/worktrees/agent-a1f470201f7eedef9  branch=worktree-agent-a1f470201f7eedef9  MERGED (safe to remove)
+  /Volumes/LancerDev/lancer/.claude/worktrees/agent-a83b12f6c34471e93  branch=worktree-agent-a83b12f6c34471e93  MERGED (safe to remove)
+  /Volumes/LancerDev/lancer/.claude/worktrees/agent-abd65cbcf4f73d74b  branch=worktree-agent-abd65cbcf4f73d74b  MERGED (safe to remove)
+  /Volumes/LancerDev/lancer/.claude/worktrees/agent-adea63da9b5bed77f  branch=worktree-agent-adea63da9b5bed77f  MERGED (safe to remove)
+  /Volumes/LancerDev/lancer/.claude/worktrees/apns-push-app-closed-bc0f75  branch=claude/apns-push-app-closed-bc0f75  MERGED (safe to remove)
+  /Volumes/LancerDev/lancer/.claude/worktrees/vendor-cli-parity-multi-account-209d7c  branch=claude/vendor-cli-parity-multi-account-209d7c  MERGED (safe to remove)
+  /Volumes/LancerDev/lancer/.worktrees/cursor-cli-adapter  branch=feat/cursor-cli-adapter  not merged
+  /Volumes/LancerDev/lancer/.worktrees/deploy-7d28c55d  branch=  not merged
+  /Volumes/LancerDev/lancer/.worktrees/sim-l1-core  branch=  not merged
+  /Volumes/LancerDev/lancer/.worktrees/sim-l3-chrome  branch=test/sim-l3-chrome  not merged
+  /Volumes/LancerDev/lancer/.worktrees/sim-l4-gov  branch=  not merged
+  /Volumes/LancerDev/lancer/.worktrees/sim-l5-widgets  branch=sim-l5-widgets  not merged
+  /Volumes/LancerDev/lancer/.worktrees/sim-l6-siri  branch=  not merged
+  /Volumes/LancerDev/lancer/.worktrees/sim-l8-accounts  branch=  not merged
+  /Volumes/LancerDev/lancer/.worktrees/widget-stale-approvals  branch=fix/widget-stale-approvals  not merged
+  /Volumes/LancerDev/simurgh/.claude/worktrees/benchmark-blockers-2026-07-13-37773c/bench/results/20260714T035141Z/wt-simurgh-rep1-A  branch=  not merged
+  /Volumes/LancerDev/simurgh/.claude/worktrees/benchmark-blockers-2026-07-13-37773c/bench/results/20260714T035141Z/wt-simurgh-rep1-B  branch=  not merged
+  /Volumes/LancerDev/simurgh/.claude/worktrees/benchmark-blockers-2026-07-13-37773c/bench/results/20260714T035316Z/wt-xbmcp-20260714T035316Z  branch=  not merged
+  WARNING: 19 worktree(s) outside the approved root.
+  Migrate merged ones by removing them; move active ones under /Volumes/LancerDev/worktrees.
+
+FAIL: 1 check(s) over budget.
