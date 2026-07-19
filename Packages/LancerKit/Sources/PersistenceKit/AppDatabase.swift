@@ -15,17 +15,66 @@ public final class AppDatabase: Sendable {
     // MARK: - Bootstrap
 
     public static func openShared() throws -> AppDatabase {
-        let url = try FileManager.default
-            .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("Lancer/db.sqlite")
-        try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
+        let url = try sharedDatabaseURL()
         var config = Configuration()
         config.defaultTransactionKind = .immediate
+        // Multiple processes (main app, LancerWidgets extension — Live
+        // Activity / Lock Screen `ApprovalActionIntent` runs there, not in
+        // the main app process) now open the same physical file. GRDB's
+        // DatabasePool already uses WAL, which supports concurrent
+        // multi-process readers/writers; give a contending writer a few
+        // seconds to retry instead of failing immediately with SQLITE_BUSY.
+        config.busyMode = .timeout(5)
         let pool = try DatabasePool(path: url.path, configuration: config)
         return try AppDatabase(pool)
+    }
+
+    /// Resolves the single physical database file every process that touches
+    /// Lancer's local data must share: the main app, the `LancerWidgets`
+    /// extension (a `LiveActivityIntent` such as `ApprovalActionIntent` runs
+    /// in the widget extension's own process, not the main app's — see its
+    /// doc comment), and the Watch companion. Must live in the App Group
+    /// container (`group.dev.lancer.mobile`, already used for
+    /// `WidgetSnapshot`'s `UserDefaults`), not `.applicationSupportDirectory`
+    /// — that path is scoped to the calling process's own private sandbox
+    /// container, so a decision made from the Lock Screen / Dynamic Island
+    /// used to land in a throwaway database the main app could never see,
+    /// leaving its local row permanently "pending" even though the decision
+    /// correctly reached the daemon over the network — the root cause of the
+    /// Home Screen widget showing an inflated approval count with a stale
+    /// summary line (`docs/test-runs/` widget investigation).
+    private static func sharedDatabaseURL() throws -> URL {
+        guard let groupContainer = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: WidgetSnapshot.appGroupID
+        ) else {
+            throw LancerError.databaseFailure(detail: "app group container unavailable")
+        }
+        let dir = groupContainer.appendingPathComponent("Lancer", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let newURL = dir.appendingPathComponent("db.sqlite")
+
+        // One-time migration for existing installs: earlier builds stored
+        // the database in the main app's private Application Support
+        // directory. Copy it (plus GRDB's WAL/SHM sidecar files, so no
+        // recently-committed rows are lost) into the App Group container the
+        // first time this runs, so upgrading users keep their history
+        // instead of silently starting from an empty database.
+        if !FileManager.default.fileExists(atPath: newURL.path) {
+            let legacyURL = try? FileManager.default
+                .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+                .appendingPathComponent("Lancer/db.sqlite")
+            if let legacyURL, FileManager.default.fileExists(atPath: legacyURL.path) {
+                try? FileManager.default.copyItem(at: legacyURL, to: newURL)
+                for suffix in ["-wal", "-shm"] {
+                    let src = URL(fileURLWithPath: legacyURL.path + suffix)
+                    let dst = URL(fileURLWithPath: newURL.path + suffix)
+                    if FileManager.default.fileExists(atPath: src.path) {
+                        try? FileManager.default.copyItem(at: src, to: dst)
+                    }
+                }
+            }
+        }
+        return newURL
     }
 
     public static func inMemory() throws -> AppDatabase {
