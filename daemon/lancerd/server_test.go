@@ -226,3 +226,46 @@ func TestPostApprovalPush(t *testing.T) {
 		t.Errorf("risk = %v, want medium", payload["risk"])
 	}
 }
+
+// TestHandleRunStartedPostsRunStart proves handleRunStarted POSTs /run-start
+// with the phone's persistent device SessionID (not the agent run ID) — the
+// exact ID space push-backend's liveActivityRegistry keys on. A wrong ID here
+// silently no-ops forever with zero errors.
+func TestHandleRunStartedPostsRunStart(t *testing.T) {
+	got := make(chan map[string]interface{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/run-start" || r.Method != http.MethodPost {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		got <- body
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	s := newServer(t.TempDir())
+	defer s.poller.stopForTest()
+	s.deviceMu.Lock()
+	s.device = &registeredDevice{
+		PushBackendURL: srv.URL,
+		SessionID:      "phone-session-xyz",
+	}
+	s.deviceMu.Unlock()
+
+	s.handleRunStarted("agent-run-should-NOT-be-sessionId", "claudeCode")
+
+	select {
+	case payload := <-got:
+		if payload["sessionId"] != "phone-session-xyz" {
+			t.Fatalf("sessionId = %v, want phone-session-xyz (dev.SessionID, not the run ID)", payload["sessionId"])
+		}
+		if payload["agent"] != "claudeCode" {
+			t.Fatalf("agent = %v, want claudeCode", payload["agent"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for /run-start POST")
+	}
+}

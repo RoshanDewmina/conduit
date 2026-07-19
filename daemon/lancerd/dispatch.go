@@ -1425,11 +1425,20 @@ type dispatchRun struct {
 	// agent.run.status terminal handler can release it. Empty for every
 	// other launch path.
 	observedResumeKey string
+	// startedNotified is set the first time wrapEmitForRun sees
+	// agent.run.status "running" for this run, so onRunStarted fires
+	// exactly once even if a launcher (or a bug) re-emits "running".
+	startedNotified bool
 }
 
 // runTerminalCallback fires once when a launched run reaches a terminal process
 // status (exited/failed). Used by the server to apply per-run worktree retention.
 type runTerminalCallback func(runID, status string, exitCode int)
+
+// runStartedCallback fires once when a launched run first emits status
+// "running" (process confirmed started). Used by the server to push-to-start
+// a Live Activity via postRunStartPush.
+type runStartedCallback func(runID, agent string)
 
 // policyEvalFunc returns the policy effect ("allow"|"ask"|"deny"), the matched
 // rule, and whether the effect came from the fail-closed default (no rule matched).
@@ -1529,6 +1538,11 @@ type dispatcher struct {
 	bindVendorSession func(runID, vendorSessionID string) error
 	// onRunTerminal is invoked when a launched run emits exited/failed status.
 	onRunTerminal runTerminalCallback
+	// onRunStarted is invoked exactly once when a launched run first emits
+	// status "running" (realLauncher's emitRunStatus after cmd.Start, or any
+	// test launcher that mirrors that). Nil ⇒ no-op (same fail-safe as
+	// onRunTerminal). Wired by the server to handleRunStarted → postRunStartPush.
+	onRunStarted runStartedCallback
 	// onQuestion is invoked when a question-tool tool_use completes in a run's
 	// stream-json output (see wrapEmitForRun's "agent.question.raw" case and
 	// question.go's extractQuestionEvent). Nil ⇒ question tool_use calls are
@@ -1722,6 +1736,25 @@ func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 					exitCode = c
 				case float64:
 					exitCode = int(c)
+				}
+				if status == "running" {
+					// Single chokepoint for Live Activity push-to-start: every
+					// Lancer-dispatched launch path (dispatch/continueRun/
+					// resumeObservedSession/launchConversationTurn) flows
+					// through wrapEmitForRun, and realLauncher emits
+					// "running" exactly once after cmd.Start succeeds.
+					var agent string
+					var fire bool
+					d.mu.Lock()
+					if run := d.runs[runID]; run != nil && !run.startedNotified {
+						run.startedNotified = true
+						agent = run.Agent
+						fire = true
+					}
+					d.mu.Unlock()
+					if fire && d.onRunStarted != nil {
+						d.onRunStarted(runID, agent)
+					}
 				}
 				if status == "exited" || status == "failed" {
 					d.finalizeReceipt(runID, status, exitCode)

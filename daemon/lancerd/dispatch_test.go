@@ -296,6 +296,55 @@ func TestResumeObservedSessionUnknownVendor(t *testing.T) {
 	}
 }
 
+// TestOnRunStartedFiresOnceOnDispatchedLaunch proves the Live Activity
+// push-to-start hook: a successful dispatch whose launcher emits
+// agent.run.status "running" (mirroring realLauncher after cmd.Start) invokes
+// onRunStarted exactly once with the run's agent — and a duplicate "running"
+// emit does not fire again. A launcher that never emits "running" must not
+// invoke the callback (failed Start / stub that skips the status event).
+func TestOnRunStartedFiresOnceOnDispatchedLaunch(t *testing.T) {
+	var started []struct{ runID, agent string }
+	d := newDispatcher()
+	d.onRunStarted = func(runID, agent string) {
+		started = append(started, struct{ runID, agent string }{runID, agent})
+	}
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		// Mirror realLauncher: emit "running" once the process is confirmed started.
+		emit("agent.run.status", map[string]any{"runId": runID, "status": "running"})
+		// A second "running" must not double-fire (startedNotified guard).
+		emit("agent.run.status", map[string]any{"runId": runID, "status": "running"})
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/repo", Prompt: "hi"},
+		allowEval, noAudit)
+	if res.Status != "started" || res.RunID == "" {
+		t.Fatalf("want started with a runId, got %+v", res)
+	}
+	if len(started) != 1 {
+		t.Fatalf("want onRunStarted exactly once, got %d calls: %+v", len(started), started)
+	}
+	if started[0].runID != res.RunID {
+		t.Fatalf("onRunStarted runID = %q, want %q", started[0].runID, res.RunID)
+	}
+	if started[0].agent != "claudeCode" {
+		t.Fatalf("onRunStarted agent = %q, want claudeCode", started[0].agent)
+	}
+
+	// Launch path that never emits "running" must not invoke the callback.
+	started = nil
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	res2 := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/repo", Prompt: "again"},
+		allowEval, noAudit)
+	if res2.Status != "started" {
+		t.Fatalf("want second dispatch started, got %+v", res2)
+	}
+	if len(started) != 0 {
+		t.Fatalf("want no onRunStarted when launcher skips running status, got %+v", started)
+	}
+}
+
 func TestContinueRunUnknownRun(t *testing.T) {
 	d := newDispatcher()
 	if res := d.continueRun("nope", "x", continueFallback{}, allowEval, noAudit); res.Status != "error" {
