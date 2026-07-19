@@ -12,7 +12,8 @@ Procedure detail: `docs/LIVE_LOOP_RUNBOOK.md` (Phase 5b relay path is the V1 loo
 
 | Field | Value |
 |---|---|
-| **Install tip (app)** | `0d14d0c69ad2d76fd8ea8c9fe122cfc7ff545831` (`0d14d0c6`) |
+| **Install tip (app binary)** | `0d14d0c69ad2d76fd8ea8c9fe122cfc7ff545831` (`0d14d0c6`) — **reinstall not needed** for docs-only follow-up |
+| **Checklist commit** | `13ef936b` on same branch (docs + launch PNG only) |
 | **Branch / PR** | `fix/l5-pending-approvals-writer-test` · [PR #194](https://github.com/RoshanDewmina/conduit/pull/194) |
 | **Why this tip** | One coherent Debug stack: `origin/master` (`7c4b1eca`) + L1 reply (#193 cherry-pick `66ad26ce`) + widget polish (#187 `960ee943`) + PendingApprovals TTL writer fix |
 | **master tip (base)** | `7c4b1eca` (Merge #184 APNs JWT cache) — **not** what is on the phone; phone is ahead with open L1/widget fixes |
