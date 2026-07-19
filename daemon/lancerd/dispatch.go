@@ -333,7 +333,6 @@ type conversationLaunchParams struct {
 	// the same conversation.
 	FullTools bool
 
-
 	// Contract mirrors dispatchParams.Contract — see conversationAppendRequest's
 	// identical field (conversation_store.go) for why this exists: without it,
 	// every receipt created through agent.conversations.append (the live
@@ -1420,6 +1419,12 @@ type dispatchRun struct {
 	// in wrapEmitForRun before relay/ledger. Vendor stdin is not altered.
 	attachmentRoot         string
 	attachmentPlaceholders map[string]string
+	// observedResumeKey is non-empty only for a run launched by
+	// resumeObservedSession — the dispatcher.activeObservedResumes key
+	// (observedResumeKey's doc comment) this run occupies, so the
+	// agent.run.status terminal handler can release it. Empty for every
+	// other launch path.
+	observedResumeKey string
 }
 
 // runTerminalCallback fires once when a launched run reaches a terminal process
@@ -1490,9 +1495,26 @@ type dispatcher struct {
 	emergencyStopped bool
 	spentUSD         float64 // accumulated daily spend; gate compares against per-run BudgetUSD cap
 	providerSpend    map[string]*providerSpend
-	launch           launchFunc
-	audit            func(AuditEntry) // run-control audit sink; no-op until wired by the server
-	emit             emitFunc         // run-output/status notifier; nil until wired by the server
+	// activeObservedResumes tracks, per exact vendor+sessionID target, the
+	// runID of a Lancer-launched resumeObservedSession that hasn't reached a
+	// terminal status yet. Keyed by observedResumeKey(vendor, sessionID).
+	// Without this, two overlapping agent.observedSession.continue calls for
+	// the SAME on-disk vendor session (e.g. a slow first reply plus an
+	// impatient second follow-up tap, or a client-side race) each launch
+	// their own `claude --resume <sessionId>` process — two OS processes
+	// concurrently reading/appending the same session transcript file, which
+	// the vendor CLI's resume mechanism was never designed to tolerate
+	// (found 2026-07-18: resumeObservedSession had zero same-session
+	// exclusion). This does NOT cover a session still busy in the
+	// ORIGINAL terminal it was started in — the daemon has no handle on
+	// that process; the iOS client's isObservedSessionWorking transcript-
+	// activity heuristic (ShellLiveBridge.swift) is the only signal for
+	// that half and queues locally instead of calling this RPC while busy.
+	// Guarded by mu like every other dispatcher field. Lazily initialized.
+	activeObservedResumes map[string]string
+	launch                launchFunc
+	audit                 func(AuditEntry) // run-control audit sink; no-op until wired by the server
+	emit                  emitFunc         // run-output/status notifier; nil until wired by the server
 	// hookWired reports whether a per-action PreToolUse hook is verifiably wired
 	// for the given agent binary (argv[0]). Nil ⇒ treat as not wired (fail-closed:
 	// launches escalate). Set by the server from the real install state.
@@ -1703,6 +1725,18 @@ func (d *dispatcher) wrapEmitForRun(runID string, ledgerBacked bool) emitFunc {
 				}
 				if status == "exited" || status == "failed" {
 					d.finalizeReceipt(runID, status, exitCode)
+					// Release this run's activeObservedResumes reservation
+					// (if any) now that it's reached a terminal state — the
+					// same session can be resumed again. Every run has this
+					// field checked (not just ones from resumeObservedSession):
+					// it's empty for every other launch path, so the delete
+					// is a safe no-op for them.
+					d.mu.Lock()
+					if run := d.runs[runID]; run != nil && run.observedResumeKey != "" {
+						delete(d.activeObservedResumes, run.observedResumeKey)
+						run.observedResumeKey = ""
+					}
+					d.mu.Unlock()
 					if d.onRunTerminal != nil {
 						d.onRunTerminal(runID, status, exitCode)
 					}
@@ -2519,6 +2553,15 @@ type observedSessionContinueParams struct {
 // the resumed turn is a normal Lancer-tracked run: output streams back under
 // the new runId exactly like dispatch/continueRun, and it can itself be
 // continued later via agent.run.continue.
+// observedResumeKey identifies one exact on-disk vendor session for
+// dispatcher.activeObservedResumes — see that field's doc comment. \x1f
+// (unit separator) can't appear in a vendor name or a vendor-issued session
+// id, so this can't collide across different (vendor, sessionID) pairs the
+// way a plain "+" join could if either half ever contained one.
+func observedResumeKey(vendor, sessionID string) string {
+	return vendor + "\x1f" + sessionID
+}
+
 func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, evalFn policyEvalFunc, audit func(AuditEntry)) dispatchResult {
 	// agent.observedSession.continue targets a terminal-started session, not
 	// a composer-dispatched conversation turn — out of scope for the
@@ -2527,6 +2570,7 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 	if !ok {
 		return dispatchResult{Status: "error", Message: "resume-by-id not supported for agent: " + p.Vendor}
 	}
+	resumeKey := observedResumeKey(p.Vendor, p.SessionID)
 	if d.emergencyStopActive() {
 		audit(AuditEntry{Action: "observed-continue-emergency-stopped", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt})
 		return emergencyStoppedResult()
@@ -2577,13 +2621,27 @@ func (d *dispatcher) resumeObservedSession(p observedSessionContinueParams, eval
 		audit(AuditEntry{Action: "observed-continue-emergency-stopped", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt})
 		return emergencyStoppedResult()
 	}
-	d.runs[id] = &dispatchRun{ID: id, Agent: p.Vendor, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD}
+	// Same-session exclusion (activeObservedResumes's doc comment): check AND
+	// reserve inside this one critical section so two RPC calls landing
+	// concurrently can't both pass a separate check before either reserves —
+	// the reservation itself is what a second concurrent caller must see.
+	if d.activeObservedResumes == nil {
+		d.activeObservedResumes = map[string]string{}
+	}
+	if existingRunID, busy := d.activeObservedResumes[resumeKey]; busy {
+		d.mu.Unlock()
+		audit(AuditEntry{Action: "observed-continue-busy", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, ApprovalID: existingRunID})
+		return dispatchResult{Status: "busy", Message: "Already resuming this session (run " + existingRunID + ") — wait for it to finish before sending another follow-up."}
+	}
+	d.activeObservedResumes[resumeKey] = id
+	d.runs[id] = &dispatchRun{ID: id, Agent: p.Vendor, Prompt: p.Prompt, CWD: p.CWD, Model: p.Model, Status: "running", BudgetUSD: p.BudgetUSD, observedResumeKey: resumeKey}
 	d.mu.Unlock()
 	d.startReceiptAccum(id, receiptStartParams{agent: p.Vendor, model: p.Model, cwd: p.CWD})
 	handle, err := d.launch(argv, p.CWD, id, d.wrapEmitForRun(id, false))
 	if err != nil {
 		d.mu.Lock()
 		delete(d.runs, id)
+		delete(d.activeObservedResumes, resumeKey)
 		d.mu.Unlock()
 		audit(AuditEntry{Action: "observed-continue-error", Agent: p.Vendor, Kind: "dispatch", Command: p.Prompt, Effect: "allow", Rule: rule})
 		return dispatchResult{Status: "error", Message: err.Error()}
@@ -2679,7 +2737,7 @@ func (d *dispatcher) launchConversationTurn(runID string, p conversationLaunchPa
 		// HTTP connection blocks in place and resumes the ALREADY-RUNNING
 		// process on decision, but here no process has been launched yet, so
 		// there is nothing for a phone-side "Retry" tap to do except restart
-        // this whole ask-gate from scratch (the observed infinite loop). Wait
+		// this whole ask-gate from scratch (the observed infinite loop). Wait
 		// for the decision in the background and, on approve, actually run
 		// the launch this "ask" gated — using the exact same continuation
 		// (completeConversationLaunch) the allow-path below falls through to,
