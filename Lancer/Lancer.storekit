@@ -2,18 +2,18 @@
   "identifier" : "1B5E8F3A-0C7D-4E9A-9F2B-3D6A1C4E7B8F",
   "nonConsumableProducts" : [
     {
-      "displayPrice" : "14.99",
+      "displayPrice" : "89.99",
       "familyShareable" : false,
       "internalID" : "6740914657",
       "localizations" : [
         {
-          "description" : "Full access to Lancer Pro features: AI agent approval inbox, SFTP file browser, port-forwarding preview, CloudKit sync, and unlimited SSH hosts.",
-          "displayName" : "Lancer Pro",
+          "description" : "Limited-time early supporter purchase. Grandfathered into future Pro. All trust features — approvals, policy, audit, emergency stop — stay free forever.",
+          "displayName" : "Founder's Edition",
           "locale" : "en_US"
         }
       ],
       "productID" : "dev.lancer.mobile.pro",
-      "referenceName" : "Lancer Pro",
+      "referenceName" : "Founder's Edition",
       "type" : "NonConsumable"
     }
   ],

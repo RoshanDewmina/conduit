@@ -69,9 +69,10 @@ Developers and small teams running autonomous or semi-autonomous coding agents
 who want a human-approval gate and visibility into what those agents are doing
 — without giving up control of where their code and credentials live.
 
-Lancer Pro unlocks the full feature set: the agent approval inbox, SFTP file
-browser, port-forwarding preview, iCloud sync across your devices, and
-unlimited SSH hosts.
+Lancer Founder's Edition is a limited-time, one-time in-app purchase that supports early
+adopters and is grandfathered into the future Pro subscription. The core trust loop —
+approval inbox, policy, audit, emergency stop — is free. Founder's Edition unlocks
+convenience surfaces (e.g. multi-host management, advanced surfaces) at launch.
 ```
 
 (VERIFY: re-confirm SFTP browser and port-forwarding preview are both
@@ -148,7 +149,7 @@ Welcome to Lancer 1.0.
 • Dispatch new agent runs and follow up on existing ones
 • Open a real SSH terminal to any reachable host, inline in a chat session
 • Pair your own self-hosted daemon via QR code
-• iCloud sync for your hosts and keys (Lancer Pro)
+• iCloud sync for your hosts and keys (Founder's Edition)
 ```
 
 (Keep "What's New" aligned to what's actually in the build being submitted — strip
@@ -158,22 +159,18 @@ any bullet not present in that specific build.)
 
 ## In-App Purchase listing (for `dev.lancer.mobile.pro`)
 
-- **Reference name:** Lancer Pro
+- **Reference name:** Founder's Edition
 - **Type:** Non-consumable, one-time purchase (NOT a subscription — confirmed by
   `Lancer/Lancer.storekit` in this repo).
-- **Price:** $14.99 (per the local StoreKit testing configuration; VERIFY this is
-  the intended live ASC price tier — the `.storekit` file is a local test config,
-  not the source of truth for the real App Store price).
-- **Display name:** Lancer Pro
-- **Description (from local StoreKit config):** "Full access to all Lancer
-  features: AI agent approval inbox, SFTP file browser, port-forwarding preview,
-  CloudKit sync, and unlimited SSH hosts."
+- **Price:** **$89.99** (ASC tier within the $79–99 band; supersedes the old $14.99
+  draft). The local `.storekit` file mirrors this for Xcode StoreKit testing.
+- **Display name:** Founder's Edition
+- **Description:** Limited-time early-adopter purchase; grandfathered into future Pro
+  subscription. Unlocks convenience surfaces (multi-host management, advanced surfaces).
+  Core safety features (approval, policy, audit, emergency stop) remain free.
 - **VERIFY:** this IAP record does not exist yet in App Store Connect — creating it
   is a human-gated step (see `HUMAN_GATED_STEPS.md`).
 
-Note: the app also has a separate Stripe-billed "Lancer Cloud" subscription
-(hosted agents / managed AI) that is **not** an Apple IAP — it's billed externally
-via Stripe. Do not conflate the two in the ASC listing; only `dev.lancer.mobile.pro`
-needs an IAP record. VERIFY whether external-payment language in the listing needs
-Apple's External Purchase Link entitlement / disclosure depending on current App
-Store guidelines at submission time.
+Note: the repo retains a Stripe-billed hosted-cloud subscription spine (`billing.go`) for
+**V2 hosted execution** — it is **not offered at GA** and is **not** an Apple IAP. Do not
+conflate the two in the ASC listing; only `dev.lancer.mobile.pro` needs an IAP record at GA.

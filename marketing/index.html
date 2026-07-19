@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lancer — Pricing</title>
+  <meta name="description" content="Lancer pricing: free trust loop for every developer, Founder's Edition for early supporters, subscription later." />
+  <style>
+    :root {
+      --bg: #f4f4f5;
+      --card: #ffffff;
+      --ink: #0a0a0a;
+      --muted: #6b6b73;
+      --line: #e8e8ec;
+      --accent: #1a1a1a;
+      --ok: #15803d;
+      --ok-bg: #f0fdf4;
+      --highlight: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 20px 64px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    header h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 5vw, 36px);
+      letter-spacing: -0.03em;
+    }
+    header p {
+      margin: 0 auto;
+      max-width: 520px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      align-items: stretch;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .card.featured {
+      border-color: var(--accent);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--ok-bg);
+      color: var(--ok);
+      width: fit-content;
+    }
+    .badge.limited {
+      background: #eff6ff;
+      color: var(--highlight);
+    }
+    .badge.soon {
+      background: #f3f3f5;
+      color: var(--muted);
+    }
+    h2 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -0.02em;
+    }
+    .price {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+    .price span {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+    li + li { margin-top: 8px; }
+    .note {
+      margin-top: 32px;
+      padding: 16px 20px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+    }
+    footer {
+      margin-top: 48px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    footer a { color: var(--ink); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Lancer pricing</h1>
+      <p>Govern AI coding agents on your own machines. Safety is never paywalled — you pay for convenience and to support the project.</p>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <span class="badge">Always free</span>
+        <h2>Free</h2>
+        <p class="price">$0</p>
+        <ul>
+          <li>Hosted relay + push notifications</li>
+          <li>Real-time approval inbox</li>
+          <li>Policy editor and audit feed</li>
+          <li>Emergency stop</li>
+          <li>Pair your own <code>lancerd</code> daemon</li>
+        </ul>
+      </section>
+
+      <section class="card featured">
+        <span class="badge limited">Limited time</span>
+        <h2>Founder's Edition</h2>
+        <p class="price">$89.99 <span>one-time</span></p>
+        <ul>
+          <li>Early supporter purchase in the App Store</li>
+          <li>Grandfathered into future Pro forever</li>
+          <li>Convenience surfaces at launch (multi-host, advanced sync)</li>
+          <li>All trust features remain free</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <span class="badge soon">After retention proof</span>
+        <h2>Pro subscription</h2>
+        <p class="price">~$8–12<span>/mo</span></p>
+        <ul>
+          <li>Planned after GA retention proof (G5)</li>
+          <li>Multi-machine, unlimited runs, multi-device sync</li>
+          <li>Founder's Edition buyers keep Pro benefits</li>
+          <li>Not available at launch</li>
+        </ul>
+      </section>
+    </div>
+
+    <p class="note">
+      Founder's Edition is purchased inside the iOS app (Profile → Buy Founder's Edition).
+      Hosted cloud execution credits and team seats are not offered at GA.
+    </p>
+
+    <footer>
+      <p>Lancer — mobile mission control for AI coding agents.</p>
+    </footer>
+  </div>
+</body>
+</html>

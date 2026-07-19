@@ -215,7 +215,9 @@ sequence. Facts pulled from `project.yml`: app bundle `dev.lancer.mobile`, team 
    `ENABLE_CLOUDKIT` is on), `dev.lancer.mobile.widget`, `dev.lancer.mobile.liveactivity`. (Watch
    targets are **not** embedded today — `project.yml` leaves the embed commented out — so skip them
    until re-embedded.)
-3. IAP: create Non-Consumable **`dev.lancer.mobile.pro`**, $14.99. (TestFlight can run without it,
+3. IAP: create Non-Consumable **`dev.lancer.mobile.pro`** as **Founder's Edition** at
+   **$79–99** (owner picks ASC tier in band; see [`SHIP_PLAN.md`](../SHIP_PLAN.md) decision 6).
+   (TestFlight can run without it,
    but sandbox-testing the purchase needs it to exist — checklist C5.)
 4. Encryption: set **`ITSAppUsesNonExemptEncryption`** (the app uses only standard TLS/ChaCha20 →
    exempt) so each upload skips the manual compliance prompt.

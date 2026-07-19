@@ -41,18 +41,17 @@ reviewed metadata, supply real Privacy Policy / Support URLs.
 **What's needed:** App Store Connect → the app record (must exist first, see #1)
 → In-App Purchases → New → Non-Consumable.
 
-**Known values to enter (from `Lancer/Lancer.storekit`, a local test config —
-confirm these are also the intended *live* values, don't just copy blindly):**
+**Known values to enter (from [`SHIP_PLAN.md`](../SHIP_PLAN.md) decision 6; local
+`Lancer/Lancer.storekit` mirrors these for Xcode StoreKit testing):**
 - Product ID: `dev.lancer.mobile.pro`
-- Reference name: Lancer Pro
+- Reference name: Founder's Edition
 - Type: Non-Consumable (one-time purchase, not a subscription)
-- Display name: Lancer Pro
-- Description: "Full access to all Lancer features: AI agent approval inbox,
-  SFTP file browser, port-forwarding preview, CloudKit sync, and unlimited SSH
-  hosts."
-- Price: drafted as $14.99 in the local StoreKit config — **VERIFY** this is the
-  intended live price tier; the local `.storekit` file is for Xcode StoreKit
-  testing only and is not authoritative for the real App Store price.
+- Display name: Founder's Edition
+- Description: Limited-time early-adopter purchase; grandfathered into future Pro
+  subscription. Unlocks convenience surfaces (multi-host management, advanced surfaces).
+  Core safety features (approval, policy, audit, emergency stop) remain free.
+- Price: **$89.99** (ASC tier within the $79–99 band; supersedes the old $14.99 draft).
+  The local `.storekit` file mirrors this for Xcode StoreKit testing.
 
 **Owner action:** create the IAP record in ASC, set the real price tier, submit
 the IAP's required localization/screenshot for review alongside the first app

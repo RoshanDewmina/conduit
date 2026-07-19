@@ -330,6 +330,7 @@ public struct AppRoot: View {
                 }
             }
             .task {
+                await PurchaseManager.shared.load()
                 relayApprovalIngest.start()
                 relayQuestionIngest.start()
                 await RelayFleetHydration.hydrate(into: relayFleetStore)

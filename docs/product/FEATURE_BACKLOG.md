@@ -129,7 +129,7 @@ Ship **Cross-Vendor Second-Agent Review** first after MVP.
 | BiometricGate fail-open (no passcode) | P0 | **Moot — removed 2026-07-07** | `019f2f6d` | `BiometricGate` deleted entirely, commit `9e18d679`; nothing left to validate | — |
 | Emergency stop non-atomic | P0 | Fixed on branch | `019f2f6d` | Daemon latch + RPC same branch | — |
 | JWT HS256-only | P1 | Open | `019f2f6d` | `push-backend/auth.go` | — |
-| Dormant StoreKit vs Stripe entitlement | P1 | Open | `019f2f6d` | Two billing mechanisms | **Decision** |
+| Dormant StoreKit vs Stripe entitlement | P1 | **Deferred** | `019f2f6d` | Spine locked in [`SHIP_PLAN.md`](../SHIP_PLAN.md) decision 6: IAP Founder's Edition at GA; Stripe hosted credits V2 on demand | — |
 | Watch not embedded | P1 | Open | `019f2f6d` | `project.yml:138-143` | — |
 | Daemon single pairing slot | P2 | Open | `019f2f6d` | `relaypair.go` by design | — |
 | Audit chain no external anchor | P1 | Open | `019f2f6d` | `audit.go:135-180` | — |
@@ -141,11 +141,11 @@ Ship **Cross-Vendor Second-Agent Review** first after MVP.
 | Item | Status | Source | Evidence | Owner? |
 |------|--------|--------|----------|--------|
 | Positioning: govern + verify across vendors | Locked | `019f2dec`, `019f2f6d` | Master plan §3 | — |
-| Pricing: $25/mo solo · $99/mo team | Unreconciled | `019f2dec` | vs StoreKit + Stripe | **Yes** |
+| Pricing ladder | Locked | [`SHIP_PLAN.md`](../SHIP_PLAN.md) decision 6 | GA: free + Founder's Edition $79–99 IAP; post-G5 subscription; hosted credits + team on demand — see decision 6 | — |
 | Validation gate 10/5/3/1 | **Unrun** | `019f2dec` | No local evidence | **Yes** |
 | Deadline | **2026-07-21** | `019f2dec` | STATUS_LEDGER | **Yes** |
 | Workspaces repo-first vs host-first | **Decided** (repo-first) | master §9 | [ADR](../architecture/2026-07-06-repo-first-workspaces-adr.md) | — |
-| Billing consolidation (3 mechanisms) | Open | master §9 | Settings billing copy blocked | **Yes** |
+| Billing consolidation (3 mechanisms) | Deferred to G4/G5 | [`SHIP_PLAN.md`](../SHIP_PLAN.md) decision 6 | Pre-GA: framing only; execution gated on G4/G5 | — |
 | Return-to-desk single recap surface | Design check | master §9 | Work Thread | — |
 
 ---

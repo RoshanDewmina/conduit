@@ -1,5 +1,7 @@
 # Lancer status ledger
 
+> **Owner SSOT for ship plan, gates, and locked decisions: [`SHIP_PLAN.md`](SHIP_PLAN.md)** (2026-07-19).
+
 **Last updated:** 2026-07-15 night. Master still `ba73c130`; a large night session shipped
 **18 open PRs (#120–#137)** consolidated in `integration/2026-07-15-night` — none merged yet.
 **Active branch:** `master` (`ba73c130`), but the reviewable tip is `integration/2026-07-15-night`.
@@ -91,7 +93,9 @@ build roadmap §1. Exit bar: owner completes the full loop on a physical phone 5
 Owner starts `docs/dogfood-log.md` (one line/day; every laptop-reach is a bug or scope insight).
 
 **September target (owner, 07-10): App Store launch at iOS 27 GA (~Sept 14)** — S27 + LAUNCH
-work packages in the build roadmap §3.1/§3.1b; billing + legal/review unfreeze early August.
+work packages in the build roadmap §3.1/§3.1b; monetization ladder locked in
+[`SHIP_PLAN.md`](SHIP_PLAN.md) decision 6 (billing execution still G4/G5); legal/review
+unfreeze early August.
 Dogfood log by mid-Aug is the go/no-go input (downgrade path: TestFlight-only).
 **Still frozen:** team tier, hosted-cloud, Away Launch Composer. Watch: cut (owner, Jul 8).
 
@@ -118,7 +122,7 @@ Fable orchestrates via [`plans/orchestrator-state.md`](plans/orchestrator-state.
 | W0.A dirty tree + abandoned wipe worktree + stash | P0 | Phase 0 defuses |
 | Production burn list (GCS `lancerd` publish, VPS, CloudKit Production schema) | P1 | [`product/2026-07-09-production-readiness-gaps.md`](product/2026-07-09-production-readiness-gaps.md); owner-gated |
 | JWT HS256-only | P1 | Open |
-| StoreKit IAP dormant vs Stripe entitlement | P1 | Open — frozen until fork |
+| StoreKit IAP dormant vs Stripe entitlement | P1 | Decision locked — see [`SHIP_PLAN.md`](SHIP_PLAN.md) decision 6; execution G4/G5 |
 | Audit chain no external anchor | P1 | Open |
 | Daemon single relay pairing slot | P2 | Open by design |
 

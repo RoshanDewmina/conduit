@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import SettingsFeature
 
 /// Profile sheet — real pairing/device info only; no invented usage/streak.
 /// Settings is pushed on this sheet's single `NavigationStack` (not a nested sheet).
@@ -8,6 +9,7 @@ public struct ProfileView: View {
     @Environment(RelayFleetStore.self) private var relayFleetStore
     @Environment(TerminalSessionCoordinator.self) private var terminalCoordinator
     @State private var isTrustedMachinesPresented = false
+    @State private var purchaseManager = PurchaseManager.shared
 
     public init() {}
 
@@ -30,7 +32,7 @@ public struct ProfileView: View {
                             .padding(.horizontal, 20)
                             .padding(.top, 28)
 
-                        usagePlaceholderSection
+                        planSection
                             .padding(.top, 24)
 
                         connectionsSection
@@ -128,20 +130,94 @@ public struct ProfileView: View {
         return "\(usable) paired machines"
     }
 
-    private var usagePlaceholderSection: some View {
+    private var planSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ProfileSectionHeader(title: "Usage")
+            ProfileSectionHeader(title: "Plan")
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Not available yet")
-                    .font(.title3.bold())
-                    .padding(.horizontal, 20)
-                Text("Token usage, streaks, and plan details will show here when billing is wired.")
-                    .font(.subheadline)
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(planTitle)
+                            .font(.title3.bold())
+                        Text(planSubtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    if purchaseManager.isPro {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.title2)
+                            .foregroundStyle(.green)
+                            .accessibilityLabel(Text("Founder's Edition active"))
+                    }
+                }
+                .padding(.horizontal, 20)
+
+                Text("The full trust loop — approvals, policy, audit, and emergency stop — is always free.")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 20)
+
+                if !purchaseManager.isPro {
+                    Button {
+                        Task { await purchaseManager.purchase() }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if purchaseManager.purchaseState == .purchasing {
+                                ProgressView()
+                            } else {
+                                Text("Buy Founder's Edition — \(foundersPriceLabel)")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                            Spacer()
+                        }
+                        .padding(.vertical, 14)
+                        .background(Color.accentColor)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(purchaseManager.purchaseState == .purchasing || purchaseManager.product == nil)
+                    .padding(.horizontal, 20)
+                    .accessibilityIdentifier("profile.row.buy-founders")
+                }
+
+                Button {
+                    Task { await purchaseManager.restore() }
+                } label: {
+                    Text("Restore Purchases")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .accessibilityIdentifier("profile.row.restore-purchases")
+
+                if case .error(let message) = purchaseManager.purchaseState {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 20)
+                }
             }
         }
+    }
+
+    private var planTitle: String {
+        purchaseManager.isPro ? "Founder's Edition" : "Free"
+    }
+
+    private var planSubtitle: String {
+        if purchaseManager.isPro {
+            return "Grandfathered into future Pro — thank you for backing Lancer early."
+        }
+        return "Hosted relay and every safety feature included."
+    }
+
+    private var foundersPriceLabel: String {
+        purchaseManager.product?.displayPrice ?? "$89.99"
     }
 
     private var connectionsSection: some View {
