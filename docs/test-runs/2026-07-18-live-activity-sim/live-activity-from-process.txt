@@ -1,0 +1,2 @@
+UAUserActivityManager supportsActivityContinuation=1 isEnabled=1 serverPid=0 PROJECT:UserActivity-551
+UAUserActivityManager supportsActivityContinuation=1 isEnabled=1 serverPid=0 PROJECT:UserActivity-551

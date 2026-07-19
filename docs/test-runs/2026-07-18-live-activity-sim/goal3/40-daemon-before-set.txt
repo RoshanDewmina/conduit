@@ -1,0 +1,2 @@
+62001 /Users/roshansilva/.lancer/bin/lancerd daemon
+62001	0	dev.lancer.lancerd

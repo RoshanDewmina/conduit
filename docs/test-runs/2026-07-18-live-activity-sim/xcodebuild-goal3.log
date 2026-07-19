@@ -1,0 +1,916 @@
+simurgh exec: replacing caller -destination with lease-scoped simulator destination
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -destination "platform=iOS Simulator,id=D3DE691C-10A3-4898-A522-731C55C91B4C" -project Lancer.xcodeproj -scheme Lancer -configuration Debug -derivedDataPath /Users/roshansilva/.simurgh/leases/lease-220/DerivedData -clonedSourcePackagesDirPath /Users/roshansilva/.simurgh/leases/lease-220/SwiftPM -resultBundlePath /tmp/goal3-menu.xcresult "-only-testing:LancerUITests/ComposerPlusMenuAlertScopeUITests" test
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  swift-system: https://github.com/apple/swift-system.git @ 1.7.2
+  SwiftTerm: https://github.com/migueldeicaza/SwiftTerm.git @ 1.13.0
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.101.2
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  Citadel: https://github.com/orlandos-nl/Citadel.git @ 0.12.1
+  Sentry: https://github.com/getsentry/sentry-cocoa @ 8.58.4
+  swift-nio-ssh: https://github.com/Wellz26/swift-nio-ssh.git @ 0.3.6
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.1
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 3.15.1
+  LancerKit: /Volumes/LancerDev/worktrees/lancer/device-build/Packages/LancerKit
+  swift-log: https://github.com/apple/swift-log.git @ 1.14.0
+  GRDB: https://github.com/groue/GRDB.swift.git @ 6.29.3
+  BigInt: https://github.com/attaswift/BigInt.git @ 5.7.0
+
+Writing result bundle at path:
+	/tmp/goal3-menu.xcresult
+
+Build Preparation
+Build task concurrency set to 6 via user default IDEBuildOperationMaxNumberOfConcurrentCompileTasks
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (86 targets)
+    Target 'LancerUITests' in project 'Lancer'
+        ➜ Explicit dependency on target 'Lancer' in project 'Lancer'
+    Target 'Lancer' in project 'Lancer'
+        ➜ Explicit dependency on target 'LancerWidgets' in project 'Lancer'
+        ➜ Explicit dependency on target 'AppFeature-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'IntentsKit-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Sentry-product' in project 'Sentry'
+    Target 'Sentry-product' in project 'Sentry'
+        ➜ Explicit dependency on target 'SentryCppHelper' in project 'Sentry'
+    Target 'SentryCppHelper' in project 'Sentry' (no dependencies)
+    Target 'IntentsKit-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'IntentsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'IntentsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'AppFeature-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AppFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'WorkspacesFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SessionFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'InboxFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'OnboardingFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SettingsFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PreviewKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+    Target 'AppFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'WorkspacesFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SessionFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'InboxFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'OnboardingFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SettingsFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PreviewKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+    Target 'PreviewKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+    Target 'SettingsFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'SyncKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'OnboardingFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'AccountKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+    Target 'InboxFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'DiffKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+    Target 'WorkspacesFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'LancerWidgets' in project 'Lancer'
+        ➜ Explicit dependency on target 'SessionFeature-product' in project 'LancerKit'
+    Target 'SessionFeature-product' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SessionFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'SessionFeature' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'NotificationsKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+    Target 'PersistenceKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'GRDB-product' in project 'GRDB'
+    Target 'GRDB-product' in project 'GRDB'
+        ➜ Explicit dependency on target 'GRDB' in project 'GRDB'
+        ➜ Explicit dependency on target 'GRDB_GRDB' in project 'GRDB'
+    Target 'GRDB' in project 'GRDB'
+        ➜ Explicit dependency on target 'GRDB_GRDB' in project 'GRDB'
+        ➜ Explicit dependency on target 'CSQLite' in project 'GRDB'
+    Target 'CSQLite' in project 'GRDB' (no dependencies)
+    Target 'GRDB_GRDB' in project 'GRDB' (no dependencies)
+    Target 'AgentKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+    Target 'TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerKit_TerminalEngine' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'SwiftTerm-product' in project 'SwiftTerm'
+    Target 'SwiftTerm-product' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm'
+    Target 'SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm'
+    Target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm' (no dependencies)
+    Target 'LancerKit_TerminalEngine' in project 'LancerKit' (no dependencies)
+    Target 'SSHTransport' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+    Target 'SecurityKit' in project 'LancerKit'
+        ➜ Explicit dependency on target 'LancerCore' in project 'LancerKit'
+        ➜ Explicit dependency on target 'Citadel-product' in project 'Citadel'
+    Target 'Citadel-product' in project 'Citadel'
+        ➜ Explicit dependency on target 'Citadel' in project 'Citadel'
+        ➜ Explicit dependency on target 'CCitadelBcrypt' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target '_CryptoExtras-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'BigInt-product' in project 'BigInt'
+        ➜ Explicit dependency on target 'Logging-product' in project 'swift-log'
+    Target 'Citadel' in project 'Citadel'
+        ➜ Explicit dependency on target 'CCitadelBcrypt' in project 'Citadel'
+        ➜ Explicit dependency on target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target '_CryptoExtras-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'BigInt-product' in project 'BigInt'
+        ➜ Explicit dependency on target 'Logging-product' in project 'swift-log'
+    Target 'Logging-product' in project 'swift-log'
+        ➜ Explicit dependency on target 'Logging' in project 'swift-log'
+    Target 'Logging' in project 'swift-log' (no dependencies)
+    Target 'BigInt-product' in project 'BigInt'
+        ➜ Explicit dependency on target 'BigInt' in project 'BigInt'
+    Target 'BigInt' in project 'BigInt' (no dependencies)
+    Target '_CryptoExtras-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target '_CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto__CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'SwiftASN1-product' in project 'swift-asn1'
+    Target '_CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto__CryptoExtras' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'SwiftASN1-product' in project 'swift-asn1'
+    Target 'SwiftASN1-product' in project 'swift-asn1'
+        ➜ Explicit dependency on target 'SwiftASN1' in project 'swift-asn1'
+    Target 'SwiftASN1' in project 'swift-asn1' (no dependencies)
+    Target 'CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_CryptoBoringWrapper' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+    Target 'swift-crypto_CryptoBoringWrapper' in project 'swift-crypto' (no dependencies)
+    Target 'CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_CCryptoBoringSSLShims' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'CCryptoBoringSSL' in project 'swift-crypto'
+    Target 'swift-crypto_CCryptoBoringSSLShims' in project 'swift-crypto' (no dependencies)
+    Target 'CCryptoBoringSSL' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_CCryptoBoringSSL' in project 'swift-crypto'
+    Target 'swift-crypto_CCryptoBoringSSL' in project 'swift-crypto' (no dependencies)
+    Target 'swift-crypto__CryptoExtras' in project 'swift-crypto' (no dependencies)
+    Target 'NIOSSH-product' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'Crypto-product' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'NIOFoundationCompat-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOConcurrencyHelpers-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'NIOCore-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIO-product' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'swift-nio_NIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'CNIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics-product' in project 'swift-atomics'
+    Target 'Atomics-product' in project 'swift-atomics'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target '_AtomicsShims' in project 'swift-atomics' (no dependencies)
+    Target 'DequeModule-product' in project 'swift-collections'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'ContainersPreview' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target '_NIODataStructures' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWASI' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWindows' in project 'swift-nio' (no dependencies)
+    Target 'CNIOLinux' in project 'swift-nio' (no dependencies)
+    Target 'CNIODarwin' in project 'swift-nio' (no dependencies)
+    Target 'CNIOFreeBSD' in project 'swift-nio' (no dependencies)
+    Target 'CNIOOpenBSD' in project 'swift-nio' (no dependencies)
+    Target '_NIOBase64' in project 'swift-nio' (no dependencies)
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'CNIOAtomics' in project 'swift-nio' (no dependencies)
+    Target 'CCitadelBcrypt' in project 'Citadel' (no dependencies)
+    Target 'LancerCore' in project 'LancerKit' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/usr/bin/ibtool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Volumes/LancerDev/worktrees/lancer/device-build/Lancer/Resources/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -x c++ -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -x assembler-with-cpp -c /dev/null
+
+ReadFileContents /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+ExecuteExternalTool /Applications/Xcode-beta.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+Build description signature: 22c1020c0b3b065c46c4978546a82844
+Build description path: /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/XCBuildData/22c1020c0b3b065c46c4978546a82844.xcbuilddata
+ClangStatCache /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/SDKStatCaches.noindex/iphonesimulator27.0-24A5380g-510ffa00bc586f8b550ac1bc3e6d48663243818bda632a4370e1cc7a9fd181c5.sdkstatcache
+    cd /Volumes/LancerDev/worktrees/lancer/device-build/Lancer.xcodeproj
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/SDKStatCaches.noindex/iphonesimulator27.0-24A5380g-510ffa00bc586f8b550ac1bc3e6d48663243818bda632a4370e1cc7a9fd181c5.sdkstatcache
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-nio_NIOPosix.bundle/Info.plist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/swift-nio_NIOPosix-b.build/empty-swift-nio_NIOPosix.plist (in target 'swift-nio_NIOPosix' from project 'swift-nio')
+    cd /Users/roshansilva/.simurgh/leases/lease-220/SwiftPM/checkouts/swift-nio
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/swift-nio_NIOPosix-b.build/empty-swift-nio_NIOPosix.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-nio_NIOPosix.bundle/Info.plist
+
+SwiftDriver LancerUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-SwiftDriver -- /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name LancerUITests -Onone @/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.SwiftFileList -DDEBUG -warn-implicit-overrides -plugin-path /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -target arm64-apple-ios27.0-simulator -g -module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/Developer/Library/Frameworks -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/SDKStatCaches.noindex/iphonesimulator27.0-24A5380g-510ffa00bc586f8b550ac1bc3e6d48663243818bda632a4370e1cc7a9fd181c5.sdkstatcache -output-file-map /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-generated-files.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-own-target-headers.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer-5d9d10880cd1ceef54abe0c83c1e6696-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-project-headers.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources/arm64 -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-Swift.h -working-directory /Volumes/LancerDev/worktrees/lancer/device-build -experimental-emit-module-separately -disable-cmo
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto-b.build/empty-swift-crypto_Crypto.plist (in target 'swift-crypto_Crypto' from project 'swift-crypto')
+    cd /Users/roshansilva/.simurgh/leases/lease-220/SwiftPM/checkouts/swift-crypto
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto-b.build/empty-swift-crypto_Crypto.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto__CryptoExtras.bundle/Info.plist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto__CryptoExtras-b.build/empty-swift-crypto__CryptoExtras.plist (in target 'swift-crypto__CryptoExtras' from project 'swift-crypto')
+    cd /Users/roshansilva/.simurgh/leases/lease-220/SwiftPM/checkouts/swift-crypto
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto__CryptoExtras-b.build/empty-swift-crypto__CryptoExtras.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto__CryptoExtras.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSL.bundle/Info.plist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSL-b.build/empty-swift-crypto_CCryptoBoringSSL.plist (in target 'swift-crypto_CCryptoBoringSSL' from project 'swift-crypto')
+    cd /Users/roshansilva/.simurgh/leases/lease-220/SwiftPM/checkouts/swift-crypto
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSL-b.build/empty-swift-crypto_CCryptoBoringSSL.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSL.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSLShims.bundle/Info.plist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSLShims-b.build/empty-swift-crypto_CCryptoBoringSSLShims.plist (in target 'swift-crypto_CCryptoBoringSSLShims' from project 'swift-crypto')
+    cd /Users/roshansilva/.simurgh/leases/lease-220/SwiftPM/checkouts/swift-crypto
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSLShims-b.build/empty-swift-crypto_CCryptoBoringSSLShims.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CCryptoBoringSSLShims.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CryptoBoringWrapper.bundle/Info.plist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CryptoBoringWrapper-b.build/empty-swift-crypto_CryptoBoringWrapper.plist (in target 'swift-crypto_CryptoBoringWrapper' from project 'swift-crypto')
+    cd /Users/roshansilva/.simurgh/leases/lease-220/SwiftPM/checkouts/swift-crypto
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_CryptoBoringWrapper-b.build/empty-swift-crypto_CryptoBoringWrapper.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/swift-crypto_CryptoBoringWrapper.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerKit_TerminalEngine.bundle/Info.plist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/LancerKit.build/Debug-iphonesimulator/LancerKit_TerminalEngine-b.build/empty-LancerKit_TerminalEngine.plist (in target 'LancerKit_TerminalEngine' from project 'LancerKit')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build/Packages/LancerKit
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/LancerKit.build/Debug-iphonesimulator/LancerKit_TerminalEngine-b.build/empty-LancerKit_TerminalEngine.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerKit_TerminalEngine.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/SwiftTerm_SwiftTerm.bundle/Info.plist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm_SwiftTerm-b.build/empty-SwiftTerm_SwiftTerm.plist (in target 'SwiftTerm_SwiftTerm' from project 'SwiftTerm')
+    cd /Users/roshansilva/.simurgh/leases/lease-220/SwiftPM/checkouts/SwiftTerm
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm_SwiftTerm-b.build/empty-SwiftTerm_SwiftTerm.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/SwiftTerm_SwiftTerm.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/GRDB_GRDB.bundle/Info.plist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/GRDB.build/Debug-iphonesimulator/GRDB_GRDB-b.build/empty-GRDB_GRDB.plist (in target 'GRDB_GRDB' from project 'GRDB')
+    cd /Users/roshansilva/.simurgh/leases/lease-220/SwiftPM/checkouts/GRDB.swift
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/GRDB.build/Debug-iphonesimulator/GRDB_GRDB-b.build/empty-GRDB_GRDB.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/GRDB_GRDB.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/Info.plist /Volumes/LancerDev/worktrees/lancer/device-build/LancerWidgets/Info.plist (in target 'LancerWidgets' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-infoPlistUtility /Volumes/LancerDev/worktrees/lancer/device-build/LancerWidgets/Info.plist -producttype com.apple.product-type.app-extension -expandbuildsettings -format binary -platform iphonesimulator -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/GRDB_GRDB.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/LancerKit_TerminalEngine.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/SwiftTerm_SwiftTerm.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/swift-crypto_CCryptoBoringSSL.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/swift-crypto_CCryptoBoringSSLShims.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/swift-crypto_Crypto.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/swift-crypto_CryptoBoringWrapper.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/swift-crypto__CryptoExtras.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/swift-nio_NIOPosix.bundle -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/Info.plist
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Info.plist /Volumes/LancerDev/worktrees/lancer/device-build/Lancer/Info.plist (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-infoPlistUtility /Volumes/LancerDev/worktrees/lancer/device-build/Lancer/Info.plist -producttype com.apple.product-type.application -genpkginfo /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PkgInfo -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/LaunchScreen-SBPartialInfo.plist -additionalcontentfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/assetcatalog_generated_info.plist -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Frameworks/Sentry.framework -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/GRDB_GRDB.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/LancerKit_TerminalEngine.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PlugIns/LancerWidgets.appex -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/SwiftTerm_SwiftTerm.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-crypto_CCryptoBoringSSL.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-crypto_CCryptoBoringSSLShims.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-crypto_Crypto.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-crypto_CryptoBoringWrapper.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-crypto__CryptoExtras.bundle -scanforprivacyfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/swift-nio_NIOPosix.bundle -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Info.plist
+
+CopySwiftLibs /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Lancer.debug.dylib --scan-folder /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Frameworks --scan-folder /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PlugIns --scan-folder /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/SystemExtensions --scan-folder /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Extensions --scan-folder /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/System/Library/Frameworks/AppIntents.framework --platform iphonesimulator --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.5218.8.jCvL1i/Metal.xctoolchain --toolchain /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ LancerUITests (in target 'LancerUITests' from project 'Lancer')
+
+SwiftCompile normal arm64 (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    
+
+SwiftCompile normal arm64 Compiling\ ComposerPlusMenuAlertScopeUITests.swift /Volumes/LancerDev/worktrees/lancer/device-build/LancerUITests/ComposerPlusMenuAlertScopeUITests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftCompile normal arm64 /Volumes/LancerDev/worktrees/lancer/device-build/LancerUITests/ComposerPlusMenuAlertScopeUITests.swift (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-SwiftPerFileCompile ComposerPlusMenuAlertScopeUITests.swift
+
+SwiftDriverJobDiscovery normal arm64 Compiling ComposerPlusMenuAlertScopeUITests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftDriver\ Compilation LancerUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-Swift-Compilation -- /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name LancerUITests -Onone @/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.SwiftFileList -DDEBUG -warn-implicit-overrides -plugin-path /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -target arm64-apple-ios27.0-simulator -g -module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/Developer/Library/Frameworks -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/SDKStatCaches.noindex/iphonesimulator27.0-24A5380g-510ffa00bc586f8b550ac1bc3e6d48663243818bda632a4370e1cc7a9fd181c5.sdkstatcache -output-file-map /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-generated-files.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-own-target-headers.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer-5d9d10880cd1ceef54abe0c83c1e6696-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-project-headers.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources/arm64 -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-Swift.h -working-directory /Volumes/LancerDev/worktrees/lancer/device-build -experimental-emit-module-separately -disable-cmo
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for LancerUITests (in target 'LancerUITests' from project 'Lancer')
+
+SwiftDriver\ Compilation\ Requirements LancerUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name LancerUITests -Onone @/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.SwiftFileList -DDEBUG -warn-implicit-overrides -plugin-path /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -target arm64-apple-ios27.0-simulator -g -module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/Developer/Library/Frameworks -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/SDKStatCaches.noindex/iphonesimulator27.0-24A5380g-510ffa00bc586f8b550ac1bc3e6d48663243818bda632a4370e1cc7a9fd181c5.sdkstatcache -output-file-map /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-generated-files.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-own-target-headers.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer-5d9d10880cd1ceef54abe0c83c1e6696-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-project-headers.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources/arm64 -Xcc -I/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-Swift.h -working-directory /Volumes/LancerDev/worktrees/lancer/device-build -experimental-emit-module-separately -disable-cmo
+
+Copy /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.swiftmodule /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftmodule (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftmodule /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.swiftmodule
+
+Copy /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.swiftdoc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftdoc (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftdoc /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.swiftdoc
+
+Ld /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/LancerUITests normal (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios27.0-simulator -bundle -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -O0 -Xlinker -no_warn_duplicate_libraries -L/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator -L/Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator -iframework /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -iframework /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/Developer/Library/Frameworks -filelist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.LinkFileList -Xlinker -rpath -Xlinker @loader_path/Frameworks -Xlinker -rpath -Xlinker @executable_path/Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftmodule -Xlinker -needed_framework -Xlinker XCTest -framework XCTest -Xlinker -needed-lXCTestSwiftSupport -lXCTestSwiftSupport -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests.xctest-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests.xctest-Simulated.xcent.der -framework AppIntents -framework AppIntentsTesting -Xlinker -no_adhoc_codesign -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/LancerUITests
+
+Copy /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.abi.json (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.abi.json /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Copy /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftsourceinfo (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftsourceinfo /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+ExtractAppIntentsMetadata (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.5218.8.jCvL1i/Metal.xctoolchain --module-name LancerUITests --sdk-root /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk --xcode-version 27A5218g --platform-family iOS --deployment-target 27.0 --bundle-identifier dev.lancer.mobile.uitests --output /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest --target-triple arm64-apple-ios27.0-simulator --binary-file /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/LancerUITests --dependency-file /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests_dependency_info.dat --stringsdata-file /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.SwiftFileList --metadata-file-list /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests.DependencyMetadataFileList --static-metadata-file-list /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests.DependencyStaticMetadataFileList --swift-const-vals-list /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --no-app-shortcuts-localization
+2026-07-18 21:19:45.816 appintentsmetadataprocessor[31695:4510652] Starting appintentsmetadataprocessor export
+2026-07-18 21:19:45.907 appintentsmetadataprocessor[31695:4510652] Writing Metadata.appintents
+2026-07-18 21:19:45.907 appintentsmetadataprocessor[31695:4510652] Metadata root: /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Metadata.appintents
+
+CopySwiftLibs /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/LancerUITests --scan-folder /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Frameworks --scan-folder /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/PlugIns --scan-folder /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/SystemExtensions --scan-folder /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Extensions --scan-folder /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/System/Library/Frameworks/AppIntents.framework --scan-folder /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/System/Library/Frameworks/AppIntentsTesting.framework --platform iphonesimulator --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.5218.8.jCvL1i/Metal.xctoolchain --toolchain /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Info.plist /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/empty-LancerUITests.plist (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/empty-LancerUITests.plist -producttype com.apple.product-type.bundle.ui-testing -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/ProductTypeInfoPlistAdditions.plist -o /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Info.plist
+
+CodeSign /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest
+
+CodeSign /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/worktrees/lancer/device-build
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app
+/Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app: replacing existing signature
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-220/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+2026-07-18 21:19:48.580041-0400 LancerUITests-Runner[31740:4510984] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-07-18 21:19:52.966.
+Test Suite 'LancerUITests.xctest' started at 2026-07-18 21:19:52.967.
+Test Suite 'ComposerPlusMenuAlertScopeUITests' started at 2026-07-18 21:19:52.967.
+Test Case '-[LancerUITests.ComposerPlusMenuAlertScopeUITests testPlusMenuAndPermissionSubmenu]' started.
+    t =     0.01s Start Test at 2026-07-18 21:19:52.977
+    t =     0.10s Set Up
+    t =     0.10s Open dev.lancer.mobile
+    t =     0.10s     Launch dev.lancer.mobile
+2026-07-18 21:19:53.389 xcodebuild[30590:4507359] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-18 21:19:53.389 xcodebuild[30590:4507359] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[31740]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10dd98398) and /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x10dedc310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     1.73s         Setting up automation session
+    t =     6.19s         Wait for dev.lancer.mobile to idle
+    t =     8.54s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =     9.62s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =     9.63s         Checking existence of `"Workspaces" StaticText`
+    t =     9.75s Waiting 15.0s for Button (First Match) to exist
+    t =    10.78s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    10.78s         Checking existence of `Button (First Match)`
+    t =    10.81s Tap Button (First Match)
+    t =    10.81s     Wait for dev.lancer.mobile to idle
+    t =    10.81s     Find the Button (First Match)
+    t =    10.84s     Check for interrupting elements affecting "lancer, 8" Button
+    t =    10.87s         Wait for com.apple.springboard to idle
+    t =    11.00s     Found 1 interrupting element:
+    t =    11.00s         Find the "Open in “Lancer”?" Alert
+    t =    11.04s "Open in “Lancer”?" Alert from Application 'com.apple.springboard'
+    t =    11.04s     Invoking UI interruption monitors for "Open in “Lancer”?" Alert from Application 'com.apple.springboard'
+    t =    11.04s         Find the "Open in “Lancer”?" Alert
+    t =    11.08s         Checking existence of `Button (Elements matching predicate 'userTestingAttributes CONTAINS "cancel-button"')`
+    t =    11.12s         Checking existence of `Button (Elements matching predicate 'userTestingAttributes CONTAINS "cancel-button"')`
+    t =    11.15s Default interruption handler attempting to dismiss alert by tapping Button (Elements matching predicate 'userTestingAttributes CONTAINS "cancel-button"').
+    t =    11.15s         Tap Button (Elements matching predicate 'userTestingAttributes CONTAINS "cancel-button"')
+    t =    11.15s             Wait for com.apple.springboard to idle
+    t =    11.16s             Find the Button (Elements matching predicate 'userTestingAttributes CONTAINS "cancel-button"')
+    t =    11.20s             Check for interrupting elements affecting "Cancel" Button
+    t =    11.25s             Synthesize event
+    t =    11.55s             Wait for com.apple.springboard to idle
+    t =    11.89s         Waiting 1.0s for Alert to not exist
+    t =    12.89s             Checking `Expect predicate `existsNoRetry == 0` for object Alert`
+    t =    12.89s                 Checking existence of `Alert`
+    t =    12.93s             Checking existence of `Alert`
+    t =    12.95s         Verifying handling...
+    t =    13.00s Confirmed successful handling of interrupting element
+    t =    13.00s     Synthesize event
+    t =    13.31s     Wait for dev.lancer.mobile to idle
+    t =    13.68s Waiting 8.0s for "live-activity-dispatch-ok" StaticText to exist
+    t =    14.71s     Checking `Expect predicate `existsNoRetry == 1` for object "live-activity-dispatch-ok" StaticText`
+    t =    14.71s         Checking existence of `"live-activity-dispatch-ok" StaticText`
+    t =    14.77s Tap "live-activity-dispatch-ok" StaticText
+    t =    14.77s     Wait for dev.lancer.mobile to idle
+    t =    14.78s     Find the "live-activity-dispatch-ok" StaticText
+    t =    14.83s     Check for interrupting elements affecting "live-activity-dispatch-ok" StaticText
+    t =    14.88s     Synthesize event
+    t =    15.19s     Wait for dev.lancer.mobile to idle
+    t =    15.79s Waiting 10.0s for "Follow up…" TextField to exist
+    t =    16.83s     Checking `Expect predicate `existsNoRetry == 1` for object "Follow up…" TextField`
+    t =    16.83s         Checking existence of `"Follow up…" TextField`
+    t =    16.89s Waiting 15.0s for "Add context" Button to exist
+    t =    17.92s     Checking `Expect predicate `existsNoRetry == 1` for object "Add context" Button`
+    t =    17.93s         Checking existence of `"Add context" Button`
+    t =    17.95s Tap "Add context" Button
+    t =    17.95s     Wait for dev.lancer.mobile to idle
+    t =    17.96s     Find the "Add context" Button
+    t =    17.97s     Check for interrupting elements affecting "Add context" Button
+    t =    18.00s     Synthesize event
+    t =    18.30s     Wait for dev.lancer.mobile to idle
+    t =    20.95s Added attachment named 'goal3-plus-menu'
+    t =    20.95s Waiting 5.0s for Any (First Match) to exist
+    t =    21.98s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    21.98s         Checking existence of `Any (First Match)`
+    t =    22.02s Tap Any (First Match)
+    t =    22.02s     Wait for dev.lancer.mobile to idle
+    t =    22.03s     Find the Any (First Match)
+    t =    22.07s     Check for interrupting elements affecting "permission-mode-pill" Button
+    t =    22.13s     Synthesize event
+    t =    22.44s     Wait for dev.lancer.mobile to idle
+    t =    24.96s Added attachment named 'goal3-permission-submenu'
+    t =    24.96s Checking existence of `"Couldn't change permission mode" Alert`
+    t =    25.14s Added attachment named 'goal3-no-alert-hydration'
+    t =    25.15s Tear Down
+Test Case '-[LancerUITests.ComposerPlusMenuAlertScopeUITests testPlusMenuAndPermissionSubmenu]' passed (25.411 seconds).
+Test Case '-[LancerUITests.ComposerPlusMenuAlertScopeUITests testUserSetFailureShowsAlert]' started.
+    t =     0.00s Start Test at 2026-07-18 21:20:18.390
+    t =     0.05s Set Up
+    t =     0.05s Open dev.lancer.mobile
+    t =     0.05s     Launch dev.lancer.mobile
+    t =     0.05s         Terminate dev.lancer.mobile:32112
+2026-07-18 21:20:19.503 xcodebuild[30590:4507359] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-18 21:20:19.503 xcodebuild[30590:4507359] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.32s         Setting up automation session
+    t =     5.47s         Wait for dev.lancer.mobile to idle
+    t =     7.80s Waiting 20.0s for "Trusted Machines" StaticText to exist
+    t =     8.84s     Checking `Expect predicate `existsNoRetry == 1` for object "Trusted Machines" StaticText`
+    t =     8.84s         Checking existence of `"Trusted Machines" StaticText`
+    t =     8.98s Waiting 10.0s for "Relay host" StaticText to exist
+    t =    10.01s     Checking `Expect predicate `existsNoRetry == 1` for object "Relay host" StaticText`
+    t =    10.01s         Checking existence of `"Relay host" StaticText`
+    t =    10.20s Swipe left "Relay host" StaticText
+    t =    10.20s     Wait for dev.lancer.mobile to idle
+    t =    10.21s     Find the "Relay host" StaticText
+    t =    10.33s     Check for interrupting elements affecting "Relay host" StaticText
+    t =    10.38s     Synthesize event
+    t =    10.73s     Wait for dev.lancer.mobile to idle
+    t =    11.44s Waiting 4.0s for "Remove" Button to exist
+    t =    12.47s     Checking `Expect predicate `existsNoRetry == 1` for object "Remove" Button`
+    t =    12.47s         Checking existence of `"Remove" Button`
+    t =    12.56s Tap "Remove" Button
+    t =    12.56s     Wait for dev.lancer.mobile to idle
+    t =    12.56s     Find the "Remove" Button
+    t =    12.64s     Check for interrupting elements affecting "trusted-machines.remove.EF5818C1" Button
+    t =    12.68s     Synthesize event
+    t =    12.98s     Wait for dev.lancer.mobile to idle
+    t =    15.10s Added attachment named 'goal3-unpaired'
+    t =    15.10s Terminate dev.lancer.mobile:33250
+    t =    16.15s Open dev.lancer.mobile
+    t =    16.15s     Launch dev.lancer.mobile
+2026-07-18 21:20:34.544 xcodebuild[30590:4507359] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-18 21:20:34.544 xcodebuild[30590:4507359] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    16.36s         Setting up automation session
+    t =    20.17s         Wait for dev.lancer.mobile to idle
+    t =    22.02s Waiting 45.0s for "Workspaces" StaticText to exist
+    t =    23.04s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    23.04s         Checking existence of `"Workspaces" StaticText`
+    t =    23.15s Waiting 15.0s for Button (First Match) to exist
+    t =    24.18s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =    24.18s         Checking existence of `Button (First Match)`
+    t =    24.21s Tap Button (First Match)
+    t =    24.21s     Wait for dev.lancer.mobile to idle
+    t =    24.21s     Find the Button (First Match)
+    t =    24.24s     Check for interrupting elements affecting "lancer, 8" Button
+    t =    24.26s     Synthesize event
+    t =    24.57s     Wait for dev.lancer.mobile to idle
+    t =    24.89s Waiting 8.0s for "live-activity-dispatch-ok" StaticText to exist
+    t =    25.92s     Checking `Expect predicate `existsNoRetry == 1` for object "live-activity-dispatch-ok" StaticText`
+    t =    25.92s         Checking existence of `"live-activity-dispatch-ok" StaticText`
+    t =    25.97s Tap "live-activity-dispatch-ok" StaticText
+    t =    25.97s     Wait for dev.lancer.mobile to idle
+    t =    25.97s     Find the "live-activity-dispatch-ok" StaticText
+    t =    26.00s     Check for interrupting elements affecting "live-activity-dispatch-ok" StaticText
+    t =    26.05s     Synthesize event
+    t =    26.34s     Wait for dev.lancer.mobile to idle
+    t =    26.71s Waiting 10.0s for "Follow up…" TextField to exist
+    t =    27.73s     Checking `Expect predicate `existsNoRetry == 1` for object "Follow up…" TextField`
+    t =    27.73s         Checking existence of `"Follow up…" TextField`
+    t =    27.77s Waiting 15.0s for "Add context" Button to exist
+    t =    28.80s     Checking `Expect predicate `existsNoRetry == 1` for object "Add context" Button`
+    t =    28.80s         Checking existence of `"Add context" Button`
+    t =    28.83s Tap "Add context" Button
+    t =    28.83s     Wait for dev.lancer.mobile to idle
+    t =    28.84s     Find the "Add context" Button
+    t =    28.85s     Check for interrupting elements affecting "Add context" Button
+    t =    28.88s     Synthesize event
+    t =    29.18s     Wait for dev.lancer.mobile to idle
+    t =    30.33s Waiting 5.0s for Any (First Match) to exist
+    t =    31.36s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    31.36s         Checking existence of `Any (First Match)`
+    t =    31.39s Tap Any (First Match)
+    t =    31.39s     Wait for dev.lancer.mobile to idle
+    t =    31.39s     Find the Any (First Match)
+    t =    31.42s     Check for interrupting elements affecting "permission-mode-pill" Button
+    t =    31.46s     Synthesize event
+    t =    31.76s     Wait for dev.lancer.mobile to idle
+    t =    32.90s Waiting 2.0s for "Always ask" Button to exist
+    t =    33.93s     Checking `Expect predicate `existsNoRetry == 1` for object "Always ask" Button`
+    t =    33.93s         Checking existence of `"Always ask" Button`
+    t =    33.98s Find the "Always ask" Button
+    t =    34.02s Tap "Always ask" Button
+    t =    34.02s     Wait for dev.lancer.mobile to idle
+    t =    34.02s     Find the "Always ask" Button
+    t =    34.05s     Check for interrupting elements affecting "Always ask" Button
+    t =    34.08s     Synthesize event
+    t =    34.38s     Wait for dev.lancer.mobile to idle
+    t =    39.94s Added attachment named 'goal3-user-set-result'
+    t =    39.95s Waiting 8.0s for "Couldn't change permission mode" Alert to exist
+    t =    40.96s     Checking `Expect predicate `existsNoRetry == 1` for object "Couldn't change permission mode" Alert`
+    t =    40.96s         Checking existence of `"Couldn't change permission mode" Alert`
+    t =    41.01s         Capturing element debug description
+    t =    41.95s     Checking `Expect predicate `existsNoRetry == 1` for object "Couldn't change permission mode" Alert`
+    t =    41.96s         Checking existence of `"Couldn't change permission mode" Alert`
+    t =    42.05s         Capturing element debug description
+    t =    42.97s     Checking `Expect predicate `existsNoRetry == 1` for object "Couldn't change permission mode" Alert`
+    t =    42.97s         Checking existence of `"Couldn't change permission mode" Alert`
+    t =    43.01s         Capturing element debug description
+    t =    43.95s     Checking `Expect predicate `existsNoRetry == 1` for object "Couldn't change permission mode" Alert`
+    t =    43.95s         Checking existence of `"Couldn't change permission mode" Alert`
+    t =    43.99s         Capturing element debug description
+    t =    45.03s     Checking `Expect predicate `existsNoRetry == 1` for object "Couldn't change permission mode" Alert`
+    t =    45.03s         Checking existence of `"Couldn't change permission mode" Alert`
+    t =    45.07s         Capturing element debug description
+    t =    45.99s     Checking `Expect predicate `existsNoRetry == 1` for object "Couldn't change permission mode" Alert`
+    t =    45.99s         Checking existence of `"Couldn't change permission mode" Alert`
+    t =    46.04s         Capturing element debug description
+    t =    46.97s     Checking `Expect predicate `existsNoRetry == 1` for object "Couldn't change permission mode" Alert`
+    t =    46.97s         Checking existence of `"Couldn't change permission mode" Alert`
+    t =    47.02s         Capturing element debug description
+    t =    47.95s     Checking `Expect predicate `existsNoRetry == 1` for object "Couldn't change permission mode" Alert`
+    t =    47.95s         Checking existence of `"Couldn't change permission mode" Alert`
+    t =    47.99s         Capturing element debug description
+    t =    47.99s     Checking existence of `"Couldn't change permission mode" Alert`
+    t =    48.02s Collecting debug information to assist test failure triage
+    t =    48.02s     Requesting snapshot of accessibility hierarchy for app with pid 33919
+    t =    48.08s Checking existence of `"Couldn't change permission mode" StaticText`
+/Volumes/LancerDev/worktrees/lancer/device-build/LancerUITests/ComposerPlusMenuAlertScopeUITests.swift:129: error: -[LancerUITests.ComposerPlusMenuAlertScopeUITests testUserSetFailureShowsAlert] : XCTAssertTrue failed - user SET failure must show 'Couldn't change permission mode' alert
+    t =    49.59s Checking existence of `"Couldn't change permission mode" Alert`
+    t =    50.49s Tear Down
+Test Case '-[LancerUITests.ComposerPlusMenuAlertScopeUITests testUserSetFailureShowsAlert]' failed (51.121 seconds).
+Test Suite 'ComposerPlusMenuAlertScopeUITests' failed at 2026-07-18 21:21:09.511.
+	 Executed 2 tests, with 1 failure (0 unexpected) in 76.532 (76.544) seconds
+Test Suite 'LancerUITests.xctest' failed at 2026-07-18 21:21:09.514.
+	 Executed 2 tests, with 1 failure (0 unexpected) in 76.532 (76.547) seconds
+Test Suite 'Selected tests' failed at 2026-07-18 21:21:09.515.
+	 Executed 2 tests, with 1 failure (0 unexpected) in 76.532 (76.549) seconds
+2026-07-18 21:31:10.026 xcodebuild[30590:4521472]  IDETestOperationsObserverDebug: Failure collecting diagnostics from simulator: Timed out after 600.0 seconds while waiting for a response from the invoked process
+2026-07-18 21:31:10.199 xcodebuild[30590:4507359] [MT] IDETestOperationsObserverDebug: 683.984 elapsed -- Testing started completed.
+2026-07-18 21:31:10.200 xcodebuild[30590:4507359] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-07-18 21:31:10.200 xcodebuild[30590:4507359] [MT] IDETestOperationsObserverDebug: 683.984 sec, +683.984 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/goal3-menu.xcresult
+
+Failing tests:
+	ComposerPlusMenuAlertScopeUITests.testUserSetFailureShowsAlert()
+
+** TEST FAILED **
+
+Testing started

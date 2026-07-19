@@ -1,0 +1,6 @@
+watcher start Sat Jul 18 22:07:39 EDT 2026
+timeout waiting for Activity.request Sat Jul 18 22:11:03 EDT 2026
+Filtering the log data using "subsystem == "dev.lancer.mobile" AND category == "LiveActivity""
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: 49D27DA9-FFBC-492C-80E0-472B71321752 (screenID: 1, name: LCD)
+Wrote screenshot to: /tmp/la-g1-timeout.png

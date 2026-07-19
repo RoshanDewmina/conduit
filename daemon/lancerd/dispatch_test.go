@@ -186,6 +186,88 @@ func TestResumeObservedSessionLaunchesNewRun(t *testing.T) {
 	}
 }
 
+// TestResumeObservedSessionSameSessionBusyRejectsSecondLaunch proves the
+// 2026-07-18 fix: two overlapping agent.observedSession.continue calls
+// targeting the EXACT SAME vendor+sessionID (e.g. a slow first reply plus an
+// impatient second follow-up tap) must not both launch a
+// `claude --resume <sessionId>` process — two OS processes concurrently
+// appending to the same on-disk session transcript is a real corruption
+// risk the vendor CLI's resume mechanism was never designed to tolerate.
+// The first run is left deliberately non-terminal (launch stub never emits
+// agent.run.status) so the second call finds the reservation still held.
+func TestResumeObservedSessionSameSessionBusyRejectsSecondLaunch(t *testing.T) {
+	launchCount := 0
+	d := newDispatcher()
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		launchCount++
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	first := d.resumeObservedSession(observedSessionContinueParams{
+		Vendor: "claudeCode", SessionID: "sess-busy", CWD: "/repo", Prompt: "first follow-up",
+	}, allowEval, noAudit)
+	if first.Status != "started" || first.RunID == "" {
+		t.Fatalf("want first call started, got %+v", first)
+	}
+
+	second := d.resumeObservedSession(observedSessionContinueParams{
+		Vendor: "claudeCode", SessionID: "sess-busy", CWD: "/repo", Prompt: "second follow-up",
+	}, allowEval, noAudit)
+	if second.Status != "busy" {
+		t.Fatalf("want second concurrent call for the same session rejected as busy, got %+v", second)
+	}
+	if launchCount != 1 {
+		t.Fatalf("want exactly 1 process launched for the same session while the first is still running, got %d", launchCount)
+	}
+
+	// A different session is NOT blocked by the first one's reservation.
+	other := d.resumeObservedSession(observedSessionContinueParams{
+		Vendor: "claudeCode", SessionID: "sess-other", CWD: "/repo", Prompt: "unrelated session",
+	}, allowEval, noAudit)
+	if other.Status != "started" {
+		t.Fatalf("want an unrelated session unaffected by another session's reservation, got %+v", other)
+	}
+	if launchCount != 2 {
+		t.Fatalf("want the unrelated session's launch to go through, got launchCount=%d", launchCount)
+	}
+}
+
+// TestResumeObservedSessionReservationReleasedOnTerminal proves the
+// reservation set by resumeObservedSession is released once that run
+// reaches a terminal agent.run.status ("exited"/"failed"), so a LATER
+// follow-up to the same session (after the first one actually finished) is
+// not permanently blocked.
+func TestResumeObservedSessionReservationReleasedOnTerminal(t *testing.T) {
+	d := newDispatcher()
+	launchCount := 0
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		launchCount++
+		// Emit synchronously (not `go emit(...)`) so the terminal status —
+		// and this test's release-the-reservation code path — has
+		// definitely run before resumeObservedSession returns.
+		emit("agent.run.status", map[string]any{"runId": runID, "status": "exited", "exitCode": 0})
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	first := d.resumeObservedSession(observedSessionContinueParams{
+		Vendor: "claudeCode", SessionID: "sess-done", CWD: "/repo", Prompt: "first follow-up",
+	}, allowEval, noAudit)
+	if first.Status != "started" {
+		t.Fatalf("want first call started, got %+v", first)
+	}
+	if run := d.runs[first.RunID]; run == nil || run.observedResumeKey != "" {
+		t.Fatalf("want the reservation cleared on the run record once terminal, got %+v", run)
+	}
+
+	second := d.resumeObservedSession(observedSessionContinueParams{
+		Vendor: "claudeCode", SessionID: "sess-done", CWD: "/repo", Prompt: "second follow-up, after the first finished",
+	}, allowEval, noAudit)
+	if second.Status != "started" {
+		t.Fatalf("want a follow-up AFTER the prior run finished to launch normally, got %+v", second)
+	}
+	if launchCount != 2 {
+		t.Fatalf("want both calls to launch (sequential, not overlapping), got launchCount=%d", launchCount)
+	}
+}
+
 func TestResumeObservedSessionDeniedDoesNotLaunch(t *testing.T) {
 	launched := false
 	d := newDispatcher()
@@ -211,6 +293,55 @@ func TestResumeObservedSessionUnknownVendor(t *testing.T) {
 	}, allowEval, noAudit)
 	if res.Status != "error" {
 		t.Fatalf("want error for unsupported vendor, got %q (%s)", res.Status, res.Message)
+	}
+}
+
+// TestOnRunStartedFiresOnceOnDispatchedLaunch proves the Live Activity
+// push-to-start hook: a successful dispatch whose launcher emits
+// agent.run.status "running" (mirroring realLauncher after cmd.Start) invokes
+// onRunStarted exactly once with the run's agent — and a duplicate "running"
+// emit does not fire again. A launcher that never emits "running" must not
+// invoke the callback (failed Start / stub that skips the status event).
+func TestOnRunStartedFiresOnceOnDispatchedLaunch(t *testing.T) {
+	var started []struct{ runID, agent string }
+	d := newDispatcher()
+	d.onRunStarted = func(runID, agent string) {
+		started = append(started, struct{ runID, agent string }{runID, agent})
+	}
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		// Mirror realLauncher: emit "running" once the process is confirmed started.
+		emit("agent.run.status", map[string]any{"runId": runID, "status": "running"})
+		// A second "running" must not double-fire (startedNotified guard).
+		emit("agent.run.status", map[string]any{"runId": runID, "status": "running"})
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	res := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/repo", Prompt: "hi"},
+		allowEval, noAudit)
+	if res.Status != "started" || res.RunID == "" {
+		t.Fatalf("want started with a runId, got %+v", res)
+	}
+	if len(started) != 1 {
+		t.Fatalf("want onRunStarted exactly once, got %d calls: %+v", len(started), started)
+	}
+	if started[0].runID != res.RunID {
+		t.Fatalf("onRunStarted runID = %q, want %q", started[0].runID, res.RunID)
+	}
+	if started[0].agent != "claudeCode" {
+		t.Fatalf("onRunStarted agent = %q, want claudeCode", started[0].agent)
+	}
+
+	// Launch path that never emits "running" must not invoke the callback.
+	started = nil
+	d.launch = func(argv []string, cwd, runID string, emit emitFunc) (*procHandle, error) {
+		return &procHandle{kill: func() {}, pause: func() {}, resume: func() {}}, nil
+	}
+	res2 := d.dispatch(dispatchParams{Agent: "claudeCode", CWD: "/repo", Prompt: "again"},
+		allowEval, noAudit)
+	if res2.Status != "started" {
+		t.Fatalf("want second dispatch started, got %+v", res2)
+	}
+	if len(started) != 0 {
+		t.Fatalf("want no onRunStarted when launcher skips running status, got %+v", started)
 	}
 }
 

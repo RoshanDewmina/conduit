@@ -1,0 +1,40 @@
+simurgh exec: replacing caller -destination with lease-scoped simulator destination
+Command line invocation:
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/xcodebuild -destination "platform=iOS Simulator,id=D3DE691C-10A3-4898-A522-731C55C91B4C" -project Lancer.xcodeproj -scheme Lancer -configuration Debug -derivedDataPath /Users/roshansilva/.simurgh/leases/lease-220/DerivedData -clonedSourcePackagesDirPath /Users/roshansilva/.simurgh/leases/lease-220/SwiftPM -resultBundlePath /tmp/goal3-set-alert.xcresult "-only-testing:LancerUITests/PermissionSetAlertUITests/testSetFailureShowsAlertWhenDaemonDown" test
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-log: https://github.com/apple/swift-log.git @ 1.14.0
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.1
+  Sentry: https://github.com/getsentry/sentry-cocoa @ 8.58.4
+  BigInt: https://github.com/attaswift/BigInt.git @ 5.7.0
+  swift-nio-ssh: https://github.com/Wellz26/swift-nio-ssh.git @ 0.3.6
+  SwiftTerm: https://github.com/migueldeicaza/SwiftTerm.git @ 1.13.0
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.101.2
+  Citadel: https://github.com/orlandos-nl/Citadel.git @ 0.12.1
+  GRDB: https://github.com/groue/GRDB.swift.git @ 6.29.3
+  LancerKit: /Volumes/LancerDev/worktrees/lancer/device-build/Packages/LancerKit
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 3.15.1
+  swift-system: https://github.com/apple/swift-system.git @ 1.7.2
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+
+Writing result bundle at path:
+	/tmp/goal3-set-alert.xcresult
+
+xcodebuild: error: Unable to find a device matching the provided destination specifier:
+		{ platform:iOS Simulator, id:D3DE691C-10A3-4898-A522-731C55C91B4C }
+
+	The requested device could not be found because no available devices matched the request.
+
+	Destinations compatible with the "Lancer" scheme:
+		{ platform:macOS, arch:arm64, variant:Designed for [iPad,iPhone], id:00008132-001665C43CD9801C, name:My Mac }
+		{ platform:iOS, arch:arm64, id:00008150-0001653C26F8401C, name:Roshan’s iPhone }
+		{ platform:iOS, id:dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder, name:Any iOS Device }
+		{ platform:iOS Simulator, id:dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder, name:Any iOS Simulator Device }
+
+	Destinations incompatible with the "Lancer" scheme:
+		{ platform:macOS, arch:arm64e, id:00008132-001665C43CD9801C, name:My Mac, error:My Mac’s macOS platform doesn’t match Lancer.app’s supported platforms. You can change Lancer.app’s Base SDK or Supported Platforms to support My Mac. }

@@ -10,9 +10,15 @@ import WidgetKit
 /// (`SessionViewModel.writeWidgetSnapshot`) — pending-approval count changes on
 /// its own cadence, independent of connection status.
 extension ApprovalRepository {
-    public func writeApprovalWidgetSnapshot() async {
+    /// - Parameter suiteName: Overridable only for tests, which need an
+    ///   isolated `UserDefaults` domain instead of the real device's shared
+    ///   App Group (`WidgetSnapshot.appGroupID`, the production default) —
+    ///   matches the per-test random-suite convention already used
+    ///   throughout `LancerKitTests` (e.g. `DeviceIdentityTests`,
+    ///   `GovernanceFeatureTests`).
+    public func writeApprovalWidgetSnapshot(suiteName: String = WidgetSnapshot.appGroupID) async {
         guard let pending = try? await self.pending() else { return }
-        guard let defaults = UserDefaults(suiteName: WidgetSnapshot.appGroupID) else { return }
+        guard let defaults = UserDefaults(suiteName: suiteName) else { return }
         defaults.set(pending.count, forKey: WidgetSnapshot.pendingApprovalsKey)
         // `pending()` already orders by createdAt DESC, so `first` is the newest.
         if let newest = pending.first {

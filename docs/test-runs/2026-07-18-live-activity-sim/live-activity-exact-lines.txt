@@ -1,0 +1,8 @@
+2026-07-18 21:15:24.440 I  Lancer[21655:446464] [dev.lancer.mobile:LiveActivity] start() called, isEnabled=true
+2026-07-18 21:15:24.505 I  Lancer[21655:446464] [dev.lancer.mobile:LiveActivity] Activity.request succeeded, id=BA85B5EF-1642-45A4-A28C-055BC427EEC8
+2026-07-18 21:15:24.505 I  Lancer[21655:446464] [dev.lancer.mobile:LiveActivity] startTokenMonitor watching pushTokenUpdates for activityKey=conv_4042d9a8-4de2-43de-9859-7e37041e16c4
+2026-07-18 21:15:25.619 I  Lancer[21655:446464] [dev.lancer.mobile:LiveActivity] pushTokenUpdates delivered token, len=256
+
+# Island-capture re-dispatch (2026-07-18 21:18:07) — ActivityKit refused while UITest pressed Home:
+2026-07-18 21:18:07.017 I  Lancer[27219:44a183] [dev.lancer.mobile:LiveActivity] start() called, isEnabled=true
+2026-07-18 21:18:07.052 E  Lancer[27219:44a183] [dev.lancer.mobile:LiveActivity] Activity.request FAILED: ActivityKit.ActivityAuthorizationError.visibility

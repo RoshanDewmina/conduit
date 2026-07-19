@@ -333,6 +333,15 @@ type server struct {
 	emit       func([]byte) error
 	deviceMu   sync.RWMutex
 	device     *registeredDevice
+	// observedPushed tracks vendor observed-session IDs for which this process
+	// has already fired postRunStartPush (Live Activity push-to-start for
+	// terminal-started agents). Cleared when a session leaves the active set
+	// so a later burst can re-trigger. Guarded by observedPushMu.
+	observedPushMu sync.Mutex
+	observedPushed map[string]struct{}
+	// listObservedSessions is a test seam for the observed-activity poller;
+	// nil ⇒ buildSessionIndex(s.home).
+	listObservedSessions func(home string) ([]SessionInfo, error)
 	// approvalRetired removes one resolved approval from the resident-owned
 	// delivery queue. It is nil outside the resident daemon (for example, in
 	// stdio-only tests). Removing by ID avoids whole-store snapshot races when
@@ -413,6 +422,7 @@ func newServer(home string) *server {
 		loopsPath:      filepath.Join(home, ".lancer", "loops.json"),
 		runStderr:      map[string]string{},
 		runResultError: map[string]string{},
+		observedPushed: map[string]struct{}{},
 	}
 	s.loadLoops()
 	// The conversation ledger opens its own SQLite file under <home>/.lancer —
@@ -478,6 +488,7 @@ func newServer(home string) *server {
 	// same serialized writer the approval-pending notification uses.
 	s.dispatcher.emit = s.emitNotification
 	s.dispatcher.onRunTerminal = s.handleRunTerminal
+	s.dispatcher.onRunStarted = s.handleRunStarted
 	return s
 }
 
@@ -495,6 +506,20 @@ func (s *server) handleRunTerminal(runID, status string, exitCode int) {
 	if status == "exited" && exitCode == 0 {
 		_, _ = s.removeManagedWorktree(repoRoot, wtPath)
 	}
+}
+
+// handleRunStarted fires when a Lancer-dispatched run first becomes "running".
+// It push-to-starts a Live Activity via the push-backend when a phone is
+// registered — sessionID MUST be the phone's persistent device session
+// (dev.SessionID), not the agent run ID (same ID space as postApprovalPush).
+func (s *server) handleRunStarted(runID, agent string) {
+	s.deviceMu.RLock()
+	dev := s.device
+	s.deviceMu.RUnlock()
+	if dev == nil || dev.PushBackendURL == "" {
+		return
+	}
+	go s.postRunStartPush(dev, dev.SessionID, &agent, nil, "")
 }
 
 // deliverApprovalEvent is the single delivery chokepoint for an ApprovalEvent
@@ -932,6 +957,7 @@ func runServeLegacy() error {
 	s := newServer(serverHome())
 	ensureClaudeHookWiredOnBoot() // plain dispatches launch immediately (hook still gates tools)
 	s.startScheduler(make(chan struct{}))
+	s.startObservedActivityPush(make(chan struct{}))
 
 	sockPath, err := socketPath()
 	if err != nil {
@@ -2419,6 +2445,62 @@ func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		fmt.Fprintf(os.Stderr, "push-backend /approval rejected: HTTP %d\n", resp.StatusCode)
+	}
+}
+
+// postRunStartPush notifies the push-backend that an agent run just became
+// active, so it can push-to-start a Live Activity for sessions that have a
+// push-to-start token on file but no local Activity running yet — the only
+// way to surface a Live Activity when the app is fully closed (relay-only
+// architecture, no local process to call ActivityKit directly). Mirrors
+// postApprovalPush's shape; hits POST /run-start (push-backend/main.go
+// handleRunStart -> pushLiveActivityStart), which already no-ops safely when
+// there's no push-to-start token or an activity token is already on file (a
+// heuristic for "a local Activity is probably already running" — see its own
+// doc comment in daemon/push-backend/liveactivity.go).
+//
+// Callers MUST NOT pass raw command text as redactedSummary — push-backend
+// puts it directly in the APNs alert body with no further redaction on this
+// path (unlike /approval, which redacts server-side via redactSummary()).
+// Leave it empty to get pushLiveActivityStart's safe "Agent run started"
+// default, or pass an already-redacted summary (risk tier + tool category,
+// never the command/args/cwd).
+func (s *server) postRunStartPush(dev *registeredDevice, sessionID string, agent *string, approvalID *string, redactedSummary string) {
+	hostname, _ := os.Hostname()
+	hostID := ""
+	if s.conversations != nil {
+		hostID = s.conversations.hostID
+	}
+	payload := map[string]interface{}{
+		"sessionId":       sessionID,
+		"hostId":          hostID,
+		"hostName":        hostname,
+		"agent":           agent,
+		"approvalId":      approvalID,
+		"redactedSummary": redactedSummary,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	url := strings.TrimRight(dev.PushBackendURL, "/") + "/run-start"
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if secret := strings.TrimSpace(os.Getenv("APPROVAL_RELAY_SECRET")); secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "push-backend /run-start POST failed: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		fmt.Fprintf(os.Stderr, "push-backend /run-start rejected: HTTP %d\n", resp.StatusCode)
 	}
 }
 

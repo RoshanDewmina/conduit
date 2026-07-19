@@ -40,6 +40,7 @@ func runDaemon() error {
 	}
 	ensureClaudeHookWiredOnBoot()              // so plain dispatches launch immediately (hook still gates tools)
 	r.core.startScheduler(make(chan struct{})) // fires due schedules for the process lifetime
+	r.core.startObservedActivityPush(make(chan struct{})) // Live Activity push-to-start for terminal-started agents
 
 	// Warm Claude auth cache in the background so the first phone send after
 	// daemon start / pair does not pay a cold `claude auth status` probe inside

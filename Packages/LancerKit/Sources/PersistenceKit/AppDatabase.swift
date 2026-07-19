@@ -15,17 +15,138 @@ public final class AppDatabase: Sendable {
     // MARK: - Bootstrap
 
     public static func openShared() throws -> AppDatabase {
-        let url = try FileManager.default
-            .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("Lancer/db.sqlite")
-        try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
+        let url = try sharedDatabaseURL()
         var config = Configuration()
         config.defaultTransactionKind = .immediate
+        // Multiple processes (main app, LancerWidgets extension — Live
+        // Activity / Lock Screen `ApprovalActionIntent` runs there, not in
+        // the main app process) now open the same physical file. GRDB's
+        // DatabasePool already uses WAL, which supports concurrent
+        // multi-process readers/writers; give a contending writer a few
+        // seconds to retry instead of failing immediately with SQLITE_BUSY.
+        config.busyMode = .timeout(5)
         let pool = try DatabasePool(path: url.path, configuration: config)
         return try AppDatabase(pool)
+    }
+
+    /// Resolves the single physical database file every process that touches
+    /// Lancer's local data must share: the main app, the `LancerWidgets`
+    /// extension (a `LiveActivityIntent` such as `ApprovalActionIntent` runs
+    /// in the widget extension's own process, not the main app's — see its
+    /// doc comment), and the Watch companion. Must live in the App Group
+    /// container (`group.dev.lancer.mobile`, already used for
+    /// `WidgetSnapshot`'s `UserDefaults`), not `.applicationSupportDirectory`
+    /// — that path is scoped to the calling process's own private sandbox
+    /// container, so a decision made from the Lock Screen / Dynamic Island
+    /// used to land in a throwaway database the main app could never see,
+    /// leaving its local row permanently "pending" even though the decision
+    /// correctly reached the daemon over the network — the root cause of the
+    /// Home Screen widget showing an inflated approval count with a stale
+    /// summary line (`docs/test-runs/` widget investigation).
+    private static func sharedDatabaseURL() throws -> URL {
+        guard let groupContainer = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: WidgetSnapshot.appGroupID
+        ) else {
+            throw LancerError.databaseFailure(detail: "app group container unavailable")
+        }
+        let dir = groupContainer.appendingPathComponent("Lancer", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let newURL = dir.appendingPathComponent("db.sqlite")
+
+        // One-time migration for existing installs: earlier builds stored
+        // the database in the main app's private Application Support
+        // directory. Copy it (plus GRDB's WAL/SHM sidecar files, so no
+        // recently-committed rows are lost) into the App Group container the
+        // first time this runs, so upgrading users keep their history
+        // instead of silently starting from an empty database.
+        if !FileManager.default.fileExists(atPath: newURL.path) {
+            migrateLegacyDatabaseIfNeeded(into: dir, newURL: newURL, legacyURLOverride: nil)
+        }
+        return newURL
+    }
+
+    /// Performs the one-time legacy-database migration `sharedDatabaseURL()`
+    /// triggers. Failure-safe by construction, unlike a naive `try?`-per-file
+    /// copy: every file that exists at the legacy location is first copied to
+    /// a `.migrating-<uuid>` temp name inside the SAME destination directory
+    /// (so the later rename is a same-volume atomic move, not a cross-volume
+    /// copy), and only once every copy has fully succeeded are any of them
+    /// renamed into their real names — sidecars (`-wal`/`-shm`) before
+    /// `db.sqlite` itself, so no other process can ever observe `db.sqlite`
+    /// at its final path before its sidecars are already there (matters
+    /// because `sharedDatabaseURL()`'s caller gates entirely on whether
+    /// `db.sqlite` exists). If any copy fails partway, every staged temp file
+    /// is removed and the function returns with `newURL` still not
+    /// existing — the legacy source is never touched, and `openShared()`
+    /// will simply retry this same migration on the next launch rather than
+    /// silently leaving a partial or empty database at the real path (the
+    /// failure mode a bare `try?` produced before this fix: a disk-pressure
+    /// or interrupted-copy error was swallowed, `db.sqlite` could end up
+    /// present-but-empty, and the "does the file exist" completion check
+    /// would treat that as "already migrated" forever, permanently losing
+    /// the user's local history with no error surfaced anywhere).
+    /// `legacyURLOverride` exists purely so tests can point this at a temp
+    /// directory instead of the real per-app Application Support directory —
+    /// production always passes `nil` (the real path is resolved below).
+    /// `internal` (not `private`) for the same reason: `@testable import`
+    /// only reaches non-`private` declarations.
+    static func migrateLegacyDatabaseIfNeeded(into dir: URL, newURL: URL, legacyURLOverride: URL?) {
+        let resolvedLegacyURL = legacyURLOverride ?? (try? FileManager.default
+            .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+            .appendingPathComponent("Lancer/db.sqlite"))
+        guard let legacyURL = resolvedLegacyURL,
+            FileManager.default.fileExists(atPath: legacyURL.path)
+        else { return }
+
+        let tempSuffix = "migrating-\(UUID().uuidString)"
+        var staged: [(temp: URL, finalName: String)] = []
+
+        func stageIfPresent(sourcePath: String, finalName: String) -> Bool {
+            guard FileManager.default.fileExists(atPath: sourcePath) else {
+                return true // sidecar legitimately absent; not a failure
+            }
+            let temp = dir.appendingPathComponent("\(finalName).\(tempSuffix)")
+            do {
+                try FileManager.default.copyItem(at: URL(fileURLWithPath: sourcePath), to: temp)
+                staged.append((temp, finalName))
+                return true
+            } catch {
+                return false
+            }
+        }
+
+        func cleanupStaged() {
+            for entry in staged {
+                try? FileManager.default.removeItem(at: entry.temp)
+            }
+        }
+
+        // Stage sidecars and the main file under temp names before renaming
+        // anything — a failure here leaves zero trace at the final paths.
+        let sidecarsOK = stageIfPresent(sourcePath: legacyURL.path + "-wal", finalName: "db.sqlite-wal")
+            && stageIfPresent(sourcePath: legacyURL.path + "-shm", finalName: "db.sqlite-shm")
+        guard sidecarsOK, stageIfPresent(sourcePath: legacyURL.path, finalName: "db.sqlite") else {
+            cleanupStaged()
+            return
+        }
+
+        // Rename into place: sidecars first, `db.sqlite` last.
+        let sidecarEntries = staged.filter { $0.finalName != "db.sqlite" }
+        let mainEntry = staged.first { $0.finalName == "db.sqlite" }
+        for entry in sidecarEntries + (mainEntry.map { [$0] } ?? []) {
+            do {
+                try FileManager.default.moveItem(at: entry.temp, to: dir.appendingPathComponent(entry.finalName))
+            } catch {
+                // A sidecar or the main file failed to rename after a
+                // successful copy (rare — same-volume rename after we just
+                // wrote the temp file). Clean up whatever is still staged;
+                // any sidecar(s) already renamed before this failure are
+                // harmless orphans (inert without db.sqlite present) until a
+                // future successful migration attempt overwrites them.
+                cleanupStaged()
+                return
+            }
+        }
     }
 
     public static func inMemory() throws -> AppDatabase {

@@ -150,6 +150,68 @@ func TestParseClaudeTranscriptUnknownTypeNeverCrashes(t *testing.T) {
 	}
 }
 
+// TestParseClaudeTranscriptQueuedMidTurnMessageRenders proves a message the
+// human types while the agent is mid-turn (Claude Code's queue-while-working
+// feature) survives ingestion. The real transcript shape is three lines for
+// one message — enqueue, remove, then a canonical type:"attachment" record —
+// and only the attachment record should become a user-role SessionMessage;
+// the queue-operation bookkeeping lines must not double it up.
+func TestParseClaudeTranscriptQueuedMidTurnMessageRenders(t *testing.T) {
+	dir := t.TempDir()
+	const midTurnText = "So one question, lets say i have by pass permissions mode on"
+	lines := []string{
+		`{"type":"user","sessionId":"` + fixtureSessionID + `","message":{"role":"user","content":"start the task"},"timestamp":"2026-07-18T20:00:00Z"}`,
+		`{"type":"queue-operation","operation":"enqueue","sessionId":"` + fixtureSessionID + `","content":"` + midTurnText + `","timestamp":"2026-07-18T20:01:03.609Z"}`,
+		`{"type":"queue-operation","operation":"remove","sessionId":"` + fixtureSessionID + `","content":"` + midTurnText + `","timestamp":"2026-07-18T20:01:04.523Z"}`,
+		`{"type":"attachment","sessionId":"` + fixtureSessionID + `","attachment":{"type":"queued_command","prompt":"` + midTurnText + `","commandMode":"prompt","origin":{"kind":"human"}},"timestamp":"2026-07-18T20:01:03.608Z"}`,
+		`{"type":"assistant","sessionId":"` + fixtureSessionID + `","message":{"role":"assistant","content":[{"type":"text","text":"Good question — let me check the code."}]},"timestamp":"2026-07-18T20:01:10Z"}`,
+	}
+	path := writeFixture(t, dir, lines, false)
+
+	msgs, _, _, _, err := parseClaudeTranscript(path, 0)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	var userTexts []string
+	for _, m := range msgs {
+		if m.Role == "user" {
+			userTexts = append(userTexts, m.Text)
+		}
+	}
+	want := []string{"start the task", midTurnText}
+	if len(userTexts) != len(want) {
+		t.Fatalf("user messages = %+v, want %+v (queue-operation lines must not duplicate the attachment)", userTexts, want)
+	}
+	for i, w := range want {
+		if userTexts[i] != w {
+			t.Fatalf("user message %d = %q, want %q", i, userTexts[i], w)
+		}
+	}
+}
+
+// TestParseClaudeTranscriptQueuedAttachmentIgnoresNonHumanOrigin proves an
+// attachment record is only promoted to a user message when it is the
+// queued_command/human shape — any other attachment payload stays dropped
+// exactly like before this fix, so unrelated future "attachment" record
+// shapes don't silently start rendering as chat bubbles.
+func TestParseClaudeTranscriptQueuedAttachmentIgnoresNonHumanOrigin(t *testing.T) {
+	dir := t.TempDir()
+	lines := []string{
+		`{"type":"attachment","sessionId":"` + fixtureSessionID + `","attachment":{"type":"queued_command","prompt":"agent-queued, not human","commandMode":"prompt","origin":{"kind":"agent"}},"timestamp":"2026-07-18T20:01:03.608Z"}`,
+		`{"type":"attachment","sessionId":"` + fixtureSessionID + `","attachment":{"type":"file","prompt":"","commandMode":"","origin":{"kind":"human"}},"timestamp":"2026-07-18T20:01:03.608Z"}`,
+	}
+	path := writeFixture(t, dir, lines, false)
+
+	msgs, _, _, _, err := parseClaudeTranscript(path, 0)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("got %+v, want non-human/non-queued_command attachments dropped", msgs)
+	}
+}
+
 func TestParseClaudeTranscriptMissingFileErrors(t *testing.T) {
 	_, _, _, _, err := parseClaudeTranscript(filepath.Join(t.TempDir(), "missing.jsonl"), 0)
 	if err == nil {

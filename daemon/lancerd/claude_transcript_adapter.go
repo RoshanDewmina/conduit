@@ -58,6 +58,24 @@ type claudeLine struct {
 	PRNumber     int    `json:"prNumber"`
 	PRUrl        string `json:"prUrl"`
 	PRRepository string `json:"prRepository"`
+	// attachment records: Claude Code's queue-while-working feature persists a
+	// message the human typed mid-turn as {"type":"attachment","attachment":
+	// {"type":"queued_command","prompt":...,"origin":{"kind":"human"}}} rather
+	// than a normal type:"user" line. See claudeQueuedAttachment.
+	Attachment *claudeQueuedAttachment `json:"attachment"`
+}
+
+// claudeQueuedAttachment is the payload of a type:"attachment" transcript line
+// when it represents a mid-turn queued human message (commandMode:"prompt").
+// Sibling type:"queue-operation" enqueue/remove lines carry the same text as
+// bookkeeping and are intentionally ignored — this attachment record is the
+// single canonical copy.
+type claudeQueuedAttachment struct {
+	Type   string `json:"type"`
+	Prompt string `json:"prompt"`
+	Origin struct {
+		Kind string `json:"kind"`
+	} `json:"origin"`
 }
 
 // parseClaudeTranscript parses the JSONL transcript at path, skipping the first
@@ -189,7 +207,17 @@ func parseClaudeLine(raw []byte) ([]SessionMessage, bool) {
 			Text:      fmt.Sprintf("🔀 [%s](%s)", label, l.PRUrl),
 			Timestamp: l.Timestamp,
 		}}, true
-	case "ai-title", "agent-name", "last-prompt", "queue-operation", "attachment",
+	case "attachment":
+		// A mid-turn queued human message (see claudeQueuedAttachment) is real
+		// conversation content, not harness bookkeeping — render it as a user
+		// turn. Any other attachment shape (or non-human origin) stays dropped.
+		if l.Attachment != nil && l.Attachment.Type == "queued_command" && l.Attachment.Origin.Kind == "human" {
+			if prompt := strings.TrimSpace(l.Attachment.Prompt); prompt != "" {
+				return []SessionMessage{{Role: "user", Text: prompt, Timestamp: l.Timestamp}}, true
+			}
+		}
+		return nil, true
+	case "ai-title", "agent-name", "last-prompt", "queue-operation",
 		"summary", "mode", "permission-mode", "bridge-session", "file-history-snapshot",
 		"custom-title":
 		return nil, true

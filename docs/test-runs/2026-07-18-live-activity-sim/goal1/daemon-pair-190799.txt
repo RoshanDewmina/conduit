@@ -1,0 +1,2 @@
+2026/07/18 22:13:51 e2e: paired with phone
+2026/07/18 22:13:52 e2e: device registered for push (session A5D72817-F39F-4E79-AA26-81F3495621BA, apnsToken=true)
