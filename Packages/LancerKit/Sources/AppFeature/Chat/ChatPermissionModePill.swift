@@ -21,6 +21,13 @@ struct ChatPermissionModePill: View {
     /// Same state/daemon round-trip either way — only the outer chrome differs.
     var embedded: Bool = false
 
+    /// Embedded-only: report a user-initiated `apply()` failure to a host that
+    /// outlives nested-`Menu` dismiss-on-select teardown. The pill's own
+    /// `.alert` was torn down with the menu before the async RPC could flip
+    /// presentation state (see `docs/test-runs/2026-07-19-goal3-set-alert/`).
+    /// Non-embedded ignores this and keeps its inline error caption.
+    var onApplyError: ((String) -> Void)? = nil
+
     @Environment(RelayFleetStore.self) private var relayFleetStore
     @AppStorage(AutonomySelection.storageKey) private var presetRaw: String =
         AutonomySelection.default.rawValue
@@ -31,15 +38,6 @@ struct ChatPermissionModePill: View {
     @State private var confirmedPreset: AutonomyPreset?
     @State private var isSyncing = false
     @State private var errorMessage: String?
-    /// Set only by a user-initiated `apply()` failure, never by the
-    /// background `refreshFromDaemon()` hydration — an alert firing from a
-    /// routine cold-launch/reconnect fetch race (not a rare failure; this
-    /// session hit that race repeatedly) would be a false-alarm interruption
-    /// the moment the composer's `+` menu is built, before the user ever
-    /// touched it. `errorMessage` still covers both paths for the
-    /// non-embedded pill's quiet inline caption.
-    @State private var applyErrorMessage: String?
-    @State private var isShowingErrorAlert = false
 
     private var preset: AutonomyPreset {
         confirmedPreset ?? AutonomySelection.resolve(presetRaw)
@@ -76,18 +74,6 @@ struct ChatPermissionModePill: View {
             .accessibilityLabel(Text("Permission mode, \(preset.shortLabel)"))
             .accessibilityHint(Text("Choose how much the agent may do without asking"))
             .task { await refreshFromDaemon() }
-            .onChange(of: applyErrorMessage) { _, newValue in
-                isShowingErrorAlert = newValue != nil
-            }
-            .alert(
-                "Couldn't change permission mode",
-                isPresented: $isShowingErrorAlert,
-                presenting: applyErrorMessage
-            ) { _ in
-                Button("OK") {}
-            } message: { message in
-                Text(message)
-            }
         } else {
             VStack(alignment: .leading, spacing: 4) {
                 Menu {
@@ -137,7 +123,6 @@ struct ChatPermissionModePill: View {
         let previous = confirmedPreset ?? AutonomySelection.resolve(presetRaw)
         isSyncing = true
         errorMessage = nil
-        applyErrorMessage = nil
         defer { isSyncing = false }
         do {
             try await GovernanceHostActions.setPermissionMode(
@@ -151,7 +136,11 @@ struct ChatPermissionModePill: View {
             confirmedPreset = previous
             presetRaw = previous.rawValue
             errorMessage = error.localizedDescription
-            applyErrorMessage = error.localizedDescription
+            // Embedded: bubble up so the host composer can present the alert
+            // after nested Menu teardown. Non-embedded: inline caption only.
+            if embedded {
+                onApplyError?(error.localizedDescription)
+            }
             await refreshFromDaemon()
         }
     }

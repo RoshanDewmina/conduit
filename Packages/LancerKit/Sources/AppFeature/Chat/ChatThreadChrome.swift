@@ -299,9 +299,16 @@ struct ChatFollowUpComposerBar<PermissionMenu: View>: View {
     var onAddContext: (() -> Void)? = nil
     /// Permission-mode picker, folded into the `+` menu instead of its own
     /// row above the composer (owner request 2026-07-18 — "looks cleaner
-    /// that way"). Pass `ChatPermissionModePill(cwd:, embedded: true)`.
-    /// `EmptyView` when the caller has nothing to show there.
-    @ViewBuilder var permissionMenu: () -> PermissionMenu
+    /// that way"). Receives an `onApplyError` reporter so the embedded pill can
+    /// surface SET failures on *this* bar (which survives nested-`Menu`
+    /// dismiss-on-select). Pass
+    /// `ChatPermissionModePill(cwd:, embedded: true, onApplyError:)`.
+    @ViewBuilder var permissionMenu: (_ onApplyError: @escaping (String) -> Void) -> PermissionMenu
+
+    /// Owns the embedded permission-mode SET-failure alert so presentation
+    /// outlives the nested `+` / Permission `Menu` teardown.
+    @State private var permissionApplyErrorMessage: String?
+    @State private var isShowingPermissionApplyErrorAlert = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -313,7 +320,9 @@ struct ChatFollowUpComposerBar<PermissionMenu: View>: View {
                 }
                 .disabled(onAddContext == nil)
 
-                permissionMenu()
+                permissionMenu { message in
+                    permissionApplyErrorMessage = message
+                }
             } label: {
                 Circle()
                     .strokeBorder(Color(.separator), lineWidth: 1)
@@ -366,6 +375,18 @@ struct ChatFollowUpComposerBar<PermissionMenu: View>: View {
         .overlay(Capsule().strokeBorder(Color(.separator).opacity(0.6), lineWidth: 0.5))
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .onChange(of: permissionApplyErrorMessage) { _, newValue in
+            isShowingPermissionApplyErrorAlert = newValue != nil
+        }
+        .alert(
+            "Couldn't change permission mode",
+            isPresented: $isShowingPermissionApplyErrorAlert,
+            presenting: permissionApplyErrorMessage
+        ) { _ in
+            Button("OK") {}
+        } message: { message in
+            Text(message)
+        }
     }
 }
 
