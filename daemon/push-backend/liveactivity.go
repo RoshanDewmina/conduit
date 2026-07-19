@@ -60,6 +60,24 @@ func registerActivityToken(sessionID, token string, isPushToStart bool) {
 	rec.seen = now
 }
 
+// clearActivityToken drops the per-activity update token for a session,
+// leaving the push-to-start token (and the record itself) intact. Called
+// when the app ends its Live Activity (registerActivityTokenRequest.Clear)
+// and after a successful "end" push — a dead token left on file would
+// otherwise permanently suppress the next pushLiveActivityStart (root cause
+// b, 2026-07-19: handleRegisterActivityToken used to reject an empty
+// ActivityToken outright, so this could never happen before).
+func clearActivityToken(sessionID string) {
+	liveActivityRegistry.Lock()
+	defer liveActivityRegistry.Unlock()
+	rec, ok := liveActivityRegistry.sessions[sessionID]
+	if !ok {
+		return
+	}
+	rec.activityToken = ""
+	rec.seen = time.Now().Unix()
+}
+
 // evictExpiredActivityTokens removes records older than deviceTokenTTL (shared with the device registry).
 func evictExpiredActivityTokens(now int64) {
 	ttl := int64(deviceTokenTTL / time.Second)

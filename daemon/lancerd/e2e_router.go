@@ -60,6 +60,15 @@ func newE2ERouter(client *e2eRelayClient, srv *server) *e2eRouter {
 		client.pairedHandler = func() {
 			r.resendPendingApprovals()
 			r.resendPendingQuestions()
+			// A push-backend restart wipes its in-memory push-to-start token
+			// with no signal to the daemon (see reforwardPersistedActivityToken's
+			// doc comment) — re-forward on every relay (re)pair, the same
+			// recovery trigger the two resends above already use, rather than
+			// waiting for the phone to happen to resend on its own next
+			// foreground/reconnect.
+			if r.server != nil {
+				r.server.reforwardPersistedActivityToken()
+			}
 		}
 	}
 	return r
@@ -702,13 +711,29 @@ func (r *e2eRouter) handleMessage(msgType string, payload []byte) {
 			ActivityToken  string `json:"activityToken"`
 			IsPushToStart  bool   `json:"isPushToStart"`
 			PushBackendURL string `json:"pushBackendURL"`
+			// Clear mirrors lancer.device.register.activity's Clear field (SSH
+			// path) — sent by the app when its Live Activity ends, over the
+			// relay-only path. See server.go's handler doc comment.
+			Clear bool `json:"clear"`
 		}
-		if err := json.Unmarshal(payload, &ap); err != nil || ap.SessionID == "" || ap.ActivityToken == "" {
+		if err := json.Unmarshal(payload, &ap); err != nil || ap.SessionID == "" {
 			log.Printf("e2e: unmarshal activityTokenRegister failed: %v", err)
 			return
 		}
+		validClear := ap.Clear && ap.ActivityToken == "" && !ap.IsPushToStart
+		if ap.ActivityToken == "" && !validClear {
+			log.Printf("e2e: activityTokenRegister missing activityToken and not a valid clear")
+			return
+		}
 		if ap.PushBackendURL != "" {
-			go r.server.postActivityTokenRegistration(ap.PushBackendURL, ap.SessionID, ap.ActivityToken, ap.IsPushToStart)
+			go r.server.postActivityTokenRegistration(ap.PushBackendURL, ap.SessionID, ap.ActivityToken, ap.IsPushToStart, ap.Clear)
+		}
+		if ap.IsPushToStart && ap.ActivityToken != "" {
+			r.server.savePersistedActivity(&registeredActivityPushToStart{
+				PushBackendURL:   ap.PushBackendURL,
+				SessionID:        ap.SessionID,
+				PushToStartToken: ap.ActivityToken,
+			})
 		}
 
 	case "agentAgentsInstalled":

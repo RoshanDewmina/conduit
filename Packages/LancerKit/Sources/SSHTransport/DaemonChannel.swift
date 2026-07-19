@@ -142,7 +142,9 @@ public actor DaemonChannel {
         )
     }
 
-    public func registerActivityToken(activityToken: String, sessionID: String, isPushToStart: Bool, pushBackendURL: String) async throws {
+    public func registerActivityToken(
+        activityToken: String, sessionID: String, isPushToStart: Bool, pushBackendURL: String, clear: Bool = false
+    ) async throws {
         _ = try await sendRPC(
             method: "lancer.device.register.activity",
             params: [
@@ -150,6 +152,7 @@ public actor DaemonChannel {
                 "sessionId": sessionID,
                 "activityToken": activityToken,
                 "isPushToStart": isPushToStart,
+                "clear": clear,
             ]
         )
     }

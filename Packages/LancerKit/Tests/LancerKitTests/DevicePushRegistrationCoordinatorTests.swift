@@ -200,6 +200,47 @@ import Testing
         #expect(sentTypes.contains("activityTokenRegister"))
     }
 
+    /// Pins the iOS half of the three-part push-to-start durability fix
+    /// (2026-07-19): when a Live Activity ends, `LancerLiveActivityManager
+    /// .end(activityKey:)` fires `tokenClear`, which LancerApp posts as
+    /// `.lancerLiveActivityTokenClear` — the coordinator must forward that as
+    /// an `activityTokenRegister` send carrying `clear: true`, an empty
+    /// `activityToken`, and `isPushToStart: false`, so push-backend drops its
+    /// now-dead per-activity token instead of leaving it on file to
+    /// permanently suppress the next app-closed push-to-start (root cause b).
+    @Test("Live Activity token clear notification forwards clear=true on the connected machine")
+    func liveActivityTokenClearForwardsClearFlag() async throws {
+        await Notifications.shared.setPendingAPNSToken("")
+        let store = freshStore()
+        let coordinator = DevicePushRegistrationCoordinator(fleetStore: store)
+        coordinator.start()
+
+        let (machine, client, bridge) = makeMachine()
+        var payloads: [(type: String, json: [String: Any])] = []
+        client.onBypassSendPayloadForTesting = { type, data in
+            let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            payloads.append((type, obj ?? [:]))
+        }
+        store.add(machine)
+        await connect(client, bridge)
+
+        NotificationCenter.default.post(
+            name: .lancerLiveActivityTokenClear,
+            object: nil,
+            userInfo: ["sessionID": "device-session-clear-1"]
+        )
+
+        await waitUntil { payloads.contains { $0.type == "activityTokenRegister" } }
+        guard let clearSend = payloads.first(where: { $0.type == "activityTokenRegister" }) else {
+            Issue.record("expected an activityTokenRegister send")
+            return
+        }
+        #expect(clearSend.json["clear"] as? Bool == true)
+        #expect(clearSend.json["activityToken"] as? String == "")
+        #expect(clearSend.json["isPushToStart"] as? Bool == false)
+        #expect(clearSend.json["sessionId"] as? String == "device-session-clear-1")
+    }
+
     @Test("a second start() call is a no-op (idempotent)")
     func secondStartIsNoOp() async throws {
         await Notifications.shared.setPendingAPNSToken("")

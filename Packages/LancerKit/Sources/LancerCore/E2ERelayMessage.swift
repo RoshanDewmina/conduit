@@ -155,12 +155,19 @@ public enum E2ERelayMessage: Codable, Sendable {
         public let activityToken: String
         public let isPushToStart: Bool
         public let pushBackendURL: String
+        /// Requests push-backend clear its per-activity token for this session
+        /// (never the push-to-start token) — sent with an empty `activityToken`
+        /// and `isPushToStart: false` when the app ends its Live Activity, so a
+        /// stale token doesn't permanently suppress a future push-to-start.
+        /// Mirrors `lancer.device.register.activity`'s `clear` field (SSH path).
+        public let clear: Bool
 
-        public init(sessionId: String, activityToken: String, isPushToStart: Bool, pushBackendURL: String) {
+        public init(sessionId: String, activityToken: String, isPushToStart: Bool, pushBackendURL: String, clear: Bool = false) {
             self.sessionId = sessionId
             self.activityToken = activityToken
             self.isPushToStart = isPushToStart
             self.pushBackendURL = pushBackendURL
+            self.clear = clear
         }
     }
 

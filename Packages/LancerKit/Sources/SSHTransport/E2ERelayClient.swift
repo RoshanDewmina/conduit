@@ -125,6 +125,10 @@ public final class E2ERelayClient: ObservableObject {
     /// Optional hook fired on each bypassed send (type string) so tests can
     /// deliver a synthetic result on the Nth attempt.
     var onBypassSendForTesting: ((String) -> Void)?
+    /// Optional hook fired on each bypassed send with its JSON-encoded payload,
+    /// so tests can assert on payload fields (e.g. `activityTokenRegister`'s
+    /// `clear` flag) without decrypting a real relay round trip.
+    var onBypassSendPayloadForTesting: ((String, Data) -> Void)?
 #endif
 
     private lazy var messageStream: AsyncStream<ReceivedMessage> = {
@@ -545,6 +549,9 @@ public final class E2ERelayClient: ObservableObject {
         if bypassSendForTesting {
             bypassedSendCountForTesting += 1
             onBypassSendForTesting?(type)
+            if let onBypassSendPayloadForTesting, let data = try? JSONEncoder().encode(payload) {
+                onBypassSendPayloadForTesting(type, data)
+            }
             return
         }
 #endif
