@@ -52,6 +52,7 @@ public final class RelayApprovalIngest {
 
     private let database: AppDatabase
     private var listenTask: Task<Void, Never>?
+    private var resolvedListenTask: Task<Void, Never>?
     /// Dedup for Live Activity pending-count pushes so identical ingest/decide
     /// refreshes don't spam ActivityKit.
     private var lastLiveActivityPendingCount: Int?
@@ -62,13 +63,10 @@ public final class RelayApprovalIngest {
         self.database = database
     }
 
-    /// Starts observing `lancerE2EApprovalReceived`. Idempotent — a second
-    /// call while already listening is a no-op, matching the established
-    /// `for await notification in NotificationCenter.default.notifications(named:)`
-    /// idiom used elsewhere in this codebase (pre-wipe `AppRoot`'s status/APNs/
-    /// Live Activity token subscribers). Also runs a one-shot stale-pending
-    /// sweep so launch / reconnect clears phone-local corpses even when the
-    /// daemon has nothing left to re-send.
+    /// Starts observing `lancerE2EApprovalReceived` + `lancerE2EApprovalResolved`.
+    /// Idempotent — a second call while already listening is a no-op. Also
+    /// runs a one-shot stale-pending sweep so launch / reconnect clears
+    /// phone-local corpses even when the daemon has nothing left to re-send.
     public func start() {
         guard listenTask == nil else { return }
         listenTask = Task { [weak self] in
@@ -77,6 +75,14 @@ public final class RelayApprovalIngest {
             ) {
                 guard let self else { return }
                 await self.handle(notification)
+            }
+        }
+        resolvedListenTask = Task { [weak self] in
+            for await notification in NotificationCenter.default.notifications(
+                named: Notification.Name("lancerE2EApprovalResolved")
+            ) {
+                guard let self else { return }
+                await self.handleResolved(notification)
             }
         }
         Task { [weak self] in
@@ -93,6 +99,38 @@ public final class RelayApprovalIngest {
         let pendingIDs = Set(((try? await repository.pending()) ?? []).map(\.id))
         for (machineID, approval) in latestPendingApproval where !pendingIDs.contains(approval.id) {
             latestPendingApproval[machineID] = nil
+        }
+        await repository.writeApprovalWidgetSnapshot()
+        await publishLiveActivityPendingApprovals(using: repository)
+    }
+
+    /// Daemon resolved an approval without a phone decision (timeout /
+    /// emergency-stop / prune). Retire the local row so Inbox + widget drop it.
+    private func handleResolved(_ notification: Notification) async {
+        guard let approvalIDStr = notification.userInfo?["approvalID"] as? String,
+              let uuid = UUID(uuidString: approvalIDStr)
+        else { return }
+        let raw = (notification.userInfo?["decision"] as? String)?.lowercased() ?? "deny"
+        let decision: Approval.Decision
+        switch raw {
+        case "approve", "approved", "allow":
+            decision = .approved
+        case "expired":
+            decision = .expired
+        default:
+            // Daemon wire values are typically "deny" / "rejected".
+            decision = .rejected
+        }
+        let repository = ApprovalRepository(database)
+        let changed = (try? await repository.decide(id: ApprovalID(uuid), decision: decision)) ?? false
+        guard changed else { return }
+        if let machineID = notification.userInfo?["machineID"] as? RelayMachineID,
+           latestPendingApproval[machineID]?.id.uuidString == approvalIDStr {
+            latestPendingApproval[machineID] = nil
+        } else {
+            for (machineID, approval) in latestPendingApproval where approval.id.uuidString == approvalIDStr {
+                latestPendingApproval[machineID] = nil
+            }
         }
         await repository.writeApprovalWidgetSnapshot()
         await publishLiveActivityPendingApprovals(using: repository)

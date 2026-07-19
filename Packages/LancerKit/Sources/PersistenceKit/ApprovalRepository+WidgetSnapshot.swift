@@ -30,7 +30,9 @@ extension ApprovalRepository {
         } else {
             defaults.removeObject(forKey: WidgetSnapshot.pendingApprovalSummaryKey)
         }
-        defaults.set(Date().timeIntervalSince1970, forKey: WidgetSnapshot.lastUpdatedKey)
+        let now = Date().timeIntervalSince1970
+        defaults.set(now, forKey: WidgetSnapshot.lastUpdatedKey)
+        defaults.set(now, forKey: WidgetSnapshot.pendingApprovalsUpdatedKey)
         WidgetCenter.shared.reloadTimelines(ofKind: "PendingApprovalsWidget")
     }
 

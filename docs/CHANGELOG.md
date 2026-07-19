@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 15:05 Cursor Grok 4.5 — widget stale-approvals cleanup: stop SessionViewModel overwriting pending count; dedicated pendingApprovalsUpdatedKey for TTL; RelayApprovalIngest handles lancerE2EApprovalResolved; daemon sendApprovalResolved on emergency-stop deny + no-client auto-allow (fix/widget-stale-approvals)
 - 14:55 Cursor Grok 4.5 — fix Home Screen widget "N approvals waiting" corpses: phone-local pending rows never retired on daemon-side resolution; add 10m TTL sweep (`expireStalePending` → `.expired`) at widget snapshot write + relay ingest start/arrive, plus widget-side lastUpdated TTL guard (fix/widget-stale-approvals)
 - 14:45 Claude Fable (orchestrator) — APNs provider-JWT cache (~40 min reuse) in push-backend makeJWT: per-push re-minting tripped Apple's 429 TooManyProviderTokenUpdates on Live Activity push-to-start (live-hit during today's LA debugging); deployed to conduit-push (fix/apns-jwt-cache)
 - 14:25 Claude Fable (orchestrator) — LA push-to-start unblocked: sendLiveActivityPush now falls back to sandbox APNs on 400 BadDeviceToken (mirrors sendAPNsAlert; dev-signed builds have sandbox tokens) + logs the APNs reason. Deployed to conduit-push.fly.dev and LIVE-PROVEN: closed-app dispatch -> Apple accepted push-to-start -> Live Activity appeared on owner's locked phone (fix/la-apns-sandbox-fallback)

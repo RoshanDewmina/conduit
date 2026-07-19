@@ -964,6 +964,10 @@ func (s *server) denyOneForEmergencyStop(event ApprovalEvent) bool {
 			fmt.Fprintf(os.Stderr, "sync approval queue after emergency-stop denying %s: %v\n", resolved.ApprovalID, err)
 		}
 	}
+	// Phone may still be showing the card — drop it proactively.
+	if s.e2e != nil {
+		s.e2e.sendApprovalResolved(resolved.ApprovalID, "deny")
+	}
 	return true
 }
 
@@ -2209,6 +2213,11 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 				Rule:       event.MatchedRule,
 				ApprovalID: event.ApprovalID,
 			})
+			// Phone may reconnect later still holding the pending card —
+			// tell it this id was resolved server-side without a tap.
+			if s.e2e != nil {
+				s.e2e.sendApprovalResolved(event.ApprovalID, "approve")
+			}
 			_ = json.NewEncoder(conn).Encode(ApprovalDecision{ApprovalID: event.ApprovalID, Decision: "approve"})
 			return
 		}

@@ -604,7 +604,10 @@ public final class SessionViewModel {
 
     private func writeWidgetSnapshot(_ snapshot: LiveActivitySnapshot) {
         guard let defaults = UserDefaults(suiteName: WidgetSnapshot.appGroupID) else { return }
-        defaults.set(snapshot.pendingApprovals, forKey: WidgetSnapshot.pendingApprovalsKey)
+        // Do NOT write `pendingApprovalsKey` here — `ApprovalRepository
+        // .writeApprovalWidgetSnapshot` owns that count/summary. Overwriting
+        // it from SessionViewModel's in-memory Live Activity counter was how
+        // a stale session-side tally could fight the DB-backed widget writer.
         defaults.set(snapshot.status, forKey: WidgetSnapshot.sessionStatusKey)
         defaults.set(host.name, forKey: WidgetSnapshot.hostNameKey)
         if let agentName = snapshot.agentName {

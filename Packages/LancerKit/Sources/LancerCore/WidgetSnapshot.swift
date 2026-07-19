@@ -14,6 +14,11 @@ public enum WidgetSnapshot {
     /// "rm -rf build/ · High risk". Read by `PendingApprovalsWidget`. Removed
     /// from the App Group (not just emptied) once the pending count hits zero.
     public static let pendingApprovalSummaryKey = "widgetPendingApprovalSummary"
+    /// Unix epoch when `writeApprovalWidgetSnapshot` last rewrote the pending
+    /// count/summary. Distinct from `lastUpdatedKey` (session-status writes)
+    /// so a status refresh cannot keep a stale approvals count looking "fresh"
+    /// to the widget TTL guard.
+    public static let pendingApprovalsUpdatedKey = "widgetPendingApprovalsUpdated"
 
     /// Phone-local pending rows older than this are treated as dead corpses.
     /// Daemon-side resolutions (timeout-deny, restart prune, decision on
