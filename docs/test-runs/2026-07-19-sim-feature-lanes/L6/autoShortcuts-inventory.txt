@@ -1,0 +1,13 @@
+autoShortcut_actionIdentifiers:
+  AgentStatusQueryIntent
+  PendingApprovalsQueryIntent
+  PauseRunIntent
+  StopRunIntent
+  DenyApprovalIntent
+  SearchLancerIntent
+  OpenConversationIntent
+  StartAgentRunIntent
+  AnswerQuestionIntent
+ApprovalActionIntent_in_autoShortcuts=False
+DenyApprovalIntent_in_autoShortcuts=True
+approve_like_phrases_in_autoShortcuts=[]

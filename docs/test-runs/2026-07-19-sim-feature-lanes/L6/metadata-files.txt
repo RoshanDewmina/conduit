@@ -1,0 +1,2 @@
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Metadata.appintents/version.json
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Metadata.appintents/extract.actionsdata

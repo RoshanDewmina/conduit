@@ -1,0 +1,7 @@
+Error: Either provide both -x/-y, or use --id/--label/--value to tap an element.
+Usage: axe tap [-x <x>] [-y <y>] [--id <id>] [--label <label>] [--value <value>] [--element-type <element-type>] [--pre-delay <pre-delay>] [--post-delay <post-delay>] [--tap-style <tap-style>] [--wait-timeout <wait-timeout>] [--poll-interval <poll-interval>] --udid <udid>
+  See 'axe tap --help' for more information.
+Warning: No accessibility element matched --label 'Retry'. Make sure the app is on the expected screen, then run `axe describe-ui --udid <SIMULATOR_UDID>` and prefer --id when available. No tap performed.
+Error: No accessibility element matched --label 'Retry'. Make sure the app is on the expected screen, then run `axe describe-ui --udid <SIMULATOR_UDID>` and prefer --id when available.
+Warning: No accessibility element matched --label 'Allow once'. Make sure the app is on the expected screen, then run `axe describe-ui --udid <SIMULATOR_UDID>` and prefer --id when available. No tap performed.
+Error: No accessibility element matched --label 'Allow once'. Make sure the app is on the expected screen, then run `axe describe-ui --udid <SIMULATOR_UDID>` and prefer --id when available.

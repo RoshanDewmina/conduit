@@ -1,0 +1,14 @@
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Metadata.appintents/version.json
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Metadata.appintents/extract.actionsdata
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PlugIns/LancerWidgets.appex/Metadata.appintents/version.json
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PlugIns/LancerWidgets.appex/Metadata.appintents/extract.actionsdata
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/Metadata.appintents/version.json
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerWidgets.appex/Metadata.appintents/extract.actionsdata
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/IntentsKit.appintents/Metadata.appintents/version.json
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/IntentsKit.appintents/Metadata.appintents/extract.actionsdata
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Metadata.appintents/version.json
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Metadata.appintents/extract.actionsdata
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/SessionFeature.appintents/Metadata.appintents/version.json
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/SessionFeature.appintents/Metadata.appintents/extract.actionsdata
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/AppFeature.appintents/Metadata.appintents/version.json
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/AppFeature.appintents/Metadata.appintents/extract.actionsdata

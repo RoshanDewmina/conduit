@@ -1,0 +1,18 @@
+15448:    t =    14.85s Added attachment named 'LC4-01-pairing-keypad'
+15461:    t =    42.10s Added attachment named 'LC4-02-settings'
+15472:    t =    47.15s Added attachment named 'LC4-03-policy'
+15494:    t =    53.98s Added attachment named 'LC4-04-audit'
+15535:    t =    63.33s Added attachment named 'LC4-05-add-repo'
+15546:    t =    65.22s Added attachment named 'LC4-06-workspaces'
+15569:    t =    95.46s Added attachment named 'LC4-07-composer'
+16217:    t =   397.45s Added attachment named 'LC4-08-thread approves=0 awaiting=false retry=false diff=false proof=false'
+16501:    t =   579.46s Added attachment named 'LC4-12-pills pill=false bashCount=1'
+16509:    t =   604.06s Waiting 15.0s for "cursor.settings.emergency-stop" Button to exist
+16510:    t =   605.10s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor.settings.emergency-stop" Button`
+16511:    t =   605.10s         Checking existence of `"cursor.settings.emergency-stop" Button`
+16512:    t =   605.22s Tap "cursor.settings.emergency-stop" Button
+16514:    t =   605.23s     Find the "cursor.settings.emergency-stop" Button
+16515:    t =   605.29s     Check for interrupting elements affecting "cursor.settings.emergency-stop" Button
+16524:    t =   607.09s     Check for interrupting elements affecting "cursor.settings.emergency-stop" Button
+16528:    t =   607.13s         Find the "cursor.settings.emergency-stop" Button
+16533:    t =   609.85s Added attachment named 'LC4-13-emergency-stop outcome=tapped'

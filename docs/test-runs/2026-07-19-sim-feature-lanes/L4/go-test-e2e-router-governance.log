@@ -1,0 +1,14 @@
+=== RUN   TestE2ERouterEmergencyStop
+--- PASS: TestE2ERouterEmergencyStop (0.01s)
+=== RUN   TestE2ERouterAuditTail
+--- PASS: TestE2ERouterAuditTail (0.00s)
+=== RUN   TestE2ERouterAuditTailClampsLimit
+--- PASS: TestE2ERouterAuditTailClampsLimit (0.00s)
+=== RUN   TestE2ERouterPermissionModeGet
+--- PASS: TestE2ERouterPermissionModeGet (0.00s)
+=== RUN   TestE2ERouterPermissionModeSet
+--- PASS: TestE2ERouterPermissionModeSet (0.00s)
+=== RUN   TestE2ERouterPermissionModeSetRejectsInvalidMode
+--- PASS: TestE2ERouterPermissionModeSetRejectsInvalidMode (0.00s)
+PASS
+ok  	lancer/lancerd	0.225s

@@ -1,0 +1,5 @@
+Wrote /tmp/serial-l4-gov-state/home/.claude/hooks/lancer-hook.sh
+Enabled Lancer-scoped Claude approvals in /tmp/serial-l4-gov-state/home/.claude/settings.json
+lancerd daemon listening on /tmp/serial-l4-gov-state/lancerd.sock
+lancerd daemon: E2E relay started
+2026/07/19 17:25:36 e2e: connected to relay as daemon

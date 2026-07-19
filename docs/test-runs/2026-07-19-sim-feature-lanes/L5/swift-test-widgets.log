@@ -1,0 +1,128 @@
+warning: 'grdb.swift': /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/Packages/LancerKit/.build/checkouts/GRDB.swift/Package.swift:40:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+38 |         .macOS(.v10_13),
+39 |         .tvOS(.v11),
+40 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+41 |     ],
+42 |     products: [
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+warning: 'bigint': /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/Packages/LancerKit/.build/checkouts/BigInt/Package.swift:18:19: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+16 |         .iOS(.v12),
+17 |         .tvOS(.v12),
+18 |         .watchOS(.v4),
+   |                   `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+19 |         .macCatalyst(.v13),
+20 |         .visionOS(.v1),
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Building for debugging...
+[Computing dependencies]
+[Constructing description]
+[Pre-planning 1 / 2442]
+[Planning 1898 / 2442]
+[Planning 2331 / 2442]
+[Planning deferred tasks]
+[Starting]
+[1 / 5]
+[2 / 6] LancerCore
+[3 / 7] LancerCore
+[9 / 13] HostControlKit
+[13 / 17] LancerCore
+[18 / 22] HostControlKit
+[21 / 23] HostControlKitTests-product
+[25 / 27] HostControlKitTests-product
+[29 / 30] HostControlKitTests-product
+[31 / 35] NIOCore
+[32 / 36] SecurityKit
+[33 / 37] SecurityKit
+[36 / 40] SSHTransport
+[37 / 41] SSHTransport
+[40 / 44] AgentKit
+[41 / 45] AgentKit
+[44 / 48] PersistenceKit
+[45 / 49] PersistenceKit
+[51 / 55] IntentsKit
+[52 / 56] IntentsKit
+[55 / 59] TerminalEngine
+[56 / 60] TerminalEngine
+[60 / 64] NotificationsKit
+[65 / 69] SessionFeature
+[66 / 70] SessionFeature
+[78 / 90] SecurityKit
+[84 / 96] SecurityKit
+[95 / 107] SSHTransport
+[106 / 118] AgentKit
+[117 / 129] PersistenceKit
+[128 / 140] IntentsKit
+[134 / 146] TerminalEngine
+[138 / 150] NotificationsKit
+[147 / 160] SessionFeature
+[148 / 160] SessionFeature
+[151 / 153] IntentsKitTests-product
+[162 / 164] IntentsKitTests-product
+[166 / 167] IntentsKitTests-product
+[168 / 168] IntentsKitTests-product
+[178 / 219] DiffKit
+[182 / 220] DiffKit
+[187 / 222] SyncKit
+[194 / 231] PreviewKit
+[196 / 231] SyncKit
+[204 / 235] PreviewKit
+[205 / 234] AccountKit
+[206 / 235] AppFeature
+[217 / 246] AppFeature
+[222 / 243] AppFeature
+[224 / 243] AppFeature
+[226 / 235] LancerKitTests-product
+[236 / 246] LancerKitTests-product
+[237 / 246] LancerKitTests-product
+[242 / 246] LancerKitTests-product
+[244 / 246] LancerKitTests-product
+[246 / 246] LancerKitTests-product
+[257 / 265] SecurityKit-product
+[261 / 265] NotificationsKit-product
+[265 / 265] DiffKit-product
+[265 / 265] InboxFeature-product
+Build complete! (26.35 secs.)
+◇ Test run started.
+↳ Testing Library Version: 2073
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "RunningAgentsFreshness" started.
+◇ Suite "RunningAgentsMapping" started.
+◇ Suite "ApprovalRepository stale pending TTL" started.
+◇ Suite "LiveActivityContentState" started.
+◇ Test "two consecutive failures yield degraded unreachable copy" started.
+◇ Test "totalRunningCount sums vendor runningCount" started.
+◇ Test "displayTitle falls back to cwd basename" started.
+◇ Test "recovery clears degraded and allows all-clear again" started.
+◇ Test "stale/unreachable surfaces data age — never all-clear" started.
+◇ Test "already-decided rows are not flipped by the TTL sweep" started.
+◇ Test "No agents running only from fresh success with zero rows" started.
+◇ Test "row older than TTL is marked expired; fresh row survives" started.
+◇ Test "one pre-first-success failure stays neutral (nil statusMessage)" started.
+◇ Test "poll interval is ~5s" started.
+◇ Test "widgetLines prefer running rows then status fallback" started.
+✔ Suite "LiveActivityContentState" passed after 0.001 seconds.
+◇ Test "rows drop historical and sort running first" started.
+◇ Test "providerLabel maps known vendors" started.
+◇ Test "resolvedRunningCount takes max of status total and running rows" started.
+✔ Test "recovery clears degraded and allows all-clear again" passed after 0.001 seconds.
+✔ Test "poll interval is ~5s" passed after 0.001 seconds.
+✔ Test "one pre-first-success failure stays neutral (nil statusMessage)" passed after 0.001 seconds.
+✔ Test "providerLabel maps known vendors" passed after 0.001 seconds.
+✔ Test "totalRunningCount sums vendor runningCount" passed after 0.001 seconds.
+✔ Test "displayTitle falls back to cwd basename" passed after 0.001 seconds.
+✔ Test "resolvedRunningCount takes max of status total and running rows" passed after 0.001 seconds.
+✔ Test "two consecutive failures yield degraded unreachable copy" passed after 0.001 seconds.
+✔ Test "stale/unreachable surfaces data age — never all-clear" passed after 0.001 seconds.
+✔ Test "rows drop historical and sort running first" passed after 0.001 seconds.
+✔ Test "widgetLines prefer running rows then status fallback" passed after 0.001 seconds.
+✔ Test "No agents running only from fresh success with zero rows" passed after 0.001 seconds.
+✔ Suite "RunningAgentsFreshness" passed after 0.001 seconds.
+✔ Suite "RunningAgentsMapping" passed after 0.001 seconds.
+✔ Test "already-decided rows are not flipped by the TTL sweep" passed after 0.015 seconds.
+✔ Test "row older than TTL is marked expired; fresh row survives" passed after 0.015 seconds.
+✔ Suite "ApprovalRepository stale pending TTL" passed after 0.015 seconds.
+✔ Test run with 14 tests in 4 suites passed after 0.015 seconds.
+EXIT:0

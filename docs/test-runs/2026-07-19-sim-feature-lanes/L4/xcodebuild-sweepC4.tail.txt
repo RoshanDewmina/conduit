@@ -1,0 +1,200 @@
+    t =   476.60s Checking existence of `"background-tasks-pill" Other`
+    t =   478.67s Checking existence of `"cursor.approval.approve" Button`
+<unknown>:0: warning: -[LancerUITests.SweepLaneC4Tests testLaneC4_PostWave1LiveSweep] : Publishing changes from background threads is not allowed; make sure to publish values from the main thread (via operators like receive(on:)) on model updates.
+    t =   478.76s Checking existence of `"Approve" Button`
+    t =   478.82s Checking existence of `"background-tasks-pill" Other`
+    t =   480.88s Checking existence of `"cursor.approval.approve" Button`
+    t =   480.92s Checking existence of `"Approve" Button`
+    t =   480.95s Checking existence of `"background-tasks-pill" Other`
+    t =   483.02s Checking existence of `"cursor.approval.approve" Button`
+    t =   483.06s Checking existence of `"Approve" Button`
+    t =   483.10s Checking existence of `"background-tasks-pill" Other`
+    t =   485.16s Checking existence of `"cursor.approval.approve" Button`
+    t =   485.20s Checking existence of `"Approve" Button`
+    t =   485.24s Checking existence of `"background-tasks-pill" Other`
+    t =   487.30s Checking existence of `"cursor.approval.approve" Button`
+    t =   487.35s Checking existence of `"Approve" Button`
+    t =   487.40s Checking existence of `Button (First Match)`
+    t =   489.44s Checking existence of `"cursor.approval.approve" Button`
+    t =   489.51s Checking existence of `"Approve" Button`
+    t =   489.55s Checking existence of `Button (First Match)`
+    t =   491.59s Checking existence of `"cursor.approval.approve" Button`
+    t =   491.64s Checking existence of `"Approve" Button`
+    t =   491.68s Checking existence of `Button (First Match)`
+    t =   493.72s Checking existence of `"cursor.approval.approve" Button`
+    t =   493.77s Checking existence of `"Approve" Button`
+    t =   493.81s Checking existence of `Button (First Match)`
+    t =   495.85s Checking existence of `"cursor.approval.approve" Button`
+    t =   495.92s Checking existence of `"Approve" Button`
+    t =   495.97s Checking existence of `Button (First Match)`
+    t =   498.01s Checking existence of `"cursor.approval.approve" Button`
+    t =   498.06s Checking existence of `"Approve" Button`
+    t =   498.10s Checking existence of `Button (First Match)`
+    t =   500.15s Checking existence of `"cursor.approval.approve" Button`
+    t =   500.20s Checking existence of `"Approve" Button`
+    t =   500.25s Checking existence of `Button (First Match)`
+    t =   502.29s Checking existence of `"cursor.approval.approve" Button`
+    t =   502.35s Checking existence of `"Approve" Button`
+    t =   502.40s Checking existence of `Button (First Match)`
+    t =   504.44s Checking existence of `"cursor.approval.approve" Button`
+    t =   504.49s Checking existence of `"Approve" Button`
+    t =   504.57s Checking existence of `Button (First Match)`
+    t =   506.61s Checking existence of `"cursor.approval.approve" Button`
+    t =   506.65s Checking existence of `"Approve" Button`
+    t =   506.69s Checking existence of `Button (First Match)`
+    t =   508.73s Checking existence of `"cursor.approval.approve" Button`
+    t =   508.77s Checking existence of `"Approve" Button`
+    t =   508.81s Checking existence of `Button (First Match)`
+    t =   510.85s Checking existence of `"cursor.approval.approve" Button`
+    t =   510.89s Checking existence of `"Approve" Button`
+    t =   510.94s Checking existence of `Button (First Match)`
+    t =   512.97s Checking existence of `"cursor.approval.approve" Button`
+    t =   513.02s Checking existence of `"Approve" Button`
+    t =   513.06s Checking existence of `Button (First Match)`
+    t =   515.10s Checking existence of `"cursor.approval.approve" Button`
+    t =   515.15s Checking existence of `"Approve" Button`
+    t =   515.19s Checking existence of `Button (First Match)`
+    t =   517.24s Checking existence of `"cursor.approval.approve" Button`
+    t =   517.30s Checking existence of `"Approve" Button`
+    t =   517.34s Checking existence of `Button (First Match)`
+    t =   519.38s Checking existence of `"cursor.approval.approve" Button`
+    t =   519.44s Checking existence of `"Approve" Button`
+    t =   519.49s Checking existence of `Button (First Match)`
+    t =   521.55s Checking existence of `"cursor.approval.approve" Button`
+    t =   521.63s Checking existence of `"Approve" Button`
+    t =   521.67s Checking existence of `Button (First Match)`
+    t =   523.72s Checking existence of `"cursor.approval.approve" Button`
+    t =   523.77s Checking existence of `"Approve" Button`
+    t =   523.81s Checking existence of `Button (First Match)`
+    t =   525.84s Checking existence of `"cursor.approval.approve" Button`
+    t =   525.89s Checking existence of `"Approve" Button`
+    t =   525.93s Checking existence of `Button (First Match)`
+    t =   527.98s Checking existence of `"cursor.approval.approve" Button`
+    t =   528.02s Checking existence of `"Approve" Button`
+    t =   528.06s Checking existence of `Button (First Match)`
+    t =   530.10s Checking existence of `"cursor.approval.approve" Button`
+    t =   530.15s Checking existence of `"Approve" Button`
+    t =   530.19s Checking existence of `Button (First Match)`
+    t =   532.23s Checking existence of `"cursor.approval.approve" Button`
+    t =   532.31s Checking existence of `"Approve" Button`
+    t =   532.35s Checking existence of `Button (First Match)`
+    t =   534.39s Checking existence of `"cursor.approval.approve" Button`
+    t =   534.46s Checking existence of `"Approve" Button`
+    t =   534.50s Checking existence of `Button (First Match)`
+    t =   536.54s Checking existence of `"cursor.approval.approve" Button`
+    t =   536.61s Checking existence of `"Approve" Button`
+    t =   536.65s Checking existence of `Button (First Match)`
+    t =   538.70s Checking existence of `"cursor.approval.approve" Button`
+    t =   538.75s Checking existence of `"Approve" Button`
+    t =   538.79s Checking existence of `Button (First Match)`
+    t =   540.83s Checking existence of `"cursor.approval.approve" Button`
+    t =   540.88s Checking existence of `"Approve" Button`
+    t =   540.92s Checking existence of `Button (First Match)`
+    t =   542.96s Checking existence of `"cursor.approval.approve" Button`
+    t =   543.03s Checking existence of `"Approve" Button`
+    t =   543.07s Checking existence of `Button (First Match)`
+    t =   545.11s Checking existence of `"cursor.approval.approve" Button`
+    t =   545.18s Checking existence of `"Approve" Button`
+    t =   545.22s Checking existence of `Button (First Match)`
+    t =   547.27s Checking existence of `"cursor.approval.approve" Button`
+    t =   547.33s Checking existence of `"Approve" Button`
+    t =   547.37s Checking existence of `Button (First Match)`
+    t =   549.41s Checking existence of `"cursor.approval.approve" Button`
+    t =   549.48s Checking existence of `"Approve" Button`
+    t =   549.52s Checking existence of `Button (First Match)`
+    t =   551.56s Checking existence of `"cursor.approval.approve" Button`
+    t =   551.62s Checking existence of `"Approve" Button`
+    t =   551.65s Checking existence of `Button (First Match)`
+    t =   553.69s Checking existence of `"cursor.approval.approve" Button`
+    t =   553.73s Checking existence of `"Approve" Button`
+    t =   553.77s Checking existence of `Button (First Match)`
+    t =   555.81s Checking existence of `"cursor.approval.approve" Button`
+    t =   555.88s Checking existence of `"Approve" Button`
+    t =   555.92s Checking existence of `Button (First Match)`
+    t =   557.96s Checking existence of `"cursor.approval.approve" Button`
+    t =   558.04s Checking existence of `"Approve" Button`
+    t =   558.08s Checking existence of `Button (First Match)`
+    t =   560.12s Checking existence of `"cursor.approval.approve" Button`
+    t =   560.18s Checking existence of `"Approve" Button`
+    t =   560.22s Checking existence of `Button (First Match)`
+    t =   562.26s Checking existence of `"cursor.approval.approve" Button`
+    t =   562.32s Checking existence of `"Approve" Button`
+    t =   562.36s Checking existence of `Button (First Match)`
+    t =   564.39s Checking existence of `"cursor.approval.approve" Button`
+    t =   564.44s Checking existence of `"Approve" Button`
+    t =   564.48s Checking existence of `Button (First Match)`
+    t =   566.51s Checking existence of `"cursor.approval.approve" Button`
+    t =   566.56s Checking existence of `"Approve" Button`
+    t =   566.60s Checking existence of `Button (First Match)`
+    t =   568.63s Checking existence of `"cursor.approval.approve" Button`
+    t =   568.70s Checking existence of `"Approve" Button`
+    t =   568.74s Checking existence of `Button (First Match)`
+    t =   570.78s Checking existence of `"cursor.approval.approve" Button`
+    t =   570.85s Checking existence of `"Approve" Button`
+    t =   570.89s Checking existence of `Button (First Match)`
+    t =   572.92s Checking existence of `"cursor.approval.approve" Button`
+    t =   572.99s Checking existence of `"Approve" Button`
+    t =   573.03s Checking existence of `Button (First Match)`
+    t =   575.07s Checking existence of `"cursor.approval.approve" Button`
+    t =   575.12s Checking existence of `"Approve" Button`
+    t =   575.15s Checking existence of `Button (First Match)`
+    t =   577.19s Checking existence of `"cursor.approval.approve" Button`
+    t =   577.24s Checking existence of `"Approve" Button`
+    t =   577.28s Checking existence of `Button (First Match)`
+    t =   579.31s Get number of matches for: Elements matching predicate 'label BEGINSWITH "Bash"'
+    t =   579.36s Find the Target Application 'dev.lancer.mobile'
+    t =   579.46s Added attachment named 'LC4-12-pills pill=false bashCount=1'
+    t =   579.46s Terminate dev.lancer.mobile:42189
+    t =   580.51s Open dev.lancer.mobile
+    t =   580.51s     Launch dev.lancer.mobile
+2026-07-19 17:38:12.169 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 17:38:12.170 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   580.73s         Setting up automation session
+    t =   582.67s         Wait for dev.lancer.mobile to idle
+    t =   604.06s Waiting 15.0s for "cursor.settings.emergency-stop" Button to exist
+    t =   605.10s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor.settings.emergency-stop" Button`
+    t =   605.10s         Checking existence of `"cursor.settings.emergency-stop" Button`
+    t =   605.22s Tap "cursor.settings.emergency-stop" Button
+    t =   605.22s     Wait for dev.lancer.mobile to idle
+    t =   605.23s     Find the "cursor.settings.emergency-stop" Button
+    t =   605.29s     Check for interrupting elements affecting "cursor.settings.emergency-stop" Button
+    t =   605.32s     Synthesize event
+    t =   605.62s     Wait for dev.lancer.mobile to idle
+    t =   605.90s Waiting 8.0s for Button (First Match) to exist
+    t =   606.93s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   606.93s         Checking existence of `Button (First Match)`
+    t =   607.02s Tap Button (First Match)
+    t =   607.02s     Wait for dev.lancer.mobile to idle
+    t =   607.03s     Find the Button (First Match)
+    t =   607.09s     Check for interrupting elements affecting "cursor.settings.emergency-stop" Button
+    t =   607.12s     Synthesize event
+    t =   607.12s         Scroll element to visible
+    t =   607.13s                 Retrying failed scroll-to-visible with containing cell Cell
+    t =   607.13s         Find the "cursor.settings.emergency-stop" Button
+    t =   607.19s         Computed hit point {-1, -1} after scrolling to visible
+    t =   607.48s     Wait for dev.lancer.mobile to idle
+    t =   609.69s Checking existence of `StaticText (First Match)`
+    t =   609.75s Find the Target Application 'dev.lancer.mobile'
+    t =   609.85s Added attachment named 'LC4-13-emergency-stop outcome=tapped'
+    t =   609.85s Terminate dev.lancer.mobile:45216
+    t =   610.89s Added attachment of type 'public.plain-text'
+    t =   610.90s Tear Down
+Test Case '-[LancerUITests.SweepLaneC4Tests testLaneC4_PostWave1LiveSweep]' passed (611.370 seconds).
+Test Suite 'SweepLaneC4Tests' passed at 2026-07-19 17:38:43.028.
+	 Executed 1 test, with 0 failures (0 unexpected) in 611.370 (611.377) seconds
+Test Suite 'LancerUITests.xctest' passed at 2026-07-19 17:38:43.029.
+	 Executed 1 test, with 0 failures (0 unexpected) in 611.370 (611.378) seconds
+Test Suite 'Selected tests' passed at 2026-07-19 17:38:43.030.
+	 Executed 1 test, with 0 failures (0 unexpected) in 611.370 (611.379) seconds
+2026-07-19 17:48:43.358 xcodebuild[28141:151650]  IDETestOperationsObserverDebug: Failure collecting diagnostics from simulator: Timed out after 600.0 seconds while waiting for a response from the invoked process
+2026-07-19 17:48:43.385 xcodebuild[28141:101439] [MT] IDETestOperationsObserverDebug: 1226.200 elapsed -- Testing started completed.
+2026-07-19 17:48:43.385 xcodebuild[28141:101439] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-07-19 17:48:43.385 xcodebuild[28141:101439] [MT] IDETestOperationsObserverDebug: 1226.200 sec, +1226.200 sec -- end
+
+Test session results, code coverage, and logs:
+	/Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/docs/test-runs/2026-07-19-sim-feature-lanes/L4/L4.xcresult
+
+** TEST SUCCEEDED ** [1337.478 sec]
+
+Testing started
+EXIT:0

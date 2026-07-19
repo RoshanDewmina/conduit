@@ -1,0 +1,36 @@
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: E0F36E79-1F13-4A9C-A1B5-7310F3409337 (screenID: 1, name: LCD)
+An error was encountered processing the command (domain=NSCocoaErrorDomain, code=513):
+You don’t have permission to save the file “L1-01-after-pair.png” in the folder “screenshots”.
+You don’t have permission.
+To view or change permissions, select the item in the Finder and choose File > Get Info.
+Underlying error (domain=NSPOSIXErrorDomain, code=1):
+	The operation couldn’t be completed. Operation not permitted
+	Operation not permitted
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: E0F36E79-1F13-4A9C-A1B5-7310F3409337 (screenID: 1, name: LCD)
+An error was encountered processing the command (domain=NSCocoaErrorDomain, code=513):
+You don’t have permission to save the file “L1-02-dispatch-t12s.png” in the folder “screenshots”.
+You don’t have permission.
+To view or change permissions, select the item in the Finder and choose File > Get Info.
+Underlying error (domain=NSPOSIXErrorDomain, code=1):
+	The operation couldn’t be completed. Operation not permitted
+	Operation not permitted
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: E0F36E79-1F13-4A9C-A1B5-7310F3409337 (screenID: 1, name: LCD)
+An error was encountered processing the command (domain=NSCocoaErrorDomain, code=513):
+You don’t have permission to save the file “L1-03-reply-t37s.png” in the folder “screenshots”.
+You don’t have permission.
+To view or change permissions, select the item in the Finder and choose File > Get Info.
+Underlying error (domain=NSPOSIXErrorDomain, code=1):
+	The operation couldn’t be completed. Operation not permitted
+	Operation not permitted
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: E0F36E79-1F13-4A9C-A1B5-7310F3409337 (screenID: 1, name: LCD)
+An error was encountered processing the command (domain=NSCocoaErrorDomain, code=513):
+You don’t have permission to save the file “L1-04-reply-t67s.png” in the folder “screenshots”.
+You don’t have permission.
+To view or change permissions, select the item in the Finder and choose File > Get Info.
+Underlying error (domain=NSPOSIXErrorDomain, code=1):
+	The operation couldn’t be completed. Operation not permitted
+	Operation not permitted

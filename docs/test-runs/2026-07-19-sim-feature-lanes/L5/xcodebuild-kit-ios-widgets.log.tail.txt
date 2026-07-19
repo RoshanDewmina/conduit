@@ -1,0 +1,1328 @@
+s.
+✔ Test "generation guard is a no-op for a legacy peer that never tags a generation" passed after 0.498 seconds.
+✔ Test "totalRunningCount sums vendor runningCount" passed after 0.498 seconds.
+✔ Test "resolvedRunningCount takes max of status total and running rows" passed after 0.498 seconds.
+✔ Test "providerLabel maps known vendors" passed after 0.498 seconds.
+✔ Test "ReplaySequencer.reset() allows seq=0 again for a new pairing generation" passed after 0.498 seconds.
+✔ Test "an untagged frame cannot hijack an active tagged generation" passed after 0.498 seconds.
+✔ Test "resolve falls back for nil empty and unknown" passed after 0.498 seconds.
+2026-07-19 18:06:09.492146-0400 xctest[68723:246857] [E2ERelayClient] connect() refused: invalid pairing code shape (machine=72739E64-382F-4A20-AA30-B637BF009F5A) — pair or restore first
+✔ Test "decodes fileDiff fixture with null line numbers" passed after 0.496 seconds.
+[E2ERelayClient] connect() REFUSED: invalid pairing code shape machine=72739E64-382F-4A20-AA30-B637BF009F5A
+✔ Test "groupByRecency splits Today and Yesterday around midnight" passed after 0.498 seconds.
+✔ Test "payload round-trips through userInfo" passed after 0.499 seconds.
+✔ Test "unknown action raw value fails to construct" passed after 0.498 seconds.
+✔ Test "generation-tagged sequencer rejects a stale-generation frame instead of poisoning the new generation's counter" passed after 0.499 seconds.
+✔ Test "default matches onboarding Balanced → autoSafeWrites" passed after 0.499 seconds.
+✔ Test "deriveRepos counts worktree/subdir threads under matching repo" passed after 0.500 seconds.
+✔ Test "thread status maps from last turn; idle copy is No runs yet" passed after 0.500 seconds.
+✔ Test "malformed userInfo (missing action) fails to construct" passed after 0.499 seconds.
+✔ Test "preferredDefaultRepo skips failed cwds and falls back to next absolute" passed after 0.500 seconds.
+✔ Test "widgetLines prefer running rows then status fallback" passed after 0.498 seconds.
+✔ Test "normalizeCwd preserves tilde (host path), strips trailing slash, resolves /tmp symlink" passed after 0.498 seconds.
+✔ Test "a captured-and-replayed encrypted frame is rejected on redelivery" passed after 0.500 seconds.
+✔ Test "search payload carries the query" passed after 0.500 seconds.
+✔ Test "pathsMatch is case-preserving equality after normalize" passed after 0.500 seconds.
+2026-07-19 18:06:09.493999-0400 xctest[68723:246857] [E2ERelayClient] restoreNamespacedStoredPairing: INCOMPLETE stored pairing for machine=8814A00D-ABB3-45EF-AAFE-59C3884B9FBA — code=false url=true; re-pair required
+[E2ERelayClient] INCOMPLETE stored pairing machine=8814A00D-ABB3-45EF-AAFE-59C3884B9FBA code=false url=true
+✔ Test "groupByRepo preserves first-seen group order and item order" passed after 0.502 seconds.
+✔ Test "relative cwd stays its own bucket when last-component match is ambiguous" passed after 0.502 seconds.
+✔ Test "rows drop historical and sort running first" passed after 0.500 seconds.
+✔ Test "isAbsoluteSendTarget rejects relative and empty cwd" passed after 0.502 seconds.
+✔ Test "tilde paths: no sandbox expansion, suffix bucketing, valid send target" passed after 0.502 seconds.
+✔ Test "isEqualOrUnder matches exact path and descendants" passed after 0.502 seconds.
+✔ Test "displayTitle falls back to cwd basename" passed after 0.500 seconds.
+✔ Test idleWhenNothing() passed after 0.502 seconds.
+✔ Test "deriveRepos merges conversation cwds with user-added repos" passed after 0.502 seconds.
+✔ Test "preferredDefaultRepo picks most-recent absolute cwd, not thread-count leader" passed after 0.502 seconds.
+✔ Test costLevelEscalates() passed after 0.502 seconds.
+✔ Test riskTierOutOfRangeRawValueResolvesNil() passed after 0.502 seconds.
+✔ Test runningWhenStreamingOnly() passed after 0.502 seconds.
+✔ Test "remove one of two slots — the other slot is preserved" passed after 0.502 seconds.
+✔ Test "seenGens evicts the oldest retired generation once its cap is exceeded" passed after 0.498 seconds.
+XCTestOutputBa✔ Test "displayName uses last path component; home and empty are honest" passed after 0.502 seconds.
+✔ Test "hasHiddenComponent detects worktree-style paths only" passed after 0.502 seconds.
+✔ Test riskTierIsElevatedOnlyForHighAndCritical() passed after 0.502 seconds.
+✔ Test "empty manager — isFull is false and slots is empty" passed after 0.504 seconds.
+✔ Test "fill to maxSlots — isFull is true and count equals maxSlots" passed after 0.504 seconds.
+rrier✔ Test "add a 4th slot when max is 3 — count stays at 3" passed after 0.504 seconds.
+✔ Test "slots are returned in insertion order" passed after 0.504 seconds.
+✔ Test "maxSlots constant is 3" passed after 0.504 seconds.
+✔ Test sessionMessageRoleDecodesThinking() passed after 0.504 seconds.
+✔ Test "remove then re-add — slot count reaches max again" passed after 0.504 seconds.
+✔ Test "conversations for cwd filter by bucketKey and sort by recency" passed after 0.505 seconds.
+✔ Test riskTierResolvesEachTier() passed after 0.502 seconds.
+✔ Test "add one slot — count is 1 and store is not full" passed after 0.502 seconds.
+✔ Test attachmentReferenceDecodesGoldenImageWithMimeType() passed after 0.504 seconds.
+✔ Test riskTierNilWhenNoPendingApprovalRisk() passed after 0.505 seconds.
+✔ Test "multi-frame parsing" passed after 0.504 seconds.
+✔ Test "repeated remove of same id is idempotent" passed after 0.505 seconds.
+✔ Test riskTierIsNilOutsideNeedsYou() passed after 0.505 seconds.
+✔ Test "remove with unknown id — slots unchanged" passed after 0.505 seconds.
+✔ Test needsYouBeatsEverything() passed after 0.505 seconds.
+✔ Test "hasHostedAgentsAccess requires active cloud entitlement in release mode" passed after 0.505 seconds.
+2026-07-19 18:06:09.498394-0400 xctest[68723:246857] [E2ERelayClient] restoreNamespacedStoredPairing: invalid stored pairing code shape for machine=B1E3FA56-22CF-4FB8-96AB-AB95AD616F3A; re-pair required
+✔ Test "tool_call / tool_result map to tool steps with tool name as title" passed after 0.506 seconds.
+[E2ERelayClient] INVALID stored pairing code shape machine=B1E3FA56-22CF-4FB8-96AB-AB95AD616F3A; re-pair required
+✔ Test "unknown method returns unknown event" passed after 0.504 seconds.
+✔ Test "out-of-order seqs are sorted before grouping" passed after 0.506 seconds.
+✔ Test "filters to the requested turn and ignores sibling turn events" passed after 0.506 seconds.
+✔ Test attachmentReferenceEncodesGoldenFileWithoutMimeType() passed after 0.506 seconds.
+✔ Test attachmentPutResultDecodesIdPathAndContentDigest() passed after 0.506 seconds.
+✔ Test "question step carries decision + latency when present" passed after 0.506 seconds.
+✔ Test conversationAppendRequestOmitsAttachmentsWhenNilOrEmpty() passed after 0.507 seconds.
+✔ Test turnDefaultEmptyAttachmentsOmitsAttachmentsKey() passed after 0.507 seconds.
+✔ Test "unframe returns nil when incomplete" passed after 0.504 seconds.
+✔ Test "remove the only slot — slots is empty" passed after 0.506 seconds.
+✔ Test "approval pending round-trip decode" passed after 0.507 seconds.
+✔ Test attachmentReferenceEncodesGoldenImageWithMimeType() passed after 0.506 seconds.
+✔ Test "output preview caps at 4KB tool-fold limit" passed after 0.507 seconds.
+✔ Test decisionLandedBeatsRunning() passed after 0.507 seconds.
+✔ Test "approval pending decode tolerates a missing contentHash (legacy daemon)" passed after 0.506 seconds.
+✔ Test "approval pending decode carries the daemon's contentHash" passed after 0.506 seconds.
+✔ Test "empty / older runs with no turn_started stay incomplete and invent no steps" passed after 0.509 seconds.
+✔ Test "full happy path: dispatch → output burst → approval → receipt → exit" passed after 0.509 seconds.
+✔ Test sessionMessageRoleToleratesUnknownFutureVendorRole() passed after 0.509 seconds.
+✔ Test conversationAttachmentDecodesLegacyWithoutContentDigest() passed after 0.506 seconds.
+✔ Test appendFollowUpWithAttachmentsGoldenRoundTrip() passed after 0.507 seconds.
+✔ Test conversationAttachmentRoundTripsContentDigest() passed after 0.509 seconds.
+✔ Test attachmentReferenceDecodesGoldenFileWithoutMimeType() passed after 0.509 seconds.
+✔ Test appendLegacyNewChatWithoutAttachmentsGoldenRoundTrip() passed after 0.509 seconds.
+✔ Test "framing round-trip" passed after 0.509 seconds.
+✔ Test turnLegacyWithoutAttachmentsGoldenRoundTrip() passed after 0.509 seconds.
+✔ Test conversationAppendRequestEncodesFullToolsWhenTrue() passed after 0.509 seconds.
+✔ Test "missing receipt on terminal turn marks recording incomplete without fabricating" passed after 0.509 seconds.
+✔ Test turnWithAttachmentsGoldenRoundTrip() passed after 0.509 seconds.
+✔ Test conversationAppendRequestDecodesMissingFullToolsAsNil() passed after 0.509 seconds.
+✔ Test "parses a real JSON audit line" passed after 0.509 seconds.
+✔ Test parsesAUnifiedPatch() passed after 0.509 seconds.
+✔ Test conversationAppendRequestOmitsFullToolsWhenNilOrFalse() passed after 0.509 seconds.
+✔ Test conversationAttachmentRejectsMalformedKind() passed after 0.509 seconds.
+✔ Test "unparseable line falls back to raw row" passed after 0.511 seconds.
+2026-07-19 18:06:09.504002-0400 xctest[68723:246857] [E2ERelayClient] restoreNamespacedStoredPairing: restored pairing for relayHost=self-host.example.com confirmed=false
+✔ Test "different approvals produce different ids" passed after 0.511 seconds.
+✔ Test "offline-machine item id is namespaced by host so it can't collide with an approval id" passed after 0.511 seconds.
+✔ Test "stall after 30s without events shows Still working…" passed after 0.511 seconds.
+✔ Test "elapsed suffix formats minutes and seconds" passed after 0.511 seconds.
+✔ Test "hidden when reply text visible or terminal — mutual exclusion" passed after 0.511 seconds.
+✔ Test "fresh event under 30s shows state label with elapsed" passed after 0.511 seconds.
+✔ Test "labels match starting/thinking/streaming/tool captions" passed after 0.511 seconds.
+✔ Test "same approval UUID produces the same AttentionItem.id across re-projections" passed after 0.511 seconds.
+✔ Test "persists under lancer.autonomy.preset" passed after 0.512 seconds.
+✔ Test "keeps unparseable lines when mixed with parsed ones" passed after 0.509 seconds.
+✔ Test conversationTurnDecodesWhenAttachmentsKeyIsAbsent() passed after 0.509 seconds.
+✔ Test conversationAppendRequestDecodesFullToolsTrueRoundTrip() passed after 0.512 seconds.
+✔ Test "conversationRecord/conversation round-trip is a no-op off iOS" passed after 0.511 seconds.
+✔ Test "pill survives working re-entry — clear only on idle/terminal" passed after 0.511 seconds.
+✔ Test appendNewChatWithAttachmentsGoldenRoundTrip() passed after 0.511 seconds.
+✔ Test "message above 4000 chars is invalid" passed after 0.511 seconds.
+✔ Test "message at 10 and 4000 chars is valid" passed after 0.511 seconds.
+✔ Test "other-machine event ignored; nil live turn rejects ingest" passed after 0.516 seconds.
+✔ Test "Claude models map to CLI aliases" passed after 0.515 seconds.
+✔ Test "ConversationTurnChunkPayload round-trips a turn and its events through JSON" passed after 0.509 seconds.
+✔ Test "normalizes legacy OpenRouter slugs for dispatch" passed after 0.516 seconds.
+✔ Test "search across multiple blocks returns per-block results" passed after 0.516 seconds.
+✔ Test "returns nil when block has no output" passed after 0.516 seconds.
+✔ Test "extractParams returns unique params in order" passed after 0.516 seconds.
+✔ Test "finds multiple matches" passed after 0.516 seconds.
+✔ Test "offline host with no pending approvals produces no offlineMachine item" passed after 0.516 seconds.
+2026-07-19 18:06:09.511267-0400 xctest[68723:246857] [E2ERelayClient] restoreNamespacedStoredPairing: restored pairing for relayHost=conduit-push-y4wpy6zeva-ts.a.run.app.attacker.example confirmed=false
+✔ Test "message below 10 chars is invalid" passed after 0.517 seconds.
+✔ Test "returns nil for empty query" passed after 0.517 seconds.
+✔ Test "offline host with a pending approval produces an offlineMachine item" passed after 0.517 seconds.
+✔ Test "returns nil when query not found" passed after 0.517 seconds.
+✔ Test "finds single match" passed after 0.517 seconds.
+✔ Test "extractParams returns empty for line without params" passed after 0.517 seconds.
+✔ Test "blank lines in workflow body are skipped" passed after 0.517 seconds.
+✔ Test "multi-step workflow emits commands in order" passed after 0.517 seconds.
+2026-07-19 18:06:09.512724-0400 xctest[68723:247086] open on /Users/roshansilva/Library/Developer/CoreSimulator/Devices/798BEDDF-D058-4BE5-AFD9-A48E574EE4BD/data/tmp/AppDatabaseMigrationTests-F12A5672-419A-4B2D-A22B-AF6857487A9B/db.sqlite: Permission denied
+✔ Test "duplicate ActivityKit rows for one run collapse to count 1" passed after 0.521 seconds.
+✔ Test "case-insensitive match" passed after 0.521 seconds.
+✔ Test "single-line workflow runs without param resolution" passed after 0.521 seconds.
+✔ Test hostWithKeyHint() passed after 0.521 seconds.
+✔ Test hostSyncedKeyHintDefaultsToNil() passed after 0.521 seconds.
+✔ Test "multiple running activities produce multiple lines" passed after 0.521 seconds.
+✔ Test "workflow with parameter substitutes correctly" passed after 0.521 seconds.
+✔ Test "isStreaming counts as running even when status is connected" passed after 0.521 seconds.
+✔ Test "relative-time formatting is stable with fixed now" passed after 0.522 seconds.
+✔ Test "no collision across a shifted field boundary" passed after 0.521 seconds.
+✔ Test "deterministic for identical fields" passed after 0.521 seconds.
+✔ Test "every field participates in the digest" passed after 0.521 seconds.
+✔ Test "orders newest-first" passed after 0.522 seconds.
+✔ Test sessionsTranscriptResultDecodesRealClaudeSessionWithThinkingBlocks() passed after 0.522 seconds.
+✔ Test "same parameter in multiple lines resolved once" passed after 0.521 seconds.
+✔ Test cloudSyncStatusUnavailableOnMacOS() passed after 0.521 seconds.
+✔ Test hostCarriesModifiedAt() passed after 0.521 seconds.
+✔ Test "matches the Go daemon's canonicalization for a known vector" passed after 0.521 seconds.
+✔ Test "AgentRun terminal statuses" passed after 0.525 seconds.
+✔ Test "Backend schedule DTO maps to AgentSchedule" passed after 0.521 seconds.
+✔ Test "Backend agent DTO maps to HostedAgent" passed after 0.525 seconds.
+✔ Test "UsageRecord totals tokens" passed after 0.525 seconds.
+✔ Test "preferredAgentID falls back to offline agent on selected machine" passed after 0.525 seconds.
+✔ Test "Lightsail runtime maps correctly" passed after 0.525 seconds.
+✔ Test "running status maps to count/lines; idle clears" passed after 0.526 seconds.
+✔ Test "same agent on distinct hosts stays as two agents" passed after 0.517 seconds.
+✔ Test "Backend run DTO maps exit code" passed after 0.525 seconds.
+✔ Test "Backend run DTO maps to AgentRun" passed after 0.525 seconds.
+✔ Test "owner phone repro: tilde-added repo folds into the discovered root, not a duplicate row" passed after 0.527 seconds.
+✔ Test "Fly runtime maps correctly" passed after 0.521 seconds.
+✔ Test "HostedAgent encodes and decodes" passed after 0.526 seconds.
+✔ Test isNotSyncingInitially() passed after 0.526 seconds.
+✔ Test "status-only runningCount still populates the widget" passed after 0.522 seconds.
+✔ Test "converts wss relay URL to https" passed after 0.526 seconds.
+✔ Test "lsof -iTCP -sTCP:LISTEN output: detects well-known ports" passed after 0.526 seconds.
+✔ Test "preferredAgentID ignores stale machine and picks first online" passed after 0.526 seconds.
+✔ Test "Each vendor decodes to the correct AgentSource and carries structured fields" passed after 0.526 seconds.
+✔ Test "preferredAgentID prefers online agent on selected machine" passed after 0.526 seconds.
+2026-07-19 18:06:09.521236-0400 xctest[68723:246857] [E2ERelayClient] disconnect() called
+✔ Test "writes count and lines from running rows; clears lines at zero" passed after 0.526 seconds.
+✔ Test "RelayMachineID round-trips through Codable" passed after 0.529 seconds.
+✔ Test "only loopback previews stay in the embedded browser" passed after 0.529 seconds.
+✔ Test "unknown ports are ignored" passed after 0.529 seconds.
+✔ Test "empty output returns empty array" passed after 0.529 seconds.
+✔ Test snippetCarriesModifiedAt() passed after 0.526 seconds.
+✔ Test "keeps https push-backend URL" passed after 0.529 seconds.
+✔ Test "first add becomes active; select updates active and lastSelectedAt" passed after 0.529 seconds.
+✔ Test syncEngineInitializes() passed after 0.526 seconds.
+✔ Test "RelayMachineRecord round-trips through Codable" passed after 0.529 seconds.
+✔ Test "vendor catalog includes pi" passed after 0.529 seconds.
+✔ Test "host preview ports reject invalid input" passed after 0.526 seconds.
+✔ Test "live path: completed host status also clears Running without re-entry" passed after 0.529 seconds.
+✔ Test "live path: host terminal delta (no re-init) flips turn + chips out of Running" passed after 0.529 seconds.
+✔ Test "flushNext drains one item per idle flush" passed after 0.529 seconds.
+✔ Test "flushNext is gated while agent is in flight" passed after 0.529 seconds.
+✔ Test "live path: running relay artifact clears when host turn exits" passed after 0.529 seconds.
+2026-07-19 18:06:09.524844-0400 xctest[68723:246857] [E2ERelayClient] disconnect() called
+✔ Test "select unknown id throws" passed after 0.529 seconds.
+✔ Test "round-trips accounts per vendor" passed after 0.531 seconds.
+✔ Test "negative: withTerminalTurnStatus false keeps running chip (no forced terminal)" passed after 0.531 seconds.
+✔ Test "quota merge honest" passed after 0.531 seconds.
+✔ Test "negative: still-running host status must not force chips terminal" passed after 0.531 seconds.
+✔ Test "dequeueFirst returns oldest then empties" passed after 0.531 seconds.
+✔ Test "agent.status RPC result decodes" passed after 0.531 seconds.
+✔ Test "remove clears active and promotes remaining account" passed after 0.529 seconds.
+✔ Test "priority order is respected" passed after 0.532 seconds.
+✔ Test "ss -tlnp output: detects well-known ports" passed after 0.529 seconds.
+✔ Test "lsof IPv6 address format: detects port 8000" passed after 0.529 seconds.
+✔ Test "success after partial failures resets before degrade threshold" passed after 0.532 seconds.
+✔ Test "sudo and destructive deletes are high" passed after 0.532 seconds.
+✔ Test "refresh success clears failure streak and exits degraded" passed after 0.532 seconds.
+✔ Test "enqueue preserves FIFO order" passed after 0.532 seconds.
+✔ Test "empty-findings drift still decodes as driftReport, not doctorReport" passed after 0.532 seconds.
+✔ Test "force-push main and rm -rf / are critical" passed after 0.532 seconds.
+✔ Test "agent.drift.scan RPC result decodes" passed after 0.532 seconds.
+✔ Test "Different hosts tracked independently" passed after 0.532 seconds.
+2026-07-19 18:06:09.528210-0400 xctest[68723:246857] [E2ERelayClient] disconnect() called
+✔ Test "refresh success while healthy stays healthy" passed after 0.531 seconds.
+✔ Test "First connect returns unknown with the presented fingerprint" passed after 0.534 seconds.
+✔ Test "installs and builds are medium" passed after 0.532 seconds.
+✔ Test "post both records to the buffer and broadcasts the notification" passed after 0.534 seconds.
+✔ Test "Changed fingerprint returns mismatch with expected/actual" passed after 0.534 seconds.
+✔ Test "read-only is low" passed after 0.535 seconds.
+✔ Test syncEngineErrorIsNilInitially() passed after 0.535 seconds.
+✔ Test "Second connect after record returns match" passed after 0.535 seconds.
+✔ Test syncEngineConflictCountStartsAtZero() passed after 0.535 seconds.
+✔ Test "live path: running turn + running chip → derived UI shows Running" passed after 0.535 seconds.
+✔ Test "fish bundled script contains COLORFGBG hint" passed after 0.535 seconds.
+✔ Test "decision rejected encodes and decodes correctly" passed after 0.535 seconds.
+✔ Test "runningPublish stays working until first non-empty chunk" passed after 0.535 seconds.
+✔ Test "approvalSync count reflects pending-only items" passed after 0.535 seconds.
+✔ Test "forget clears the record so next connect is unknown again" passed after 0.534 seconds.
+✔ Test "sessionSync with zero pendingCount and agentActive false" passed after 0.535 seconds.
+✔ Test "emergencyStop encodes and decodes correctly" passed after 0.535 seconds.
+✔ Test "POSIX bootstrap includes bash and zsh branches" passed after 0.535 seconds.
+✔ Test "decision approved encodes and decodes correctly" passed after 0.535 seconds.
+✔ Test "decision decode requires both id and result fields" passed after 0.542 seconds.
+✔ Test "runSnippet encodes and decodes body correctly" passed after 0.542 seconds.
+✔ Test "sessionSync carries live pendingCount and agentActive" passed after 0.542 seconds.
+✔ Test "owner has the full capability set" passed after 0.542 seconds.
+✔ Test "bundled scripts emit OSC 133 and OSC 7 markers" passed after 0.542 seconds.
+✔ Test "colorfgbgExport returns 15;0 for dark themes and 0;15 for light" passed after 0.542 seconds.
+✔ Test "missing type key returns nil" passed after 0.542 seconds.
+✔ Test "public key format is well-formed" passed after 0.542 seconds.
+✔ Test "decision id survives a UUID round-trip" passed after 0.535 seconds.
+✔ Test "POSIX bootstrap injects COLORFGBG for dark-mode theme hint" passed after 0.543 seconds.
+✔ Test "approvalSync with empty list encodes and decodes" passed after 0.542 seconds.
+✔ Test "poll interval is ~1s" passed after 0.535 seconds.
+✔ Test "unknown type key returns nil" passed after 0.543 seconds.
+✔ Test "maps daemon process-lifecycle statuses onto phone turn vocabulary" passed after 0.543 seconds.
+✔ Test "reconnect fires when network becomes reachable" passed after 0.543 seconds.
+✔ Test "degraded message surfaces data age; never invents working" passed after 0.543 seconds.
+✔ Test "parses header, separator, and body rows with alignments" passed after 0.543 seconds.
+✔ Test "splitCells trims cells and outer pipes" passed after 0.543 seconds.
+✔ Test "failure counter resets after success" passed after 0.544 seconds.
+✔ Test "reflecting allow always yields bypass" passed after 0.543 seconds.
+✔ Test "reflecting deny fail-closes to alwaysAsk" passed after 0.544 seconds.
+✔ Test "AutonomySelection.coarsePermissionMode(forRaw:) uses resolve fail-closed" passed after 0.543 seconds.
+✔ Test "reflecting ask replaces preferred bypass with balanced default" passed after 0.544 seconds.
+✔ Test "bypass maps to allow; all other presets map to ask (fail-closed)" passed after 0.544 seconds.
+✔ Test "every AutonomyPreset maps to a valid coarse mode" passed after 0.544 seconds.
+✔ Test "draft reference uses server id/path/digest and keeps previewCacheKey as draft UUID" passed after 0.544 seconds.
+✔ Test "reflecting ask preserves preferred when it already maps to ask" passed after 0.544 seconds.
+✔ Test "PermissionModeScope: empty/~ are document default; repo cwd is per-chat" passed after 0.544 seconds.
+✔ Test "non-US and unknown storefronts hide external Stripe CTA" passed after 0.547 seconds.
+✔ Test "stops after explicit stop()" passed after 0.548 seconds.
+✔ Test "rejects lines that look like pipes but lack a separator" passed after 0.548 seconds.
+✔ Test "chip error blocks send until removed" passed after 0.547 seconds.
+✔ Test "only owner and approver can approve" passed after 0.548 seconds.
+✔ Test "US storefront codes are eligible for external Stripe CTA" passed after 0.547 seconds.
+✔ Test "append request builder keeps prompt clean and carries refs" passed after 0.547 seconds.
+✔ Test "error retry policy preserves initial attachments when lastAttempt is nil" passed after 0.547 seconds.
+✔ Test "presentation model never surfaces host paths or malformed URL names" passed after 0.548 seconds.
+✔ Test "Approval can be created with tool-use fields" passed after 0.547 seconds.
+✔ Test "appending enforces 5-file and 20MB caps" passed after 0.548 seconds.
+✔ Test "preview cache survives recreation and rejects traversal" passed after 0.548 seconds.
+✔ Test "handles /dev/null for added files" passed after 0.548 seconds.
+✔ Test "chunking math respects 256KB cap" passed after 0.548 seconds.
+✔ Test "legacy lancerd JSON (no tool-use fields) still decodes cleanly with nil values" passed after 0.548 seconds.
+✔ Test "parses a one-file, one-hunk patch" passed after 0.548 seconds.
+✔ Test "chip state machine: pending → uploading → done" passed after 0.548 seconds.
+✔ Test "Approval created without tool-use fields has nil values" passed after 0.548 seconds.
+✔ Test "makePreviewData rejects oversized input" passed after 0.548 seconds.
+✔ Test "attachment layout is adaptive" passed after 0.547 seconds.
+✔ Test "chip title derivation table — Edit / Write / Bash / Read / unknown" passed after 0.552 seconds.
+✔ Test "preview cache rejects oversized entries before write" passed after 0.552 seconds.
+✔ Test diffCountLabels() passed after 0.552 seconds.
+✔ Test "Artifact DTO maps download URL from gcsUri" passed after 0.552 seconds.
+✔ Test "handles binary diff marker" passed after 0.552 seconds.
+✔ Test "Schedule DTO maps cron fields" passed after 0.552 seconds.
+✔ Test "legacy attachment prefix is hidden from display" passed after 0.552 seconds.
+✔ Test "Runtime kind maps gcp_cloud_run" passed after 0.552 seconds.
+✔ Test "Credit balance remaining label" passed after 0.552 seconds.
+✔ Test "Z1 fixture assembles ordered prose / toolChip / thinking; assistantText is prose-only" passed after 0.552 seconds.
+✔ Test "scroll policy matches Orca 48pt near-bottom threshold" passed after 0.552 seconds.
+✔ Test preprocessStripsUnknownTagsKeepsContent() passed after 0.552 seconds.
+✔ Test "arguments round-trip through JSON" passed after 0.554 seconds.
+✔ Test "thinking is collapsed by default" passed after 0.552 seconds.
+✔ Test preprocessConvertsDetailsSummaryToBoldVisibleBody() passed after 0.552 seconds.
+✔ Test changedFileExposesDiffFormat() passed after 0.552 seconds.
+✔ Test "failures under limit do not degrade" passed after 0.552 seconds.
+✔ Test "consecutive tool chips group; all-Read → Read N files" passed after 0.552 seconds.
+✔ Test "decodes new tool-use fields from lancerd JSON" passed after 0.552 seconds.
+✔ Test parseSplitsProseAndFences() passed after 0.552 seconds.
+✔ Test parseEmptyYieldsEmpty() passed after 0.552 seconds.
+✔ Test parsePlainProseOnly() passed after 0.555 seconds.
+✔ Test preprocessNormalizesAsteriskBulletsButKeepsBold() passed after 0.555 seconds.
+✔ Test preprocessInsertsBlankLinesBetweenHeadingsAndBoldLeads() passed after 0.555 seconds.
+✔ Test displayNameUsesBasename() passed after 0.552 seconds.
+✔ Test diffCountClampsNegative() passed after 0.555 seconds.
+✔ Test "WT-B: terminal turn forces running chips to done" passed after 0.555 seconds.
+✔ Test "Cloud entitlement exposes team org when orgId set" passed after 0.552 seconds.
+✔ Test "non-consecutive groups do not merge across intervening assistant prose" passed after 0.555 seconds.
+✔ Test preprocessNormalizesUnicodeBullets() passed after 0.555 seconds.
+XCT✔ Test truncatesLongNamesInMiddle() passed after 0.552 seconds.
+estOutputBarrier✔ Test "4 consecutive Bash → Ran 4 commands" passed after 0.556 seconds.
+✔ Test "enabledAgents whitelist excludes others" passed after 0.556 seconds.
+✔ Test "approve allows fast path for low/medium risk" passed after 0.556 seconds.
+✔ Test "map(error:) returns .timeout for LancerError.timeout pass-through" passed after 0.556 seconds.
+✔ Test shortNamesUnchanged() passed after 0.552 seconds.
+✔ Test "minRisk gates low-risk approvals" passed after 0.556 seconds.
+✔ Test parseMemoizesIdenticalInput() passed after 0.556 seconds.
+✔ Test "GCP runtime does not require host id" passed after 0.555 seconds.
+✔ Test "single Bash call → Ran a command" passed after 0.556 seconds.
+✔ Test "preview cache evicts corrupt entries and respects caps" passed after 0.557 seconds.
+✔ Test "sub-second span still reports at least 1s" passed after 0.561 seconds.
+✔ Test "mixed run (2 bash + 1 edit + 3 other) → Used 6 tools wording" passed after 0.561 seconds.
+✔ Test "WT-B negative: running turn keeps running chip" passed after 0.561 seconds.
+✔ Test "map(error:) returns .authFailed for LancerError.authFailed pass-through" passed after 0.561 seconds.
+✔ Test attributedStringMarksInlineCode() passed after 0.562 seconds.
+✔ Test "approve requires authentication for high/critical and unknown risk" passed after 0.561 seconds.
+✔ Test "cwd: .ignore drops the cd prefix" passed after 0.561 seconds.
+✔ Test "sessionPath placeholder resolves from sessionDirectory + sessionId" passed after 0.561 seconds.
+✔ Test "empty sessionId returns nil" passed after 0.561 seconds.
+✔ Test "intent declares system authentication policy for lock-screen approve baseline" passed after 0.561 seconds.
+✔ Test "backoff is always positive (jitter never produces zero)" passed after 0.561 seconds.
+✔ Test preprocessConvertsCommonHTMLTags() passed after 0.562 seconds.
+✔ Test "Grok resume uses -r flag" passed after 0.561 seconds.
+✔ Test attributedStringFallsBackOnEmpty() passed after 0.552 seconds.
+✔ Test "reject never requires authentication" passed after 0.561 seconds.
+✔ Test "Codex resume uses 'resume' subcommand" passed after 0.561 seconds.
+✔ Test "environment vars produce env-prefix sorted by key" passed after 0.561 seconds.
+✔ Test "ShellQuoting handles non-ASCII via printf substitution" passed after 0.561 seconds.
+✔ Test attributedStringPreservesBlockSeparationFromOwnerFixture() passed after 0.562 seconds.
+✔ Test "first attempt is 250 ms ± 20%" passed after 0.561 seconds.
+✔ Test "duration never 0 when completedAt is after startedAt" passed after 0.555 seconds.
+✔ Test "appending an event invalidates the cache and includes the new item" passed after 0.566 seconds.
+✔ Test "Claude Code realizes every rule as a hook" passed after 0.566 seconds.
+✔ Test "an expired approval is kept in the projection and flagged isExpired" passed after 0.566 seconds.
+✔ Test "attempt 1 is 500 ms ± 20%" passed after 0.566 seconds.
+✔ Test "a resolved (approved) approval is excluded from the attention projection" passed after 0.566 seconds.
+✔ Test "attempt 5+ caps at 10 s ± 20%" passed after 0.566 seconds.
+✔ Test "Codex realizes every rule as an approval gate" passed after 0.566 seconds.
+✔ Test "default policy has the four seeded rules" passed after 0.566 seconds.
+✔ Test "workingDirectory with spaces gets shell-quoted" passed after 0.566 seconds.
+✔ Test "sessionId with quotes gets safely escaped" passed after 0.566 seconds.
+✔ Test "same event array returns the identical cached items on repeated calls" passed after 0.562 seconds.
+✔ Test "Claude resume command substitutes sessionId and cd's into cwd" passed after 0.566 seconds.
+✔ Test "mime video/* and mov/mp4/m4v classify as video" passed after 0.566 seconds.
+✔ Test "a pending approval is kept and not flagged expired" passed after 0.566 seconds.
+✔ Test "draft reference maps video mime to wire kind file and image mime to image" passed after 0.566 seconds.
+✔ Test "type-based match takes priority over string fallback for Citadel errors" passed after 0.566 seconds.
+✔ Test "mime image/* and common extensions classify as image" passed after 0.566 seconds.
+✔ Test "an approval with no governance context decodes to nil (legacy / plain rows)" passed after 0.566 seconds.
+✔ Test "non-media stays file" passed after 0.566 seconds.
+✔ Test "SSHClientError.allAuthenticationOptionsFailed maps to .authFailed" passed after 0.566 seconds.
+✔ Test "LancerError.notConnected passes through unchanged" passed after 0.568 seconds.
+✔ Test "different turn ids never share a cache entry" passed after 0.568 seconds.
+✔ Test "OpenCode cannot map scope-based rules" passed after 0.566 seconds.
+✔ Test "CitadelError.channelFailure maps to .channelClosed" passed after 0.568 seconds.
+✔ Test "LancerError.timeout passes through unchanged" passed after 0.568 seconds.
+✔ Test "CitadelError.unauthorized maps to .authFailed" passed after 0.568 seconds.
+✔ Test "unknown error maps to .unknown" passed after 0.568 seconds.
+✔ Test "reference classifier prefers mime then wire kind image fallback" passed after 0.568 seconds.
+✔ Test "SSHClientError.channelCreationFailed maps to .channelClosed" passed after 0.569 seconds.
+✔ Test "CitadelError.channelCreationFailed maps to .channelClosed" passed after 0.569 seconds.
+✔ Test "'connection refused' string maps to .connectionRefused" passed after 0.569 seconds.
+✔ Test "'timed out' string maps to .timeout" passed after 0.569 seconds.
+✔ Test "partial frame waits for more bytes" passed after 0.568 seconds.
+✔ Test "single framed event is decoded correctly" passed after 0.568 seconds.
+✔ Test "non-prefix target snaps to full replacement" passed after 0.568 seconds.
+✔ Test "commit and settle gates use elapsed thresholds" passed after 0.569 seconds.
+✔ Test "all three providers are enumerable" passed after 0.568 seconds.
+✔ Test "decision wire values are stable across the SSH + relay transports" passed after 0.568 seconds.
+✔ Test "reveal prefers word boundaries when advancing" passed after 0.571 seconds.
+✔ Test "zero remaining yields zero step" passed after 0.568 seconds.
+✔ Test "character reveal catches up within one poll interval" passed after 0.571 seconds.
+✔ Test "inferContentType returns nil for unknown/extensionless names" passed after 0.571 seconds.
+✔ Test "defaults contain Claude, Codex, OpenCode, Cursor, Grok, Pi, Gemini" passed after 0.571 seconds.
+✔ Test "explain error system prompt contains injection guard" passed after 0.570 seconds.
+✔ Test "inferContentType maps common extensions" passed after 0.571 seconds.
+✔ Test "explainError with clean output has zero redactions" passed after 0.570 seconds.
+✔ Test "overlay wins only while strictly longer than persisted text" passed after 0.571 seconds.
+✔ Test "duplicate IDs collapse, later wins" passed after 0.571 seconds.
+✔ Test "registration(id:) returns the right agent" passed after 0.571 seconds.
+✔ Test "nlToCommand prompt references intent" passed after 0.571 seconds.
+✔ Test "invalid IDs and reserved IDs fail to decode" passed after 0.571 seconds.
+✔ Test "system prompt contains injection guard" passed after 0.571 seconds.
+✔ Test "AKIA token in output is redacted" passed after 0.571 seconds.
+✔ Test "identifier carries prompt and cwd without name→~/name mapping" passed after 0.571 seconds.
+✔ Test "add, role change, and remove a teammate" passed after 0.571 seconds.
+✔ Test "explainError includes command in user content" passed after 0.571 seconds.
+✔ Test "resumeCommand without sessionId placeholder fails to decode" passed after 0.574 seconds.
+✔ Test "AKIA token in context is redacted" passed after 0.574 seconds.
+✔ Test "isRelayFleetFull is false under the cap, true at and above it" passed after 0.574 seconds.
+✔ Test "nlToCommand clean context has zero redactions" passed after 0.574 seconds.
+✔ Test "OpenCode registration resumes with --session" passed after 0.571 seconds.
+✔ Test "recovery clears degraded and allows all-clear again" passed after 0.574 seconds.
+✔ Test impactTagsAppendFromBlastRadius() passed after 0.574 seconds.
+✔ Test plainBinaryShowsBasenameOnly() passed after 0.574 seconds.
+✔ Test "sessionIdSource accepts string and object forms" passed after 0.574 seconds.
+✔ Test emptyCommandFallsBack() passed after 0.574 seconds.
+✔ Test "one pre-first-success failure stays neutral (nil statusMessage)" passed after 0.574 seconds.
+✔ Test patchFileCountPrefersBlastRadius() passed after 0.574 seconds.
+✔ Test "poll interval is ~5s" passed after 0.574 seconds.
+✔ Test "two consecutive failures yield degraded unreachable copy" passed after 0.574 seconds.
+✔ Test commandHeadlineUsesVerbAndSubcommand() passed after 0.574 seconds.
+✔ Test "dispatchSlug is Claude-only" passed after 0.574 seconds.
+✔ Test "No agents running only from fresh success with zero rows" passed after 0.574 seconds.
+✔ Test "stale/unreachable surfaces data age — never all-clear" passed after 0.574 seconds.
+✔ Test questionIsSummarized() passed after 0.574 seconds.
+✔ Test patchCountsFilesAndLines() passed after 0.574 seconds.
+✔ Test "slug mapping covers haiku / sonnet / opus" passed after 0.577 seconds.
+✔ Test "follow-up prefers conversation model over current picker" passed after 0.577 seconds.
+✔ Test "sessionID is generated once and reused for the install" passed after 0.578 seconds.
+✔ Test "plain command is wrapped in login-shell invocation" passed after 0.577 seconds.
+✔ Test "never replaces cached content with a skeleton" passed after 0.577 seconds.
+✔ Test "empty command wraps safely" passed after 0.577 seconds.
+✔ Test "shows skeleton only while loading with no cached content" passed after 0.577 seconds.
+✔ Test "liveActivityStatus maps in-flight states to running and terminals to nil" passed after 0.577 seconds.
+✔ Test "read-only command is low severity" passed after 0.577 seconds.
+✔ Test "hides skeleton when load finishes empty" passed after 0.577 seconds.
+✔ Test "command with double-dollar keeps dollar signs" passed after 0.578 seconds.
+✔ Test "command with backtick does not expand" passed after 0.578 seconds.
+✔ Test "status filter keeps only enabled buckets" passed after 0.578 seconds.
+✔ Test "default is haiku when nothing is stored" passed after 0.578 seconds.
+✔ Test "command with single quotes is POSIX-escaped" passed after 0.578 seconds.
+✔ Test "statusBucket maps ledger kinds; idle folds into completed" passed after 0.578 seconds.
+✔ Test "summaries report Show All or active labels" passed after 0.578 seconds.
+✔ Test "deploy flags production" passed after 0.578 seconds.
+✔ Test "turning a status off clears Show All; all-on restores it" passed after 0.578 seconds.
+✔ Test "Show All statuses passes every row" passed after 0.578 seconds.
+✔ Test "source filter separates phone ledger from desktop sessions" passed after 0.581 seconds.
+✔ Test "a pre-seeded value is honored (no re-mint)" passed after 0.582 seconds.
+✔ Test "DEBUG persisted retired override migrates but self-host override remains" passed after 0.581 seconds.
+✔ Test "on-call assignment persists" passed after 0.582 seconds.
+✔ Test "handleRemoteNotification ignores a subscriptionID that isn't ours" passed after 0.581 seconds.
+✔ Test "statusBucket maps observed session states" passed after 0.581 seconds.
+✔ Test "load/save round-trips through UserDefaults" passed after 0.581 seconds.
+✔ Test "unread toggle includes unread rows even when status bucket is off" passed after 0.581 seconds.
+✔ Test unterminatedFenceOverCapUsesPlainTextFallback() passed after 0.583 seconds.
+✔ Test "persists selection under lancer.dispatch.model" passed after 0.581 seconds.
+✔ Test "rm -rf is high severity" passed after 0.578 seconds.
+✔ Test "seeds 'you' as owner and on-call on first run" passed after 0.582 seconds.
+✔ Test "parseCompletion extracts text, tokens, and cost" passed after 0.581 seconds.
+✔ Test "syncError is nil initially" passed after 0.581 seconds.
+✔ Test "corrupt stored bytes are never silently reused: regenerates and reports .regeneratedAfterCorruption" passed after 0.581 seconds.
+✔ Test "affectedPathCount mirrors the path list" passed after 0.578 seconds.
+✔ Test "default is Claude Code" passed after 0.581 seconds.
+✔ Test "first use generates and persists a key, reporting .generated" passed after 0.581 seconds.
+✔ Test "seedIfAbsent rejects undecodable bytes and leaves the identity absent" passed after 0.581 seconds.
+✔ Test "applying Show All statuses enables every toggle" passed after 0.582 seconds.
+✔ Test "seedIfAbsent adopts the given key when no identity exists yet" passed after 0.584 seconds.
+✔ Test "parseCompletion handles missing cost" passed after 0.581 seconds.
+✔ Test "available filters to installed, keeps selection" passed after 0.581 seconds.
+✔ Test "combined source and status predicates both apply" passed after 0.584 seconds.
+✔ Test "repeated calls on the same instance return the identical cached keypair" passed after 0.584 seconds.
+✔ Test "a derived blast radius round-trips through Codable" passed after 0.584 seconds.
+✔ Test "a fresh instance over the same store reloads the persisted key, not a new one" passed after 0.584 seconds.
+✔ Test "wire ids and display names" passed after 0.584 seconds.
+✔ Test "Agent auth method throws unsupportedPlatform" passed after 0.584 seconds.
+✔ Test "resolve + save round-trip" passed after 0.584 seconds.
+✔ Test "seedIfAbsent is a no-op once an identity is already cached or persisted" passed after 0.581 seconds.
+✔ Test "Ed25519 path loads key from store" passed after 0.584 seconds.
+✔ Test "Password auth method returns password credential immediately" passed after 0.584 seconds.
+✔ Test "owner fixture: one command-center row, Home, sibling /tmp roots, empty excluded" passed after 0.591 seconds.
+✔ Test "clean text passes through unchanged" passed after 0.584 seconds.
+✔ Test "GitHub token is redacted" passed after 0.584 seconds.
+✔ Test "RSA PEM private key block is redacted" passed after 0.584 seconds.
+✔ Test "report counts match number of redactions" passed after 0.584 seconds.
+✔ Test "extra patterns are applied" passed after 0.587 seconds.
+✔ Test "OpenAI key is redacted" passed after 0.587 seconds.
+✔ Test "start() is a no-op when CloudKit is unavailable (macOS test target)" passed after 0.587 seconds.
+✔ Test "multiple different secret types are all redacted" passed after 0.587 seconds.
+✔ Test "Redactor masks OpenRouter keys" passed after 0.584 seconds.
+✔ Test "Anthropic key is still redacted by fallback sk- pattern if specific pattern changes" passed after 0.587 seconds.
+✔ Test "GitHub server token is redacted" passed after 0.587 seconds.
+✔ Test "Bearer token in Authorization header is redacted" passed after 0.587 seconds.
+✔ Test "bare JWT (three dot-separated base64url segments) is redacted" passed after 0.587 seconds.
+✔ Test "splitExit separates trailing exit marker" passed after 0.587 seconds.
+✔ Test "PEM public key block is NOT redacted (only private keys are sensitive)" passed after 0.587 seconds.
+✔ Test "save then delete a custom preset" passed after 0.588 seconds.
+✔ Test "OpenSSH PEM private key block is redacted" passed after 0.587 seconds.
+✔ Test "seeds prod-strict and dev-relaxed builtins" passed after 0.588 seconds.
+✔ Test "handleRemoteNotification ignores a nil subscriptionID" passed after 0.588 seconds.
+✔ Test "numstat totals include text files and keep binary files countable" passed after 0.587 seconds.
+✔ Test "parses branch, upstream, ahead/behind and changes" passed after 0.587 seconds.
+✔ Test "Anthropic key is redacted by specific pattern" passed after 0.584 seconds.
+✔ Test "Bearer token with opaque value is redacted" passed after 0.587 seconds.
+✔ Test "EC PEM private key block is redacted" passed after 0.584 seconds.
+✔ Test "round-trip encrypt/decrypt" passed after 0.591 seconds.
+✔ Test "splitExit defaults to 0 when marker absent" passed after 0.592 seconds.
+✔ Test "clean tree with no upstream" passed after 0.592 seconds.
+✔ Test "normal text with dots is not over-redacted" passed after 0.592 seconds.
+✔ Test pendingApprovalRiskDefaultsNilAndRoundTrips() passed after 0.591 seconds.
+✔ Test "export then import is idempotent on ids" passed after 0.592 seconds.
+✔ Test "isResumable returns true only when both agentID + sessionID set" passed after 0.591 seconds.
+✔ Test "AWS key is redacted" passed after 0.592 seconds.
+✔ Test "explicit apply-fix decodes" passed after 0.592 seconds.
+✔ Test "pendingApprovalRisk key matches Go liveActivityContentState JSON tag" passed after 0.592 seconds.
+✔ Test "unknown remediation value decodes to .manual" passed after 0.592 seconds.
+✔ Test "shellQuote escapes embedded single quotes" passed after 0.592 seconds.
+✔ Test "isSyncing is false initially" passed after 0.592 seconds.
+✔ Test "connected status with no pending approvals" passed after 0.592 seconds.
+✔ Test "connected status round-trips with nil optionals" passed after 0.592 seconds.
+✔ Test "OpenCode pending notification decodes to inbox Approval fields" passed after 0.592 seconds.
+✔ Test "pendingApprovals > 0 sets pendingApprovalID" passed after 0.592 seconds.
+✔ Test "reconnecting status round-trips through Codable" passed after 0.592 seconds.
+✔ Test lastDecisionRoundTripsAndDefaultsNil() passed after 0.592 seconds.
+✔ Test "push-backend content-state round-trip — Go JSON mirrors Swift Codable output" passed after 0.592 seconds.
+✔ Test "ContentState fields match Go liveActivityContentState JSON keys" passed after 0.592 seconds.
+✔ Test "started + missing runId is rejected" passed after 0.595 seconds.
+✔ Test "started + valid runId is accepted" passed after 0.595 seconds.
+✔ Test "decodes from a daemon JSON envelope with an empty runId → rejected" passed after 0.595 seconds.
+✔ Test "Nth consecutive failure enters degraded and stays there" passed after 0.595 seconds.
+✘ Test "lastUpdate encodes as a JSON number (Unix fractional seconds) — ActivityKit push contract" failed after 0.592 seconds with 1 issue.
+✔ Test "threadItem hydrates preview unread and diff fields" passed after 0.595 seconds.
+✔ Test "diffTotals aggregates tool artifact added/removed" passed after 0.595 seconds.
+✔ Test "missing remediation field decodes to .manual (never an unsafe auto-fix)" passed after 0.595 seconds.
+✔ Test "non-started status is rejected even with a runId" passed after 0.595 seconds.
+✔ Test "started + empty-string runId is rejected (the TEST-02 gap)" passed after 0.595 seconds.
+✔ Test "suspended status round-trips through Codable" passed after 0.595 seconds.
+✔ Test "diffTotals prefers RepoDiffSummary-shaped .diff artifact" passed after 0.595 seconds.
+✔ Test "previewSnippet collapses whitespace and caps length" passed after 0.595 seconds.
+✔ Test "isUnread compares last activity to last opened" passed after 0.595 seconds.
+✔ Test "base64url round-trip" passed after 0.596 seconds.
+✔ Test "workspace for unknown ID returns nil" passed after 0.613 seconds.
+✔ Test "diffTotals from RepoDiffSummary matches SessionDiffPill totals" passed after 0.595 seconds.
+2026-07-19 18:06:09.596339-0400 xctest[68723:247085] [ConversationSyncEngine] push: 0 conversation(s) needing upload
+2026-07-19 18:06:09.596389-0400 xctest[68723:247086] [ConversationSyncEngine] push: 0 conversation(s) needing upload
+✔ Test controlAvailabilityTracksStatus() passed after 0.618 seconds.
+✔ Test "conversation for unknown ID returns nil" passed after 0.620 seconds.
+2026-07-19 18:06:09.601768-0400 xctest[68723:247085] [ConversationSyncEngine] performSync: cycle completed
+2026-07-19 18:06:09.601809-0400 xctest[68723:247086] [ConversationSyncEngine] performSync: cycle completed
+✔ Test "audit tail result decodes" passed after 0.492 seconds.
+✔ Test "Approval stores blast radius" passed after 0.492 seconds.
+✔ Test "decodes blast-radius on approval pending" passed after 0.492 seconds.
+✔ Test "list(machineID:) for unknown machine returns empty" passed after 0.621 seconds.
+✔ Test "waitForAnyConnected bails immediately when every pairing is known-bad" passed after 0.619 seconds.
+✔ Test "policy get result decodes" passed after 0.492 seconds.
+✔ Test "relay origin lookup is case-insensitive (daemon lowercase vs UUID.uuidString UPPERCASE)" passed after 0.617 seconds.
+✔ Test "empty or whitespace prompt skips the initial live send (observed-continue adopt)" passed after 0.480 seconds.
+✔ Test "turnByRunID returns nil for unknown run" passed after 0.619 seconds.
+✔ Test "priorTurns keeps completed history when a later turn is live" passed after 0.484 seconds.
+✔ Test "observed wrapper prefixes use trimmed-prefix matching" passed after 0.484 seconds.
+✔ Test "adopt with empty transcript exposes no-history state, not bare idle" passed after 0.484 seconds.
+✔ Test "round-trips Orca binary frame header + payload" passed after 0.483 seconds.
+✔ Test "liveTurn resolves by id" passed after 0.483 seconds.
+✔ Test "trailing user message without assistant still becomes a completed turn" passed after 0.483 seconds.
+✔ Test "all completed turns are prior when nothing is live" passed after 0.483 seconds.
+✔ Test "wrapper turns hide prompt bubble and hide whole turn when assistant text is empty" passed after 0.483 seconds.
+✔ Test "tool inputs and results never render as prose (CC parity)" passed after 0.484 seconds.
+✔ Test "priorTurns drops trailing running turn when liveTurnID is nil" passed after 0.484 seconds.
+✔ Test "observed SessionMessages pair into completed ChatTurns" passed after 0.484 seconds.
+✔ Test "empty assistant text has no placeholder fallback" passed after 0.483 seconds.
+✘ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" recorded an issue at WidgetSnapshotWriterTests.swift:65:9: Expectation failed: defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) == 1
+↳ defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) == 1 → false
+↳   defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) → 0
+✘ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" recorded an issue at WidgetSnapshotWriterTests.swift:66:9: Expectation failed: defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("date +lockscreen-proof-1") == true
+↳ defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("date +lockscreen-proof-1") == true → false
+↳   defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("date +lockscreen-proof-1") → nil
+↳     some → true
+✔ Test "client mints a fresh send generation on every peer_joined, and its recv rejects stale-generation frames" passed after 0.619 seconds.
+✔ Test "runStatus envelope decodes daemon shape" passed after 0.375 seconds.
+✔ Test "missing optional fields decode defensively" passed after 0.375 seconds.
+✔ Test "peer re-key resets receive sequence space so seq=0 is accepted again" passed after 0.622 seconds.
+✔ Test noLegacyFileIsANoOp() passed after 0.375 seconds.
+✔ Test "invalid peer re-key preserves the active replay window" passed after 0.622 seconds.
+✔ Test legacySourceIsNeverModifiedOrDeleted() passed after 0.375 seconds.
+✔ Test "find(id:) returns nil for an id with no row" passed after 0.628 seconds.
+✔ Test migratesMainFileWithoutSidecars() passed after 0.377 seconds.
+✔ Test failedMainCopyLeavesNoPartialState() passed after 0.377 seconds.
+✔ Test "low-risk decision commits synchronously and hits the sink" passed after 0.622 seconds.
+✔ Test "high-risk decision commits synchronously and hits the sink" passed after 0.622 seconds.
+✔ Test "decision for an unknown id is a no-op" passed after 0.622 seconds.
+✔ Test migratesMainFileAndBothSidecars() passed after 0.377 seconds.
+✔ Test patchTableExists() passed after 0.620 seconds.
+✔ Test "POST encodes all six payload fields" passed after 0.620 seconds.
+✔ Test "a machine whose pairing is known-bad is not sent to and not waited on — falls through to transportUnavailable immediately" passed after 0.618 seconds.
+✔ Test "no channel and no relay bridge: queryStatus reports transportUnavailable, does not hang" passed after 0.618 seconds.
+✔ Test "no channel and no relay bridge: pause/resume/cancel report transportUnavailable, do not hang" passed after 0.618 seconds.
+✔ Suite "SiriNavigationBuffer" passed after 0.643 seconds.
+✔ Suite "Approval decision wire format" passed after 0.643 seconds.
+✔ Suite "Cloud entitlement gating" passed after 0.643 seconds.
+✔ Test "snapshot for unknown host returns nil" passed after 0.618 seconds.
+✔ Suite E2ERelayMessageWireTests passed after 0.643 seconds.
+✔ Test "applyCloudArchive marks a conversation archived without clobbering an existing archivedAt" passed after 0.638 seconds.
+✔ Test "deleteConversation removes record and FTS entry" passed after 0.638 seconds.
+✔ Test "search returns empty for no match" passed after 0.638 seconds.
+✔ Test "syncNow() completes without throwing when CloudKit is unavailable" passed after 0.623 seconds.
+✔ Suite "TodoPayloadParser" passed after 0.646 seconds.
+✔ Suite "BackgroundTasksPresentation" passed after 0.646 seconds.
+✔ Suite "AgentHookDef" passed after 0.646 seconds.
+✔ Suite "SFTPClient" passed after 0.646 seconds.
+✔ Test "handleRemoteNotification triggers a sync cycle when the subscriptionID matches" passed after 0.623 seconds.
+✔ Test "search returns recent for empty query" passed after 0.638 seconds.
+✔ Suite "ThreadListLoadingPolicy" passed after 0.646 seconds.
+✔ Suite "AnsiSGRParser" passed after 0.646 seconds.
+✔ Suite "TurnActivitySummary" passed after 0.646 seconds.
+2026-07-19 18:06:09.623285-0400 xctest[68723:246915] [ChatConversationRepository] attachments_json decode failed; failing closed without wiping metadata
+✔ Test "create round-trips all fields" passed after 0.637 seconds.
+✔ Test "upsertConversationMirror on existing row updates lastHostSeq/syncState without losing sourceHost fields" passed after 0.640 seconds.
+✔ Suite "DeepLinkRoute" passed after 0.647 seconds.
+✔ Suite ProofReelModelTests passed after 0.647 seconds.
+✔ Suite "AttentionItem — sorting" passed after 0.647 seconds.
+✔ Suite "M6 cloud execution model" passed after 0.647 seconds.
+✔ Suite FleetSummaryTests passed after 0.647 seconds.
+✔ Suite OpenApprovalBufferTests passed after 0.646 seconds.
+✔ Test "recent returns conversations ordered by last_activity_at" passed after 0.636 seconds.
+✔ Suite "WatchApprovalTransfer" passed after 0.647 seconds.
+✔ Test "an approval with no contentHash decodes to nil (legacy / on-device-only rows)" passed after 0.641 seconds.
+✔ Suite "RunningAgentsMapping" passed after 0.656 seconds.
+✔ Suite "WorkspaceRepoCatalog" passed after 0.658 seconds.
+✔ Suite "AutonomySelection" passed after 0.659 seconds.
+✔ Test "updateSyncState transitions a conversation's mirror state" passed after 0.651 seconds.
+✔ Suite "SiriNavigationPayload" passed after 0.658 seconds.
+✔ Suite LiveActivityPresentationTests passed after 0.658 seconds.
+✔ Suite "FleetSlotManager — slot management" passed after 0.659 seconds.
+✔ Suite "LancerDProtocol" passed after 0.659 seconds.
+✔ Suite "FlightRecorderTimeline" passed after 0.659 seconds.
+✔ Suite "AgentStore entitlement gating" passed after 0.659 seconds.
+✔ Suite "AuditFeedFormatting" passed after 0.659 seconds.
+✔ Suite "AttentionItem — identity" passed after 0.659 seconds.
+✔ Suite "LiveStatusPresentation" passed after 0.659 seconds.
+✔ Suite "FeedbackClient validation" passed after 0.659 seconds.
+✔ Suite "AttentionItem — offline machine condition" passed after 0.661 seconds.
+✔ Test "upsertConversationMirror creates a host-backed conversation with lastHostSeq/syncState" passed after 0.656 seconds.
+✔ Test "createConversation round-trips all fields" passed after 0.656 seconds.
+✔ Suite "Live Activity → AgentStatusWidget snapshot" passed after 0.662 seconds.
+✔ Suite "Approval.computeContentHash" passed after 0.662 seconds.
+✔ Test channelErrorLeavesStatusAndRecordsLastError() passed after 0.655 seconds.
+✔ Suite "HostedAgent domain types" passed after 0.662 seconds.
+✔ Suite "DispatchAgent" passed after 0.663 seconds.
+✔ Suite "AgentStatusWidget running-agents snapshot writer" passed after 0.663 seconds.
+✔ Suite "PortDetector parsing" passed after 0.663 seconds.
+✔ Suite ApprovalParityTests passed after 0.664 seconds.
+✔ Suite RelayMachineCodableTests passed after 0.664 seconds.
+✔ Suite "Vendor account store" passed after 0.664 seconds.
+✔ Suite "LiveTerminalStateRegression (WT-B)" passed after 0.664 seconds.
+✔ Suite "MidRunFeedbackQueue" passed after 0.665 seconds.
+✔ Suite "AgentStatusProtocol" passed after 0.665 seconds.
+✔ Suite "WorkflowEngine" passed after 0.661 seconds.
+✔ Test "removeAllInvalid() removes only pairingInvalid machines and leaves valid ones" passed after 0.517 seconds.
+✔ Test "aggregateConnectionState reflects live connection state, not stale record data" passed after 0.517 seconds.
+✔ Suite "LivePollPolicy" passed after 0.664 seconds.
+✔ Test "add() past the fleet cap returns false and tracks nothing" passed after 0.517 seconds.
+✔ Test "invalidMachines returns only pairingInvalid machines" passed after 0.521 seconds.
+✔ Suite "HostKeyStore TOFU logic" passed after 0.668 seconds.
+✔ Suite "FeedbackClient backendBaseURL" passed after 0.663 seconds.
+✔ Test "a machine whose stored pairing failed to restore reads pairingInvalid, and remove() untracks it" passed after 0.521 seconds.
+✔ Test hostDeleteFromSyncLeavesNoTombstone() passed after 0.651 seconds.
+✔ Suite PatchDiffRenderTests passed after 0.659 seconds.
+✔ Suite "ConversationCloudRecords" passed after 0.659 seconds.
+✔ Suite "SiriNavigationDispatch" passed after 0.669 seconds.
+✔ Test snippetRepositoryUpsertSyncPreservesModifiedAt() passed after 0.651 seconds.
+✔ Test "pairedMachines excludes pairingInvalid; invalidMachines retains them" passed after 0.521 seconds.
+✔ Suite "BlockSearch" passed after 0.661 seconds.
+✔ Suite "RiskScorer" passed after 0.664 seconds.
+✔ Test snippetDeleteCreatesTombstone() passed after 0.652 seconds.
+✔ Suite "ShellIntegrationScript" passed after 0.670 seconds.
+✔ Suite "WatchSyncMessage — decision and count paths" passed after 0.670 seconds.
+✔ Test "upsert and retrieve all" passed after 0.651 seconds.
+✔ Suite "TeamRole — capabilities & approval" passed after 0.670 seconds.
+✔ Test "insufficient remaining budget skips retry and throws refresh timeout" passed after 0.656 seconds.
+✔ Suite "AutoReconnectEngine" passed after 0.669 seconds.
+✔ Suite "ChatTurn.Status.fromHostStatus" passed after 0.669 seconds.
+✔ Test hostDeleteCreatesTombstone() passed after 0.652 seconds.
+✔ Suite "ManagedModel CLI dispatch" passed after 0.659 seconds.
+✔ Suite "AutonomyPreset coarse permission mode" passed after 0.669 seconds.
+✔ Suite "KeyStore" passed after 0.670 seconds.
+✔ Suite "Billing eligibility" passed after 0.670 seconds.
+✔ Test hostRepositoryUpsertSyncPreservesModifiedAt() passed after 0.653 seconds.
+✔ Suite "ChatMarkdownTableParser" passed after 0.669 seconds.
+✔ Suite "Approval tool-use fields" passed after 0.669 seconds.
+✔ Suite "TurnTranscriptAssembler" passed after 0.670 seconds.
+✔ Suite "Hosted agents Phase 2/3 models" passed after 0.669 seconds.
+✔ Test hostRepositoryPreservesSyncedKeyHint() passed after 0.652 seconds.
+✔ Suite "UnifiedDiffParser" passed after 0.669 seconds.
+✔ Suite "SSHSession — auth-failure credential clear" passed after 0.674 seconds.
+✔ Suite NotificationFilterTests passed after 0.673 seconds.
+✔ Suite "ReconnectController — backoff schedule" passed after 0.673 seconds.
+✔ Suite "NormalizedPolicy — cross-provider mapping" passed after 0.673 seconds.
+✔ Suite ChatPresentationHelperTests passed after 0.670 seconds.
+✔ Suite "AttentionItem — resolution state" passed after 0.673 seconds.
+✔ Suite "AgentResumeBuilder" passed after 0.673 seconds.
+✔ Suite "TurnTranscriptItemsCache" passed after 0.673 seconds.
+✔ Suite AttachmentMediaClassificationTests passed after 0.673 seconds.
+✔ Suite "DaemonChannel framing" passed after 0.673 seconds.
+✔ Suite "M4 ssh-host files / artifact upload" passed after 0.673 seconds.
+✔ Suite "ChatStreamingTextSmoother" passed after 0.674 seconds.
+✔ Suite "SSHSession — type-based error mapping" passed after 0.673 seconds.
+✔ Suite "AgentRegistry" passed after 0.673 seconds.
+✔ Suite "ApprovalActionIntentPolicy" passed after 0.674 seconds.
+✔ Suite "ToolChipGrouping" passed after 0.673 seconds.
+✔ Suite "PromptBuilder" passed after 0.673 seconds.
+✔ Suite "LiveThreadIdentifier" passed after 0.673 seconds.
+✔ Test "blastRadius / question / choices / answeredChoice survive the DB round-trip" passed after 0.654 seconds.
+✔ Suite "TeamRoleStore — local persistence" passed after 0.673 seconds.
+✔ Suite "RunningAgentsFreshness" passed after 0.673 seconds.
+✔ Suite ApprovalSummaryTests passed after 0.673 seconds.
+✔ Suite "DispatchModelSelection" passed after 0.674 seconds.
+✔ Suite "SSHSession.loginShellWrap" passed after 0.674 seconds.
+✔ Suite "M8 — stable device identity" passed after 0.675 seconds.
+✔ Suite "BlastRadius — command risk derivation" passed after 0.674 seconds.
+✔ Suite "ChatTranscriptSkeletonVisibility" passed after 0.674 seconds.
+✔ Suite AsyncGate passed after 0.674 seconds.
+✔ Suite "ThreadListFilters" passed after 0.674 seconds.
+✔ Suite "OpenRouterClient usage parsing" passed after 0.674 seconds.
+✔ Suite RelaySettingsCutoverTests passed after 0.674 seconds.
+✔ Suite RelayDeviceIdentityTests passed after 0.674 seconds.
+✔ Suite "DispatchVendorSelection" passed after 0.674 seconds.
+✔ Suite "CredentialResolver" passed after 0.674 seconds.
+✔ Suite "Redactor" passed after 0.674 seconds.
+✔ Test hostRepositoryUpsertSetsModifiedAt() passed after 0.659 seconds.
+✔ Suite RelayFleetCapTests passed after 0.673 seconds.
+✔ Suite "PolicyPresetStore — presets & JSON round-trip" passed after 0.675 seconds.
+✔ Suite "PairingCrypto" passed after 0.675 seconds.
+✔ Suite "DriftFinding — remediation decoding" passed after 0.674 seconds.
+✔ Suite "OpenCode hook inbox round-trip" passed after 0.675 seconds.
+✔ Suite "DispatchResult.startedRunId" passed after 0.675 seconds.
+✘ Suite "LiveActivityContentState" failed after 0.675 seconds with 1 issue.
+✔ Suite "ThreadListMetadata" passed after 0.675 seconds.
+✔ Suite "GitClient parsing" passed after 0.674 seconds.
+✔ Test "delete removes the record" passed after 0.672 seconds.
+✔ Test "markCloudUploaded persists the CloudKit record name" passed after 0.671 seconds.
+✔ Test "appendEventsMirror is idempotent on repeated seq" passed after 0.673 seconds.
+✔ Test "rename changes name only" passed after 0.674 seconds.
+✔ Suite "Policy + audit protocol (WS-B)" passed after 0.677 seconds.
+✔ Test "events(sinceSeq:) pages strictly after the given sequence" passed after 0.674 seconds.
+✔ Suite "LiveThreadTranscript" passed after 0.677 seconds.
+✔ Test "upsertTurnMirror binds vendorSessionID and host seq range" passed after 0.673 seconds.
+✔ Suite "TerminalStreamCodec" passed after 0.677 seconds.
+✔ Test "search finds by title" passed after 0.673 seconds.
+✔ Test "contentHash survives the DB round-trip" passed after 0.671 seconds.
+✔ Test "adopt with transcript history leaves sendState idle" passed after 0.418 seconds.
+✔ Test "zero wall budget throws refresh timeout without calling fetch" passed after 0.667 seconds.
+✔ Test "startConversation with latestInCwdFallback resumeMode publishes degradedResume" passed after 0.667 seconds.
+✔ Test "startConversation threads fullTools into the append request" passed after 0.667 seconds.
+✔ Test "startConversation omits fullTools from the request by default" passed after 0.667 seconds.
+✔ Test "updateConversationTitle changes title" passed after 0.671 seconds.
+✔ Test "mergeConversationSummaries creates mirror rows for conversations discovered via list" passed after 0.667 seconds.
+✔ Suite "LiveRunStatusParams wire" passed after 0.679 seconds.
+✔ Suite "E2E relay replay resistance" passed after 0.683 seconds.
+✔ Suite AppDatabaseMigrationTests passed after 0.680 seconds.
+✔ Suite "Inbox decision commit" passed after 0.684 seconds.
+✔ Test "markUsed updates lastUsedAt" passed after 0.665 seconds.
+✔ Test "upsert updates existing snippet" passed after 0.665 seconds.
+✔ Test "delete non-existent id is a no-op" passed after 0.665 seconds.
+✔ Test "rankedForPalette orders by score descending" passed after 0.665 seconds.
+✔ Test "search by name matches" passed after 0.665 seconds.
+✔ Test "search by body matches" passed after 0.665 seconds.
+✔ Test "already-decided rows are not flipped by the TTL sweep" passed after 0.663 seconds.
+✔ Test "first decision wins; a second decision does not re-resolve" passed after 0.663 seconds.
+✔ Test "search empty query returns all" passed after 0.665 seconds.
+✔ Test "legacy turns without attachments_json decode as empty" passed after 0.679 seconds.
+✔ Suite "ConversationSyncEngine" passed after 0.683 seconds.
+✔ Test "updateTurnOutput sets assistantText and status" passed after 0.679 seconds.
+✔ Test "search finds by assistant text in turns" passed after 0.679 seconds.
+✔ Test "upsertTurnMirror on existing row updates status without duplicating" passed after 0.678 seconds.
+✔ Suite CommandGatewayTests passed after 0.682 seconds.
+◇ Test "Parsed seed produces a valid KeyStore import" started.
+✔ Test "corrupt attachments_json fails closed instead of wiping to empty" passed after 0.679 seconds.
+✔ Test "needsApproval persists turn and returns awaitingApproval; denied stays blocked" passed after 0.672 seconds.
+✔ Test "startConversation forwards attachments and persists clean prompt" passed after 0.671 seconds.
+✔ Test "startConversation with relay routing id persists it for follow-ups" passed after 0.673 seconds.
+✔ Test "mergeConversationSummaries never clobbers a stored relay routing agentID with a bare provider token" passed after 0.672 seconds.
+✔ Test "mergeConversationSummaries never regresses lastHostSeq below the existing mirror value" passed after 0.671 seconds.
+✔ Test "upsert + read round-trips all fields" passed after 0.663 seconds.
+✔ Test "conflict when refetch throws blocks without retrying append" passed after 0.671 seconds.
+✔ Test "startConversation persists a synced mirror row and returns runID" passed after 0.671 seconds.
+✔ Test "refresh never retries non-transient transport errors" passed after 0.671 seconds.
+✔ Test "fresh pending row under TTL survives the snapshot write sweep" passed after 0.678 seconds.
+✔ Test upsertSyncClearsTombstone() passed after 0.669 seconds.
+✔ Suite "M7 — governance context persistence round-trip" passed after 0.686 seconds.
+✔ Test "delete removes snippet" passed after 0.668 seconds.
+✔ Test tombstoneRepositoryRoundTrip() passed after 0.669 seconds.
+✔ Test "chat turn attachments survive repository reopen" passed after 0.680 seconds.
+✔ Test "delete removes the snapshot" passed after 0.664 seconds.
+✔ Test "touch updates lastUsedTime in place" passed after 0.664 seconds.
+✔ Test "list(machineID:) returns only that machine's workspaces" passed after 0.682 seconds.
+✔ Test "conversationsNeedingCloudPush excludes localOnly and already-current rows" passed after 0.682 seconds.
+✔ Test insertAndRead() passed after 0.666 seconds.
+✔ Test "markTurnCloudUploaded persists the CloudKit record name" passed after 0.681 seconds.
+✔ Test "touch updates lastUsedAt" passed after 0.683 seconds.
+✔ Test "list orders by lastUsedAt descending" passed after 0.683 seconds.
+✔ Test "mergeConversationSummaries ignores summaries without lastTurn fields" passed after 0.675 seconds.
+✔ Test "upsertArtifact round-trips all fields" passed after 0.681 seconds.
+✔ Test "observeSyncState immediately yields the current state, then updates on transitions" passed after 0.674 seconds.
+✔ Test "associateApproval is idempotent" passed after 0.681 seconds.
+✔ Test "upsertTurnMirror preserves attachments across status-only refresh" passed after 0.679 seconds.
+✔ Test "associateApproval creates approval artifact linked to runID" passed after 0.679 seconds.
+◇ Test "201 parses issue and url" started.
+✔ Suite "M9 — exactly-once decision delivery gate" passed after 0.687 seconds.
+✔ Suite "Content-hash binding — persistence round-trip" passed after 0.689 seconds.
+✔ Test "delete of one machine's workspace doesn't affect another machine's" passed after 0.684 seconds.
+✔ Test "allRecent sorts by lastUsedTime DESC" passed after 0.666 seconds.
+✔ Test "row older than TTL is marked expired; fresh row survives" passed after 0.668 seconds.
+✔ Test "saveDraft / localDraft / clearDraft round-trip a single draft per conversation" passed after 0.684 seconds.
+✔ Test "upsertArtifact with same ID updates existing row" passed after 0.683 seconds.
+✔ Test "Parsed seed produces a valid KeyStore import" passed after 0.004 seconds.
+✔ Test "mergeConversationSummaries does not overwrite a locally-completed turn" passed after 0.676 seconds.
+✔ Suite "SyncEngine" passed after 0.690 seconds.
+✔ Suite "SnippetRepository" passed after 0.690 seconds.
+✔ Suite "WorkspaceRepository" passed after 0.692 seconds.
+✔ Suite "Patch persistence" passed after 0.690 seconds.
+✔ Test "continueConversation threads fullTools into the append request" passed after 0.676 seconds.
+✔ Test "appendTurn assigns incrementing ordinals" passed after 0.686 seconds.
+✔ Test "recent respects limit and offset" passed after 0.685 seconds.
+✔ Suite "SessionSnapshotRepository" passed after 0.690 seconds.
+✔ Suite "ApprovalRepository stale pending TTL" passed after 0.691 seconds.
+✔ Test "mergeConversationSummaries applies running→failed from enriched list lastTurnStatus" passed after 0.678 seconds.
+✔ Test "refresh resumes from the highest contiguous locally hydrated event" passed after 0.678 seconds.
+✔ Test "host attachment envelopes map into local ChatTurn.attachments" passed after 0.679 seconds.
+✔ Test "conflict after refetch and retry still conflicts surfaces runbook blocked message" passed after 0.678 seconds.
+✔ Test "continueConversation preserves existing agentID when request omits agent" passed after 0.678 seconds.
+◇ Test "Parse is idempotent — same seed each call" started.
+✔ Test "artifacts(turnIDs:) groups by turn and excludes unrelated turns" passed after 0.688 seconds.
+✘ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" recorded an issue at WidgetSnapshotWriterTests.swift:84:9: Expectation failed: defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) == 2
+↳ defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) == 2 → false
+↳   defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) → 0
+✘ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" recorded an issue at WidgetSnapshotWriterTests.swift:85:9: Expectation failed: defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("cat go.mod") == true
+↳ defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("cat go.mod") == true → false
+↳   defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("cat go.mod") → nil
+↳     some → true
+✔ Test "turnsNeedingCloudPush only returns finished, not-yet-uploaded turns" passed after 0.687 seconds.
+✔ Test "event-less refresh preserves non-empty local assistantText" passed after 0.682 seconds.
+✔ Test "artifacts(turnID:) filters by turn" passed after 0.688 seconds.
+✔ Test "latestTurns(conversationIDs:) returns only the highest-ordinal turn per conversation" passed after 0.687 seconds.
+✘ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" recorded an issue at WidgetSnapshotWriterTests.swift:90:9: Expectation failed: newerChanged == true
+↳ newerChanged == true → false
+↳   newerChanged → false
+✔ Test "201 parses issue and url" passed after 0.006 seconds.
+✔ Test "Parse is idempotent — same seed each call" passed after 0.001 seconds.
+✔ Test "refresh repairs a summary-poisoned cursor from locally hydrated events" passed after 0.681 seconds.
+✔ Test "refreshConversation materializes a receipt-kind event into a chat_artifacts .receipt row" passed after 0.683 seconds.
+◇ Test "Ignores extra whitespace and trailing newlines" started.
+✔ Test "refreshConversation maps host 'exited' turn status to .completed (not .running)" passed after 0.680 seconds.
+✔ Test "conflict retry preserves attachment metadata and clientTurnId" passed after 0.683 seconds.
+✔ Test "conflict auto-recovers: stale baseSeq refetches then retries with fresh nextSeq" passed after 0.682 seconds.
+✔ Test "Ignores extra whitespace and trailing newlines" passed after 0.001 seconds.
+✔ Test "refreshConversation mirrors host tool artifacts for background-tasks pill" passed after 0.684 seconds.
+◇ Test "503 maps to user-facing not configured error" started.
+◇ Test "Encrypted key without passphrase throws encryptedKeyRequiresPassphrase" started.
+✔ Test "stale pending row past TTL is expired and excluded from the widget snapshot" passed after 0.690 seconds.
+✔ Test "refreshConversation merges conversation, turns, and events into the mirror" passed after 0.683 seconds.
+✔ Test "eventful refresh that assembles empty replaces prior assistantText" passed after 0.683 seconds.
+✔ Test "Encrypted key without passphrase throws encryptedKeyRequiresPassphrase" passed after 0.001 seconds.
+◇ Test "Encrypted key with correct passphrase returns 32-byte seed" started.
+✔ Test "503 maps to user-facing not configured error" passed after 0.004 seconds.
+◇ Test "network error maps to retryable message" started.
+✘ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" recorded an issue at WidgetSnapshotWriterTests.swift:93:9: Expectation failed: defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) == 1
+↳ defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) == 1 → false
+↳   defaults.integer(forKey: WidgetSnapshot.pendingApprovalsKey) → 0
+✘ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" recorded an issue at WidgetSnapshotWriterTests.swift:94:9: Expectation failed: defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("date +lockscreen-proof-1") == true
+↳ defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("date +lockscreen-proof-1") == true → false
+↳   defaults.string(forKey: WidgetSnapshot.pendingApprovalSummaryKey)?.contains("date +lockscreen-proof-1") → nil
+↳     some → true
+✘ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" recorded an issue at WidgetSnapshotWriterTests.swift:100:9: Expectation failed: olderChanged == true
+↳ olderChanged == true → false
+↳   olderChanged → false
+2026-07-19 18:06:09.683254-0400 xctest[68723:247088] [Default] Task <E1B06DBA-6FA0-4CB8-A50E-9F9B1485FD61>.<1> finished with error [-1009] Error Domain=NSURLErrorDomain Code=-1009 "(null)" UserInfo={_NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <E1B06DBA-6FA0-4CB8-A50E-9F9B1485FD61>.<1>"
+), _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <E1B06DBA-6FA0-4CB8-A50E-9F9B1485FD61>.<1>}
+✔ Test "network error maps to retryable message" passed after 0.005 seconds.
+✔ Suite "FeedbackClient submit" passed after 0.705 seconds.
+✔ Test "refetching the same receipt event does not duplicate the materialized artifact" passed after 0.694 seconds.
+✔ Test "refreshConversation pages until hasMore is false and merges all events" passed after 0.697 seconds.
+✘ Test "count and summary track a realistic arrive -> arrive -> resolve -> resolve sequence" failed after 0.704 seconds with 8 issues.
+✘ Suite "PendingApprovalsWidget snapshot writer — arrive/resolve sequence" failed after 0.713 seconds with 8 issues.
+✔ Test "adopt with empty transcript exposes adoptedNoHistory, not bare idle" passed after 0.464 seconds.
+✔ Test "no legacy pairing at all: no-op, returns nil, index stays empty" passed after 0.779 seconds.
+◇ Test "valid legacy state migrates into exactly one indexed machine, legacy keys gone" started.
+✔ Test "refresh pages past 500 events with cursor merge" passed after 0.809 seconds.
+✔ Test "sign up rejects passwords shorter than twelve characters" passed after 0.809 seconds.
+2026-07-19 18:06:09.807906-0400 xctest[68723:246857] [E2ERelayClient] handleMessage: relay error: pairing code expired, generate a new one
+2026-07-19 18:06:09.807996-0400 xctest[68723:246857] [E2ERelayClient] stopReconnectingDeadCode: pairing code expired — stopping reconnect loop
+2026-07-19 18:06:09.810673-0400 xctest[68723:246857] [E2ERelayClient] handleMessage: relay error: pairing code expired, generate a new one
+2026-07-19 18:06:09.810733-0400 xctest[68723:246857] [E2ERelayClient] handleMessage: code_expired on confirmed pairing — keeping code and reconnecting
+2026-07-19 18:06:09.811164-0400 xctest[68723:246857] [E2ERelayClient] handleMessage: waiting for peer
+2026-07-19 18:06:09.811480-0400 xctest[68723:246857] [E2ERelayClient] handleMessage: relay error: pairing code expired, generate a new one
+2026-07-19 18:06:09.811515-0400 xctest[68723:246857] [E2ERelayClient] stopReconnectingDeadCode: pairing code expired — stopping reconnect loop
+2026-07-19 18:06:09.811576-0400 xctest[68723:246857] [E2ERelayClient] handleMessage: relay error: key mismatch -- pairing already established with a different key
+2026-07-19 18:06:09.811735-0400 xctest[68723:246857] [E2ERelayClient] handleMessage: relay error: key mismatch -- pairing already established with a different key
+2026-07-19 18:06:09.811840-0400 xctest[68723:246857] [E2ERelayClient] handleDisconnect: connection lost closeCode=-1 closeReason=nil
+2026-07-19 18:06:09.811943-0400 xctest[68723:246857] [E2ERelayClient] handleMessage: waiting for peer
+✔ Test "persistPairing refuses invalid pairing code shape" passed after 0.829 seconds.
+✔ Test "connect() with an invalid pairing code is refused, not dialed" passed after 0.829 seconds.
+✔ Test "backend decision body carries the same sessionId used to register" passed after 0.829 seconds.
+✔ Test "invalid stored pairing code reports false and restores nothing" passed after 0.828 seconds.
+✔ Test "self-host and lookalike endpoints are never migrated" passed after 0.829 seconds.
+✔ Test "URL missing (code present) reports false and restores nothing" passed after 0.829 seconds.
+✔ Test "code missing (URL present) reports false and restores nothing" passed after 0.829 seconds.
+✔ Test "tracked machine's state follows the client's published states" passed after 0.827 seconds.
+✔ Test "complete persisted pairing restores and reports true" passed after 0.829 seconds.
+✔ Test "observers fire only on real transitions" passed after 0.827 seconds.
+✔ Test "derivation matrix distinguishes retrying from needs-a-human" passed after 0.827 seconds.
+✔ Test "retired hosted endpoint migrates without changing pairing identity" passed after 0.829 seconds.
+✔ Suite "M8/M9 — relay decision body uses the agreed session id" passed after 0.836 seconds.
+✔ Suite E2ERelayClientRestoreTests passed after 0.836 seconds.
+✔ Test "a transient transport failure on append recovers via retry instead of going hostOffline" passed after 0.915 seconds.
+✔ Test "append retries keep the same clientTurnId so the host can dedupe" passed after 0.916 seconds.
+[WP1 perf] N+1 loop (150 conversations): 96.837125ms; batched: 6.074542ms; speedup: 15.94146933217352x
+✔ Test "perf: batched lookup is faster than the N+1 loop it replaced (150 conversations)" passed after 0.946 seconds.
+✔ Suite "ChatConversationRepository" passed after 0.954 seconds.
+✔ Test "Backend decision POST body has approvalId, decision wire value, sessionId" passed after 0.966 seconds.
+✔ Test "Backend decision POST body omits contentHash when nil" passed after 0.965 seconds.
+✔ Test "Backend decision POST body carries contentHash when supplied" passed after 0.966 seconds.
+✔ Suite ApprovalRelayBackendTests passed after 0.977 seconds.
+✔ Test "persists and reloads failed cwd keys" passed after 0.959 seconds.
+✔ Test "lastConnectedAt refreshes on every transition into connected" passed after 0.968 seconds.
+✔ Test "markFailed dedupes normalized paths" passed after 0.959 seconds.
+✔ Test "TUIDetector: application cursor keys \e[?1h triggers shouldEscalate" passed after 0.959 seconds.
+✔ Test "TUIDetector: cursor home \e[H triggers shouldEscalate" passed after 0.960 seconds.
+✔ Test "TUIDetector: promptEditing-only sequences (ZLE \e[?1h) do not bypass the .submitted guard" passed after 0.959 seconds.
+✔ Test "TUIDetector: alt-screen enter \e[?1049h triggers shouldEscalate" passed after 0.959 seconds.
+✔ Test "TUIDetector: older alt-screen \e[?47h triggers shouldEscalate" passed after 0.960 seconds.
+✔ Test "TUIDetector: plain text does not trigger shouldEscalate" passed after 0.959 seconds.
+✔ Suite "FailedCwdStore" passed after 0.977 seconds.
+✔ Test "TUIDetector: normal SGR sequence does not trigger shouldEscalate" passed after 0.959 seconds.
+✔ Test "TUIDetector: hide cursor \e[?25l triggers shouldEscalate" passed after 0.960 seconds.
+✘ Test "pending in-memory relay approval forwards when durable row is not present yet" recorded an issue at ApprovalReliabilityWave2Tests.swift:264:9: Expectation failed: recorded?.id == approval.id
+↳ recorded?.id == approval.id → false
+↳   recorded?.id → nil
+↳   approval.id → 8947E160-3B05-48F0-80AF-253134E4470D
+↳     raw → 8947E160-3B05-48F0-80AF-253134E4470D
+✘ Test "pending in-memory relay approval forwards when durable row is not present yet" recorded an issue at ApprovalReliabilityWave2Tests.swift:265:9: Expectation failed: recorded?.decision == .approved
+↳ recorded?.decision == .approved → false
+↳   recorded?.decision → nil
+↳     some → .approved
+✘ Test "pending in-memory relay approval forwards when durable row is not present yet" recorded an issue at ApprovalReliabilityWave2Tests.swift:267:9: Expectation failed: recorded?.contentHash == "shown-content"
+↳ recorded?.contentHash == "shown-content" → false
+↳   recorded?.contentHash → nil
+↳     some → "shown-content"
+✘ Test "pending in-memory relay approval forwards when durable row is not present yet" failed after 0.958 seconds with 3 issues.
+✘ Suite "Relay approval decision race" failed after 0.977 seconds with 3 issues.
+✔ Test "TUIDetector: erase display \e[2J triggers shouldEscalate" passed after 0.960 seconds.
+✔ Test "marking an unknown run terminal is a no-op, not a crash" passed after 0.960 seconds.
+✔ Test "add then deriveRepos yields selectable WorkspaceRepo for composer" passed after 0.959 seconds.
+✔ Test "marking the same run active twice does not duplicate it" passed after 0.960 seconds.
+✔ Test "load dedups persisted duplicates keeping first" passed after 0.959 seconds.
+✔ Test "add of existing normalized path is a no-op keeping first" passed after 0.959 seconds.
+✔ Test "persists and reloads user-added repos" passed after 0.959 seconds.
+✔ Test "markActive then markTerminal removes the run from activeRunIDs" passed after 0.960 seconds.
+✔ Suite ActiveRunRegistryTests passed after 0.978 seconds.
+✔ Suite "AddedRepoStore" passed after 0.978 seconds.
+✔ Test "line editor backspaces normalize across chunks" passed after 0.961 seconds.
+✔ Test "line editor backspaces are normalized" passed after 0.961 seconds.
+2026-07-19 18:06:09.957182-0400 xctest[68723:246857] [DevicePushRegistration] machine connected before any push token exists — nothing to register yet
+✔ Test "collapse and star toggle" passed after 0.961 seconds.
+✔ Test "begin -> append -> finalize" passed after 0.961 seconds.
+✔ Test "bound device decodes backend JSON and derives status, including fractional-second timestamps" passed after 0.960 seconds.
+✔ Test "unconfigured account service is not misreported as invalid credentials" passed after 0.960 seconds.
+✔ Test "bound device is awaiting the daemon when approved but not yet redeemed" passed after 0.960 seconds.
+✔ Test "TUI detection sets pending flag" passed after 0.961 seconds.
+✔ Test "device management requires an authenticated session" passed after 0.961 seconds.
+✔ Suite "BlockRenderer" passed after 0.979 seconds.
+✔ Test "decide passes nil contentHash when the approval never carried one" passed after 0.965 seconds.
+✔ Test "decide passes the approval's contentHash through decisionSink" passed after 0.965 seconds.
+✔ Test "uploader requires server id/path/digest on final chunk" passed after 0.966 seconds.
+✔ Test "attentionItems is empty when relayInboxVM is nil and there are no slots" passed after 0.965 seconds.
+✔ Test "slot(forApprovalID:) returns nil on empty store" passed after 0.965 seconds.
+✔ Test "FleetStore.maxSlots is 3" passed after 0.965 seconds.
+✔ Test "attentionItems excludes a decided relayInboxVM approval" passed after 0.965 seconds.
+✔ Test "identityLoadOutcome reflects the underlying identity's outcome" passed after 0.964 seconds.
+✔ Test "a client constructed after a simulated relaunch presents the same key as before" passed after 0.965 seconds.
+✔ Test "beginPairingSession() rolls the pairing code but never the identity key" passed after 0.965 seconds.
+✔ Test "two client instances over the same identity present the identical public key" passed after 0.964 seconds.
+✔ Test "allPendingApprovals formula: sum of pending counts across viewmodels" passed after 0.965 seconds.
+✔ Test "code_expired error frame sets .codeExpired and clears the persisted code" passed after 0.964 seconds.
+✔ Test "older backend without the structured code field still falls back to substring match" passed after 0.964 seconds.
+✔ Test "waiting frame decodes expiresAt into pairingExpiresAt" passed after 0.964 seconds.
+✔ Test "socket close after pairingFailed keeps the failure visible (no flash-to-unpaired)" passed after 0.964 seconds.
+✔ Test "failed run with output uses the real output as the failure summary" passed after 0.963 seconds.
+✔ Test "code_expired on a confirmed pairing keeps the code (durable re-register)" passed after 0.964 seconds.
+✔ Test "failed run with no output still has a visible failure summary" passed after 0.963 seconds.
+✔ Test pauseThenResumeUpdatesStatus() passed after 0.979 seconds.
+✔ Test "No new block created when submit happens in executing state" passed after 0.978 seconds.
+✔ Test setBudgetThenStopSetsStoppedStatus() passed after 0.979 seconds.
+✔ Test "Cursor-positioning bytes in output set pendingTUIEscalation on BlockRenderer" passed after 0.978 seconds.
+✔ Test "key_mismatch (or any other error) is NOT treated as code_expired" passed after 0.964 seconds.
+✔ Suite "InboxViewModel — decisionSink content-hash threading" passed after 0.986 seconds.
+✔ Test "OSC 133 B — state transitions to submitted" passed after 0.978 seconds.
+✔ Test "Claude Code inline TUI: cursor-positioning bytes stay on the active block" passed after 0.978 seconds.
+✔ Test "TUIDetector ignores plain text output" passed after 0.978 seconds.
+✔ Test "updatePromptCWD reflects in the block's prompt" passed after 0.978 seconds.
+✔ Test "Legacy begin() creates a .submitted block (OSC-133-free fallback)" passed after 0.978 seconds.
+✔ Test "OSC 133 C — state transitions to executing" passed after 0.978 seconds.
+2026-07-19 18:06:09.963707-0400 xctest[68723:246857] [ApprovalRelay] postDecisionToBackend: SKIPPED for approvalID=appr-2 — backendURL/sessionID not configured (backendURL empty: true, sessionID empty: true)
+✔ Test "Two complete A→C→D cycles produce two finished blocks" passed after 0.978 seconds.
+✔ Test "Phase-7 re-engagement: beginPrompt succeeds after blocks.clear()" passed after 0.978 seconds.
+✔ Test "Full OSC 133 A→B→C→D sequence transitions block through all states" passed after 0.979 seconds.
+✔ Test "Active executing block is finalized when a new OSC 133 A arrives" passed after 0.978 seconds.
+✔ Test "OSC 133 A — block starts in promptEditing" passed after 0.978 seconds.
+2026-07-19 18:06:09.964755-0400 xctest[68723:246857] [ApprovalRelay] forwardDecisionOnly: QUEUED approvalID=appr-2 for redelivery (orig✔ Test "Resize: terminalCols update after block creation (mid-session rotate)" passed after 0.978 seconds.
+✔ Test "OSC 133 D — block finalized with exit code" passed after 0.978 seconds.
+inTag=5097CE57-890F-45CD-9F0C-7B36763F369A) — decision is parked until that bridge reconnects
+✔ Test "Resize: terminalCols set before beginPrompt configures block terminal width" passed after 0.979 seconds.
+✔ Test "TUIDetector identifies Claude Code cursor-positioning as interactive" passed after 0.978 seconds.
+✔ Test "waiting frame with no expiresAt (already-paired reconnect) leaves it nil" passed after 0.965 seconds.
+✔ Suite AttachmentModelsTests passed after 0.986 seconds.
+✔ Test "attentionItems includes a pending approval from relayInboxVM with zero slots" passed after 0.966 seconds.
+✔ Test "Ghost block scenario: empty done block appears before correct idle block" passed after 0.978 seconds.
+2026-07-19 18:06:09.964943-0400 xctest[68723:246857] [ApprovalRelay] postDecisionToBackend: SKIPPED for approvalID=unknown-1 — backendURL/sessionID not configured (backendURL empty: true, sessionID empty: true)
+✔ Suite "RunOutputStore" passed after 0.985 seconds.
+✔ Suite "RunControlStore" passed after 0.989 seconds.
+✔ Test "registered origin with no matching bridge falls through" passed after 0.978 seconds.
+✔ Suite "FleetStore — iOS approval aggregation" passed after 0.986 seconds.
+✔ Suite E2ERelayClientExpiryTests passed after 0.985 seconds.
+✔ Suite "SessionViewModel — block state machine" passed after 0.989 seconds.
+✔ Suite E2ERelayClientIdentityTests passed after 0.986 seconds.
+2026-07-19 18:06:09.965209-0400 xctest[68723:246857] [ApprovalRelay] forwardDecisionOnly: QUEUED approvalID=unknown-1 for redelivery (originTag=nil) — decision is parked until that bridge reconnects
+✔ Test "unregistered approval falls through, does not hang or crash" passed after 0.977 seconds.
+2026-07-19 18:06:09.965647-0400 xctest[68723:246857] [ApprovalRelay] postDecisionToBackend: SKIPPED for approvalID=appr-3 — backendURL/sessionID not configured (backendURL empty: true, sessionID empty: true)
+2026-07-19 18:06:09.965726-0400 xctest[68723:246857] [ApprovalRelay] forwardDecisionOnly: QUEUED approvalID=appr-3 for redelivery (originTag=5258460C-67D1-4427-A589-83FD428A2985) — decision is parked until that bridge reconnects
+✔ Test "registered origin with an inactive bridge falls through without misrouting to a different bridge" passed after 0.978 seconds.
+✔ Suite ApprovalRelayMultiMachineRoutingTests passed after 0.989 seconds.
+2026-07-19 18:06:09.975428-0400 xctest[68723:246857] [LiveActivity] start() called, isEnabled=false
+2026-07-19 18:06:09.975810-0400 xctest[68723:246857] [LiveActivity] start() aborted — Live Activities disabled (Settings → Notifications → Lancer, or system-wide)
+2026-07-19 18:06:09.976363-0400 xctest[68723:246857] [E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+[E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+✔ Test "prepend inserts finished blocks before live blocks" passed after 0.981 seconds.
+✔ Test "prepend de-duplication: existing block ID is skipped by caller" passed after 0.981 seconds.
+✔ Test "prepended blocks are always .done state" passed after 0.981 seconds.
+✔ Test "offline self-hosted choice stores no account session" passed after 0.990 seconds.
+2026-07-19 18:06:09.987399-0400 xctest[68723:246857] [ApprovalRelay] forwardDecisionOnly: approvalID=appr-1 decision=approved registeredOrigins=[] bridges=0
+2026-07-19 18:06:09.987495-0400 xctest[68723:246857] [ApprovalRelay] forwardDecisionOnly: NO relay origin registered for approvalID=appr-1 — falling through (registered: [])
+✔ Test "prepend with empty array is a no-op" passed after 0.991 seconds.
+✔ Suite "BlockRenderer — history restore (prepend)" passed after 1.010 seconds.
+✔ Test "unrelated bytes do not trigger escalation flags" passed after 0.994 seconds.
+✔ Test "alt-screen enter sets escalationDetected" passed after 0.993 seconds.
+✔ Test "bracketed-paste enable sequence sets bracketedPasteActive" passed after 0.994 seconds.
+✔ Test "OSC 133 Z records shell probe result" passed after 0.994 seconds.
+✔ Test "escalation sequence detected when embedded in larger chunk" passed after 0.994 seconds.
+✔ Test "Phase-7 re-engagement: first 133;A sets integrationActive on the bridge" passed after 0.994 seconds.
+✔ Test "alt-screen exit sets deescalationDetected" passed after 0.994 seconds.
+✔ Test "bracketed-paste disable sequence clears bracketedPasteActive" passed after 0.994 seconds.
+✘ Test "valid legacy state migrates into exactly one indexed machine, legacy keys gone" recorded an issue at RelayMachineTests.swift:148:9: Expectation failed: result != nil
+↳ result != nil → false
+↳   result → nil
+✘ Test "valid legacy state migrates into exactly one indexed machine, legacy keys gone" failed after 0.214 seconds with 1 issue.
+◇ Test "retired singular pairing migrates to Fly and backfills confirmation" started.
+✔ Test "sign out removes the durable session" passed after 0.994 seconds.
+✔ Test "OSC 133 B fires onPromptEnd callback" passed after 0.995 seconds.
+✔ Test "OSC stripping preserves -- and other shell syntax verbatim" passed after 0.995 seconds.
+✔ Test "OSC 133 C fires onCommandStart callback" passed after 0.995 seconds.
+2026-07-19 18:06:09.990472-0400 xctest[68723:246857] [WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=1 elapsedMs=37.301667
+✔ Test "returns ready after local rows without awaiting host sync" passed after 0.993 seconds.
+✔ Test "OSC 7 fires onCWDUpdate with correct path" passed after 0.996 seconds.
+✔ Test "stderr-only output — bytes reach onBlockBytes even with no stdout" passed after 0.996 seconds.
+✔ Suite "WorkspaceDataStore.refresh cache-first" passed after 1.012 seconds.
+2026-07-19 18:06:09.990697-0400 xctest[68723:246857] [E2ERelayBridge] append result dropped: clientTurnId mismatch or missing (expected=device:legacy-err got=nil)
+2026-07-19 18:06:09.990853-0400 xctest[68723:246857] [E2ERelayBridge] append result dropped: clientTurnId mismatch or missing (expected=device:legacy got=nil)
+2026-07-19 18:06:09.990990-0400 xctest[68723:246857] [E2ERelayBridge] append result dropped: clientTurnId mismatch or missing (expected=device:expected got=device:other)
+✔ Test "OSC 133 D;42 fires onCommandDone with exit code 42" passed after 0.996 seconds.
+✔ Test "no-output command — A→C→D fires all three callbacks with empty output" passed after 0.996 seconds.
+✔ Test "OSC 133 A fires onPromptStart callback" passed after 0.996 seconds.
+✔ Test "Full OSC 133 A→C→D sequence fires all three callbacks in order" passed after 0.996 seconds.
+✔ Test "onBlockBytes receives bytes with OSC sequences stripped" passed after 0.996 seconds.
+✔ Test "Ctrl-C mid-stream — D;130 fires onCommandDone with exit code 130" passed after 0.996 seconds.
+✔ Test "rapid A→C→D→A→C→D sequence — all callbacks fire in order" passed after 0.996 seconds.
+✔ Test "OSC 133 A does not fire onCommandStart" passed after 0.993 seconds.
+✔ Test "standard account session restores from Keychain" passed after 0.995 seconds.
+✔ Test "password reset uses the Lancer deep-link and restores the returned session" passed after 0.995 seconds.
+✔ Suite "Account session" passed after 1.013 seconds.
+✔ Test "stop clears an in-flight conversationsFetch continuation" passed after 1.006 seconds.
+✔ Test "Phase-7 re-engagement: onPromptStart fires on every 133;A, not just the first" passed after 0.992 seconds.
+✔ Suite "PTYBridge" passed after 1.016 seconds.
+✔ Test "awaitingApproval poll completion flips to completed" passed after 0.748 seconds.
+✔ Test "awaitingApproval poll deny flips to failed with honest message" passed after 0.752 seconds.
+2026-07-19 18:06:09.996273-0400 xctest[68723:246857] [E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+[E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+✔ Test "stop releases an in-flight append waiter exactly once" passed after 1.010 seconds.
+✘ Test "retired singular pairing migrates to Fly and backfills confirmation" recorded an issue at RelayMachineTests.swift:180:25: Issue recorded
+↳ retired legacy pairing did not migrate
+✔ Test "adopt prefers attachObservedSession and hydrates ledger turns, not the tail transcript" passed after 0.758 seconds.
+✘ Test "retired singular pairing migrates to Fly and backfills confirmation" failed after 0.009 seconds with 1 issue.
+◇ Test "partial legacy state (code present, privkey missing) returns nil, fragments cleared" started.
+✔ Test "pollUntilTerminal flips sendState before the transcript write lands, closing the race" passed after 0.759 seconds.
+2026-07-19 18:06:09.999576-0400 xctest[68723:246857] [ApprovalRelay] forwardDecisionOnly: approvalID=FEA1CCAA-6376-492F-BA03-8B5BE446DBC8 decision=approved registeredOrigins=[] bridges=0
+2026-07-19 18:06:09.999679-0400 xctest[68723:246857] [ApprovalRelay] forwardDecisionOnly: NO relay origin registered for approvalID=FEA1CCAA-6376-492F-BA03-8B5BE446DBC8 — falling through (registered: [])
+✔ Test "stale poll refresh does not repopulate transcriptTurns after resetForNewThread" passed after 0.755 seconds.
+2026-07-19 18:06:10.001117-0400 xctest[68723:246857] [E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+[E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+✔ Test "partial legacy state (code present, privkey missing) returns nil, fragments cleared" passed after 0.002 seconds.
+◇ Test "corrupt privkey bytes (present but not valid Curve25519) returns nil, fragments cleared" started.
+✔ Test "echoed host error with matching clientTurnId resumes as RelayConversationError.host" passed after 1.014 seconds.
+✔ Test "first append after re-key completes from matching agentConversationsAppendResult" passed after 1.014 seconds.
+2026-07-19 18:06:10.004076-0400 xctest[68723:246857] [E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+[E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+✔ Test "corrupt privkey bytes (present but not valid Curve25519) returns nil, fragments cleared" passed after 0.004 seconds.
+◇ Test "valid legacy state seeds an absent device identity with the legacy privkey" started.
+2026-07-19 18:06:10.008435-0400 xctest[68723:246857] [E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+[E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+2026-07-19 18:06:10.009687-0400 xctest[68723:246857] [ApprovalRelay] postDecisionToBackend: DELIVERED approvalID=appr-1
+✘ Test "cold-launch forward hydrates relayToken before the backend POST" recorded an issue at ApprovalRelayColdLaunchTests.swift:56:9: Expectation failed: capturedAuth.value == "Bearer tok-abc"
+↳ cold-launch POST must carry the hydrated token; nil/empty means the hydration race regressed
+↳ capturedAuth.value == "Bearer tok-abc" → false
+↳   capturedAuth.value → "Bearer tok-cold"
+↳     some → "Bearer tok-cold"
+↳     some → "Bearer tok-abc"
+✘ Test "cold-launch forward hydrates relayToken before the backend POST" failed after 1.010 seconds with 1 issue.
+2026-07-19 18:06:10.009842-0400 xctest[68723:246857] [ApprovalRelay] postDecisionToBackend: DELIVERED approvalID=FEA1CCAA-6376-492F-BA03-8B5BE446DBC8
+✘ Suite ApprovalRelayColdLaunchTests failed after 1.031 seconds with 1 issue.
+↳ /// SEC-2 regression: on a cold launch the relay must hydrate its per-session
+↳ /// `relayToken` from the Keychain *before* `postDecisionToBackend` reads it. The
+↳ /// old fire-and-forget hydration left the token empty at the `guard` that runs
+↳ /// before the URLSession suspension, so the POST never fired with auth.
+✘ Test "enqueue on a cold-launch, row-less approval still posts the decision to the backend" recorded an issue at LockScreenDecisionDeliveryTests.swift:102:9: Expectation failed: posted != nil
+↳ a row-less cold-launch decision must still be forwarded to the backend relay
+↳ posted != nil → false
+↳   posted → nil
+✘ Test "enqueue on a cold-launch, row-less approval still posts the decision to the backend" recorded an issue at LockScreenDecisionDeliveryTests.swift:103:9: Expectation failed: posted?["approvalId"] as? String == approvalID
+↳ posted?["approvalId"] as? String == approvalID → false
+↳   posted?["approvalId"] as? String → nil
+↳   approvalID → "FEA1CCAA-6376-492F-BA03-8B5BE446DBC8"
+✘ Test "enqueue on a cold-launch, row-less approval still posts the decision to the backend" recorded an issue at LockScreenDecisionDeliveryTests.swift:104:9: Expectation failed: posted?["decision"] as? String == DaemonChannel.decisionWireValue(for: .approved)
+↳ posted?["decision"] as? String == DaemonChannel.decisionWireValue(for: .approved) → false
+↳   posted?["decision"] as? String → nil
+↳   DaemonChannel.decisionWireValue(for: .approved) → "approve"
+✘ Test "enqueue on a cold-launch, row-less approval still posts the decision to the backend" recorded an issue at LockScreenDecisionDeliveryTests.swift:105:9: Expectation failed: posted?["sessionId"] as? String == "sess-cold"
+↳ posted?["sessionId"] as? String == "sess-cold" → false
+↳   posted?["sessionId"] as? String → nil
+↳     some → "sess-cold"
+✘ Test "valid legacy state seeds an absent device identity with the legacy privkey" recorded an issue at RelayMachineTests.swift:245:9: Expectation failed: result != nil
+↳ result != nil → false
+↳   result → nil
+✘ Test "enqueue on a cold-launch, row-less approval still posts the decision to the backend" failed after 1.012 seconds with 4 issues.
+✘ Test "valid legacy state seeds an absent device identity with the legacy privkey" recorded an issue at RelayMachineTests.swift:254:9: Expectation failed: outcome == .existing
+↳ outcome == .existing → false
+↳   outcome → .generated
+✘ Suite LockScreenDecisionDeliveryTests failed after 1.032 seconds with 4 issues.
+↳ /// Regression coverage for checkpoint 5c (2026-07-08 device proof): a lock-screen
+↳ /// Approve/Reject tapped while the app is force-quit must reach the backend
+↳ /// WITHOUT `AppRoot`'s SwiftUI view graph ever running. `LancerNotificationDelegate`
+↳ /// (app target, not unit-testable directly) now calls exactly the path exercised
+↳ /// here — `ApprovalRelay.enqueue` against a fresh `AppDatabase` with no local
+↳ /// approval row (the push-only, cold-launch case) — so this proves the engine-level
+↳ /// half of the fix: enqueue on a row-less approval still hydrates credentials and
+↳ /// posts the decision to the backend relay.
+↳ ///
+↳ /// `.serialized`: like `ApprovalRelayColdLaunchTests`, this registers a global
+↳ /// `URLProtocol` and reads a module-level capture var around `URLSession.shared`
+↳ /// — shared mutable state that races against any other suite doing the same
+↳ /// thing concurrently (Swift Testing parallelizes across suites by default).
+↳ /// Serializing only fixes multiple tests within *this* suite; running this file
+↳ /// together with another suite that also swaps in a global `URLProtocol`
+↳ /// (e.g. `ApprovalRelayColdLaunchTests`) can still cross-contaminate when both
+↳ /// run in the same process at once — a pre-existing limitation of this test
+↳ /// pattern (see `LiveActivityContentStateTests.swift:151`'s identical caveat),
+↳ /// not something this fix introduced. Verified in isolation via
+↳ /// `-only-testing:LancerKitTests/LockScreenDecisionDeliveryTests`.
+✘ Test "valid legacy state seeds an absent device identity with the legacy privkey" recorded an issue at RelayMachineTests.swift:255:9: Expectation failed: keyPair.publicKeyBase64URL == PairingCrypto.KeyPair(privateKey: privateKey).publicKeyBase64URL
+↳ keyPair.publicKeyBase64URL == PairingCrypto.KeyPair(privateKey: privateKey).publicKeyBase64URL → false
+↳   keyPair.publicKeyBase64URL → "t2TKjVotiraSq4yvZkPlbFQGncpw-f3KUaK4P5rNxRY"
+↳   PairingCrypto.KeyPair(privateKey: privateKey).publicKeyBase64URL → "D2mSpWLpjroM80Tc-ZyjbKlYFnuncekWWNFW_98E2DU"
+2026-07-19 18:06:10.010873-0400 xctest[68723:246857] [E2ERelayBridge] relayAppendConversation: first attempt timed out after re-key (machine=15D874B0-8AEA-403A-A481-051FE143E9C4) — retrying once
+✘ Test "valid legacy state seeds an absent device identity with the legacy privkey" failed after 0.004 seconds with 3 issues.
+2026-07-19 18:06:10.010935-0400 xctest[68723:246857] [E2ERelayBridge] relayAppendConversation: first attempt timed out after re-key (machine=C081688B-B33A-46BF-AE3A-8A4D97615F83) — retrying once
+◇ Test "valid legacy state does NOT clobber an already-present device identity" started.
+2026-07-19 18:06:10.011044-0400 xctest[68723:246857] [E2ERelayBridge] relayAppendConversation: first attempt timed out after re-key (machine=EDF66127-ED2E-4E37-B8E0-9316C5B3F21F) — retrying once
+✔ Test "observed follow appends desktop-side activity to an open thread" passed after 0.766 seconds.
+✔ Test "exhausted timed-out fetch throws cloudStale without persisting hostOffline" passed after 1.020 seconds.
+2026-07-19 18:06:10.013952-0400 xctest[68723:246857] [E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+[E2ERelayClient] keychainRead(lancer.relay.pairedPrivKey) failed: OSStatus -34018
+✔ Test "refresh retries a timed-out fetch then hydrates assistantText" passed after 1.024 seconds.
+✔ Test "valid legacy state does NOT clobber an already-present device identity" passed after 0.004 seconds.
+◇ Test "a healthy (non-corrupt) identity leaves persisted machines untouched" started.
+✔ Test "a healthy (non-corrupt) identity leaves persisted machines untouched" passed after 0.001 seconds.
+◇ Test "a corrupt-and-regenerated identity wipes every persisted machine pairing" started.
+✔ Test "relayFetchConversation throws timedOut when no response arrives" passed after 1.031 seconds.
+✔ Test "relayListSessions throws timedOut when no response arrives" passed after 1.031 seconds.
+✔ Suite E2ERelayBridgeTimeoutTests passed after 1.041 seconds.
+✔ Test "no-op when no APNs token has ever arrived" passed after 1.029 seconds.
+◇ Test "no-op when a token exists but no machine is connected yet, then registers once one connects" started.
+2026-07-19 18:06:10.019202-0400 xctest[68723:246857] [E2ERelayBridge] relayAppendConversation: first attempt timed out after re-key (machine=773229ED-A7E3-41AB-BF46-6CFAF9E49410) — retrying once
+✔ Test "concurrent retryLastAttempt claims the dispatch gate once" passed after 0.779 seconds.
+✔ Test "a corrupt-and-regenerated identity wipes every persisted machine pairing" passed after 0.002 seconds.
+✘ Suite RelayMachineMigrationTests failed after 1.042 seconds with 5 issues.
+↳ // `.serialized`: every test in this suite mutates shared global state
+↳ // (real `UserDefaults.standard` legacy keys + `RelayMachineMigration
+↳ // .indexKeychain`, which is a single static var, not per-test). Swift
+↳ // Testing runs a suite's tests concurrently by default, which raced these
+↳ // against each other (one test's migrated index record leaking into
+↳ // another's "should still be empty" assertion). Serializing matches how
+↳ // this shared, unswappable state is actually used at runtime — one
+↳ // migration, one app launch.
+✔ Test "two sequential appends each require their own matching result" passed after 1.032 seconds.
+2026-07-19 18:06:10.027855-0400 xctest[68723:246857] [E2ERelayBridge] relayAppendConversation: first attempt timed out after re-key (machine=0C268B9F-F894-46D0-A7EC-1909C447C400) — retrying once
+2026-07-19 18:06:10.037833-0400 xctest[68723:246857] [E2ERelayBridge] relayAppendConversation: first attempt timed out after re-key (machine=37D16D9B-8C52-494F-80C4-4A835C5034C4) — retrying once
+2026-07-19 18:06:10.041183-0400 xctest[68723:246857] [E2ERelayBridge] relayAppendConversation: first attempt timed out after re-key (machine=10305229-BD77-4091-9FC1-79ADE33B752C) — retrying once
+✔ Test "dropped first append result after re-key retries once with same clientTurnId" passed after 1.055 seconds.
+2026-07-19 18:06:10.049355-0400 xctest[68723:246857] [E2ERelayBridge] append result dropped: clientTurnId mismatch or missing (expected=device:B got=device:A)
+✔ Test "same-id late attempt-1 result may resolve attempt-2" passed after 1.061 seconds.
+✔ Test "host error without clientTurnId echo still times out (fail-closed)" passed after 1.062 seconds.
+✔ Test "missing clientTurnId on result is fail-closed (does not resolve waiter)" passed after 1.061 seconds.
+✔ Test "mismatched clientTurnId on result is dropped" passed after 1.061 seconds.
+✔ Test "lastConnectedAt refreshes on every reconnect, not just the first" passed after 0.925 seconds.
+✔ Suite RelayFleetStoreTests passed after 1.070 seconds.
+✔ Test "new rekey re-arms eligibility" passed after 1.054 seconds.
+✔ Test "pair then delayed first append remains eligible for one-shot resend" passed after 1.054 seconds.
+✔ Test "waitForAnyConnected returns once a mid-reconnect machine pairs" passed after 1.069 seconds.
+✔ Suite ConnectionStateStoreTests passed after 1.078 seconds.
+✔ Test "a relay-delivered approval is persisted and resolving it clears it from pending()" passed after 1.056 seconds.
+✔ Suite "RelayApprovalIngest — the real production arrive/resolve call sites" passed after 1.076 seconds.
+✔ Test "triggerWithRetry stops when reportReconnectOutcome(succeeded:true) is called" passed after 1.068 seconds.
+✔ Suite "AutoReconnectEngine — trigger and retry" passed after 1.081 seconds.
+2026-07-19 18:06:10.070792-0400 xctest[68723:246857] [DevicePushRegistration] registerDevice → Test Machine: sent
+✔ Test "no-op when a token exists but no machine is connected yet, then registers once one connects" passed after 0.052 seconds.
+◇ Test "token known before pairing: registers once the machine connects" started.
+✔ Test "mid-pagination timeout keeps partial merge stale without hostOffline" passed after 1.079 seconds.
+✔ Test "duplicate paired emission while active does not re-arm" passed after 1.086 seconds.
+✔ Test "concurrent dispatch and append allow at most one protected operation" passed after 1.091 seconds.
+✔ Test "late A during wait B is dropped — B still times out" passed after 1.101 seconds.
+✔ Suite E2ERelayBridgeAppendResumeTests passed after 1.112 seconds.
+✔ Test "timeout resend disarms regardless of second-attempt outcome" passed after 1.096 seconds.
+✔ Test repoRPCSerializationGateSerializesConcurrentCallers() passed after 1.129 seconds.
+✔ Suite ReviewModelsTests passed after 1.143 seconds.
+2026-07-19 18:06:10.122817-0400 xctest[68723:246857] [DevicePushRegistration] registerDevice → Test Machine: sent
+✔ Test "token known before pairing: registers once the machine connects" passed after 0.051 seconds.
+◇ Test "pairing before token: registers once the token notification arrives" started.
+2026-07-19 18:06:10.124354-0400 xctest[68723:246857] [DevicePushRegistration] machine connected before any push token exists — nothing to register yet
+2026-07-19 18:06:10.179832-0400 xctest[68723:246857] [DevicePushRegistration] registerDevice → Test Machine: sent
+✔ Test "pairing before token: registers once the token notification arrives" passed after 0.057 seconds.
+◇ Test "re-registers the known token on every reconnect" started.
+2026-07-19 18:06:10.231682-0400 xctest[68723:246857] [DevicePushRegistration] registerDevice → Test Machine: sent
+2026-07-19 18:06:10.282583-0400 xctest[68723:246857] [DevicePushRegistration] registerDevice → Test Machine: sent
+✔ Test "re-registers the known token on every reconnect" passed after 0.102 seconds.
+◇ Test "Live Activity token notification registers on the connected machine" started.
+✔ Test "Live Activity token notification registers on the connected machine" passed after 0.002 seconds.
+◇ Test "Live Activity token clear notification forwards clear=true on the connected machine" started.
+2026-07-19 18:06:10.287967-0400 xctest[68723:246857] [DevicePushRegistration] machine connected before any push token exists — nothing to register yet
+✔ Test "Live Activity token clear notification forwards clear=true on the connected machine" passed after 0.004 seconds.
+◇ Test "a second start() call is a no-op (idempotent)" started.
+✔ Test "a transport failure marks the conversation hostOffline and returns blocked" passed after 1.312 seconds.
+✔ Suite "ConversationSyncCoordinator" passed after 1.327 seconds.
+2026-07-19 18:06:10.340969-0400 xctest[68723:246857] [DevicePushRegistration] registerDevice → Test Machine: sent
+✔ Test "a second start() call is a no-op (idempotent)" passed after 0.110 seconds.
+✔ Suite DevicePushRegistrationCoordinatorTests passed after 1.423 seconds.
+✔ Test "concurrent send() calls single-flight the dispatch, not just isSendInFlight" passed after 1.597 seconds.
+2026-07-19 18:06:10.843199-0400 xctest[68723:246857] [WorkspaceCatalogPerf] workspaceCatalog.loadLocalRows conversations=1 elapsedMs=0.703000
+✔ Test "needsApproval send enters awaitingApproval with runID and keeps polling" passed after 1.758 seconds.
+✔ Test "first successful gated RPC disarms the one-shot slot" passed after 3.006 seconds.
+✔ Suite E2ERelayBridgeFirstSendTests passed after 3.026 seconds.
+✔ Test "unchanging running turn: only the first poll tick republishes transcriptTurns" passed after 4.038 seconds.
+✔ Test "Encrypted key with correct passphrase returns 32-byte seed" passed after 4.894 seconds.
+◇ Test "Encrypted key with wrong passphrase throws wrongPassphrase" started.
+✔ Test "Encrypted key with wrong passphrase throws wrongPassphrase" passed after 4.248 seconds.
+◇ Test "Encrypted key with empty passphrase throws — not treated as unencrypted" started.
+✔ Test "Encrypted key with empty passphrase throws — not treated as unencrypted" passed after 4.447 seconds.
+◇ Test "Encrypted seed differs from plain seed — not the same key" started.
+✔ Test "Encrypted seed differs from plain seed — not the same key" passed after 4.095 seconds.
+◇ Test "RSA key in OpenSSH format throws unsupportedKeyType" started.
+✔ Test "RSA key in OpenSSH format throws unsupportedKeyType" passed after 0.001 seconds.
+◇ Test "RSA key error description is user-friendly and secret-free" started.
+✔ Test "RSA key error description is user-friendly and secret-free" passed after 0.001 seconds.
+◇ Test "Empty string throws invalidPEMFormat" started.
+✔ Test "Empty string throws invalidPEMFormat" passed after 0.001 seconds.
+◇ Test "Missing BEGIN marker throws invalidPEMFormat" started.
+✔ Test "Missing BEGIN marker throws invalidPEMFormat" passed after 0.001 seconds.
+◇ Test "Missing END marker throws invalidPEMFormat" started.
+✔ Test "Missing END marker throws invalidPEMFormat" passed after 0.001 seconds.
+◇ Test "Truncated base64 body throws truncatedData or invalidPEMFormat" started.
+✔ Test "Truncated base64 body throws truncatedData or invalidPEMFormat" passed after 0.001 seconds.
+◇ Test "Random bytes between markers throw an appropriate error" started.
+✔ Test "Random bytes between markers throw an appropriate error" passed after 0.001 seconds.
+◇ Test "Non-PEM text throws invalidPEMFormat" started.
+✔ Test "Non-PEM text throws invalidPEMFormat" passed after 0.001 seconds.
+◇ Test "Bit-flipped ciphertext throws wrongPassphrase on decryption check" started.
+✔ Test "Bit-flipped ciphertext throws wrongPassphrase on decryption check" passed after 0.001 seconds.
+◇ Test "invalidPEMFormat error description is non-empty and helpful" started.
+✔ Test "invalidPEMFormat error description is non-empty and helpful" passed after 0.001 seconds.
+◇ Test "encryptedKeyRequiresPassphrase error description mentions passphrase" started.
+✔ Test "encryptedKeyRequiresPassphrase error description mentions passphrase" passed after 0.001 seconds.
+◇ Test "wrongPassphrase error description does not echo any key bytes" started.
+✔ Test "wrongPassphrase error description does not echo any key bytes" passed after 0.001 seconds.
+◇ Test "importEd25519FromPEM round-trips through KeyStore in-memory" started.
+✔ Test "importEd25519FromPEM round-trips through KeyStore in-memory" passed after 0.001 seconds.
+◇ Test "importEd25519FromPEM encrypted round-trips through KeyStore in-memory" started.
+✔ Test "importEd25519FromPEM encrypted round-trips through KeyStore in-memory" passed after 4.178 seconds.
+◇ Test "importEd25519FromPEM with RSA key throws keyDecodeFailed" started.
+✔ Test "importEd25519FromPEM with RSA key throws keyDecodeFailed" passed after 0.001 seconds.
+✔ Suite "OpenSSHKeyParser" passed after 22.569 seconds.
+✔ Test "retry reuses the same clientTurnId and attachment refs" passed after 60.617 seconds.
+✔ Suite "ShellLiveBridge" passed after 60.883 seconds.
+✘ Test run with 1034 tests in 167 suites failed after 60.888 seconds with 22 issues.
+2026-07-19 18:07:22.656 xcodebuild[66430:237506] [MT] IDETestOperationsObserverDebug: 77.380 elapsed -- Testing started completed.
+2026-07-19 18:07:22.656 xcodebuild[66430:237506] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-07-19 18:07:22.656 xcodebuild[66430:237506] [MT] IDETestOperationsObserverDebug: 77.380 sec, +77.380 sec -- end
+
+Test session results, code coverage, and logs:
+	/Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/docs/test-runs/2026-07-19-sim-feature-lanes/L5/L5-kit-ios.xcresult
+
+Failing tests:
+	WidgetSnapshotWriterTests.writerTracksArriveAndResolveSequence()
+	WidgetSnapshotWriterTests.writerTracksArriveAndResolveSequence()
+	WidgetSnapshotWriterTests.writerTracksArriveAndResolveSequence()
+	WidgetSnapshotWriterTests.writerTracksArriveAndResolveSequence()
+	WidgetSnapshotWriterTests.writerTracksArriveAndResolveSequence()
+	WidgetSnapshotWriterTests.writerTracksArriveAndResolveSequence()
+	WidgetSnapshotWriterTests.writerTracksArriveAndResolveSequence()
+	WidgetSnapshotWriterTests.writerTracksArriveAndResolveSequence()
+	RelayMachineMigrationTests.validLegacyState()
+	RelayMachineMigrationTests.retiredLegacyStateBackfillsConfirmation()
+	RelayMachineMigrationTests.validLegacyStateSeedsAbsentIdentity()
+	RelayMachineMigrationTests.validLegacyStateSeedsAbsentIdentity()
+	RelayMachineMigrationTests.validLegacyStateSeedsAbsentIdentity()
+	RelayApprovalDecisionRaceTests.inMemoryPendingApprovalStillForwardsDecision()
+	RelayApprovalDecisionRaceTests.inMemoryPendingApprovalStillForwardsDecision()
+	RelayApprovalDecisionRaceTests.inMemoryPendingApprovalStillForwardsDecision()
+	LockScreenDecisionDeliveryTests.enqueueWithoutLocalRowPostsDecision()
+	LockScreenDecisionDeliveryTests.enqueueWithoutLocalRowPostsDecision()
+	LockScreenDecisionDeliveryTests.enqueueWithoutLocalRowPostsDecision()
+	LockScreenDecisionDeliveryTests.enqueueWithoutLocalRowPostsDecision()
+	ApprovalRelayColdLaunchTests.hydratesBeforePost()
+	LiveActivityContentStateTests.lastUpdateEncodesAsUnixNumber()
+
+** TEST FAILED **
+
+Testing started
+EXIT:0

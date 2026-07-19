@@ -1,0 +1,1375 @@
+leCompile TapInjectionProofTests.swift
+
+SwiftCompile normal arm64 Compiling\ LiveActivityIslandCaptureUITests.swift,\ LiveActivitySimSetupUITests.swift /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/LiveActivityIslandCaptureUITests.swift /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/LiveActivitySimSetupUITests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftCompile normal arm64 /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/LiveActivityIslandCaptureUITests.swift (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-SwiftPerFileCompile LiveActivityIslandCaptureUITests.swift
+
+SwiftCompile normal arm64 /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/LiveActivitySimSetupUITests.swift (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-SwiftPerFileCompile LiveActivitySimSetupUITests.swift
+
+SwiftDriverJobDiscovery normal arm64 Compiling PermissionSetAlertUITests.swift, ReconnectCycleUITests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AgentStatusIntentLiveExecutionTests.swift, AttachmentPreviewUITests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftMergeGeneratedHeaders /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources/LancerUITests-Swift.h /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-Swift.h (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-swiftHeaderTool -arch arm64 /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-Swift.h -o /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources/LancerUITests-Swift.h
+
+SwiftDriverJobDiscovery normal arm64 Compiling DesktopSessionDecryptUITests.swift, DesktopSessionsBannerRecoveryUITests.swift (in target 'LancerUITests' from project 'Lancer')
+
+Copy /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.swiftmodule /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftmodule (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftmodule /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.swiftmodule
+
+Copy /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.swiftdoc /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftdoc (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftdoc /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.swiftdoc
+
+Copy /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.abi.json (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.abi.json /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Copy /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftsourceinfo (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftsourceinfo /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+SwiftCompile normal arm64 Compiling\ DispatchHaikuFlowTests.swift,\ HomeButtonTapTests.swift /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/DispatchHaikuFlowTests.swift /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/HomeButtonTapTests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftCompile normal arm64 /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/DispatchHaikuFlowTests.swift (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-SwiftPerFileCompile DispatchHaikuFlowTests.swift
+
+SwiftCompile normal arm64 /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/HomeButtonTapTests.swift (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-SwiftPerFileCompile HomeButtonTapTests.swift
+
+SwiftDriverJobDiscovery normal arm64 Compiling SweepLaneC4Tests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftCompile normal arm64 Compiling\ CCParityScreenshots.swift,\ ComposerPlusMenuAlertScopeUITests.swift /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/CCParityScreenshots.swift /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/ComposerPlusMenuAlertScopeUITests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftCompile normal arm64 /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/CCParityScreenshots.swift (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-SwiftPerFileCompile CCParityScreenshots.swift
+
+SwiftCompile normal arm64 /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/LancerUITests/ComposerPlusMenuAlertScopeUITests.swift (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-SwiftPerFileCompile ComposerPlusMenuAlertScopeUITests.swift
+
+AppIntentsSSUTraining (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Info.plist --temp-dir-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/ssu --bundle-id dev.lancer.mobile --product-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app --extracted-metadata-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Metadata.appintents --metadata-file-list /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/Lancer.DependencyMetadataFileList --source-file /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Info.plist --archive-ssu-assets
+2026-07-19 17:28:14.273 appintentsnltrainingprocessor[33490:120328] Parsing options for appintentsnltrainingprocessor
+2026-07-19 17:28:14.273 appintentsnltrainingprocessor[33490:120328] Starting AppIntents SSU YAML Generation
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'How many agents are running on ${+applicationName}|Check agent status in ${+applicationName}' for en
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Are any approvals waiting in ${+applicationName}|Check pending approvals in ${+applicationName}' for en
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Pause the agent in ${+applicationName}|Pause my ${+applicationName} session' for en
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Stop the agent in ${+applicationName}|Stop my ${+applicationName} session' for en
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Deny the latest approval in ${+applicationName}|Deny an approval in ${+applicationName}' for en
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Search ${+applicationName}|Search my ${+applicationName} conversations' for en
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Open a conversation in ${+applicationName}' for en
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Start an agent run in ${+applicationName}|Start Claude Code in ${+applicationName}' for en
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training 'Answer the question in ${+applicationName}|Answer the agent's question in ${+applicationName}' for en
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Training Negative Phrases '' for en
+2026-07-19 17:28:14.299 appintentsnltrainingprocessor[33490:120328] Application name 'Lancer' for en
+2026-07-19 17:28:14.317 appintentsnltrainingprocessor[33490:120328] Generated AppIntents SSU YAML files in file:///Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/ssu/
+2026-07-19 17:28:14.318 appintentsnltrainingprocessor[33490:120328] Copied AppIntents SSU YAML files to file:///Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Metadata.appintents/
+Archiving all locales.
+[------------------------------------------------------------] 0% archiving en[🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢] 100% archived en[🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢🁢] 100% archived 1 locales/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Metadata.appintents/nlu
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Metadata.appintents/nlu/d4752b9d5086297570774d97056d96ec.version
+
+
+SwiftDriverJobDiscovery normal arm64 Compiling LiveActivityIslandCaptureUITests.swift, LiveActivitySimSetupUITests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftDriverJobDiscovery normal arm64 Compiling TapInjectionProofTests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftDriverJobDiscovery normal arm64 Compiling DispatchHaikuFlowTests.swift, HomeButtonTapTests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftDriverJobDiscovery normal arm64 Compiling CCParityScreenshots.swift, ComposerPlusMenuAlertScopeUITests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftDriverJobDiscovery normal arm64 Compiling LegacyUIRemovalTests.swift, LiveActivityDispatchProofUITests.swift (in target 'LancerUITests' from project 'Lancer')
+
+SwiftDriver\ Compilation LancerUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-Swift-Compilation -- /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name LancerUITests -Onone @/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.SwiftFileList -DDEBUG -warn-implicit-overrides -plugin-path /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -target arm64-apple-ios27.0-simulator -g -module-cache-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/Developer/Library/Frameworks -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/SDKStatCaches.noindex/iphonesimulator27.0-24A5380g-510ffa00bc586f8b550ac1bc3e6d48663243818bda632a4370e1cc7a9fd181c5.sdkstatcache -output-file-map /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-generated-files.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-own-target-headers.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer-5d9d10880cd1ceef54abe0c83c1e6696-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests-project-headers.hmap -Xcc -I/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources/arm64 -Xcc -I/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests-Swift.h -working-directory /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes -experimental-emit-module-separately -disable-cmo
+
+CodeSign /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Lancer.debug.dylib (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Lancer.debug.dylib
+
+CodeSign /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/__preview.dylib (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/__preview.dylib
+
+CodeSign /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --entitlements /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/Lancer.build/Lancer.app.xcent --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app
+
+ValidateEmbeddedBinary /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PlugIns/LancerWidgets.appex (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    /Applications/Xcode-beta.app/Contents/Developer/usr/bin/embeddedBinaryValidationUtility /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/PlugIns/LancerWidgets.appex -signing-cert - -info-plist-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app/Info.plist
+
+RegisterExecutionPolicyException /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-RegisterExecutionPolicyException /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app
+
+Validate /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-validationUtility /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app (in target 'Lancer' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    /usr/bin/touch -c /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/Lancer.app
+
+ProcessInfoPlistFile /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Info.plist /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/empty-LancerUITests.plist (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-infoPlistUtility /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/empty-LancerUITests.plist -producttype com.apple.product-type.bundle.ui-testing -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/ProductTypeInfoPlistAdditions.plist -o /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Info.plist
+
+Ld /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/LancerUITests normal (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios27.0-simulator -bundle -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk -O0 -Xlinker -no_warn_duplicate_libraries -L/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator -L/Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator -iframework /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -iframework /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/Developer/Library/Frameworks -filelist /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.LinkFileList -Xlinker -rpath -Xlinker @loader_path/Frameworks -Xlinker -rpath -Xlinker @executable_path/Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.swiftmodule -Xlinker -needed_framework -Xlinker XCTest -framework XCTest -Xlinker -needed-lXCTestSwiftSupport -lXCTestSwiftSupport -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests.xctest-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests.xctest-Simulated.xcent.der -framework AppIntents -framework AppIntentsTesting -Xlinker -no_adhoc_codesign -o /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/LancerUITests
+
+CopySwiftLibs /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/LancerUITests --scan-folder /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Frameworks --scan-folder /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/PlugIns --scan-folder /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/SystemExtensions --scan-folder /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Extensions --scan-folder /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/System/Library/Frameworks/AppIntents.framework --scan-folder /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk/System/Library/Frameworks/AppIntentsTesting.framework --platform iphonesimulator --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.5218.8.D7azDN/Metal.xctoolchain --toolchain /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ExtractAppIntentsMetadata (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.5218.8.D7azDN/Metal.xctoolchain --module-name LancerUITests --sdk-root /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.0.sdk --xcode-version 27A5218g --platform-family iOS --deployment-target 27.0 --bundle-identifier dev.lancer.mobile.uitests --output /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest --target-triple arm64-apple-ios27.0-simulator --binary-file /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/LancerUITests --dependency-file /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests_dependency_info.dat --stringsdata-file /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.SwiftFileList --metadata-file-list /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests.DependencyMetadataFileList --static-metadata-file-list /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests.DependencyStaticMetadataFileList --swift-const-vals-list /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/Objects-normal/arm64/LancerUITests.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --no-app-shortcuts-localization
+2026-07-19 17:28:16.920 appintentsmetadataprocessor[33525:120496] Starting appintentsmetadataprocessor export
+2026-07-19 17:28:16.956 appintentsmetadataprocessor[33525:120496] Writing Metadata.appintents
+2026-07-19 17:28:16.956 appintentsmetadataprocessor[33525:120496] Metadata root: /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Metadata.appintents
+
+AppIntentsSSUTraining (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Info.plist --temp-dir-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/ssu --bundle-id dev.lancer.mobile.uitests --product-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest --extracted-metadata-path /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Metadata.appintents --metadata-file-list /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/Lancer.build/Debug-iphonesimulator/LancerUITests.build/LancerUITests.DependencyMetadataFileList --source-file /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Info.plist --archive-ssu-assets
+2026-07-19 17:28:16.978 appintentsnltrainingprocessor[33526:120500] Parsing options for appintentsnltrainingprocessor
+2026-07-19 17:28:16.978 appintentsnltrainingprocessor[33526:120500] Starting AppIntents SSU YAML Generation
+2026-07-19 17:28:16.987 appintentsnltrainingprocessor[33526:120500] No AppShortcuts found - Skipping.
+
+MkDir /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    /bin/mkdir -p /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app
+
+CopyAndPreserveArchs /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/LancerUITests-Runner (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    /Applications/Xcode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/lipo /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/XCTRunner -output /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/LancerUITests-Runner -extract arm64
+
+CopyPlistFile /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/Info.plist /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/Info.plist (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-copyPlist --validate --convert xml1 --macro-expansion WRAPPEDPRODUCTNAME LancerUITests-Runner --macro-expansion WRAPPEDPRODUCTBUNDLEIDENTIFIER dev.lancer.mobile.uitests.xctrunner --macro-expansion TESTPRODUCTNAME LancerUITests --macro-expansion TESTPRODUCTBUNDLEIDENTIFIER dev.lancer.mobile.uitests --copy-value UIDeviceFamily /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest/Info.plist --outdir /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app -- /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/Info.plist
+
+Copy /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PkgInfo /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/PkgInfo (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Applications/Xcode-beta.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/PkgInfo /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app
+
+CodeSign /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest
+
+CodeSign /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app
+/Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app: replacing existing signature
+
+RegisterExecutionPolicyException /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    builtin-RegisterExecutionPolicyException /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest
+
+Touch /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest (in target 'LancerUITests' from project 'Lancer')
+    cd /Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes
+    /usr/bin/touch -c /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Products/Debug-iphonesimulator/LancerUITests-Runner.app/PlugIns/LancerUITests.xctest
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/roshansilva/.simurgh/leases/lease-242/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+2026-07-19 17:28:26.942844-0400 LancerUITests-Runner[33658:121381] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-07-19 17:28:31.650.
+Test Suite 'LancerUITests.xctest' started at 2026-07-19 17:28:31.651.
+Test Suite 'SweepLaneC4Tests' started at 2026-07-19 17:28:31.651.
+Test Case '-[LancerUITests.SweepLaneC4Tests testLaneC4_PostWave1LiveSweep]' started.
+    t =     0.01s Start Test at 2026-07-19 17:28:31.658
+    t =     0.32s Set Up
+    t =     0.33s Open dev.lancer.mobile
+    t =     0.33s     Launch dev.lancer.mobile
+2026-07-19 17:28:32.389 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 17:28:32.390 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[33658]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x112b08398) and /Library/Developer/CoreSimulator/Volumes/iOS_24A5355p/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x113078310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     1.97s         Setting up automation session
+    t =     5.68s         Wait for dev.lancer.mobile to idle
+    t =     7.52s Waiting 20.0s for "trusted-machines.pair" Button to exist
+    t =     8.57s     Checking `Expect predicate `existsNoRetry == 1` for object "trusted-machines.pair" Button`
+    t =     8.57s         Checking existence of `"trusted-machines.pair" Button`
+    t =     8.65s Tap "trusted-machines.pair" Button
+    t =     8.65s     Wait for dev.lancer.mobile to idle
+    t =     8.65s     Find the "trusted-machines.pair" Button
+    t =     8.69s     Check for interrupting elements affecting "trusted-machines.pair" Button
+    t =     8.70s         Wait for com.apple.springboard to idle
+    t =     8.79s     Found 1 interrupting element:
+    t =     8.79s         Find the "“Lancer” Would Like to Send You Notifications" Alert
+    t =     8.82s "“Lancer” Would Like to Send You Notifications" Alert from Application 'com.apple.springboard'
+    t =     8.82s     Invoking UI interruption monitors for "“Lancer” Would Like to Send You Notifications" Alert from Application 'com.apple.springboard'
+    t =     8.82s         Find the "“Lancer” Would Like to Send You Notifications" Alert
+    t =     8.84s         Checking existence of `Button (Elements matching predicate 'userTestingAttributes CONTAINS "cancel-button"')`
+    t =     8.87s         Get all elements bound by accessibility element for: Elements matching predicate 'userTestingAttributes CONTAINS "default-button"'
+    t =     8.90s         Checking existence of `"Allow" Button`
+    t =     8.92s Default interruption handler attempting to dismiss alert by tapping "Allow" Button.
+    t =     8.92s         Tap "Allow" Button
+    t =     8.92s             Wait for com.apple.springboard to idle
+    t =     8.92s             Find the "Allow" Button
+    t =     8.95s             Check for interrupting elements affecting "Allow" Button
+    t =     8.99s             Synthesize event
+    t =     9.39s             Wait for com.apple.springboard to idle
+    t =     9.63s         Waiting 1.0s for Alert to not exist
+    t =    10.64s             Checking `Expect predicate `existsNoRetry == 0` for object Alert`
+    t =    10.64s                 Checking existence of `Alert`
+    t =    10.67s             Checking existence of `Alert`
+    t =    10.69s         Verifying handling...
+    t =    10.72s Confirmed successful handling of interrupting element
+    t =    10.73s     Synthesize event
+    t =    11.02s     Wait for dev.lancer.mobile to idle
+    t =    11.44s Waiting 15.0s for TextField (First Match) to exist
+    t =    12.47s     Checking `Expect predicate `existsNoRetry == 1` for object TextField (First Match)`
+    t =    12.48s         Checking existence of `TextField (First Match)`
+    t =    12.57s Tap TextField (First Match)
+    t =    12.57s     Wait for dev.lancer.mobile to idle
+    t =    12.57s     Find the TextField (First Match)
+    t =    12.65s     Check for interrupting elements affecting "000000" TextField
+    t =    12.70s     Synthesize event
+    t =    12.99s     Wait for dev.lancer.mobile to idle
+    t =    13.81s Type '123456' into "000000" TextField
+    t =    13.81s     Wait for dev.lancer.mobile to idle
+    t =    14.17s     Find the "000000" TextField
+    t =    14.32s     Check for interrupting elements affecting "000000" TextField
+    t =    14.37s     Synthesize event
+    t =    14.67s     Wait for dev.lancer.mobile to idle
+    t =    14.68s Find the Target Application 'dev.lancer.mobile'
+    t =    14.85s Added attachment named 'LC4-01-pairing-keypad'
+    t =    14.85s Waiting 5.0s for "Connect" Button to exist
+    t =    15.87s     Checking `Expect predicate `existsNoRetry == 1` for object "Connect" Button`
+    t =    15.87s         Checking existence of `"Connect" Button`
+    t =    15.93s Find the "Connect" Button
+    t =    15.99s Terminate dev.lancer.mobile:33914
+    t =    17.07s Open dev.lancer.mobile
+    t =    17.08s     Launch dev.lancer.mobile
+2026-07-19 17:28:48.731 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 17:28:48.731 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    17.30s         Setting up automation session
+    t =    20.34s         Wait for dev.lancer.mobile to idle
+    t =    41.94s Find the Target Application 'dev.lancer.mobile'
+    t =    42.10s Added attachment named 'LC4-02-settings'
+    t =    42.10s Waiting 10.0s for "cursor.settings.row.policy" Any to exist
+    t =    43.13s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor.settings.row.policy" Any`
+    t =    43.13s         Checking existence of `"cursor.settings.row.policy" Any`
+    t =    43.27s Tap "cursor.settings.row.policy" Any
+    t =    43.27s     Wait for dev.lancer.mobile to idle
+    t =    43.27s     Find the "cursor.settings.row.policy" Any
+    t =    43.36s     Check for interrupting elements affecting "cursor.settings.row.policy" Button
+    t =    43.40s     Synthesize event
+    t =    43.69s     Wait for dev.lancer.mobile to idle
+    t =    47.05s Find the Target Application 'dev.lancer.mobile'
+    t =    47.15s Added attachment named 'LC4-03-policy'
+    t =    47.15s Waiting 15.0s for "cursor.settings.policy.mode-picker" Any to exist
+    t =    48.19s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor.settings.policy.mode-picker" Any`
+    t =    48.19s         Checking existence of `"cursor.settings.policy.mode-picker" Any`
+    t =    48.27s Checking existence of `"cursor.settings.policy.error" Any`
+    t =    48.33s Checking existence of `Button (First Match)`
+    t =    48.35s Tap Button (First Match)
+    t =    48.35s     Wait for dev.lancer.mobile to idle
+    t =    48.35s     Find the Button (First Match)
+    t =    48.36s     Check for interrupting elements affecting "BackButton" Button
+    t =    48.38s     Synthesize event
+    t =    48.66s     Wait for dev.lancer.mobile to idle
+    t =    48.98s Waiting 10.0s for "cursor.settings.row.audit" Any to exist
+    t =    50.02s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor.settings.row.audit" Any`
+    t =    50.02s         Checking existence of `"cursor.settings.row.audit" Any`
+    t =    50.12s Tap "cursor.settings.row.audit" Any
+    t =    50.12s     Wait for dev.lancer.mobile to idle
+    t =    50.13s     Find the "cursor.settings.row.audit" Any
+    t =    50.22s     Check for interrupting elements affecting "cursor.settings.row.audit" Button
+    t =    50.26s     Synthesize event
+    t =    50.54s     Wait for dev.lancer.mobile to idle
+    t =    53.88s Find the Target Application 'dev.lancer.mobile'
+    t =    53.98s Added attachment named 'LC4-04-audit'
+    t =    53.98s Waiting 10.0s for "cursor.settings.audit-feed" Any to exist
+    t =    55.04s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor.settings.audit-feed" Any`
+    t =    55.04s         Checking existence of `"cursor.settings.audit-feed" Any`
+    t =    55.10s Checking existence of `StaticText (First Match)`
+    t =    55.13s Terminate dev.lancer.mobile:34486
+    t =    56.21s Open dev.lancer.mobile
+    t =    56.21s     Launch dev.lancer.mobile
+2026-07-19 17:29:27.865 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 17:29:27.866 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    56.43s         Setting up automation session
+    t =    58.45s         Wait for dev.lancer.mobile to idle
+    t =    59.86s Waiting 20.0s for TextField (First Match) to exist
+    t =    60.91s     Checking `Expect predicate `existsNoRetry == 1` for object TextField (First Match)`
+    t =    60.91s         Checking existence of `TextField (First Match)`
+    t =    60.95s Tap TextField (First Match)
+    t =    60.95s     Wait for dev.lancer.mobile to idle
+    t =    60.95s     Find the TextField (First Match)
+    t =    60.97s     Check for interrupting elements affecting "~/Documents/my-repo" TextField
+    t =    60.99s     Synthesize event
+    t =    61.28s     Wait for dev.lancer.mobile to idle
+    t =    61.82s Type '/tmp/sweep-C4/targ...' into "~/Documents/my-repo" TextField
+    t =    61.82s     Wait for dev.lancer.mobile to idle
+    t =    61.82s     Find the "~/Documents/my-repo" TextField
+    t =    61.86s     Check for interrupting elements affecting "~/Documents/my-repo" TextField
+    t =    61.88s     Synthesize event
+    t =    62.50s     Wait for dev.lancer.mobile to idle
+    t =    62.50s Get all elements bound by index for: Descendants matching type TextField
+    t =    62.53s Tap TextField (Element at index 1)
+    t =    62.53s     Wait for dev.lancer.mobile to idle
+    t =    62.53s     Find the TextField (Element at index 1)
+    t =    62.55s     Check for interrupting elements affecting "target-repo" TextField
+    t =    62.57s     Synthesize event
+    t =    62.86s     Wait for dev.lancer.mobile to idle
+    t =    62.86s Type 'sc4-repo' into "target-repo" TextField
+    t =    62.86s     Wait for dev.lancer.mobile to idle
+    t =    62.86s     Find the "target-repo" TextField
+    t =    62.88s     Check for interrupting elements affecting "target-repo" TextField
+    t =    62.90s     Synthesize event
+    t =    63.23s     Wait for dev.lancer.mobile to idle
+    t =    63.24s Find the Target Application 'dev.lancer.mobile'
+    t =    63.33s Added attachment named 'LC4-05-add-repo'
+    t =    63.33s Tap "Add Repo" Button
+    t =    63.33s     Wait for dev.lancer.mobile to idle
+    t =    63.34s     Find the "Add Repo" Button
+    t =    63.37s     Check for interrupting elements affecting "Add Repo" Button
+    t =    63.39s     Synthesize event
+    t =    63.68s     Wait for dev.lancer.mobile to idle
+    t =    64.04s Waiting 15.0s for "Workspaces" StaticText to exist
+    t =    65.09s     Checking `Expect predicate `existsNoRetry == 1` for object "Workspaces" StaticText`
+    t =    65.10s         Checking existence of `"Workspaces" StaticText`
+    t =    65.14s Find the Target Application 'dev.lancer.mobile'
+    t =    65.22s Added attachment named 'LC4-06-workspaces'
+    t =    90.22s Tap "cursor-composer-tap" Button
+    t =    90.23s     Wait for dev.lancer.mobile to idle
+    t =    90.23s     Find the "cursor-composer-tap" Button
+    t =    90.25s     Check for interrupting elements affecting "cursor-composer-tap" Button
+    t =    90.26s     Synthesize event
+    t =    90.54s     Wait for dev.lancer.mobile to idle
+    t =    90.55s Waiting 10.0s for TextView (First Match) to exist
+    t =    91.59s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =    91.60s         Checking existence of `TextView (First Match)`
+    t =    91.64s Tap TextView (First Match)
+    t =    91.64s     Wait for dev.lancer.mobile to idle
+    t =    91.64s     Find the TextView (First Match)
+    t =    91.67s     Check for interrupting elements affecting TextView
+    t =    91.70s     Synthesize event
+    t =    92.00s     Wait for dev.lancer.mobile to idle
+    t =    92.10s Type 'Run `pwd` with Bas...' into TextView at {{27.0, 355.0}, {348.0, 120.0}}
+    t =    92.10s     Wait for dev.lancer.mobile to idle
+    t =    92.49s     Find the TextView at {{27.0, 355.0}, {348.0, 120.0}}
+    t =    92.55s     Check for interrupting elements affecting TextView
+    t =    92.57s     Synthesize event
+    t =    95.36s     Wait for dev.lancer.mobile to idle
+    t =    95.36s Find the Target Application 'dev.lancer.mobile'
+    t =    95.46s Added attachment named 'LC4-07-composer'
+    t =    95.46s Tap "composer.send" Button
+    t =    95.46s     Wait for dev.lancer.mobile to idle
+    t =    95.46s     Find the "composer.send" Button
+    t =    95.50s     Check for interrupting elements affecting "composer.send" Button
+    t =    95.53s     Synthesize event
+    t =    95.82s     Wait for dev.lancer.mobile to idle
+    t =    96.48s Checking existence of `"cursor.approval.approve" Button`
+    t =    96.53s Checking existence of `"Approve" Button`
+    t =    96.57s Checking existence of `"awaiting-approval-card" Other`
+    t =    96.64s Checking existence of `Button (First Match)`
+    t =    96.67s Checking existence of `"session-diff-pill" Other`
+    t =    96.73s Checking existence of `"session-diff-pill" Button`
+    t =    96.76s Checking existence of `Button (First Match)`
+    t =    99.81s Checking existence of `"cursor.approval.approve" Button`
+    t =    99.85s Checking existence of `"Approve" Button`
+    t =    99.89s Checking existence of `"awaiting-approval-card" Other`
+    t =    99.94s Checking existence of `Button (First Match)`
+    t =    99.98s Checking existence of `"session-diff-pill" Other`
+    t =   100.04s Checking existence of `"session-diff-pill" Button`
+    t =   100.08s Checking existence of `Button (First Match)`
+    t =   103.13s Checking existence of `"cursor.approval.approve" Button`
+    t =   103.20s Checking existence of `"Approve" Button`
+    t =   103.23s Checking existence of `"awaiting-approval-card" Other`
+    t =   103.29s Checking existence of `Button (First Match)`
+    t =   103.32s Checking existence of `"session-diff-pill" Other`
+    t =   103.37s Checking existence of `"session-diff-pill" Button`
+    t =   103.40s Checking existence of `Button (First Match)`
+    t =   106.44s Checking existence of `"cursor.approval.approve" Button`
+    t =   106.48s Checking existence of `"Approve" Button`
+    t =   106.52s Checking existence of `"awaiting-approval-card" Other`
+    t =   106.57s Checking existence of `Button (First Match)`
+    t =   106.60s Checking existence of `"session-diff-pill" Other`
+    t =   106.66s Checking existence of `"session-diff-pill" Button`
+    t =   106.69s Checking existence of `Button (First Match)`
+    t =   109.74s Checking existence of `"cursor.approval.approve" Button`
+    t =   109.80s Checking existence of `"Approve" Button`
+    t =   109.84s Checking existence of `"awaiting-approval-card" Other`
+    t =   109.89s Checking existence of `Button (First Match)`
+    t =   109.92s Checking existence of `"session-diff-pill" Other`
+    t =   109.97s Checking existence of `"session-diff-pill" Button`
+    t =   110.01s Checking existence of `Button (First Match)`
+    t =   113.05s Checking existence of `"cursor.approval.approve" Button`
+    t =   113.12s Checking existence of `"Approve" Button`
+    t =   113.15s Checking existence of `"awaiting-approval-card" Other`
+    t =   113.20s Checking existence of `Button (First Match)`
+    t =   113.24s Checking existence of `"session-diff-pill" Other`
+    t =   113.29s Checking existence of `"session-diff-pill" Button`
+    t =   113.32s Checking existence of `Button (First Match)`
+    t =   116.37s Checking existence of `"cursor.approval.approve" Button`
+    t =   116.43s Checking existence of `"Approve" Button`
+    t =   116.47s Checking existence of `"awaiting-approval-card" Other`
+    t =   116.52s Checking existence of `Button (First Match)`
+    t =   116.55s Checking existence of `"session-diff-pill" Other`
+    t =   116.60s Checking existence of `"session-diff-pill" Button`
+    t =   116.64s Checking existence of `Button (First Match)`
+    t =   119.68s Checking existence of `"cursor.approval.approve" Button`
+    t =   119.73s Checking existence of `"Approve" Button`
+    t =   119.76s Checking existence of `"awaiting-approval-card" Other`
+    t =   119.81s Checking existence of `Button (First Match)`
+    t =   119.84s Checking existence of `"session-diff-pill" Other`
+    t =   119.90s Checking existence of `"session-diff-pill" Button`
+    t =   119.93s Checking existence of `Button (First Match)`
+    t =   122.96s Checking existence of `"cursor.approval.approve" Button`
+    t =   123.00s Checking existence of `"Approve" Button`
+    t =   123.03s Checking existence of `"awaiting-approval-card" Other`
+    t =   123.09s Checking existence of `Button (First Match)`
+    t =   123.12s Checking existence of `"session-diff-pill" Other`
+    t =   123.17s Checking existence of `"session-diff-pill" Button`
+    t =   123.20s Checking existence of `Button (First Match)`
+    t =   126.24s Checking existence of `"cursor.approval.approve" Button`
+    t =   126.31s Checking existence of `"Approve" Button`
+    t =   126.34s Checking existence of `"awaiting-approval-card" Other`
+    t =   126.40s Checking existence of `Button (First Match)`
+    t =   126.43s Checking existence of `"session-diff-pill" Other`
+    t =   126.48s Checking existence of `"session-diff-pill" Button`
+    t =   126.51s Checking existence of `Button (First Match)`
+    t =   129.56s Checking existence of `"cursor.approval.approve" Button`
+    t =   129.62s Checking existence of `"Approve" Button`
+    t =   129.66s Checking existence of `"awaiting-approval-card" Other`
+    t =   129.71s Checking existence of `Button (First Match)`
+    t =   129.74s Checking existence of `"session-diff-pill" Other`
+    t =   129.79s Checking existence of `"session-diff-pill" Button`
+    t =   129.82s Checking existence of `Button (First Match)`
+    t =   132.86s Checking existence of `"cursor.approval.approve" Button`
+    t =   132.92s Checking existence of `"Approve" Button`
+    t =   132.95s Checking existence of `"awaiting-approval-card" Other`
+    t =   133.00s Checking existence of `Button (First Match)`
+    t =   133.04s Checking existence of `"session-diff-pill" Other`
+    t =   133.09s Checking existence of `"session-diff-pill" Button`
+    t =   133.12s Checking existence of `Button (First Match)`
+    t =   136.15s Checking existence of `"cursor.approval.approve" Button`
+    t =   136.20s Checking existence of `"Approve" Button`
+    t =   136.24s Checking existence of `"awaiting-approval-card" Other`
+    t =   136.29s Checking existence of `Button (First Match)`
+    t =   136.32s Checking existence of `"session-diff-pill" Other`
+    t =   136.37s Checking existence of `"session-diff-pill" Button`
+    t =   136.41s Checking existence of `Button (First Match)`
+    t =   139.45s Checking existence of `"cursor.approval.approve" Button`
+    t =   139.52s Checking existence of `"Approve" Button`
+    t =   139.56s Checking existence of `"awaiting-approval-card" Other`
+    t =   139.61s Checking existence of `Button (First Match)`
+    t =   139.64s Checking existence of `"session-diff-pill" Other`
+    t =   139.69s Checking existence of `"session-diff-pill" Button`
+    t =   139.72s Checking existence of `Button (First Match)`
+    t =   142.76s Checking existence of `"cursor.approval.approve" Button`
+    t =   142.82s Checking existence of `"Approve" Button`
+    t =   142.85s Checking existence of `"awaiting-approval-card" Other`
+    t =   142.91s Checking existence of `Button (First Match)`
+    t =   142.94s Checking existence of `"session-diff-pill" Other`
+    t =   142.99s Checking existence of `"session-diff-pill" Button`
+    t =   143.03s Checking existence of `Button (First Match)`
+    t =   146.07s Checking existence of `"cursor.approval.approve" Button`
+    t =   146.13s Checking existence of `"Approve" Button`
+    t =   146.16s Checking existence of `"awaiting-approval-card" Other`
+    t =   146.22s Checking existence of `Button (First Match)`
+    t =   146.25s Checking existence of `"session-diff-pill" Other`
+    t =   146.30s Checking existence of `"session-diff-pill" Button`
+    t =   146.33s Checking existence of `Button (First Match)`
+    t =   149.37s Checking existence of `"cursor.approval.approve" Button`
+    t =   149.47s Checking existence of `"Approve" Button`
+    t =   149.52s Checking existence of `"awaiting-approval-card" Other`
+    t =   149.57s Checking existence of `Button (First Match)`
+    t =   149.61s Checking existence of `"session-diff-pill" Other`
+    t =   149.66s Checking existence of `"session-diff-pill" Button`
+    t =   149.69s Checking existence of `Button (First Match)`
+    t =   152.74s Checking existence of `"cursor.approval.approve" Button`
+    t =   152.80s Checking existence of `"Approve" Button`
+    t =   152.84s Checking existence of `"awaiting-approval-card" Other`
+    t =   152.89s Checking existence of `Button (First Match)`
+    t =   152.92s Checking existence of `"session-diff-pill" Other`
+    t =   152.97s Checking existence of `"session-diff-pill" Button`
+    t =   153.01s Checking existence of `Button (First Match)`
+    t =   156.05s Checking existence of `"cursor.approval.approve" Button`
+    t =   156.10s Checking existence of `"Approve" Button`
+    t =   156.13s Checking existence of `"awaiting-approval-card" Other`
+    t =   156.18s Checking existence of `Button (First Match)`
+    t =   156.21s Checking existence of `"session-diff-pill" Other`
+    t =   156.26s Checking existence of `"session-diff-pill" Button`
+    t =   156.30s Checking existence of `Button (First Match)`
+    t =   159.34s Checking existence of `"cursor.approval.approve" Button`
+    t =   159.40s Checking existence of `"Approve" Button`
+    t =   159.43s Checking existence of `"awaiting-approval-card" Other`
+    t =   159.49s Checking existence of `Button (First Match)`
+    t =   159.52s Checking existence of `"session-diff-pill" Other`
+    t =   159.57s Checking existence of `"session-diff-pill" Button`
+    t =   159.60s Checking existence of `Button (First Match)`
+    t =   162.64s Checking existence of `"cursor.approval.approve" Button`
+    t =   162.68s Checking existence of `"Approve" Button`
+    t =   162.72s Checking existence of `"awaiting-approval-card" Other`
+    t =   162.77s Checking existence of `Button (First Match)`
+    t =   162.80s Checking existence of `"session-diff-pill" Other`
+    t =   162.85s Checking existence of `"session-diff-pill" Button`
+    t =   162.88s Checking existence of `Button (First Match)`
+    t =   165.92s Checking existence of `"cursor.approval.approve" Button`
+    t =   165.95s Checking existence of `"Approve" Button`
+    t =   165.99s Checking existence of `"awaiting-approval-card" Other`
+    t =   166.04s Checking existence of `Button (First Match)`
+    t =   166.07s Checking existence of `"session-diff-pill" Other`
+    t =   166.12s Checking existence of `"session-diff-pill" Button`
+    t =   166.16s Checking existence of `Button (First Match)`
+    t =   169.19s Checking existence of `"cursor.approval.approve" Button`
+    t =   169.23s Checking existence of `"Approve" Button`
+    t =   169.26s Checking existence of `"awaiting-approval-card" Other`
+    t =   169.32s Checking existence of `Button (First Match)`
+    t =   169.35s Checking existence of `"session-diff-pill" Other`
+    t =   169.40s Checking existence of `"session-diff-pill" Button`
+    t =   169.43s Checking existence of `Button (First Match)`
+    t =   172.48s Checking existence of `"cursor.approval.approve" Button`
+    t =   172.54s Checking existence of `"Approve" Button`
+    t =   172.58s Checking existence of `"awaiting-approval-card" Other`
+    t =   172.63s Checking existence of `Button (First Match)`
+    t =   172.66s Checking existence of `"session-diff-pill" Other`
+    t =   172.71s Checking existence of `"session-diff-pill" Button`
+    t =   172.74s Checking existence of `Button (First Match)`
+    t =   175.78s Checking existence of `"cursor.approval.approve" Button`
+    t =   175.84s Checking existence of `"Approve" Button`
+    t =   175.87s Checking existence of `"awaiting-approval-card" Other`
+    t =   175.92s Checking existence of `Button (First Match)`
+    t =   175.95s Checking existence of `"session-diff-pill" Other`
+    t =   176.00s Checking existence of `"session-diff-pill" Button`
+    t =   176.03s Checking existence of `Button (First Match)`
+    t =   179.06s Checking existence of `"cursor.approval.approve" Button`
+    t =   179.11s Checking existence of `"Approve" Button`
+    t =   179.15s Checking existence of `"awaiting-approval-card" Other`
+    t =   179.20s Checking existence of `Button (First Match)`
+    t =   179.23s Checking existence of `"session-diff-pill" Other`
+    t =   179.29s Checking existence of `"session-diff-pill" Button`
+    t =   179.32s Checking existence of `Button (First Match)`
+    t =   182.36s Checking existence of `"cursor.approval.approve" Button`
+    t =   182.40s Checking existence of `"Approve" Button`
+    t =   182.44s Checking existence of `"awaiting-approval-card" Other`
+    t =   182.49s Checking existence of `Button (First Match)`
+    t =   182.52s Checking existence of `"session-diff-pill" Other`
+    t =   182.57s Checking existence of `"session-diff-pill" Button`
+    t =   182.60s Checking existence of `Button (First Match)`
+    t =   185.64s Checking existence of `"cursor.approval.approve" Button`
+    t =   185.70s Checking existence of `"Approve" Button`
+    t =   185.74s Checking existence of `"awaiting-approval-card" Other`
+    t =   185.81s Checking existence of `Button (First Match)`
+    t =   185.85s Checking existence of `"session-diff-pill" Other`
+    t =   185.90s Checking existence of `"session-diff-pill" Button`
+    t =   185.93s Checking existence of `Button (First Match)`
+    t =   188.96s Checking existence of `"cursor.approval.approve" Button`
+    t =   189.03s Checking existence of `"Approve" Button`
+    t =   189.07s Checking existence of `"awaiting-approval-card" Other`
+    t =   189.12s Checking existence of `Button (First Match)`
+    t =   189.15s Checking existence of `"session-diff-pill" Other`
+    t =   189.20s Checking existence of `"session-diff-pill" Button`
+    t =   189.24s Checking existence of `Button (First Match)`
+    t =   192.27s Checking existence of `"cursor.approval.approve" Button`
+    t =   192.32s Checking existence of `"Approve" Button`
+    t =   192.35s Checking existence of `"awaiting-approval-card" Other`
+    t =   192.40s Checking existence of `Button (First Match)`
+    t =   192.43s Checking existence of `"session-diff-pill" Other`
+    t =   192.48s Checking existence of `"session-diff-pill" Button`
+    t =   192.52s Checking existence of `Button (First Match)`
+    t =   195.56s Checking existence of `"cursor.approval.approve" Button`
+    t =   195.62s Checking existence of `"Approve" Button`
+    t =   195.65s Checking existence of `"awaiting-approval-card" Other`
+    t =   195.71s Checking existence of `Button (First Match)`
+    t =   195.74s Checking existence of `"session-diff-pill" Other`
+    t =   195.79s Checking existence of `"session-diff-pill" Button`
+    t =   195.82s Checking existence of `Button (First Match)`
+    t =   198.86s Checking existence of `"cursor.approval.approve" Button`
+    t =   198.92s Checking existence of `"Approve" Button`
+    t =   198.96s Checking existence of `"awaiting-approval-card" Other`
+    t =   199.01s Checking existence of `Button (First Match)`
+    t =   199.04s Checking existence of `"session-diff-pill" Other`
+    t =   199.09s Checking existence of `"session-diff-pill" Button`
+    t =   199.12s Checking existence of `Button (First Match)`
+    t =   202.16s Checking existence of `"cursor.approval.approve" Button`
+    t =   202.23s Checking existence of `"Approve" Button`
+    t =   202.26s Checking existence of `"awaiting-approval-card" Other`
+    t =   202.31s Checking existence of `Button (First Match)`
+    t =   202.34s Checking existence of `"session-diff-pill" Other`
+    t =   202.39s Checking existence of `"session-diff-pill" Button`
+    t =   202.43s Checking existence of `Button (First Match)`
+    t =   205.47s Checking existence of `"cursor.approval.approve" Button`
+    t =   205.52s Checking existence of `"Approve" Button`
+    t =   205.55s Checking existence of `"awaiting-approval-card" Other`
+    t =   205.60s Checking existence of `Button (First Match)`
+    t =   205.63s Checking existence of `"session-diff-pill" Other`
+    t =   205.68s Checking existence of `"session-diff-pill" Button`
+    t =   205.72s Checking existence of `Button (First Match)`
+    t =   208.76s Checking existence of `"cursor.approval.approve" Button`
+    t =   208.82s Checking existence of `"Approve" Button`
+    t =   208.86s Checking existence of `"awaiting-approval-card" Other`
+    t =   208.91s Checking existence of `Button (First Match)`
+    t =   208.94s Checking existence of `"session-diff-pill" Other`
+    t =   208.99s Checking existence of `"session-diff-pill" Button`
+    t =   209.02s Checking existence of `Button (First Match)`
+    t =   212.06s Checking existence of `"cursor.approval.approve" Button`
+    t =   212.13s Checking existence of `"Approve" Button`
+    t =   212.16s Checking existence of `"awaiting-approval-card" Other`
+    t =   212.21s Checking existence of `Button (First Match)`
+    t =   212.24s Checking existence of `"session-diff-pill" Other`
+    t =   212.29s Checking existence of `"session-diff-pill" Button`
+    t =   212.32s Checking existence of `Button (First Match)`
+    t =   215.36s Checking existence of `"cursor.approval.approve" Button`
+    t =   215.41s Checking existence of `"Approve" Button`
+    t =   215.44s Checking existence of `"awaiting-approval-card" Other`
+    t =   215.49s Checking existence of `Button (First Match)`
+    t =   215.52s Checking existence of `"session-diff-pill" Other`
+    t =   215.57s Checking existence of `"session-diff-pill" Button`
+    t =   215.61s Checking existence of `Button (First Match)`
+    t =   218.65s Checking existence of `"cursor.approval.approve" Button`
+    t =   218.71s Checking existence of `"Approve" Button`
+    t =   218.74s Checking existence of `"awaiting-approval-card" Other`
+    t =   218.79s Checking existence of `Button (First Match)`
+    t =   218.82s Checking existence of `"session-diff-pill" Other`
+    t =   218.87s Checking existence of `"session-diff-pill" Button`
+    t =   218.91s Checking existence of `Button (First Match)`
+    t =   221.94s Checking existence of `"cursor.approval.approve" Button`
+    t =   222.00s Checking existence of `"Approve" Button`
+    t =   222.04s Checking existence of `"awaiting-approval-card" Other`
+    t =   222.09s Checking existence of `Button (First Match)`
+    t =   222.12s Checking existence of `"session-diff-pill" Other`
+    t =   222.17s Checking existence of `"session-diff-pill" Button`
+    t =   222.21s Checking existence of `Button (First Match)`
+    t =   225.25s Checking existence of `"cursor.approval.approve" Button`
+    t =   225.31s Checking existence of `"Approve" Button`
+    t =   225.35s Checking existence of `"awaiting-approval-card" Other`
+    t =   225.40s Checking existence of `Button (First Match)`
+    t =   225.43s Checking existence of `"session-diff-pill" Other`
+    t =   225.48s Checking existence of `"session-diff-pill" Button`
+    t =   225.52s Checking existence of `Button (First Match)`
+    t =   228.55s Checking existence of `"cursor.approval.approve" Button`
+    t =   228.60s Checking existence of `"Approve" Button`
+    t =   228.63s Checking existence of `"awaiting-approval-card" Other`
+    t =   228.68s Checking existence of `Button (First Match)`
+    t =   228.71s Checking existence of `"session-diff-pill" Other`
+    t =   228.76s Checking existence of `"session-diff-pill" Button`
+    t =   228.79s Checking existence of `Button (First Match)`
+    t =   231.84s Checking existence of `"cursor.approval.approve" Button`
+    t =   231.88s Checking existence of `"Approve" Button`
+    t =   231.92s Checking existence of `"awaiting-approval-card" Other`
+    t =   231.97s Checking existence of `Button (First Match)`
+    t =   232.00s Checking existence of `"session-diff-pill" Other`
+    t =   232.05s Checking existence of `"session-diff-pill" Button`
+    t =   232.08s Checking existence of `Button (First Match)`
+    t =   235.12s Checking existence of `"cursor.approval.approve" Button`
+    t =   235.18s Checking existence of `"Approve" Button`
+    t =   235.22s Checking existence of `"awaiting-approval-card" Other`
+    t =   235.27s Checking existence of `Button (First Match)`
+    t =   235.30s Checking existence of `"session-diff-pill" Other`
+    t =   235.36s Checking existence of `"session-diff-pill" Button`
+    t =   235.41s Checking existence of `Button (First Match)`
+    t =   238.44s Checking existence of `"cursor.approval.approve" Button`
+    t =   238.49s Checking existence of `"Approve" Button`
+    t =   238.53s Checking existence of `"awaiting-approval-card" Other`
+    t =   238.58s Checking existence of `Button (First Match)`
+    t =   238.61s Checking existence of `"session-diff-pill" Other`
+    t =   238.67s Checking existence of `"session-diff-pill" Button`
+    t =   238.71s Checking existence of `Button (First Match)`
+    t =   241.76s Checking existence of `"cursor.approval.approve" Button`
+    t =   241.81s Checking existence of `"Approve" Button`
+    t =   241.84s Checking existence of `"awaiting-approval-card" Other`
+    t =   241.89s Checking existence of `Button (First Match)`
+    t =   241.92s Checking existence of `"session-diff-pill" Other`
+    t =   241.97s Checking existence of `"session-diff-pill" Button`
+    t =   242.01s Checking existence of `Button (First Match)`
+    t =   245.05s Checking existence of `"cursor.approval.approve" Button`
+    t =   245.12s Checking existence of `"Approve" Button`
+    t =   245.15s Checking existence of `"awaiting-approval-card" Other`
+    t =   245.20s Checking existence of `Button (First Match)`
+    t =   245.23s Checking existence of `"session-diff-pill" Other`
+    t =   245.28s Checking existence of `"session-diff-pill" Button`
+    t =   245.32s Checking existence of `Button (First Match)`
+    t =   248.36s Checking existence of `"cursor.approval.approve" Button`
+    t =   248.42s Checking existence of `"Approve" Button`
+    t =   248.46s Checking existence of `"awaiting-approval-card" Other`
+    t =   248.51s Checking existence of `Button (First Match)`
+    t =   248.54s Checking existence of `"session-diff-pill" Other`
+    t =   248.59s Checking existence of `"session-diff-pill" Button`
+    t =   248.62s Checking existence of `Button (First Match)`
+    t =   251.66s Checking existence of `"cursor.approval.approve" Button`
+    t =   251.70s Checking existence of `"Approve" Button`
+    t =   251.74s Checking existence of `"awaiting-approval-card" Other`
+    t =   251.79s Checking existence of `Button (First Match)`
+    t =   251.82s Checking existence of `"session-diff-pill" Other`
+    t =   251.87s Checking existence of `"session-diff-pill" Button`
+    t =   251.90s Checking existence of `Button (First Match)`
+    t =   254.94s Checking existence of `"cursor.approval.approve" Button`
+    t =   255.00s Checking existence of `"Approve" Button`
+    t =   255.04s Checking existence of `"awaiting-approval-card" Other`
+    t =   255.09s Checking existence of `Button (First Match)`
+    t =   255.12s Checking existence of `"session-diff-pill" Other`
+    t =   255.17s Checking existence of `"session-diff-pill" Button`
+    t =   255.20s Checking existence of `Button (First Match)`
+    t =   258.24s Checking existence of `"cursor.approval.approve" Button`
+    t =   258.31s Checking existence of `"Approve" Button`
+    t =   258.34s Checking existence of `"awaiting-approval-card" Other`
+    t =   258.39s Checking existence of `Button (First Match)`
+    t =   258.42s Checking existence of `"session-diff-pill" Other`
+    t =   258.47s Checking existence of `"session-diff-pill" Button`
+    t =   258.51s Checking existence of `Button (First Match)`
+    t =   261.55s Checking existence of `"cursor.approval.approve" Button`
+    t =   261.61s Checking existence of `"Approve" Button`
+    t =   261.65s Checking existence of `"awaiting-approval-card" Other`
+    t =   261.70s Checking existence of `Button (First Match)`
+    t =   261.73s Checking existence of `"session-diff-pill" Other`
+    t =   261.78s Checking existence of `"session-diff-pill" Button`
+    t =   261.81s Checking existence of `Button (First Match)`
+    t =   264.85s Checking existence of `"cursor.approval.approve" Button`
+    t =   264.90s Checking existence of `"Approve" Button`
+    t =   264.93s Checking existence of `"awaiting-approval-card" Other`
+    t =   264.98s Checking existence of `Button (First Match)`
+    t =   265.01s Checking existence of `"session-diff-pill" Other`
+    t =   265.06s Checking existence of `"session-diff-pill" Button`
+    t =   265.10s Checking existence of `Button (First Match)`
+    t =   268.14s Checking existence of `"cursor.approval.approve" Button`
+    t =   268.20s Checking existence of `"Approve" Button`
+    t =   268.24s Checking existence of `"awaiting-approval-card" Other`
+    t =   268.29s Checking existence of `Button (First Match)`
+    t =   268.32s Checking existence of `"session-diff-pill" Other`
+    t =   268.37s Checking existence of `"session-diff-pill" Button`
+    t =   268.40s Checking existence of `Button (First Match)`
+    t =   271.44s Checking existence of `"cursor.approval.approve" Button`
+    t =   271.49s Checking existence of `"Approve" Button`
+    t =   271.53s Checking existence of `"awaiting-approval-card" Other`
+    t =   271.58s Checking existence of `Button (First Match)`
+    t =   271.61s Checking existence of `"session-diff-pill" Other`
+    t =   271.66s Checking existence of `"session-diff-pill" Button`
+    t =   271.70s Checking existence of `Button (First Match)`
+    t =   274.74s Checking existence of `"cursor.approval.approve" Button`
+    t =   274.78s Checking existence of `"Approve" Button`
+    t =   274.82s Checking existence of `"awaiting-approval-card" Other`
+    t =   274.87s Checking existence of `Button (First Match)`
+    t =   274.90s Checking existence of `"session-diff-pill" Other`
+    t =   274.95s Checking existence of `"session-diff-pill" Button`
+    t =   274.98s Checking existence of `Button (First Match)`
+    t =   278.01s Checking existence of `"cursor.approval.approve" Button`
+    t =   278.05s Checking existence of `"Approve" Button`
+    t =   278.08s Checking existence of `"awaiting-approval-card" Other`
+    t =   278.13s Checking existence of `Button (First Match)`
+    t =   278.16s Checking existence of `"session-diff-pill" Other`
+    t =   278.21s Checking existence of `"session-diff-pill" Button`
+    t =   278.25s Checking existence of `Button (First Match)`
+    t =   281.29s Checking existence of `"cursor.approval.approve" Button`
+    t =   281.33s Checking existence of `"Approve" Button`
+    t =   281.37s Checking existence of `"awaiting-approval-card" Other`
+    t =   281.42s Checking existence of `Button (First Match)`
+    t =   281.46s Checking existence of `"session-diff-pill" Other`
+    t =   281.51s Checking existence of `"session-diff-pill" Button`
+    t =   281.54s Checking existence of `Button (First Match)`
+    t =   284.57s Checking existence of `"cursor.approval.approve" Button`
+    t =   284.62s Checking existence of `"Approve" Button`
+    t =   284.66s Checking existence of `"awaiting-approval-card" Other`
+    t =   284.71s Checking existence of `Button (First Match)`
+    t =   284.74s Checking existence of `"session-diff-pill" Other`
+    t =   284.79s Checking existence of `"session-diff-pill" Button`
+    t =   284.82s Checking existence of `Button (First Match)`
+    t =   287.86s Checking existence of `"cursor.approval.approve" Button`
+    t =   287.91s Checking existence of `"Approve" Button`
+    t =   287.94s Checking existence of `"awaiting-approval-card" Other`
+    t =   287.99s Checking existence of `Button (First Match)`
+    t =   288.02s Checking existence of `"session-diff-pill" Other`
+    t =   288.07s Checking existence of `"session-diff-pill" Button`
+    t =   288.10s Checking existence of `Button (First Match)`
+    t =   291.14s Checking existence of `"cursor.approval.approve" Button`
+    t =   291.21s Checking existence of `"Approve" Button`
+    t =   291.24s Checking existence of `"awaiting-approval-card" Other`
+    t =   291.29s Checking existence of `Button (First Match)`
+    t =   291.32s Checking existence of `"session-diff-pill" Other`
+    t =   291.37s Checking existence of `"session-diff-pill" Button`
+    t =   291.40s Checking existence of `Button (First Match)`
+    t =   294.44s Checking existence of `"cursor.approval.approve" Button`
+    t =   294.48s Checking existence of `"Approve" Button`
+    t =   294.51s Checking existence of `"awaiting-approval-card" Other`
+    t =   294.56s Checking existence of `Button (First Match)`
+    t =   294.59s Checking existence of `"session-diff-pill" Other`
+    t =   294.64s Checking existence of `"session-diff-pill" Button`
+    t =   294.67s Checking existence of `Button (First Match)`
+    t =   297.71s Checking existence of `"cursor.approval.approve" Button`
+    t =   297.78s Checking existence of `"Approve" Button`
+    t =   297.82s Checking existence of `"awaiting-approval-card" Other`
+    t =   297.87s Checking existence of `Button (First Match)`
+    t =   297.90s Checking existence of `"session-diff-pill" Other`
+    t =   297.95s Checking existence of `"session-diff-pill" Button`
+    t =   297.98s Checking existence of `Button (First Match)`
+    t =   301.01s Checking existence of `"cursor.approval.approve" Button`
+    t =   301.06s Checking existence of `"Approve" Button`
+    t =   301.09s Checking existence of `"awaiting-approval-card" Other`
+    t =   301.14s Checking existence of `Button (First Match)`
+    t =   301.17s Checking existence of `"session-diff-pill" Other`
+    t =   301.22s Checking existence of `"session-diff-pill" Button`
+    t =   301.26s Checking existence of `Button (First Match)`
+    t =   304.30s Checking existence of `"cursor.approval.approve" Button`
+    t =   304.36s Checking existence of `"Approve" Button`
+    t =   304.40s Checking existence of `"awaiting-approval-card" Other`
+    t =   304.45s Checking existence of `Button (First Match)`
+    t =   304.48s Checking existence of `"session-diff-pill" Other`
+    t =   304.53s Checking existence of `"session-diff-pill" Button`
+    t =   304.56s Checking existence of `Button (First Match)`
+    t =   307.59s Checking existence of `"cursor.approval.approve" Button`
+    t =   307.63s Checking existence of `"Approve" Button`
+    t =   307.68s Checking existence of `"awaiting-approval-card" Other`
+    t =   307.73s Checking existence of `Button (First Match)`
+    t =   307.77s Checking existence of `"session-diff-pill" Other`
+    t =   307.82s Checking existence of `"session-diff-pill" Button`
+    t =   307.86s Checking existence of `Button (First Match)`
+    t =   310.90s Checking existence of `"cursor.approval.approve" Button`
+    t =   310.94s Checking existence of `"Approve" Button`
+    t =   310.97s Checking existence of `"awaiting-approval-card" Other`
+    t =   311.03s Checking existence of `Button (First Match)`
+    t =   311.06s Checking existence of `"session-diff-pill" Other`
+    t =   311.11s Checking existence of `"session-diff-pill" Button`
+    t =   311.14s Checking existence of `Button (First Match)`
+    t =   314.18s Checking existence of `"cursor.approval.approve" Button`
+    t =   314.21s Checking existence of `"Approve" Button`
+    t =   314.25s Checking existence of `"awaiting-approval-card" Other`
+    t =   314.31s Checking existence of `Button (First Match)`
+    t =   314.34s Checking existence of `"session-diff-pill" Other`
+    t =   314.40s Checking existence of `"session-diff-pill" Button`
+    t =   314.43s Checking existence of `Button (First Match)`
+    t =   317.47s Checking existence of `"cursor.approval.approve" Button`
+    t =   317.54s Checking existence of `"Approve" Button`
+    t =   317.57s Checking existence of `"awaiting-approval-card" Other`
+    t =   317.63s Checking existence of `Button (First Match)`
+    t =   317.66s Checking existence of `"session-diff-pill" Other`
+    t =   317.71s Checking existence of `"session-diff-pill" Button`
+    t =   317.74s Checking existence of `Button (First Match)`
+    t =   320.78s Checking existence of `"cursor.approval.approve" Button`
+    t =   320.85s Checking existence of `"Approve" Button`
+    t =   320.88s Checking existence of `"awaiting-approval-card" Other`
+    t =   320.94s Checking existence of `Button (First Match)`
+    t =   320.97s Checking existence of `"session-diff-pill" Other`
+    t =   321.02s Checking existence of `"session-diff-pill" Button`
+    t =   321.05s Checking existence of `Button (First Match)`
+    t =   324.09s Checking existence of `"cursor.approval.approve" Button`
+    t =   324.14s Checking existence of `"Approve" Button`
+    t =   324.18s Checking existence of `"awaiting-approval-card" Other`
+    t =   324.23s Checking existence of `Button (First Match)`
+    t =   324.26s Checking existence of `"session-diff-pill" Other`
+    t =   324.32s Checking existence of `"session-diff-pill" Button`
+    t =   324.35s Checking existence of `Button (First Match)`
+    t =   327.39s Checking existence of `"cursor.approval.approve" Button`
+    t =   327.44s Checking existence of `"Approve" Button`
+    t =   327.48s Checking existence of `"awaiting-approval-card" Other`
+    t =   327.53s Checking existence of `Button (First Match)`
+    t =   327.56s Checking existence of `"session-diff-pill" Other`
+    t =   327.62s Checking existence of `"session-diff-pill" Button`
+    t =   327.65s Checking existence of `Button (First Match)`
+    t =   330.69s Checking existence of `"cursor.approval.approve" Button`
+    t =   330.75s Checking existence of `"Approve" Button`
+    t =   330.79s Checking existence of `"awaiting-approval-card" Other`
+    t =   330.85s Checking existence of `Button (First Match)`
+    t =   330.89s Checking existence of `"session-diff-pill" Other`
+    t =   330.94s Checking existence of `"session-diff-pill" Button`
+    t =   330.98s Checking existence of `Button (First Match)`
+    t =   334.01s Checking existence of `"cursor.approval.approve" Button`
+    t =   334.12s Checking existence of `"Approve" Button`
+    t =   334.17s Checking existence of `"awaiting-approval-card" Other`
+    t =   334.22s Checking existence of `Button (First Match)`
+    t =   334.26s Checking existence of `"session-diff-pill" Other`
+    t =   334.31s Checking existence of `"session-diff-pill" Button`
+    t =   334.35s Checking existence of `Button (First Match)`
+    t =   337.38s Checking existence of `"cursor.approval.approve" Button`
+    t =   337.43s Checking existence of `"Approve" Button`
+    t =   337.47s Checking existence of `"awaiting-approval-card" Other`
+    t =   337.53s Checking existence of `Button (First Match)`
+    t =   337.56s Checking existence of `"session-diff-pill" Other`
+    t =   337.61s Checking existence of `"session-diff-pill" Button`
+    t =   337.65s Checking existence of `Button (First Match)`
+    t =   340.68s Checking existence of `"cursor.approval.approve" Button`
+    t =   340.74s Checking existence of `"Approve" Button`
+    t =   340.77s Checking existence of `"awaiting-approval-card" Other`
+    t =   340.83s Checking existence of `Button (First Match)`
+    t =   340.87s Checking existence of `"session-diff-pill" Other`
+    t =   340.92s Checking existence of `"session-diff-pill" Button`
+    t =   340.96s Checking existence of `Button (First Match)`
+    t =   344.00s Checking existence of `"cursor.approval.approve" Button`
+    t =   344.05s Checking existence of `"Approve" Button`
+    t =   344.09s Checking existence of `"awaiting-approval-card" Other`
+    t =   344.15s Checking existence of `Button (First Match)`
+    t =   344.19s Checking existence of `"session-diff-pill" Other`
+    t =   344.24s Checking existence of `"session-diff-pill" Button`
+    t =   344.28s Checking existence of `Button (First Match)`
+    t =   347.32s Checking existence of `"cursor.approval.approve" Button`
+    t =   347.37s Checking existence of `"Approve" Button`
+    t =   347.41s Checking existence of `"awaiting-approval-card" Other`
+    t =   347.46s Checking existence of `Button (First Match)`
+    t =   347.50s Checking existence of `"session-diff-pill" Other`
+    t =   347.56s Checking existence of `"session-diff-pill" Button`
+    t =   347.60s Checking existence of `Button (First Match)`
+    t =   350.64s Checking existence of `"cursor.approval.approve" Button`
+    t =   350.69s Checking existence of `"Approve" Button`
+    t =   350.73s Checking existence of `"awaiting-approval-card" Other`
+    t =   350.78s Checking existence of `Button (First Match)`
+    t =   350.82s Checking existence of `"session-diff-pill" Other`
+    t =   350.87s Checking existence of `"session-diff-pill" Button`
+    t =   350.91s Checking existence of `Button (First Match)`
+    t =   353.95s Checking existence of `"cursor.approval.approve" Button`
+    t =   354.00s Checking existence of `"Approve" Button`
+    t =   354.04s Checking existence of `"awaiting-approval-card" Other`
+    t =   354.10s Checking existence of `Button (First Match)`
+    t =   354.13s Checking existence of `"session-diff-pill" Other`
+    t =   354.19s Checking existence of `"session-diff-pill" Button`
+    t =   354.23s Checking existence of `Button (First Match)`
+    t =   357.26s Checking existence of `"cursor.approval.approve" Button`
+    t =   357.33s Checking existence of `"Approve" Button`
+    t =   357.37s Checking existence of `"awaiting-approval-card" Other`
+    t =   357.43s Checking existence of `Button (First Match)`
+    t =   357.46s Checking existence of `"session-diff-pill" Other`
+    t =   357.52s Checking existence of `"session-diff-pill" Button`
+    t =   357.56s Checking existence of `Button (First Match)`
+    t =   360.59s Checking existence of `"cursor.approval.approve" Button`
+    t =   360.64s Checking existence of `"Approve" Button`
+    t =   360.68s Checking existence of `"awaiting-approval-card" Other`
+    t =   360.74s Checking existence of `Button (First Match)`
+    t =   360.77s Checking existence of `"session-diff-pill" Other`
+    t =   360.82s Checking existence of `"session-diff-pill" Button`
+    t =   360.86s Checking existence of `Button (First Match)`
+    t =   363.90s Checking existence of `"cursor.approval.approve" Button`
+    t =   364.01s Checking existence of `"Approve" Button`
+    t =   364.05s Checking existence of `"awaiting-approval-card" Other`
+    t =   364.11s Checking existence of `Button (First Match)`
+    t =   364.15s Checking existence of `"session-diff-pill" Other`
+    t =   364.20s Checking existence of `"session-diff-pill" Button`
+    t =   364.24s Checking existence of `Button (First Match)`
+    t =   367.28s Checking existence of `"cursor.approval.approve" Button`
+    t =   367.35s Checking existence of `"Approve" Button`
+    t =   367.39s Checking existence of `"awaiting-approval-card" Other`
+    t =   367.45s Checking existence of `Button (First Match)`
+    t =   367.50s Checking existence of `"session-diff-pill" Other`
+    t =   367.56s Checking existence of `"session-diff-pill" Button`
+    t =   367.59s Checking existence of `Button (First Match)`
+    t =   370.64s Checking existence of `"cursor.approval.approve" Button`
+    t =   370.69s Checking existence of `"Approve" Button`
+    t =   370.73s Checking existence of `"awaiting-approval-card" Other`
+    t =   370.79s Checking existence of `Button (First Match)`
+    t =   370.82s Checking existence of `"session-diff-pill" Other`
+    t =   370.87s Checking existence of `"session-diff-pill" Button`
+    t =   370.91s Checking existence of `Button (First Match)`
+    t =   373.95s Checking existence of `"cursor.approval.approve" Button`
+    t =   374.00s Checking existence of `"Approve" Button`
+    t =   374.03s Checking existence of `"awaiting-approval-card" Other`
+    t =   374.09s Checking existence of `Button (First Match)`
+    t =   374.12s Checking existence of `"session-diff-pill" Other`
+    t =   374.17s Checking existence of `"session-diff-pill" Button`
+    t =   374.21s Checking existence of `Button (First Match)`
+    t =   377.25s Checking existence of `"cursor.approval.approve" Button`
+    t =   377.31s Checking existence of `"Approve" Button`
+    t =   377.35s Checking existence of `"awaiting-approval-card" Other`
+    t =   377.41s Checking existence of `Button (First Match)`
+    t =   377.44s Checking existence of `"session-diff-pill" Other`
+    t =   377.50s Checking existence of `"session-diff-pill" Button`
+    t =   377.53s Checking existence of `Button (First Match)`
+    t =   380.57s Checking existence of `"cursor.approval.approve" Button`
+    t =   380.61s Checking existence of `"Approve" Button`
+    t =   380.65s Checking existence of `"awaiting-approval-card" Other`
+    t =   380.71s Checking existence of `Button (First Match)`
+    t =   380.74s Checking existence of `"session-diff-pill" Other`
+    t =   380.80s Checking existence of `"session-diff-pill" Button`
+    t =   380.83s Checking existence of `Button (First Match)`
+    t =   383.87s Checking existence of `"cursor.approval.approve" Button`
+    t =   383.96s Checking existence of `"Approve" Button`
+    t =   384.00s Checking existence of `"awaiting-approval-card" Other`
+    t =   384.07s Checking existence of `Button (First Match)`
+    t =   384.10s Checking existence of `"session-diff-pill" Other`
+    t =   384.16s Checking existence of `"session-diff-pill" Button`
+    t =   384.19s Checking existence of `Button (First Match)`
+    t =   387.23s Checking existence of `"cursor.approval.approve" Button`
+    t =   387.27s Checking existence of `"Approve" Button`
+    t =   387.31s Checking existence of `"awaiting-approval-card" Other`
+    t =   387.37s Checking existence of `Button (First Match)`
+    t =   387.40s Checking existence of `"session-diff-pill" Other`
+    t =   387.46s Checking existence of `"session-diff-pill" Button`
+    t =   387.49s Checking existence of `Button (First Match)`
+    t =   390.53s Checking existence of `"cursor.approval.approve" Button`
+    t =   390.57s Checking existence of `"Approve" Button`
+    t =   390.60s Checking existence of `"awaiting-approval-card" Other`
+    t =   390.66s Checking existence of `Button (First Match)`
+    t =   390.69s Checking existence of `"session-diff-pill" Other`
+    t =   390.74s Checking existence of `"session-diff-pill" Button`
+    t =   390.78s Checking existence of `Button (First Match)`
+    t =   393.82s Checking existence of `"cursor.approval.approve" Button`
+    t =   393.88s Checking existence of `"Approve" Button`
+    t =   393.92s Checking existence of `"awaiting-approval-card" Other`
+    t =   393.99s Checking existence of `Button (First Match)`
+    t =   394.03s Checking existence of `"session-diff-pill" Other`
+    t =   394.08s Checking existence of `"session-diff-pill" Button`
+    t =   394.12s Checking existence of `Button (First Match)`
+    t =   397.16s Checking existence of `"session-diff-pill" Other`
+    t =   397.23s Checking existence of `"session-diff-pill" Button`
+    t =   397.26s Checking existence of `Button (First Match)`
+    t =   397.30s Find the Target Application 'dev.lancer.mobile'
+    t =   397.45s Added attachment named 'LC4-08-thread approves=0 awaiting=false retry=false diff=false proof=false'
+    t =   397.45s Waiting 5.0s for Button (First Match) to exist
+    t =   398.47s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   398.48s         Checking existence of `Button (First Match)`
+    t =   398.52s         Capturing element debug description
+    t =   399.45s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   399.45s         Checking existence of `Button (First Match)`
+    t =   399.51s         Capturing element debug description
+    t =   400.45s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   400.45s         Checking existence of `Button (First Match)`
+    t =   400.51s         Capturing element debug description
+    t =   401.53s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   401.53s         Checking existence of `Button (First Match)`
+    t =   401.60s         Capturing element debug description
+    t =   402.45s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   402.45s         Checking existence of `Button (First Match)`
+    t =   402.51s         Capturing element debug description
+    t =   402.51s     Checking existence of `Button (First Match)`
+    t =   402.55s Collecting debug information to assist test failure triage
+    t =   402.55s     Requesting snapshot of accessibility hierarchy for app with pid 35091
+    t =   402.67s Waiting 8.0s for Button (First Match) to exist
+    t =   403.70s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   403.70s         Checking existence of `Button (First Match)`
+    t =   403.76s         Capturing element debug description
+    t =   404.68s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   404.68s         Checking existence of `Button (First Match)`
+    t =   404.74s         Capturing element debug description
+    t =   405.76s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   405.76s         Checking existence of `Button (First Match)`
+    t =   405.82s         Capturing element debug description
+    t =   406.74s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   406.74s         Checking existence of `Button (First Match)`
+    t =   406.79s         Capturing element debug description
+    t =   407.71s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   407.71s         Checking existence of `Button (First Match)`
+    t =   407.76s         Capturing element debug description
+    t =   408.68s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   408.68s         Checking existence of `Button (First Match)`
+    t =   408.72s         Capturing element debug description
+    t =   409.75s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   409.75s         Checking existence of `Button (First Match)`
+    t =   409.80s         Capturing element debug description
+    t =   410.68s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   410.68s         Checking existence of `Button (First Match)`
+    t =   410.73s         Capturing element debug description
+    t =   410.73s     Checking existence of `Button (First Match)`
+    t =   410.76s Collecting debug information to assist test failure triage
+    t =   410.76s     Requesting snapshot of accessibility hierarchy for app with pid 35091
+    t =   410.79s Terminate dev.lancer.mobile:35091
+    t =   411.85s Open dev.lancer.mobile
+    t =   411.86s     Launch dev.lancer.mobile
+2026-07-19 17:35:23.523 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 17:35:23.523 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   412.08s         Setting up automation session
+    t =   414.45s         Wait for dev.lancer.mobile to idle
+    t =   430.97s Waiting 15.0s for TextView (First Match) to exist
+    t =   431.99s     Checking `Expect predicate `existsNoRetry == 1` for object TextView (First Match)`
+    t =   431.99s         Checking existence of `TextView (First Match)`
+    t =   432.06s Tap TextView (First Match)
+    t =   432.06s     Wait for dev.lancer.mobile to idle
+    t =   432.06s     Find the TextView (First Match)
+    t =   432.10s     Check for interrupting elements affecting TextView
+    t =   432.16s     Synthesize event
+    t =   432.45s     Wait for dev.lancer.mobile to idle
+    t =   432.46s Type 'Run `sleep 35 && e...' into TextView at {{27.0, 355.0}, {348.0, 120.0}}
+    t =   432.46s     Wait for dev.lancer.mobile to idle
+    t =   432.46s     Find the TextView at {{27.0, 355.0}, {348.0, 120.0}}
+    t =   432.58s     Check for interrupting elements affecting TextView
+    t =   432.61s     Synthesize event
+    t =   433.69s     Wait for dev.lancer.mobile to idle
+    t =   433.70s Waiting 5.0s for "composer.send" Button to exist
+    t =   434.73s     Checking `Expect predicate `existsNoRetry == 1` for object "composer.send" Button`
+    t =   434.73s         Checking existence of `"composer.send" Button`
+    t =   434.78s Find the "composer.send" Button
+    t =   434.83s Tap "composer.send" Button
+    t =   434.83s     Wait for dev.lancer.mobile to idle
+    t =   434.83s     Find the "composer.send" Button
+    t =   434.88s     Check for interrupting elements affecting "composer.send" Button
+    t =   434.91s     Synthesize event
+    t =   435.20s     Wait for dev.lancer.mobile to idle
+    t =   435.65s Checking existence of `"cursor.approval.approve" Button`
+    t =   435.69s Checking existence of `"Approve" Button`
+    t =   435.72s Checking existence of `"background-tasks-pill" Other`
+    t =   437.76s Checking existence of `"cursor.approval.approve" Button`
+    t =   437.81s Checking existence of `"Approve" Button`
+    t =   437.83s Checking existence of `"background-tasks-pill" Other`
+    t =   439.87s Checking existence of `"cursor.approval.approve" Button`
+    t =   439.92s Checking existence of `"Approve" Button`
+    t =   439.95s Checking existence of `"background-tasks-pill" Other`
+    t =   441.99s Checking existence of `"cursor.approval.approve" Button`
+    t =   442.03s Checking existence of `"Approve" Button`
+    t =   442.06s Checking existence of `"background-tasks-pill" Other`
+    t =   444.10s Checking existence of `"cursor.approval.approve" Button`
+    t =   444.13s Checking existence of `"Approve" Button`
+    t =   444.15s Checking existence of `"background-tasks-pill" Other`
+    t =   446.19s Checking existence of `"cursor.approval.approve" Button`
+    t =   446.23s Checking existence of `"Approve" Button`
+    t =   446.25s Checking existence of `"background-tasks-pill" Other`
+    t =   448.28s Checking existence of `"cursor.approval.approve" Button`
+    t =   448.34s Checking existence of `"Approve" Button`
+    t =   448.41s Checking existence of `"background-tasks-pill" Other`
+    t =   450.48s Checking existence of `"cursor.approval.approve" Button`
+    t =   450.53s Checking existence of `"Approve" Button`
+    t =   450.57s Checking existence of `"background-tasks-pill" Other`
+    t =   452.64s Checking existence of `"cursor.approval.approve" Button`
+    t =   452.71s Checking existence of `"Approve" Button`
+    t =   452.75s Checking existence of `"background-tasks-pill" Other`
+    t =   454.82s Checking existence of `"cursor.approval.approve" Button`
+    t =   454.87s Checking existence of `"Approve" Button`
+    t =   454.91s Checking existence of `"background-tasks-pill" Other`
+    t =   456.97s Checking existence of `"cursor.approval.approve" Button`
+    t =   457.03s Checking existence of `"Approve" Button`
+    t =   457.08s Checking existence of `"background-tasks-pill" Other`
+    t =   459.14s Checking existence of `"cursor.approval.approve" Button`
+    t =   459.19s Checking existence of `"Approve" Button`
+    t =   459.23s Checking existence of `"background-tasks-pill" Other`
+    t =   461.29s Checking existence of `"cursor.approval.approve" Button`
+    t =   461.35s Checking existence of `"Approve" Button`
+    t =   461.40s Checking existence of `"background-tasks-pill" Other`
+    t =   463.52s Checking existence of `"cursor.approval.approve" Button`
+    t =   463.58s Checking existence of `"Approve" Button`
+    t =   463.62s Checking existence of `"background-tasks-pill" Other`
+    t =   465.68s Checking existence of `"cursor.approval.approve" Button`
+    t =   465.76s Checking existence of `"Approve" Button`
+    t =   465.80s Checking existence of `"background-tasks-pill" Other`
+    t =   467.86s Checking existence of `"cursor.approval.approve" Button`
+    t =   467.92s Checking existence of `"Approve" Button`
+    t =   467.95s Checking existence of `"background-tasks-pill" Other`
+    t =   470.01s Checking existence of `"cursor.approval.approve" Button`
+    t =   470.07s Checking existence of `"Approve" Button`
+    t =   470.11s Checking existence of `"background-tasks-pill" Other`
+    t =   472.17s Checking existence of `"cursor.approval.approve" Button`
+    t =   472.21s Checking existence of `"Approve" Button`
+    t =   472.24s Checking existence of `"background-tasks-pill" Other`
+    t =   474.31s Checking existence of `"cursor.approval.approve" Button`
+    t =   474.38s Checking existence of `"Approve" Button`
+    t =   474.42s Checking existence of `"background-tasks-pill" Other`
+    t =   476.49s Checking existence of `"cursor.approval.approve" Button`
+    t =   476.56s Checking existence of `"Approve" Button`
+    t =   476.60s Checking existence of `"background-tasks-pill" Other`
+    t =   478.67s Checking existence of `"cursor.approval.approve" Button`
+<unknown>:0: warning: -[LancerUITests.SweepLaneC4Tests testLaneC4_PostWave1LiveSweep] : Publishing changes from background threads is not allowed; make sure to publish values from the main thread (via operators like receive(on:)) on model updates.
+    t =   478.76s Checking existence of `"Approve" Button`
+    t =   478.82s Checking existence of `"background-tasks-pill" Other`
+    t =   480.88s Checking existence of `"cursor.approval.approve" Button`
+    t =   480.92s Checking existence of `"Approve" Button`
+    t =   480.95s Checking existence of `"background-tasks-pill" Other`
+    t =   483.02s Checking existence of `"cursor.approval.approve" Button`
+    t =   483.06s Checking existence of `"Approve" Button`
+    t =   483.10s Checking existence of `"background-tasks-pill" Other`
+    t =   485.16s Checking existence of `"cursor.approval.approve" Button`
+    t =   485.20s Checking existence of `"Approve" Button`
+    t =   485.24s Checking existence of `"background-tasks-pill" Other`
+    t =   487.30s Checking existence of `"cursor.approval.approve" Button`
+    t =   487.35s Checking existence of `"Approve" Button`
+    t =   487.40s Checking existence of `Button (First Match)`
+    t =   489.44s Checking existence of `"cursor.approval.approve" Button`
+    t =   489.51s Checking existence of `"Approve" Button`
+    t =   489.55s Checking existence of `Button (First Match)`
+    t =   491.59s Checking existence of `"cursor.approval.approve" Button`
+    t =   491.64s Checking existence of `"Approve" Button`
+    t =   491.68s Checking existence of `Button (First Match)`
+    t =   493.72s Checking existence of `"cursor.approval.approve" Button`
+    t =   493.77s Checking existence of `"Approve" Button`
+    t =   493.81s Checking existence of `Button (First Match)`
+    t =   495.85s Checking existence of `"cursor.approval.approve" Button`
+    t =   495.92s Checking existence of `"Approve" Button`
+    t =   495.97s Checking existence of `Button (First Match)`
+    t =   498.01s Checking existence of `"cursor.approval.approve" Button`
+    t =   498.06s Checking existence of `"Approve" Button`
+    t =   498.10s Checking existence of `Button (First Match)`
+    t =   500.15s Checking existence of `"cursor.approval.approve" Button`
+    t =   500.20s Checking existence of `"Approve" Button`
+    t =   500.25s Checking existence of `Button (First Match)`
+    t =   502.29s Checking existence of `"cursor.approval.approve" Button`
+    t =   502.35s Checking existence of `"Approve" Button`
+    t =   502.40s Checking existence of `Button (First Match)`
+    t =   504.44s Checking existence of `"cursor.approval.approve" Button`
+    t =   504.49s Checking existence of `"Approve" Button`
+    t =   504.57s Checking existence of `Button (First Match)`
+    t =   506.61s Checking existence of `"cursor.approval.approve" Button`
+    t =   506.65s Checking existence of `"Approve" Button`
+    t =   506.69s Checking existence of `Button (First Match)`
+    t =   508.73s Checking existence of `"cursor.approval.approve" Button`
+    t =   508.77s Checking existence of `"Approve" Button`
+    t =   508.81s Checking existence of `Button (First Match)`
+    t =   510.85s Checking existence of `"cursor.approval.approve" Button`
+    t =   510.89s Checking existence of `"Approve" Button`
+    t =   510.94s Checking existence of `Button (First Match)`
+    t =   512.97s Checking existence of `"cursor.approval.approve" Button`
+    t =   513.02s Checking existence of `"Approve" Button`
+    t =   513.06s Checking existence of `Button (First Match)`
+    t =   515.10s Checking existence of `"cursor.approval.approve" Button`
+    t =   515.15s Checking existence of `"Approve" Button`
+    t =   515.19s Checking existence of `Button (First Match)`
+    t =   517.24s Checking existence of `"cursor.approval.approve" Button`
+    t =   517.30s Checking existence of `"Approve" Button`
+    t =   517.34s Checking existence of `Button (First Match)`
+    t =   519.38s Checking existence of `"cursor.approval.approve" Button`
+    t =   519.44s Checking existence of `"Approve" Button`
+    t =   519.49s Checking existence of `Button (First Match)`
+    t =   521.55s Checking existence of `"cursor.approval.approve" Button`
+    t =   521.63s Checking existence of `"Approve" Button`
+    t =   521.67s Checking existence of `Button (First Match)`
+    t =   523.72s Checking existence of `"cursor.approval.approve" Button`
+    t =   523.77s Checking existence of `"Approve" Button`
+    t =   523.81s Checking existence of `Button (First Match)`
+    t =   525.84s Checking existence of `"cursor.approval.approve" Button`
+    t =   525.89s Checking existence of `"Approve" Button`
+    t =   525.93s Checking existence of `Button (First Match)`
+    t =   527.98s Checking existence of `"cursor.approval.approve" Button`
+    t =   528.02s Checking existence of `"Approve" Button`
+    t =   528.06s Checking existence of `Button (First Match)`
+    t =   530.10s Checking existence of `"cursor.approval.approve" Button`
+    t =   530.15s Checking existence of `"Approve" Button`
+    t =   530.19s Checking existence of `Button (First Match)`
+    t =   532.23s Checking existence of `"cursor.approval.approve" Button`
+    t =   532.31s Checking existence of `"Approve" Button`
+    t =   532.35s Checking existence of `Button (First Match)`
+    t =   534.39s Checking existence of `"cursor.approval.approve" Button`
+    t =   534.46s Checking existence of `"Approve" Button`
+    t =   534.50s Checking existence of `Button (First Match)`
+    t =   536.54s Checking existence of `"cursor.approval.approve" Button`
+    t =   536.61s Checking existence of `"Approve" Button`
+    t =   536.65s Checking existence of `Button (First Match)`
+    t =   538.70s Checking existence of `"cursor.approval.approve" Button`
+    t =   538.75s Checking existence of `"Approve" Button`
+    t =   538.79s Checking existence of `Button (First Match)`
+    t =   540.83s Checking existence of `"cursor.approval.approve" Button`
+    t =   540.88s Checking existence of `"Approve" Button`
+    t =   540.92s Checking existence of `Button (First Match)`
+    t =   542.96s Checking existence of `"cursor.approval.approve" Button`
+    t =   543.03s Checking existence of `"Approve" Button`
+    t =   543.07s Checking existence of `Button (First Match)`
+    t =   545.11s Checking existence of `"cursor.approval.approve" Button`
+    t =   545.18s Checking existence of `"Approve" Button`
+    t =   545.22s Checking existence of `Button (First Match)`
+    t =   547.27s Checking existence of `"cursor.approval.approve" Button`
+    t =   547.33s Checking existence of `"Approve" Button`
+    t =   547.37s Checking existence of `Button (First Match)`
+    t =   549.41s Checking existence of `"cursor.approval.approve" Button`
+    t =   549.48s Checking existence of `"Approve" Button`
+    t =   549.52s Checking existence of `Button (First Match)`
+    t =   551.56s Checking existence of `"cursor.approval.approve" Button`
+    t =   551.62s Checking existence of `"Approve" Button`
+    t =   551.65s Checking existence of `Button (First Match)`
+    t =   553.69s Checking existence of `"cursor.approval.approve" Button`
+    t =   553.73s Checking existence of `"Approve" Button`
+    t =   553.77s Checking existence of `Button (First Match)`
+    t =   555.81s Checking existence of `"cursor.approval.approve" Button`
+    t =   555.88s Checking existence of `"Approve" Button`
+    t =   555.92s Checking existence of `Button (First Match)`
+    t =   557.96s Checking existence of `"cursor.approval.approve" Button`
+    t =   558.04s Checking existence of `"Approve" Button`
+    t =   558.08s Checking existence of `Button (First Match)`
+    t =   560.12s Checking existence of `"cursor.approval.approve" Button`
+    t =   560.18s Checking existence of `"Approve" Button`
+    t =   560.22s Checking existence of `Button (First Match)`
+    t =   562.26s Checking existence of `"cursor.approval.approve" Button`
+    t =   562.32s Checking existence of `"Approve" Button`
+    t =   562.36s Checking existence of `Button (First Match)`
+    t =   564.39s Checking existence of `"cursor.approval.approve" Button`
+    t =   564.44s Checking existence of `"Approve" Button`
+    t =   564.48s Checking existence of `Button (First Match)`
+    t =   566.51s Checking existence of `"cursor.approval.approve" Button`
+    t =   566.56s Checking existence of `"Approve" Button`
+    t =   566.60s Checking existence of `Button (First Match)`
+    t =   568.63s Checking existence of `"cursor.approval.approve" Button`
+    t =   568.70s Checking existence of `"Approve" Button`
+    t =   568.74s Checking existence of `Button (First Match)`
+    t =   570.78s Checking existence of `"cursor.approval.approve" Button`
+    t =   570.85s Checking existence of `"Approve" Button`
+    t =   570.89s Checking existence of `Button (First Match)`
+    t =   572.92s Checking existence of `"cursor.approval.approve" Button`
+    t =   572.99s Checking existence of `"Approve" Button`
+    t =   573.03s Checking existence of `Button (First Match)`
+    t =   575.07s Checking existence of `"cursor.approval.approve" Button`
+    t =   575.12s Checking existence of `"Approve" Button`
+    t =   575.15s Checking existence of `Button (First Match)`
+    t =   577.19s Checking existence of `"cursor.approval.approve" Button`
+    t =   577.24s Checking existence of `"Approve" Button`
+    t =   577.28s Checking existence of `Button (First Match)`
+    t =   579.31s Get number of matches for: Elements matching predicate 'label BEGINSWITH "Bash"'
+    t =   579.36s Find the Target Application 'dev.lancer.mobile'
+    t =   579.46s Added attachment named 'LC4-12-pills pill=false bashCount=1'
+    t =   579.46s Terminate dev.lancer.mobile:42189
+    t =   580.51s Open dev.lancer.mobile
+    t =   580.51s     Launch dev.lancer.mobile
+2026-07-19 17:38:12.169 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-07-19 17:38:12.170 xcodebuild[28141:101439] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   580.73s         Setting up automation session
+    t =   582.67s         Wait for dev.lancer.mobile to idle
+    t =   604.06s Waiting 15.0s for "cursor.settings.emergency-stop" Button to exist
+    t =   605.10s     Checking `Expect predicate `existsNoRetry == 1` for object "cursor.settings.emergency-stop" Button`
+    t =   605.10s         Checking existence of `"cursor.settings.emergency-stop" Button`
+    t =   605.22s Tap "cursor.settings.emergency-stop" Button
+    t =   605.22s     Wait for dev.lancer.mobile to idle
+    t =   605.23s     Find the "cursor.settings.emergency-stop" Button
+    t =   605.29s     Check for interrupting elements affecting "cursor.settings.emergency-stop" Button
+    t =   605.32s     Synthesize event
+    t =   605.62s     Wait for dev.lancer.mobile to idle
+    t =   605.90s Waiting 8.0s for Button (First Match) to exist
+    t =   606.93s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   606.93s         Checking existence of `Button (First Match)`
+    t =   607.02s Tap Button (First Match)
+    t =   607.02s     Wait for dev.lancer.mobile to idle
+    t =   607.03s     Find the Button (First Match)
+    t =   607.09s     Check for interrupting elements affecting "cursor.settings.emergency-stop" Button
+    t =   607.12s     Synthesize event
+    t =   607.12s         Scroll element to visible
+    t =   607.13s                 Retrying failed scroll-to-visible with containing cell Cell
+    t =   607.13s         Find the "cursor.settings.emergency-stop" Button
+    t =   607.19s         Computed hit point {-1, -1} after scrolling to visible
+    t =   607.48s     Wait for dev.lancer.mobile to idle
+    t =   609.69s Checking existence of `StaticText (First Match)`
+    t =   609.75s Find the Target Application 'dev.lancer.mobile'
+    t =   609.85s Added attachment named 'LC4-13-emergency-stop outcome=tapped'
+    t =   609.85s Terminate dev.lancer.mobile:45216
+    t =   610.89s Added attachment of type 'public.plain-text'
+    t =   610.90s Tear Down
+Test Case '-[LancerUITests.SweepLaneC4Tests testLaneC4_PostWave1LiveSweep]' passed (611.370 seconds).
+Test Suite 'SweepLaneC4Tests' passed at 2026-07-19 17:38:43.028.
+	 Executed 1 test, with 0 failures (0 unexpected) in 611.370 (611.377) seconds
+Test Suite 'LancerUITests.xctest' passed at 2026-07-19 17:38:43.029.
+	 Executed 1 test, with 0 failures (0 unexpected) in 611.370 (611.378) seconds
+Test Suite 'Selected tests' passed at 2026-07-19 17:38:43.030.
+	 Executed 1 test, with 0 failures (0 unexpected) in 611.370 (611.379) seconds
+2026-07-19 17:48:43.358 xcodebuild[28141:151650]  IDETestOperationsObserverDebug: Failure collecting diagnostics from simulator: Timed out after 600.0 seconds while waiting for a response from the invoked process
+2026-07-19 17:48:43.385 xcodebuild[28141:101439] [MT] IDETestOperationsObserverDebug: 1226.200 elapsed -- Testing started completed.
+2026-07-19 17:48:43.385 xcodebuild[28141:101439] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-07-19 17:48:43.385 xcodebuild[28141:101439] [MT] IDETestOperationsObserverDebug: 1226.200 sec, +1226.200 sec -- end
+
+Test session results, code coverage, and logs:
+	/Volumes/LancerDev/lancer/.worktrees/sim-serial-lanes/docs/test-runs/2026-07-19-sim-feature-lanes/L4/L4.xcresult
+
+** TEST SUCCEEDED ** [1337.478 sec]
+
+Testing started
+EXIT:0
