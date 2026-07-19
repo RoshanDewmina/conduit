@@ -389,6 +389,10 @@ type server struct {
 	// termHost owns interactive PTY sessions (Orca-style daemon-owned terminal).
 	termOnce sync.Once
 	termHost *terminal.Host
+	// stopLatch is the durable mirror of dispatcher.emergencyStopped — see
+	// emergency_stop_latch.go. nil only in the rare case its home dir can't be
+	// created; applyEmergencyStop/clearEmergencyStop nil-check before using it.
+	stopLatch *emergencyStopLatch
 }
 
 type loopState struct {
@@ -425,6 +429,13 @@ func newServer(home string) *server {
 		observedPushed: map[string]struct{}{},
 	}
 	s.loadLoops()
+	// Restore a stop latch left by a prior process BEFORE anything else can
+	// dispatch or gate a hook — a restart must come back up already denying,
+	// not with a clean slate (see emergency_stop_latch.go).
+	s.stopLatch = newEmergencyStopLatch(home)
+	if s.stopLatch.load() {
+		s.dispatcher.setEmergencyStopped(true)
+	}
 	// The conversation ledger opens its own SQLite file under <home>/.lancer —
 	// same host-local-state pattern as policy/audit/secrets/scheduler above. A
 	// failure here (e.g. unwritable home) is logged, not fatal: the daemon still
@@ -815,9 +826,31 @@ func (s *server) applyRunControl(runID, action string) {
 // how many pending approvals were successfully denied. A failed individual
 // resolve still proceeds with the rest; only successes increment the deny count.
 func (s *server) applyEmergencyStop() (stoppedRuns, deniedApprovals int) {
+	// Persist the latch FIRST — before killing anything or resolving any
+	// approval — so the fail-closed record is durable even if the daemon
+	// dies partway through the rest of this call (e.g. killed alongside a
+	// runaway process it was trying to stop).
+	if s.stopLatch != nil {
+		if err := s.stopLatch.set(true); err != nil {
+			fmt.Fprintf(os.Stderr, "persist emergency-stop latch: %v\n", err)
+		}
+	}
 	deniedApprovals = s.denyPendingApprovalsForEmergencyStop()
 	stoppedRuns = s.dispatcher.emergencyStop()
 	return stoppedRuns, deniedApprovals
+}
+
+// clearEmergencyStop is the only way the fail-closed latch set by
+// applyEmergencyStop lifts — never implicitly on the next dispatch (see
+// emergency_stop_latch.go). Reachable locally over the control/attach socket
+// (agent.emergencyStop.clear) and over the E2E relay (agentEmergencyStopClear),
+// mirroring the two paths applyEmergencyStop itself is reachable from.
+func (s *server) clearEmergencyStop() error {
+	s.dispatcher.setEmergencyStopped(false)
+	if s.stopLatch != nil {
+		return s.stopLatch.set(false)
+	}
+	return nil
 }
 
 // denyPendingApprovalsForEmergencyStop resolves every currently-pending
@@ -1466,6 +1499,13 @@ func (s *server) handleMessage(msg *rpcMessage) {
 			"deniedApprovals":  denied,
 		})
 
+	case "agent.emergencyStop.clear":
+		if err := s.clearEmergencyStop(); err != nil {
+			s.writeError(msg.ID, -32000, err.Error())
+			return
+		}
+		s.writeResult(msg.ID, map[string]bool{"emergencyStopped": false})
+
 	case "agent.pause":
 		var p struct {
 			RunID string `json:"runId"`
@@ -1948,6 +1988,27 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 		return
 	}
 	event.ContentHash = computeContentHash(event.Command, event.Patch, event.CWD, event.ToolInput)
+
+	// Fail-closed for the emergency-stop latch: this covers both a NEW
+	// escalation raised after a stop (already-pending ones at stop time are
+	// handled by denyPendingApprovalsForEmergencyStop) and a hook process that
+	// polls in AFTER a daemon restart, when the latch was reloaded from disk
+	// (server.newServer) but nothing else about this request's history is
+	// known. Checked ahead of policy evaluation deliberately — a stop denies
+	// unconditionally, including tool calls an allow-tier policy rule would
+	// otherwise auto-approve.
+	if s.dispatcher.emergencyStopActive() {
+		_ = s.audit.append(AuditEntry{
+			Action:     "auto-deny-emergency-stop",
+			Agent:      event.Agent,
+			Kind:       event.Kind,
+			Command:    event.Command,
+			Effect:     string(policy.EffectDeny),
+			ApprovalID: event.ApprovalID,
+		})
+		_ = json.NewEncoder(conn).Encode(ApprovalDecision{ApprovalID: event.ApprovalID, Decision: "deny"})
+		return
+	}
 
 	eval := s.policy.evaluate(event)
 	auditRule := eval.MatchedRule
