@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 import AppFeature
 import LancerCore
 import NotificationsKit
@@ -89,6 +90,7 @@ struct LancerApp: App {
 // MARK: - AppDelegate
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    private static let logger = Logger(subsystem: "dev.lancer.mobile", category: "AppDelegate")
     /// Singleton notification delegate kept alive for the app lifetime.
     private let notificationDelegate = LancerNotificationDelegate()
 
@@ -134,18 +136,26 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         let hexToken = deviceToken.map { String(format: "%02x", $0) }.joined()
-        Task { await Notifications.shared.setPendingAPNSToken(hexToken) }
-        NotificationCenter.default.post(
-            name: .lancerAPNSTokenReceived,
-            object: nil,
-            userInfo: ["token": hexToken]
-        )
+        Self.logger.info("APNs device token received (\(hexToken.count) hex chars)")
+        // Cache BEFORE posting: the coordinator's notification listener may not
+        // be iterating yet at cold launch (live-reproduced 2026-07-18 — the
+        // token consistently beats it), so the durable cache is the primary
+        // handoff and the notification is only a wake-up for late tokens.
+        Task {
+            await Notifications.shared.setPendingAPNSToken(hexToken)
+            NotificationCenter.default.post(
+                name: .lancerAPNSTokenReceived,
+                object: nil,
+                userInfo: ["token": hexToken]
+            )
+        }
     }
 
     func application(
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
+        Self.logger.error("APNs registration failed: \(error, privacy: .public)")
         // Expected in simulator — APNs only works on physical device.
     }
 
