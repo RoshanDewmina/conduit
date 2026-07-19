@@ -66,7 +66,9 @@ public final class RelayApprovalIngest {
     /// call while already listening is a no-op, matching the established
     /// `for await notification in NotificationCenter.default.notifications(named:)`
     /// idiom used elsewhere in this codebase (pre-wipe `AppRoot`'s status/APNs/
-    /// Live Activity token subscribers).
+    /// Live Activity token subscribers). Also runs a one-shot stale-pending
+    /// sweep so launch / reconnect clears phone-local corpses even when the
+    /// daemon has nothing left to re-send.
     public func start() {
         guard listenTask == nil else { return }
         listenTask = Task { [weak self] in
@@ -77,6 +79,23 @@ public final class RelayApprovalIngest {
                 await self.handle(notification)
             }
         }
+        Task { [weak self] in
+            await self?.sweepStalePendingAndRefresh()
+        }
+    }
+
+    /// Retire phone-local pending rows past the widget TTL, drop any
+    /// published cards that no longer exist in `pending()`, and rewrite the
+    /// Home Screen snapshot. Shared by `start()` and the arrive path.
+    private func sweepStalePendingAndRefresh() async {
+        let repository = ApprovalRepository(database)
+        _ = try? await repository.expireStalePending()
+        let pendingIDs = Set(((try? await repository.pending()) ?? []).map(\.id))
+        for (machineID, approval) in latestPendingApproval where !pendingIDs.contains(approval.id) {
+            latestPendingApproval[machineID] = nil
+        }
+        await repository.writeApprovalWidgetSnapshot()
+        await publishLiveActivityPendingApprovals(using: repository)
     }
 
     private func handle(_ notification: Notification) async {
@@ -104,6 +123,9 @@ public final class RelayApprovalIngest {
         )
 
         let repository = ApprovalRepository(database)
+        // Sweep before upsert so a reconnect that delivers a fresh approval
+        // also retires yesterday's corpses in the same turn.
+        _ = try? await repository.expireStalePending()
         do {
             try await repository.upsert(approval)
         } catch {

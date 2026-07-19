@@ -17,6 +17,10 @@ extension ApprovalRepository {
     ///   throughout `LancerKitTests` (e.g. `DeviceIdentityTests`,
     ///   `GovernanceFeatureTests`).
     public func writeApprovalWidgetSnapshot(suiteName: String = WidgetSnapshot.appGroupID) async {
+        // Sweep corpses before counting — daemon-side resolutions never
+        // retire phone rows, so a stale pending set would otherwise be
+        // written straight into the App Group and shown on the Home Screen.
+        _ = try? await expireStalePending()
         guard let pending = try? await self.pending() else { return }
         guard let defaults = UserDefaults(suiteName: suiteName) else { return }
         defaults.set(pending.count, forKey: WidgetSnapshot.pendingApprovalsKey)
