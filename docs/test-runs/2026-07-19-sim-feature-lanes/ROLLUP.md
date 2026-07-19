@@ -23,7 +23,7 @@ Status legend: **PASS** = lane bar met with committed evidence · **PARTIAL** = 
 | **L7 Review** | **MISSING** | no `L7/` artifacts | Worktree @ `7c4b1eca`; agent never wrote report |
 | **L8 Accounts** | **FAIL** | `L8/swift-test.excerpt.txt` | `swift test` build failed (`PermissionModeSetResult` not in scope in `DaemonChannel.swift`); Simurgh acquire still waiting (~10m+) |
 | **Vendor free-model smoke** | **MISSING** | `docs/test-runs/2026-07-19-vendor-free-model-smoke/` absent | Codex/OpenCode smoke agent transcript is user-prompt only (never ran) |
-| **Cursor CLI adapter** | **PARTIAL → PR pending** | `.worktrees/cursor-cli-adapter` uncommitted → push this session | Mid-flight complete locally: `go test ./...` PASS; focused Swift 22/22 PASS; **needs Sonnet/Fable full-diff review** (`dispatch.go`) before merge |
+| **Cursor CLI adapter** | **PARTIAL** | [PR #190](https://github.com/RoshanDewmina/conduit/pull/190) · `feat/cursor-cli-adapter` @ `387824ba` | `go test ./...` PASS; focused Swift 22/22 PASS; **needs Sonnet/Fable full-diff review** (`dispatch.go`) before merge |
 
 ### Open PRs (related)
 
@@ -33,6 +33,8 @@ Status legend: **PASS** = lane bar met with committed evidence · **PARTIAL** = 
 | [#186](https://github.com/RoshanDewmina/conduit/pull/186) | test(ios): Siri Shortcuts phrase dogfood harness + report | Siri harness — not a substitute for L6 sim lane |
 | [#187](https://github.com/RoshanDewmina/conduit/pull/187) | fix(ios): Siri sim dogfood + Agents widget dedupe/aesthetics | Overlaps L5/L6 code; lane evidence still MISSING |
 | [#188](https://github.com/RoshanDewmina/conduit/pull/188) | docs: 2026-07-19 plan/feature matrix audit | **DONE** plan inventory |
+| [#189](https://github.com/RoshanDewmina/conduit/pull/189) | docs: 2026-07-19 feature-sweep rollup | **This rollup** |
+| [#190](https://github.com/RoshanDewmina/conduit/pull/190) | feat(daemon): Cursor Agent CLI as dispatchable vendor | Cursor MVG — review before merge |
 
 ---
 
@@ -91,13 +93,13 @@ Status legend: **PASS** = lane bar met with committed evidence · **PARTIAL** = 
 | Gate | Result |
 |---|---|
 | Worktree | `/Volumes/LancerDev/lancer/.worktrees/cursor-cli-adapter` · branch `feat/cursor-cli-adapter` |
-| Commits on branch vs master | **none** (all uncommitted until push) |
+| Commit | `387824ba` on `feat/cursor-cli-adapter` |
 | `cd daemon/lancerd && go test ./... -count=1` | **PASS** (lancerd / policy / terminal) |
 | `swift test --filter 'AgentRegistryTests\|DispatchVendorSelectionTests\|RunningAgentsMappingTests'` | **PASS** 22 tests |
-| Remote PR | **none yet** — push + `gh pr create` in this rollup session |
+| Remote PR | [#190](https://github.com/RoshanDewmina/conduit/pull/190) |
 | Merge gate | **Sonnet/Fable full-diff review required** (`dispatch.go`, doctor, stream-json) |
 
-Scope (from dirty tree): Cursor `agent -p --output-format stream-json --trust` argv + continue/resume; stream-json parsing; doctor detect `agent`; iOS picker/Accounts entry; `LANCER_CURSOR_FORCE=1` opt-in for `--force` (fail-closed default).
+Scope: Cursor `agent -p --output-format stream-json --trust` argv + continue/resume; stream-json parsing; doctor detect `agent`; iOS picker/Accounts entry; `LANCER_CURSOR_FORCE=1` opt-in for `--force` (fail-closed default).
 
 ---
 
