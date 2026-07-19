@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 19:20 Cursor Grok 4.5 — B1 Tier-0 device re-proof prep: upgrade-install Debug tip `0d14d0c6` (#194 = master+L1+#187 widgets) on phone `557A7877…`, launched Workspaces, pair/push reconfirmed, refreshed `docs/test-runs/2026-07-19-b1-tier0-reproof/CHECKLIST.md` + launch screenshot (branch `fix/l5-pending-approvals-writer-test`)
 - 18:40 Cursor Grok 4.5 — L5 PendingApprovals writer arrive/resolve: root cause was test fixtures using 1970 `createdAt` that `expireStalePending` (10m TTL) immediately retired; use wall-clock ages inside TTL. Tip = #187 aesthetics + #193 L1 cherry-pick. Simurgh `lease-246` re-proof PASS (iOS 12/12 widget suites + macOS 14 + app/widgets build). L5 → PASS (branch `fix/l5-pending-approvals-writer-test`)
 - 18:25 Cursor Grok 4.5 — L1 core-loop reply path: honor `LANCER_SKIP_NOTIFICATION_PROMPT`, auto-pair before hydrate mark, wait for connected on `liveThread`/empty-fleet+pair-code, skip duplicate auto-pair; sim re-proof PASS (assistant PONG) with isolated `LANCER_STATE_DIR`; push-backend 401 documented env-only (branch `fix/l1-reply-path`)
 - 16:35 Cursor Grok 4.5 — Siri sim dogfood on Simurgh `lease-229` + Agents widget aesthetics: dedupe ActivityKit duplicate runs (count/lines), polish Agents/Pending Approvals widgets to match island palette; sim results in `docs/test-runs/2026-07-19-siri-sim-dogfood/` (live `intent.run()` Code=800 on sim; discovery + no-Approve metadata PASS) (fix/siri-sim-and-aesthetics)
