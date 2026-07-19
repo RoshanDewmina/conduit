@@ -11,7 +11,8 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
-- 10:55 Cursor Grok — wire Live Activity push-to-start for Lancer-dispatched runs: `onRunStarted` callback fires once from `wrapEmitForRun` on first `"running"` status → `handleRunStarted` → `postRunStartPush(dev.SessionID)` (feat/live-activity-dispatch-trigger, uncommitted)
+- 10:55 Cursor Grok — wire Live Activity push-to-start for Lancer-dispatched runs: `onRunStarted` callback fires once from `wrapEmitForRun` on first `"running"` status → `handleRunStarted` → `postRunStartPush(dev.SessionID)` (feat/live-activity-dispatch-trigger)
+- 10:54 Cursor Grok — daemon poller push-starts Live Activities for locally-observed (terminal-started) agent sessions via existing `postRunStartPush` (phone `dev.SessionID`, not vendor transcript id); wired beside `startScheduler` in resident + legacy serve (`feat/live-activity-observed-trigger`)
 
 ## 2026-07-18
 
