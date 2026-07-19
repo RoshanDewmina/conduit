@@ -728,27 +728,49 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 	// reaper below), and leak as orphans reparented to launchd.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	stdout, err := cmd.StdoutPipe()
+	// Use os.Pipe (not StdoutPipe/StderrPipe): cmd.Wait closes StdoutPipe readers
+	// as soon as the process exits (see os/exec StdoutPipe docs), discarding any
+	// unread stderr — the A3 zero-output failure. *os.File Stdout/Stderr are
+	// inherited by the child and are NOT closed by Wait, so we can drain after
+	// exit (with a grace timeout for MCP orphans that keep write-ends open).
+	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
-	stderr, err := cmd.StderrPipe()
+	stderrR, stderrW, err := os.Pipe()
 	if err != nil {
+		_ = stdoutR.Close()
+		_ = stdoutW.Close()
 		return nil, err
 	}
+	cmd.Stdout = stdoutW
+	cmd.Stderr = stderrW
 
 	var stdinCtl *controlStdin
 	if useControlStdin {
 		stdinPipe, err := cmd.StdinPipe()
 		if err != nil {
+			_ = stdoutR.Close()
+			_ = stdoutW.Close()
+			_ = stderrR.Close()
+			_ = stderrW.Close()
 			return nil, err
 		}
 		stdinCtl = &controlStdin{w: stdinPipe}
 	}
 
 	if err := cmd.Start(); err != nil {
+		_ = stdoutR.Close()
+		_ = stdoutW.Close()
+		_ = stderrR.Close()
+		_ = stderrW.Close()
 		return nil, err
 	}
+	// Parent closes write ends so Read sees EOF once the child (and any
+	// inheriting orphans) close theirs.
+	_ = stdoutW.Close()
+	_ = stderrW.Close()
+
 	proc := cmd.Process
 	pid := 0
 	if proc != nil {
@@ -842,37 +864,59 @@ func realLauncher(argv []string, cwd, runID string, emit emitFunc) (*procHandle,
 		})
 	}
 
+	// Tee a bounded tail so a force-close during drain grace can still surface
+	// why the run failed when stream readers saw no chunks.
+	stdoutTail := &boundedTail{max: 8192}
+	stderrTail := &boundedTail{max: 8192}
+	stdoutReader := io.TeeReader(stdoutR, stdoutTail)
+	stderrReader := io.TeeReader(stderrR, stderrTail)
+
 	var streams sync.WaitGroup
 	streams.Add(2)
-	go streamOutput(watchEmit, runID, "stdout", stdout, &seq, &streams, streamJSON)
-	go streamOutput(watchEmit, runID, "stderr", stderr, &seq, &streams, false)
+	go streamOutput(watchEmit, runID, "stdout", stdoutReader, &seq, &streams, streamJSON)
+	go streamOutput(watchEmit, runID, "stderr", stderrReader, &seq, &streams, false)
 
 	go func() {
-		// Report completion the instant the AGENT process exits — never gate it on
-		// the stdout/stderr pipes hitting EOF. Claude Code spawns MCP server
-		// subprocesses that detach (setsid) into their own session, so they escape
-		// the agent's process group AND keep the pipe write-ends open after the
-		// agent exits. Waiting on those pipes (streams.Wait) would hang the run in
-		// "running" forever — the exact bug that broke every fresh dispatch.
 		code := exitCode(cmd.Wait())
 		cancelTTFO()
-		if code == 0 {
-			emitTerminal("exited", &code)
-		} else {
-			emitTerminal("failed", &code)
-		}
-		// Best-effort cleanup AFTER status is sent: kill the agent's group (reaps
-		// any MCP children that didn't detach) and close our pipe ends so the
-		// reader goroutines unblock instead of leaking.
+		// Kill the agent's group (reaps MCP children that didn't detach).
 		if proc != nil {
 			_ = syscall.Kill(-proc.Pid, syscall.SIGKILL)
 		}
-		_ = stdout.Close()
-		_ = stderr.Close()
 		if stdinCtl != nil {
 			stdinCtl.close()
 		}
-		streams.Wait()
+
+		if code == 0 {
+			// Success: emit immediately. Orphan MCP holders can keep pipes open;
+			// never gate a clean exit on streams.Wait (hangs "running" forever).
+			emitTerminal("exited", &code)
+			_ = stdoutR.Close()
+			_ = stderrR.Close()
+			streams.Wait()
+			return
+		}
+
+		// Failure: drain readers before terminal status so stderr/raw-stdout
+		// reach persistConversationEvent's runStderr / resultError maps before
+		// takeRunStderr runs. Cap the wait — detached MCP orphans still need
+		// a forced pipe close so we cannot hang.
+		drained := make(chan struct{})
+		go func() {
+			streams.Wait()
+			close(drained)
+		}()
+		select {
+		case <-drained:
+		case <-time.After(streamDrainGrace):
+			_ = stdoutR.Close()
+			_ = stderrR.Close()
+			<-drained
+		}
+		_ = stdoutR.Close()
+		_ = stderrR.Close()
+		surfaceZeroOutputFailure(watchEmit, runID, &seq, stderrTail, stdoutTail)
+		emitTerminal("failed", &code)
 	}()
 
 	return &procHandle{
@@ -1076,7 +1120,66 @@ func lancerGateEnvironment(environment []string) []string {
 	return append(result, "LANCER_GATE=1")
 }
 
+// streamDrainGrace is how long a failed run waits for stdout/stderr readers
+// before force-closing pipes. Detached MCP orphans can hold write-ends open
+// indefinitely; this bound keeps failure terminal.
+var streamDrainGrace = 250 * time.Millisecond
+
+// streamOutputHold, when non-nil, blocks stream readers until the channel is
+// closed. Tests use it to reproduce status-before-drain races; production leaves
+// it nil.
+var streamOutputHold <-chan struct{}
+
+// boundedTail keeps a trailing byte window for zero-output failure surfacing.
+type boundedTail struct {
+	mu  sync.Mutex
+	buf []byte
+	max int
+}
+
+func (b *boundedTail) Write(p []byte) (int, error) {
+	if b == nil || b.max <= 0 {
+		return len(p), nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.buf = append(b.buf, p...)
+	if len(b.buf) > b.max {
+		b.buf = append([]byte(nil), b.buf[len(b.buf)-b.max:]...)
+	}
+	return len(p), nil
+}
+
+func (b *boundedTail) String() string {
+	if b == nil {
+		return ""
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return string(b.buf)
+}
+
+// surfaceZeroOutputFailure emits a resultError from the teed stderr (or last
+// raw stdout) when stream readers produced no chunks — the fallback for the
+// unclassified exit-1 / zero-output case.
+func surfaceZeroOutputFailure(emit emitFunc, runID string, seq *int64, stderrTail, stdoutTail *boundedTail) {
+	if emit == nil || atomic.LoadInt64(seq) > 0 {
+		return
+	}
+	msg := strings.TrimSpace(stderrTail.String())
+	if msg == "" {
+		msg = strings.TrimSpace(stdoutTail.String())
+	}
+	if msg == "" {
+		return
+	}
+	emitStreamJSONResultError(emit, runID, truncateRunErrorMessage(msg), seq)
+}
+
 func streamOutput(emit emitFunc, runID, stream string, r io.Reader, seq *int64, done *sync.WaitGroup, streamJSON bool) {
+	if streamOutputHold != nil {
+		<-streamOutputHold
+	}
 	if stream == "stdout" && streamJSON {
 		streamJSONOutput(emit, runID, r, seq, done)
 		return
