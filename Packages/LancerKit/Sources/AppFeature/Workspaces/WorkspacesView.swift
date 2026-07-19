@@ -255,7 +255,7 @@ public struct WorkspacesView: View {
                     let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
                         ?? "Review the pending approval"
                     let cwd = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_CWD"]
-                        ?? repos.first?.cwd
+                        ?? workspaceData.defaultRepo?.cwd
                         ?? "/home/ubuntu/myapp"
                     activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: cwd)
                 }
@@ -284,7 +284,7 @@ public struct WorkspacesView: View {
                 let prompt = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_PROMPT"]
                     ?? "Can you take a look at the onboarding flow?"
                 let cwd = ProcessInfo.processInfo.environment["LANCER_LIVETHREAD_CWD"]
-                    ?? repos.first?.cwd
+                    ?? workspaceData.defaultRepo?.cwd
                     ?? ""
                 guard !cwd.isEmpty else { break }
                 activeLiveThread = LiveThreadIdentifier(prompt: prompt, cwd: cwd)
@@ -350,14 +350,14 @@ public struct WorkspacesView: View {
         #if DEBUG
         NewChatComposerView(
             initiallyShowsRepoPicker: isComposerRepoPickerPresented,
-            initialRepo: repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) },
+            initialRepo: workspaceData.defaultRepo,
             hostStyle: .inline,
             onCollapse: { collapseComposer(animated: true) },
             onSend: handleSend
         )
         #else
         NewChatComposerView(
-            initialRepo: repos.first { WorkspaceRepoCatalog.isAbsoluteSendTarget($0.cwd) },
+            initialRepo: workspaceData.defaultRepo,
             hostStyle: .inline,
             onCollapse: { collapseComposer(animated: true) },
             onSend: handleSend
