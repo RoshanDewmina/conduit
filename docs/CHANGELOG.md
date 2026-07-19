@@ -9,6 +9,7 @@ re-deriving it from git archaeology. Do not rewrite or delete old lines.
 
 Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
+<<<<<<< HEAD
 ## 2026-07-19
 
 - 11:25 Cursor Grok — restore Edit/Write/MultiEdit red/green diff sheet in Workspaces chat: parse tool `inputJSON` → `EditToolDiffSheet` via existing `DiffLineRow`; wire **View diff** on expanded tool chips (no CursorStyle resurrection). Tests 6/6; AppFeature iOS Simulator build SUCCEEDED (`fix/apns-live-activity-device-proof-2026-07-18`, uncommitted)
@@ -16,6 +17,15 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 - 10:54 Cursor Grok — daemon poller push-starts Live Activities for locally-observed (terminal-started) agent sessions via existing `postRunStartPush` (phone `dev.SessionID`, not vendor transcript id); wired beside `startScheduler` in resident + legacy serve (`feat/live-activity-observed-trigger`)
 
 ## 2026-07-18
+||||||| 4d558f5d
+## 2026-07-18
+=======
+## 2026-07-19
+
+- 11:05 Cursor Grok 4.5 — Goal 3 SET-failure alert fix: moved "Couldn't change permission mode" alert state + `.alert` from nested `ChatPermissionModePill(embedded:)` onto `ChatFollowUpComposerBar` (survives Menu dismiss-on-select), with `onApplyError` callback from the pill's `apply()` catch. Non-embedded pill path unchanged. (`test/goal3-set-alert-2026-07-19`)
+
+- 10:41 Claude Sonnet 5 — Goal 3 SET-failure alert: root-caused why the "Couldn't change permission mode" alert never fires. Built an isolated `lancerd` (`LANCER_STATE_DIR=/tmp/goal3-set-alert-lancerd-state`, own relay pairing code, production `~/.lancer` untouched throughout — verified via `ps aux`/`last`/`who`/mtimes) and induced a real daemon SET-RPC failure (chmod'd `permission-mode-overrides.yaml` read-only) with zero daemon-lifecycle disruption. Control A/B proved the tap→`apply()`→RPC path is fully reliable (a successful SET correctly updates state) while the failure path correctly reverts state but never presents the alert, across 3 independent attempts. Root cause: `ChatPermissionModePill(embedded: true)`'s `Menu`+`.alert` is nested inside the composer's outer `+` `Menu` (`ChatThreadChrome.swift:308-316`); selecting a leaf preset dismisses the whole menu chain before the async `apply()` RPC completes, tearing down the view the `.alert` needs to present against. Also found `LANCER_SEED_TRANSCRIPT=1` currently no-ops (worked around via direct SQLite insert). Evidence + repro commands: `docs/test-runs/2026-07-19-goal3-set-alert/README.md` (branch `test/goal3-set-alert-2026-07-19`)
+>>>>>>> 127d956f
 
 - 22:23 Cursor Grok — closed Goal 1 Live Activity visual gap on sim (`lease-222`): Lock Screen LA banner + Island indicator captured while `Activity.request succeeded` (`F593D5C9-…`); IslandCapture UITest waits 25s foreground before Home; SET-failure alert still not obtained (daemon-kill UITest failed + watchdog); accidental `lancerd pair --help` rotated prod code to `190799` — phone needs re-pair; evidence in `docs/test-runs/2026-07-18-live-activity-sim/` (uncommitted worktree)
 - 20:50 Cursor Composer — Goal 2 (device-build): failed-cwd UserDefaults store (`dev.lancer.failedCwds`) + `preferredDefaultRepo`/`defaultRepo` recency-first composer default (skips stale high-count missing host paths); ShellLiveBridge surfaces `cwd does not exist` with pick-another-folder copy; unit tests in `WorkspaceRepoCatalogTests` (uncommitted worktree)

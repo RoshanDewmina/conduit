@@ -285,7 +285,13 @@ public struct LiveThreadView: View {
                             Task { await bridge.stopCurrentRun() }
                         },
                         onAddContext: { isContextPresented = true },
-                        permissionMenu: { ChatPermissionModePill(cwd: cwd, embedded: true) }
+                        permissionMenu: { onApplyError in
+                            ChatPermissionModePill(
+                                cwd: cwd,
+                                embedded: true,
+                                onApplyError: onApplyError
+                            )
+                        }
                     )
                     if !bridge.queuedFeedback.isEmpty {
                         Text("Will send when the agent finishes")
