@@ -49,6 +49,7 @@ var agentBinaries = []struct{ vendor, binary string }{
 	{"codex", "codex"},
 	{"opencode", "opencode"},
 	{"kimi", "kimi"},
+	{"cursor", "agent"},
 }
 
 // installedAgents returns the vendor ids whose CLI is resolvable, so the phone only
@@ -119,6 +120,7 @@ func collectDoctorResults(lancerDir, exePath, home string, look lookPathFunc, di
 		checkCodexHooks(home),
 		checkKimiHooks(home),
 		checkPiExtension(home),
+		checkCursorGate(look),
 		checkAuditLog(lancerDir),
 		checkQueue(lancerDir),
 		checkOSArch(),
@@ -229,7 +231,7 @@ func checkResidentDaemon(lancerDir string, dial dialFunc) checkResult {
 }
 
 func checkAgentCLIs(look lookPathFunc) checkResult {
-	agents := []string{"claude", "codex", "opencode", "kimi", "pi"}
+	agents := []string{"claude", "codex", "opencode", "kimi", "pi", "agent"}
 	var found []string
 	for _, a := range agents {
 		if _, err := look(a); err == nil {
@@ -240,7 +242,7 @@ func checkAgentCLIs(look lookPathFunc) checkResult {
 		return checkResult{
 			name:    "agent CLIs",
 			status:  statusWarn,
-			message: "none of claude/codex/opencode/kimi/pi on PATH",
+			message: "none of claude/codex/opencode/kimi/pi/agent on PATH",
 			hint:    "install at least one agent CLI",
 		}
 	}
@@ -386,6 +388,26 @@ func checkPiExtension(home string) checkResult {
 		status:  statusWarn,
 		message: "Pi approval extension not installed — pi dispatches stay on the coarse launch gate",
 		hint:    "run: lancerd install",
+	}
+}
+
+// checkCursorGate warns that Cursor Agent has no PreToolUse-equivalent today.
+// When the `agent` binary is present, doctor must not imply governed tools:
+// hookWiredForAgent("agent") stays false (launch-ask only); after launch,
+// `agent -p --trust` auto-runs shell/write even without --force.
+func checkCursorGate(look lookPathFunc) checkResult {
+	if _, err := look("agent"); err != nil {
+		return checkResult{
+			name:    "cursor gate",
+			status:  statusOK,
+			message: "Cursor Agent CLI (agent) not on PATH — no Cursor dispatch surface",
+		}
+	}
+	return checkResult{
+		name:    "cursor gate",
+		status:  statusWarn,
+		message: "Cursor has no PreToolUse-equivalent — hookWiredForAgent(agent) stays false; post-launch tools under agent -p --trust are ungated (omitting --force is NOT fail-closed)",
+		hint:    "treat Cursor like unverified Kimi/Pi: launch approval only until a real Cursor hook exists; optional read-only: agent --mode ask|plan",
 	}
 }
 

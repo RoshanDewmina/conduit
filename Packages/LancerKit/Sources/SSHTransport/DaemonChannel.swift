@@ -462,7 +462,7 @@ public actor DaemonChannel {
         return try Self.decodeResult(data, as: SessionsListResult.self, dateDecoding: .iso8601).sessions
     }
 
-    /// Vendor ids whose CLI is installed on the host (claude/codex/opencode/kimi).
+    /// Vendor ids whose CLI is installed on the host (claude/codex/opencode/kimi/cursor).
     public func installedAgents() async throws -> [String] {
         let data = try await sendRPC(method: "agent.agents.installed", params: [String: String]())
         return try Self.decodeResult(data, as: AgentsInstalledResult.self).agents

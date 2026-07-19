@@ -218,6 +218,38 @@ func agentArgv(agent, prompt, model string, fullTools bool) ([]string, bool) {
 			argv = append(argv, "--model", modelID)
 		}
 		return append(argv, "-p", prompt), true
+	case "cursor":
+		// Cursor Agent CLI (`agent`, also installed as `cursor-agent`).
+		// Verified live 2026-07-19 against agent 2026.07.16-899851b:
+		//   agent -p --output-format stream-json --trust "<prompt>"
+		// exits 0 with system/user/thinking/assistant/result NDJSON; without
+		// --trust headless fails fast EXIT 1 with "Workspace Trust Required"
+		// — not a TTY hang. Prompt is a trailing positional arg (never
+		// shell-interpolated).
+		//
+		// Tool-gating honesty (re-verified 2026-07-19): vendor `-p` "Has
+		// access to all tools, including write and shell." With --trust and
+		// WITHOUT --force, shell/write still auto-run (permissionMode
+		// default). Omitting --force is NOT fail-closed for tools.
+		// Lancer's real gate today is launch escalation only:
+		// hookWiredForAgent("agent") stays false (no PreToolUse-equivalent),
+		// so relaxLaunchEscalation keeps default-ask and launchRisk stays
+		// medium — same class as unverified Kimi/Pi. After the owner allows
+		// the *launch*, subsequent Cursor tools are ungated until a real
+		// Cursor hook exists. Vendor --mode ask|plan is read-only (live-
+		// verified) but is NOT the default argv: that would ship a planning
+		// stub, not a coding agent. LANCER_CURSOR_FORCE=1 adds --force only
+		// to skip remaining interactive denials; it is not a Lancer security
+		// boundary (mirrors LANCER_CODEX_UNSAFE naming discipline, not
+		// semantics).
+		argv := []string{"agent", "-p", "--output-format", "stream-json", "--trust"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		if os.Getenv("LANCER_CURSOR_FORCE") == "1" {
+			argv = append(argv, "--force")
+		}
+		return append(argv, prompt), true
 	default:
 		return nil, false
 	}
@@ -305,6 +337,20 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 			argv = append(argv, "--model", modelID)
 		}
 		return append(argv, "-p", prompt), true
+	case "cursor":
+		// --continue resumes the previous session in cwd — verified live
+		// 2026-07-19 against agent 2026.07.16-899851b (same session_id
+		// retained; prior-turn context recalled). Same --trust /
+		// LANCER_CURSOR_FORCE + launch-gate honesty as agentArgv (post-
+		// launch tools remain ungated; see agentArgv "cursor" comment).
+		argv := []string{"agent", "-p", "--continue", "--output-format", "stream-json", "--trust"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		if os.Getenv("LANCER_CURSOR_FORCE") == "1" {
+			argv = append(argv, "--force")
+		}
+		return append(argv, prompt), true
 	default:
 		return nil, false
 	}
@@ -335,6 +381,8 @@ func continueArgv(agent, prompt, model string, fullTools bool) ([]string, bool) 
 //   - pi:       --session <id>  (verified live 2026-07-18 against pi 0.80.10:
 //     same session id retained, prior-turn context recalled — see this
 //     function's pi case doc comment)
+//   - cursor:   --resume <chatId>  (verified live 2026-07-19 against agent
+//     2026.07.16-899851b: create-chat UUID + --resume retains session_id)
 func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]string, bool) {
 	switch normalizeAgentSource(agent) {
 	case "claudeCode":
@@ -396,6 +444,19 @@ func resumeArgv(agent, sessionID, prompt, model string, fullTools bool) ([]strin
 			argv = append(argv, "--model", modelID)
 		}
 		return append(argv, "-p", prompt), true
+	case "cursor":
+		// --resume <chatId> targets that exact Cursor chat — verified live
+		// 2026-07-19 (create-chat UUID retained as session_id). Same
+		// --trust / LANCER_CURSOR_FORCE + launch-gate honesty as agentArgv
+		// (post-launch tools remain ungated).
+		argv := []string{"agent", "-p", "--resume", sessionID, "--output-format", "stream-json", "--trust"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		if os.Getenv("LANCER_CURSOR_FORCE") == "1" {
+			argv = append(argv, "--force")
+		}
+		return append(argv, prompt), true
 	default:
 		return nil, false
 	}
@@ -1269,6 +1330,70 @@ func extractStreamJSONResultError(obj map[string]any) (string, bool) {
 	return "Run failed", true
 }
 
+// extractAssistantMessageText pulls concatenated text blocks from a vendor
+// {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+// envelope (Cursor Agent stream-json; also Claude's whole-message form).
+func extractAssistantMessageText(obj map[string]any) string {
+	msg, _ := obj["message"].(map[string]any)
+	if msg == nil {
+		return ""
+	}
+	content, ok := msg["content"].([]any)
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	for _, raw := range content {
+		block, _ := raw.(map[string]any)
+		if block == nil {
+			continue
+		}
+		if t, _ := block["type"].(string); t != "" && t != "text" {
+			continue
+		}
+		if text, _ := block["text"].(string); text != "" {
+			b.WriteString(text)
+		}
+	}
+	return b.String()
+}
+
+// cursorToolCallNameAndInput maps Cursor Agent's nested tool_call object
+// (shellToolCall / writeToolCall / …) into a display name + JSON input for
+// emitToolArtifact. Unknown nested keys fall back to the wrapper description.
+func cursorToolCallNameAndInput(tc map[string]any) (name, inputJSON string) {
+	if shell, ok := tc["shellToolCall"].(map[string]any); ok {
+		args, _ := shell["args"].(map[string]any)
+		cmd, _ := args["command"].(string)
+		b, _ := json.Marshal(map[string]string{"command": cmd})
+		return "Bash", string(b)
+	}
+	for key, raw := range tc {
+		if !strings.HasSuffix(key, "ToolCall") {
+			continue
+		}
+		inner, _ := raw.(map[string]any)
+		if inner == nil {
+			continue
+		}
+		args, _ := inner["args"].(map[string]any)
+		b, _ := json.Marshal(args)
+		base := strings.TrimSuffix(key, "ToolCall")
+		if base == "" {
+			base = key
+		}
+		if len(base) > 0 {
+			base = strings.ToUpper(base[:1]) + base[1:]
+		}
+		return base, string(b)
+	}
+	if desc, _ := tc["description"].(string); desc != "" {
+		b, _ := json.Marshal(map[string]string{"description": desc})
+		return "Tool", string(b)
+	}
+	return "", ""
+}
+
 func emitStreamJSONResultError(emit emitFunc, runID, errText string, seq *int64) {
 	if emit == nil || errText == "" {
 		return
@@ -1303,6 +1428,12 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 	// subsequent line would be redundant churn.
 	var sessionCaptured bool
 	var authErrorEmitted bool // once per run — avoid duplicate assistant+result auth errors
+	// sawStreamTextDelta latches when Claude-style stream_event text deltas
+	// appear. Cursor Agent emits whole assistant messages without deltas
+	// (verified 2026-07-19); we only fall back to those when no deltas were
+	// seen, so Claude runs that also emit a final assistant envelope don't
+	// double-print.
+	var sawStreamTextDelta bool
 
 	for sc.Scan() {
 		line := sc.Text()
@@ -1379,6 +1510,7 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 					if text == "" {
 						break
 					}
+					sawStreamTextDelta = true
 					emitLiveStatusStreaming(emit, runID)
 					n := atomic.AddInt64(seq, 1)
 					emit("agent.run.output", map[string]any{
@@ -1424,15 +1556,49 @@ func streamJSONOutput(emit emitFunc, runID string, r io.Reader, seq *int64, done
 				}
 			}
 		case "assistant":
-			// Whole-message fallback is normally suppressed (deltas supersede).
-			// Exception: structured auth-failure assistants
+			// Whole-message fallback is normally suppressed when Claude-style
+			// stream_event text deltas already arrived (deltas supersede).
+			// Exception 1: structured auth-failure assistants
 			// (error=authentication_failed, live 2026-07-14) — classify promptly
 			// so the phone never waits out TTFO after vendor output arrived.
+			// Exception 2: Cursor Agent (and similar) emit only whole assistant
+			// messages — verified live 2026-07-19 against agent 2026.07.16-899851b.
 			if msg, ok := extractClaudeAssistantAuthError(obj); ok && !authErrorEmitted {
 				authErrorEmitted = true
 				invalidateClaudeAuthCache()
 				emitStreamJSONResultError(emit, runID, msg, seq)
+			} else if !sawStreamTextDelta {
+				if text := extractAssistantMessageText(obj); text != "" {
+					emitLiveStatusStreaming(emit, runID)
+					n := atomic.AddInt64(seq, 1)
+					emit("agent.run.output", map[string]any{
+						"runId": runID, "stream": "stdout", "chunk": text + "\n", "seq": int(n),
+					})
+				}
 			}
+		case "thinking":
+			// Cursor Agent: {"type":"thinking","subtype":"delta"|"completed",...}
+			// — verified live 2026-07-19. No text forwarded (same as Claude
+			// thinking_delta / opencode reasoning) — live-status only.
+			emitLiveStatusThinking(emit, runID)
+		case "tool_call":
+			// Cursor Agent: {"type":"tool_call","subtype":"started"|"completed",
+			// "call_id":"...","tool_call":{"shellToolCall":{"args":{"command":"..."}}}}
+			// — verified live 2026-07-19. Announce on started only (completed
+			// carries stdout under result.success; tool cards already cover it).
+			if subtype, _ := obj["subtype"].(string); subtype != "" && subtype != "started" {
+				break
+			}
+			callID, _ := obj["call_id"].(string)
+			tc, _ := obj["tool_call"].(map[string]any)
+			if tc == nil {
+				break
+			}
+			toolName, inputJSON := cursorToolCallNameAndInput(tc)
+			if toolName == "" {
+				break
+			}
+			emitToolArtifact(emit, runID, callID, toolName, inputJSON)
 		case "result":
 			if errText, ok := extractStreamJSONResultError(obj); ok {
 				if classifyClaudeResultAuthError(obj, errText) {
