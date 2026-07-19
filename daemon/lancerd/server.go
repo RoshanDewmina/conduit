@@ -2400,6 +2400,62 @@ func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
 	}
 }
 
+// postRunStartPush notifies the push-backend that an agent run just became
+// active, so it can push-to-start a Live Activity for sessions that have a
+// push-to-start token on file but no local Activity running yet — the only
+// way to surface a Live Activity when the app is fully closed (relay-only
+// architecture, no local process to call ActivityKit directly). Mirrors
+// postApprovalPush's shape; hits POST /run-start (push-backend/main.go
+// handleRunStart -> pushLiveActivityStart), which already no-ops safely when
+// there's no push-to-start token or an activity token is already on file (a
+// heuristic for "a local Activity is probably already running" — see its own
+// doc comment in daemon/push-backend/liveactivity.go).
+//
+// Callers MUST NOT pass raw command text as redactedSummary — push-backend
+// puts it directly in the APNs alert body with no further redaction on this
+// path (unlike /approval, which redacts server-side via redactSummary()).
+// Leave it empty to get pushLiveActivityStart's safe "Agent run started"
+// default, or pass an already-redacted summary (risk tier + tool category,
+// never the command/args/cwd).
+func (s *server) postRunStartPush(dev *registeredDevice, sessionID string, agent *string, approvalID *string, redactedSummary string) {
+	hostname, _ := os.Hostname()
+	hostID := ""
+	if s.conversations != nil {
+		hostID = s.conversations.hostID
+	}
+	payload := map[string]interface{}{
+		"sessionId":       sessionID,
+		"hostId":          hostID,
+		"hostName":        hostname,
+		"agent":           agent,
+		"approvalId":      approvalID,
+		"redactedSummary": redactedSummary,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	url := strings.TrimRight(dev.PushBackendURL, "/") + "/run-start"
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if secret := strings.TrimSpace(os.Getenv("APPROVAL_RELAY_SECRET")); secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "push-backend /run-start POST failed: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		fmt.Fprintf(os.Stderr, "push-backend /run-start rejected: HTTP %d\n", resp.StatusCode)
+	}
+}
+
 func (s *server) postSecretRequestPush(dev *registeredDevice, req SecretRequestParams) {
 	hostname, _ := os.Hostname()
 	payload := map[string]interface{}{
