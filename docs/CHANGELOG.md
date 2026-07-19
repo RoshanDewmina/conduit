@@ -11,6 +11,7 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 11:25 Cursor Grok — restore Edit/Write/MultiEdit red/green diff sheet in Workspaces chat: parse tool `inputJSON` → `EditToolDiffSheet` via existing `DiffLineRow`; wire **View diff** on expanded tool chips (no CursorStyle resurrection). Tests 6/6; AppFeature iOS Simulator build SUCCEEDED (`fix/apns-live-activity-device-proof-2026-07-18`, uncommitted)
 - 10:55 Cursor Grok — wire Live Activity push-to-start for Lancer-dispatched runs: `onRunStarted` callback fires once from `wrapEmitForRun` on first `"running"` status → `handleRunStarted` → `postRunStartPush(dev.SessionID)` (feat/live-activity-dispatch-trigger)
 - 10:54 Cursor Grok — daemon poller push-starts Live Activities for locally-observed (terminal-started) agent sessions via existing `postRunStartPush` (phone `dev.SessionID`, not vendor transcript id); wired beside `startScheduler` in resident + legacy serve (`feat/live-activity-observed-trigger`)
 

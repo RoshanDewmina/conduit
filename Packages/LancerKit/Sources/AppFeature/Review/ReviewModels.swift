@@ -200,6 +200,23 @@ public struct DiffDisplayRow: Equatable, Sendable, Identifiable {
         self.text = line.text
         self.displayLineNumber = line.displayLineNumber
     }
+
+    /// Synthetic rows (Edit-tool old/new blocks) that aren't backed by a `RepoDiffHunk`.
+    public init(
+        id: String,
+        kind: RepoDiffLine.Kind,
+        oldNo: Int?,
+        newNo: Int?,
+        text: String,
+        displayLineNumber: Int?
+    ) {
+        self.id = id
+        self.kind = kind
+        self.oldNo = oldNo
+        self.newNo = newNo
+        self.text = text
+        self.displayLineNumber = displayLineNumber
+    }
 }
 
 public enum DiffHunkPresentation {
