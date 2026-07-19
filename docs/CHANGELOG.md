@@ -11,6 +11,8 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 13:15 Cursor Grok 4.5 — A3 zero-output failure: replace StdoutPipe/StderrPipe with os.Pipe (Wait was closing readers and discarding unread stderr), drain stream readers before failed status, surface teed stderr/stdout tail into resultError when no chunks were emitted; regression TestZeroOutputExit1SurfacesStderrInErrorMessage (branch fix/a3-zero-output-failure)
+
 - 12:15 Claude Fable (orchestrator) — land owner SSOT docs: SHIP_PLAN.md (A1/A2 marked done: night stack merged @7b888f78, phone pair 676174 confirmed 14:26:47Z), 07-19 daily-driver roadmap, away-mode wireframes, 07-18 fable briefs, policy/audit relay port map, device-proof publish status (PR: docs/ship-plan-2026-07-19)
 
 ## 2026-07-18
