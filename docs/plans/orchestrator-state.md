@@ -1,5 +1,231 @@
 # Orchestrator state — Fable swarm dashboard
 
+## ⚡ 2026-07-21 ~20:15 ET — B1 owner-assist + parallel P1.5/P1.9; Agents honesty PR #196 open
+
+- **Owner session (Cursor Grok orchestrator):** B1 checklist still PENDING on tip for
+  rows 3/4/6/7 (evidence files missing); owner asserts prior lock-screen / follow-up /
+  E-stop already done — awaiting one-line attestation to close paperwork vs re-run.
+  Tonight's `echo B1-LOCK-SCREEN` was `auto-allow` via policy `allow-echo` (not a
+  lock-screen proof). Pair `676174` live; resident daemon OK.
+- **Parallel:** [Agents honesty](af62b104) → **PR #196** MERGEABLE, CI in progress;
+  write-set Agents + tests only; `swift test` claimed green (859+62+13). Device proof
+  of Connected + refresh-fail copy still owed.
+- **Parallel:** [Needs-You hub](aebcb01f) → **PR #197** open; banner copy + needs-you-first
+  thread ordering (cwd match). Local `NeedsYouOrdering` 4/4 PASS. Residual: no full
+  inline hub; empty-cwd no promotion; no device UITest.
+- **CI note (#197 / likely #196):** GitHub Actions FAIL is infra — runner Swift 6.2 /
+  Xcode_26.0.1 vs Package tools-version **6.4** (`xcode-select` Xcode_27.0.app missing).
+  Not a product regression in the Needs-You diff. Rebase/merge still blocked until CI
+  image catches up or tools-version policy is decided (owner/Fable).
+- **Open residue:** #185–#197. Serialize CHANGELOG merges when green.
+- **Next:** owner B1 attestation OR dogfood log; triage PR stack; Fable brief for pairing
+  footgun + CI tools-version + residue.
+
+## ⚡ 2026-07-19 ~14:50 ET — Live Activity push-to-start FIXED + OWNER-CONFIRMED ×2; PRs #181–#184; full stack redeployed
+
+- **Owner report "LA/island/widgets not working" → four stacked root causes, all fixed + live-proven:**
+  1. **#182** `sendLiveActivityPush` hardcoded production APNs → 400 BadDeviceToken on
+     dev-signed builds. Added sandbox-host fallback (mirrors `sendAPNsAlert`). Deployed.
+  2. **#183** backend `liveActivityRegistry` in-memory → any deploy wiped the push-to-start
+     token silently. lancerd now persists it (`$HOME/push-activity.json`, mirrors
+     push-device.json) and re-forwards on startup + every phone re-pair (Sonnet impl,
+     Fable full-diff review PASS — relay-adjacent).
+  3. **#183** stale per-activity token permanently suppressed push-to-start
+     (`existingActivityToken != "" ⇒ no-op` + no way to clear). Added explicit clear
+     (Clear=true wire flag phone→daemon→backend) sent when the iOS activity ends.
+  4. **#184** per-push provider-JWT minting → APNs 429 TooManyProviderTokenUpdates.
+     ~40-min JWT cache in `makeJWT`.
+- **Proof:** owner confirmed the Live Activity appeared on the CLOSED phone twice — 18:11Z
+  (post-#182) and 18:44Z (final stack, after a deliberate backend-restart wipe healed by the
+  daemon's persisted re-forward at 18:40:28Z with zero phone interaction). Fly log chain:
+  400-BadDeviceToken → "trying next host" → no failure = sandbox 200.
+- **Also merged: #181** stale "1 running task" pill (artifact chips missed
+  `withTerminalTurnStatus`, `BackgroundTasksPill.swift:144` — Cursor grok impl; gates incl.
+  app-target BUILD SUCCEEDED).
+- **Deployed stack:** conduit-push @ master+#184 · resident lancerd `bd6f9467…` @ `7d28c55d` ·
+  owner phone Debug @ `7d28c55d` (~14:32 ET). Pair `676174` intact throughout.
+- **Ops gotcha (self-inflicted, logged):** one Fly deploy shipped the MAIN dirty worktree and
+  silently reverted #182 on prod for ~3 min. Always deploy from a clean master worktree.
+- **Follow-ups queued:** (a) re-forward push-to-start on daemon relay-reconnect too (currently
+  startup + phone-re-pair only — a backend restart while the phone is closed leaves a gap
+  until either fires); (b) latent Date-encoding bug `LiveActivityContentStateTests.lastUpdate`
+  (JSONEncoder .deferredToDate 2001-epoch vs backend Unix float — pre-existing, 8 unrelated
+  sim-suite failures noted in #183); (c) widget verification on device still OPEN (owner not
+  yet asked to confirm post-App-Group-fix state); (d) flaky daemon test shells out to real
+  `claude` CLI; (e) in-app island expectation documented: island only shows when app
+  backgrounded.
+- **B1:** pre-state re-stamped @ `7d28c55d` in `docs/test-runs/2026-07-19-b1-tier0-reproof/
+  CHECKLIST.md`; owner rows outstanding: lock-screen approval (3/4), receipt/follow-up
+  screenshots (5/6 done earlier, files owed), E-stop (7).
+
+## ⚡ 2026-07-19 ~13:20 ET — **G1 CLEARED.** PRs #176–#180 landed; master `5f35e31f` green; zero open PRs
+
+- **Merged this block (each gated first-hand by orchestrator, serialized daemon merges):**
+  - **#176** APNs app-closed push / Live Activity / App-Group DB (merge `4c55e28c`). Sonnet
+    full-diff review MERGE-READY, Fable arbitration on dispatch.go/server.go hunks. Gates on
+    the merged tree: `go build/vet/test -race` ok · LancerKit swift build+test ok · app-target
+    `** BUILD SUCCEEDED ** [159.415s]` (Simurgh lease-224, released). Conflicts (CHANGELOG
+    union, Package.resolved originHash) resolved by orchestrator, resolved merge pushed to PR.
+  - **#178** B2 emergency-stop atomic daemon primitive (Sonnet impl): persisted
+    `emergency_stop.json` latch survives restart; `handleHookWithNotify` denies new/late gates
+    ahead of policy eval; explicit `agent.emergencyStop.clear` (local + relay) sole un-latch;
+    OS-level process-group kill test. 3 new tests confirmed RED without fix. Fable full-diff
+    review PASS. Gate re-run post-#176 merge: `ok lancer/lancerd 46.745s`.
+  - **#179** A3 zero-output failure fix (Cursor grok-4.5-high impl): root cause `cmd.Wait()`
+    closes StdoutPipe/StderrPipe readers on exit + status emitted before drain → stderr
+    discarded. Fix: os.Pipe + drain-before-failed-status (250ms cap, MCP-orphan invariant
+    preserved — clean exits never gated on pipe EOF) + bounded-tail fallback. Regression test
+    RED-confirmed. Fable full-diff review PASS (sensitive dispatch.go).
+  - **#177** SHIP_PLAN SSOT docs · **#180** G1 evidence into SHIP_PLAN §7. **#117** merged,
+    **#126** closed superseded (rationale on PR).
+- **G1 evidence pasted in SHIP_PLAN §7** (all 6 done-when items). Master `5f35e31f`,
+  `go test ./...` ok at every merge point; `gh pr list --state open` empty.
+- **Follow-ups logged (non-blocking, from #176 review):** live lock-screen push re-proof
+  (owner, B1); AppDatabase App-Group migration TOCTOU; SessionViewModel widget-snapshot key
+  collision; postRunStartPush redactedSummary guard; a flaky daemon test shells out to the
+  real `claude` CLI (status/usage) — should be hermetic.
+- **Next (owner-gated):** B1 physical-device Tier-0 re-proof —
+  `docs/test-runs/2026-07-19-b1-tier0-reproof/CHECKLIST.md` (pair intact → dispatch →
+  lock-screen approval app-closed → receipt → follow-up → E-stop row now that #178 is in).
+  Daemon on the Mac still runs a pre-#176 binary — rebuild+reinstall `~/.lancer/bin/lancerd`
+  from `5f35e31f` before the run (owner or next session, NOT while owner mid-run).
+- **Worktrees cleaned:** a3-zero-output, b2-estop-atomic, pr176-gate, docs-ship-plan-0719.
+  C/D workstreams remain NOT started per session scope.
+
+## ⚡ 2026-07-19 ~13:15 ET — G1 push: docs SSOT landed (#177), #117 merged, #126 closed; WP fan-out for #176 review + A3 + B2
+
+- **Master tip:** `b71f2b9d` (PR #177 — SHIP_PLAN + 07-19 roadmap/wireframes/briefs landed,
+  docs-only, orchestrator-merged). Before that `7b888f78` (#175).
+- **PR residue cleared:** **#117 MERGED** (Fly cutover device-proof doc — single new file,
+  CLEAN). **#126 CLOSED** as superseded with rationale on the PR: its headline deliverables
+  (agent-oracle-harness skill, publish-oracle-audit, CHANGELOG + AGENTS.md changelog rule) are
+  already on master via other paths (verified `git ls-tree` @ 7b888f78); the rest was a stale
+  2026-07-16 code snapshot superseded by #140–#175. `gh pr list` now shows ONLY #176.
+- **Phone pair VERIFIED LIVE (A2 done, no remint):** `~/.lancer/relay-pairing.json` code
+  `676174`, `confirmedAt 2026-07-19T14:26:47Z`; daemon log `connected to relay as daemon`
+  12:54:29 + `postRunStartPush … HTTP 204`. NOTE: pair code rotated since the 10:45 entry
+  below (was `190799`) — a `code_expired` re-register of the same identity, not a remint.
+- **SHIP_PLAN A1/A2 marked DONE** in the landed SHIP_PLAN (§3) with evidence inline.
+- **A3 repro instances found in production ledger (read-only):** `turn_78280d98…` 2026-07-09
+  "Hi?" → `Run failed with exit code 1`, events only turn_started/status/receipt;
+  `turn_c3a40766…`/`turn_ef0a95d6…` 2026-07-07 with NULL error_message. Diagnosis seed:
+  vendor CLI exited 1 pre-stream-JSON and stderr was swallowed.
+- **In flight (disjoint write-sets):**
+  - **WP-A** #176 full-diff sensitive review — Sonnet subagent, read-only. Merge only after
+    my re-run of gates.
+  - **WP-C** A3 fix — Cursor grok-4.5-high in `.worktrees/a3-zero-output`
+    (`fix/a3-zero-output-failure`), isolated LANCER_STATE_DIR, no push (I verify first).
+  - **WP-D** B2 emergency-stop atomic daemon primitive — Sonnet in
+    `.worktrees/b2-estop-atomic` (`feat/b2-estop-daemon-atomic`); root cause seed = 07-17
+    GAP_LIST FAIL (run-stopped never signals the in-flight tool-call gate process). Draft PR
+    when green; device proof owner-gated.
+- **Merge order once green:** #176 (after review verdict + my gate re-run) → A3 → B2;
+  serialize daemon/lancerd merges, re-gate after each.
+- **Next:** B1 evidence dir + runbook checklist prep (owner runs physical pass); G1 §7
+  evidence paste once #176 resolved and A3 landed/blocked-with-evidence.
+
+## ⚡ 2026-07-19 ~10:45 ET — PR #176 rescue landed; fanning out 3 work packages; owner testing live in parallel
+
+- **Rescued:** 11-commit branch `fix/apns-live-activity-device-proof-2026-07-18` (PR #176,
+  draft) — the 2026-07-18 device-testing session's uncommitted work (APNs app-closed push fix,
+  Live Activity production wiring, widget/App-Group DB fix, observed-resume race guard,
+  mid-turn queued-message fix, permission-menu fold, recency-first default repo). `go
+  build/vet/test` + `swift build` re-verified green on the branch.
+- **origin/master tip:** `7b888f78` (PR #175 — vendor-cli-parity brief fully closed:
+  Codex/Kimi hooks, Pi adapter, accounts/usage view, all merged #170–175). Widgets extension
+  (#169) and TestFlight builds 2/3 also already on master, ahead of PR #176.
+- **Phone:** paired, production code `190799`, confirmed `2026-07-19T02:13:51Z`. Owner is
+  live-testing on the physical device in parallel with this session — **WP-C below must stay
+  fully isolated (Simurgh sim lease + isolated `LANCER_STATE_DIR`) and must never touch the
+  resident production daemon or run `lancerd pair` against production state** (the exact
+  footgun that orphaned the phone twice already, 2026-07-16 and 2026-07-18).
+- **Dispatching 3 disjoint-write-set work packages** (see below), owner doing manual step-by-step
+  device testing with the main session concurrently:
+  - **WP-A** (read-only, no write-set): full-diff sensitive-path review of PR #176
+    (`dispatch.go` is a sensitive path per `AGENTS.md`) — Claude subagent, high effort.
+  - **WP-B** (write-set: `docs/PUBLISH_READINESS_CHECKLIST.md` only): reconcile the checklist,
+    stale since 2026-07-15, against current merged state.
+  - **WP-C** (write-set: isolated worktree + isolated sim/daemon only): reproduce the Goal 3
+    SET-failure-alert (`docs/test-runs/2026-07-18-live-activity-sim/README.md` — 2 attempts
+    last night, not obtained).
+- **Next:** merge WP-B once green (docs-only, low risk); arbitrate WP-A findings before
+  un-drafting PR #176; fold WP-C's result into `docs/KNOWN_ISSUES.md` §7 either way.
+
+## ⚡ 2026-07-16 ~18:15 ET — session-hop sync: master `62b4424d`; pair confirmed; launch PASS
+
+- **Tip:** `origin/master` `62b4424d` (PR #149). Sweep #140–#143, auth #145, Proof #147, ISO #148, Repos #149 all merged.
+- **Phone:** paired on relay slot ending `…9884` (no remint); last `paired with phone` through 17:43 ET; `lancerd doctor` relay **confirmed**.
+- **Smoke:** `"Hi"` launch **PASS** post-#145 (`conversation-append-launched allow` @ 21:20:25Z). Full 10-step checklist (approve + follow-up + Policy/Audit UI) **not fully evidenced**.
+- **Open:** Lane C4 #7 chain live re-proof; #10/#14 live re-proof; publish/TestFlight.
+- **Docs:** `SESSION_HOP_REPORT.md` canonical; `GAP_LIST`/`DOGFOOD_READY` refreshed this session.
+
+## ⚡ 2026-07-16 ~17:22 ET — auth-preflight FIXED + phone Hi launched (PR #145)
+
+- **Merged:** PR #145 → `origin/master` `1a51329b` (probe 35s, boot warm, shim-excluding resolve, launchd PATH).
+- **Host proof:** `conversation-append-launched allow` @ 21:19:07Z.
+- **Phone smoke:** `"Hi"` → `conversation-append-launched allow` @ 21:20:25Z (no auth-preflight deny). Pair **149884** kept.
+- **UI screenshot:** not captured (physical idb unavailable).
+
+## ⚡ 2026-07-16 ~17:20 ET — auth-preflight fixed on host; phone smoke needs owner send
+
+- **Root cause:** launchd cold `claude auth status` ~13s vs 20s probe budget → `conversation-append-auth-preflight` deny on `"Hi"` @ 21:05:24Z while interactive Claude was logged in.
+- **Fix branch:** `fix/auth-preflight-cold-probe` — timeout 35s + boot warm + shim-excluding resolve + launchd PATH in plist; `go test ./...` green; host installed+reloaded.
+- **Auth proof:** audit `conversation-append-launched allow` @ 21:19:07Z (RPC); `agent.status` `loggedIn:true`.
+- **Pair:** code **149884** kept (no remint); doctor relay **confirmed** after reload.
+- **Smoke:** phone send still **BLOCKED** on owner tap (idb cannot drive physical UDID); app foregrounded via `devicectl`.
+- **App binary:** still master `ec3565f7` on phone — daemon-only fix.
+
+## ⚡ 2026-07-16 ~17:05 ET — Lane C4 PARTIAL (pairing harness blocked; Audit PASS, FX5 PASS)
+
+Sweep tip `671047a7` (C4 run). Evidence: `LC4-report.md` + `screenshots/LC4-*.png`. Daemon never
+`paired with phone` → #7 chain ungraded (**not disproven** — harness pairing gate). Lane P: Audit
+**PASS** relay; Policy **PARTIAL** (picker + stale SSH error — fix branch `fix/policy-stale-ssh-error`).
+FX5 **PASS**. #10 FAIL on C4 was pre-FX10 tip; **FX10 `5a3fce93` on `origin/master`** — live re-proof
+owed on owner phone. C4 retry needs single-session harness + pairing gate. Owner re-pair in progress.
+
+## ⚡ 2026-07-16 ~16:50 ET — master `fbc85191` includes FX10; phone reinstalled; smoke BLOCKED on pair
+
+- **`origin/master`:** `fbc85191` (PR #140 sweep + PR #141 FX10 `5a3fce93` + dogfood docs).
+- **FX10:** YES on master — relay artifact mirror for background-tasks pill.
+- **Phone install:** SUCCEEDED — `/tmp/lancer-device-dogfood-dd/Build/Products/Debug-iphoneos/Lancer.app` on `557A7877-…`; app launched.
+- **Re-pair:** code **`347051`** minted post-install; **unconfirmed** — owner must Connect on phone (`DOGFOOD_SMOKE.md`).
+- **Smoke:** pair/send/approve **BLOCKED** on owner tap; GAP #10 FIXED (code) / live owed.
+- **C4:** may still hold Simurgh `lease-197` (isolated `/tmp/sweep-C4`) — do not steal.
+
+## ⚡ 2026-07-16 ~16:40 ET — master has sweep (#140); folding FX10 + phone reinstall
+
+- **`origin/master` (pre-FX10 push):** `99fd4526` (PR #140 = sweep tip `fe450949`).
+- **FX10:** `5a3fce93` (`fix/background-tasks-pill`) merged onto master line in `docs/dogfood-smoke-2026-07-16` @ merge commit pending push — relay `lancerE2EArtifact` → `RelayArtifactIngest`.
+- **Phone:** prior install was `b8bb778c` **without** FX10; rebuild+reinstall via `/tmp/lancer-device-dogfood-dd` IN PROGRESS.
+- **Re-pair:** production code **`300552`** minted (replaced stale `310440`); still **unconfirmed** — owner must enter code on phone (C4 isolated at `/tmp/sweep-C4`, safe).
+- **Smoke:** `DOGFOOD_SMOKE.md` — pair/send/approve **BLOCKED** on owner tap; launch PASS earlier.
+- **GAP #10:** FIXED (code) / live owed.
+- **C4:** still may use Simurgh `lease-197` — do not steal.
+
+## ⚡ 2026-07-16 ~16:35 ET — owner ordered merge→master + phone dogfood (supersedes C4-wait autonomy stop)
+
+**Sweep tip:** `integration/2026-07-16-untested-sweep` @ `b8bb778c` (+ docs hygiene commit pending).  
+**Worktree:** `.worktrees/untested-sweep-2026-07-16`.
+
+- **Wave 1 MERGED** (FX7 + FX5 + Lane P) on tip; unit gates previously green (`go test ./...`; `swift test` 781+62+13).
+- **Owner directive (16:29 ET):** push + merge integration → `master`, install latest on physical iPhone, start dogfood. C4 live re-proof may continue in parallel on Simurgh `lease-197` — do not steal that lease; device build uses `/tmp/lancer-device-dogfood-dd`.
+- **Merge-to-master:** IN PROGRESS (this session).
+- **Dogfood:** next after `origin/master` tip confirmed + device install.
+- **#10 fx10-bg-tasks:** leave in-flight worktree alone (not green/committed).
+- **Owner re-pair:** still owed if production slot `310440` unconfirmed — only after confirming C4 will not fight the single relay slot (or document owner pairs after sim quiesces).
+*(Superseded by 16:40 FX10 fold + `99fd4526` master merge above.)*
+
+## ⚡ 2026-07-16 ~16:20 ET — Wave 1 MERGED + Simurgh preflight green; Lane C4 IN FLIGHT
+
+**Sweep tip:** `integration/2026-07-16-untested-sweep` @ `7707e4fa` (`.worktrees/untested-sweep-2026-07-16`).
+
+- **Wave 1 MERGED @ `7707e4fa`:** FX7 (`543566ba` needsApproval→awaiting) + FX5 (`2a872e1e` Connect above keypad) + Lane P (`7707e4fa` relay audit tail + coarse permission mode). Sentry `Package.resolved` pin stripped (`faeb80c9`).
+- **Unit gates green on tip:** `go test ./...` ok (lancerd/policy/terminal); `swift test` 781+62+13.
+- **Simurgh wave-1/2 @ `85f3907`:** daemon UP; `simurgh doctor` all ok; `simurgh exec lease-196 -- echo ok` → `ok`. Route long xcodebuild via `simurgh exec <lease> -- …`; isolate daemons with `LANCER_STATE_DIR` only (keep passwd `HOME`).
+- **Lane C4 IN FLIGHT:** live sim re-test post-Wave-1 — #7/#8/#9/#17/#23 + #2/#3 Policy/Audit over relay + FX5 keypad screenshot + #10/#14 recheck + #1/#11/#18 harness retries if time. Evidence → `LC4-report.md`.
+- **Owner re-pair still owed** (incident from C3 bare `lancerd pair`; L6 device pass owner-gated).
+*(Superseded by 16:35 owner merge+dogfood directive above — C4 may still finish in parallel.)*
+
 ## ⚡ FULL-APP NIGHT TEST — 2026-07-15 ~22:40 ET
 
 **Workspace:** `master` @ `ba73c130` (not on integration checkout). Reviewable tip still

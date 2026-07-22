@@ -157,3 +157,9 @@ research-repos/
 
 # owner's local folder, accidentally committed in #75
 /frontend-slides-main/
+
+# Foglamp codebase scan (edit token is a secret)
+.foglamp/
+
+# Local agent settings — never commit
+.claude/settings.local.json

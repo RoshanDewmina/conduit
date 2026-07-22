@@ -1674,7 +1674,10 @@ func (s *server) handleHookWithNotify(conn net.Conn, first []byte, notify func(A
 	dev := s.device
 	s.deviceMu.RUnlock()
 	if dev != nil && dev.PushBackendURL != "" {
+		fmt.Fprintf(os.Stderr, "push-diag: dispatching postApprovalPush for %s (session=%s url=%s)\n", event.ApprovalID, dev.SessionID, dev.PushBackendURL)
 		go s.postApprovalPush(dev, event)
+	} else {
+		fmt.Fprintf(os.Stderr, "push-diag: SKIPPED postApprovalPush for %s -- dev=%v\n", event.ApprovalID, dev)
 	}
 
 	// No reachable client (no attach + no registered push device): nobody can
@@ -2092,8 +2095,11 @@ func (s *server) postApprovalPush(dev *registeredDevice, event ApprovalEvent) {
 		return
 	}
 	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode/100 != 2 {
-		fmt.Fprintf(os.Stderr, "push-backend /approval rejected: HTTP %d\n", resp.StatusCode)
+		fmt.Fprintf(os.Stderr, "push-backend /approval rejected: HTTP %d: %s\n", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	} else {
+		fmt.Fprintf(os.Stderr, "push-diag: postApprovalPush got HTTP %d for %s: %s\n", resp.StatusCode, event.ApprovalID, strings.TrimSpace(string(respBody)))
 	}
 }
 

@@ -25,24 +25,26 @@ rm -rf /tmp/LancerDerivedData*
 ./scripts/check-worktree-sprawl.sh
 ```
 
-### Migration to /Volumes/LancerDev
+### Migration to /Volumes/LancerDev (done 2026-07-18)
 
-The repo is migrating build/tmp caches off the internal disk onto `/Volumes/LancerDev` — set these
-once that volume is mounted, so Xcode/tooling stop writing gigabytes of DerivedData back onto the
-internal SSD:
+`/Volumes/LancerDev` is mounted (APFS, 2TB external SSD, USB). Xcode's global DerivedData location
+is now set to `/Volumes/LancerDev/lancer-tmp/DerivedData` via `defaults write com.apple.dt.Xcode
+IDECustomDerivedDataLocation` (Settings → Locations → Derived Data → Custom shows the same value).
+`-derivedDataPath "$LANCER_DERIVED_DATA"` on a raw `xcodebuild` invocation still overrides it
+per-command if needed. All Lancer/Simurgh/Momentum worktrees live under
+`/Volumes/LancerDev/worktrees/<project>/` — `check-disk-budget.sh` should PASS with no `WORKTREE_ROOT`
+override needed.
 
-```bash
-export LANCER_DERIVED_DATA=/Volumes/LancerDev/lancer-tmp/DerivedData
-export TMPDIR=/Volumes/LancerDev/lancer-tmp/
-```
+**Do not set `TMPDIR` to a path on this volume.** macOS caps Unix-domain-socket paths at ~104 bytes,
+and both `lancerd` and Simurgh's lease sockets live under `TMPDIR`/`HOME`-relative paths — a long
+external `TMPDIR` risks silently breaking those. Leave `TMPDIR` as the system default; only
+DerivedData (file-based, no socket path-length concern) moves to the SSD.
 
-`LANCER_DERIVED_DATA` is a convention for this repo's tooling/scripts, not an Xcode-recognized env
-var by itself — point Xcode's actual DerivedData location there via **Settings → Locations →
-Derived Data → Custom**, or `-derivedDataPath "$LANCER_DERIVED_DATA"` on any `xcodebuild`
-invocation, so the two stay in sync. Until `/Volumes/LancerDev` exists, `check-disk-budget.sh`
-falls back to its defaults (internal disk, `~/Library/Developer/Xcode/DerivedData`) and will flag
-every current worktree as outside the approved root — that is expected pre-migration, not a script
-bug.
+One accepted exception `check-disk-budget.sh` will always flag: three detached-HEAD scratch
+worktrees under `simurgh/.claude/worktrees/benchmark-blockers-2026-07-13-37773c/bench/results/`
+are command-center worktrees nested inside a Simurgh benchmark-run directory. They're harmless
+archived checkouts of an already-merged commit (not unique work), but moving the parent Simurgh
+worktree would break their internal gitdir links, so they're left in place intentionally.
 
 ## Physical device reinstall
 
@@ -70,7 +72,14 @@ Use for quick LancerKit feedback. It does not replace app-target simulator build
 
 ## Xcode App Target
 
-Use XcodeBuildMCP for iOS app target verification.
+**Simulator routing (required):** call Simurgh MCP `pool_status`, then `lease_acquire`
+before any simulator/XcodeBuildMCP work. Route every `xcodebuild` through
+`simurgh exec <lease-id> -- …` (or work inside `simurgh shell <lease-id>` for
+manual steps, still using `exec` for long builds). Never pick a booted simulator
+UDID from `simctl list`. Release the lease when done (`lease_release`).
+
+Use XcodeBuildMCP for iOS app target verification (with the per-lease adapter:
+`simurgh integration xcodebuildmcp start --session <lease-id>`).
 
 Required sequence in a fresh tool session:
 

@@ -80,10 +80,22 @@ done so the device is torn down and capacity returns to the pool. Leases are
 session-bound by default: if this session crashes or ends without releasing,
 the lease is reclaimed automatically. Do not pass `detach=true` unless a lease
 must deliberately outlive the session. If using the CLI instead of MCP,
-acquire with `--rm` so the lease dies with your shell session. Source:
-`~/Documents/simurgh` (private repo, not published) — `README.md` for the CLI
-reference, `docs/ARCHITECTURE.md` for how lease isolation/XcodeBuildMCP
-integration/PATH-shim audit mode work.
+acquire with `--rm` so the lease dies with your shell session.
+
+**Builds and tests:** route every `xcodebuild` (and long XcodeBuildMCP simulator
+run) through `simurgh exec <lease-id> -- …` so isolation flags merge and the
+lease auto-renews during the run. Bare `xcodebuild` or hand-merged flags defeat
+isolation and risk mid-run reclaim when TTL expires. Between discrete steps,
+call `lease_renew` / `simurgh renew` if work will outlast the current expiry —
+do not acquire a second lease. For XcodeBuildMCP, use
+`simurgh integration xcodebuildmcp start --session <lease-id>` bound to the same
+lease. Confirm the Simurgh MCP server is registered in project `.mcp.json`
+(`simurgh init` upserts it); restart the agent session after adding it — a
+missing server surfaces as `Server "simurgh" not found`.
+
+Source: `~/Documents/simurgh` (private repo, not published) — `README.md` for
+the CLI reference, `docs/AGENT_GUIDE.md` for agent lease/build discipline,
+`docs/ARCHITECTURE.md` for isolation and the XcodeBuildMCP adapter.
 
 ## Local workflow conventions
 
