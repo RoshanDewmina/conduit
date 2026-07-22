@@ -9,6 +9,10 @@ re-deriving it from git archaeology. Do not rewrite or delete old lines.
 
 Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
+## 2026-07-21
+
+- 20:13 Cursor Grok 4.5 — Phase-1 P1.5/P1.6 Needs-You: home banner copy → "N need you", thread-list needs-you-first ordering via cwd-matched `RelayApprovalIngest` pending (honest; empty cwd skipped), `NeedsYouOrdering` + unit tests (branch feat/needs-you-hub)
+
 ## 2026-07-19
 
 - 12:15 Claude Fable (orchestrator) — land owner SSOT docs: SHIP_PLAN.md (A1/A2 marked done: night stack merged @7b888f78, phone pair 676174 confirmed 14:26:47Z), 07-19 daily-driver roadmap, away-mode wireframes, 07-18 fable briefs, policy/audit relay port map, device-proof publish status (PR: docs/ship-plan-2026-07-19)
