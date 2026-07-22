@@ -1,0 +1,17 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00008150-0001653C26F8401C",
+        "deviceName" : "Roshan’s iPhone",
+        "exportedFileName" : "F4BEBB5E-6130-4680-B037-733AE5F4DA30.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "dogfood-website-device_0_74110CCC-F5D9-4635-85F4-BB8218B2FF59.png",
+        "timestamp" : 1784682679.801
+      }
+    ],
+    "testIdentifier" : "DogfoodWebsiteDispatchUITests/testDispatchWebsiteBuildOnPairedPhone()",
+    "testIdentifierURL" : "test://com.apple.xcode/Lancer/LancerUITests/DogfoodWebsiteDispatchUITests/testDispatchWebsiteBuildOnPairedPhone"
+  }
+]

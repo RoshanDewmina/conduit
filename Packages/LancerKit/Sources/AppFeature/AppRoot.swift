@@ -355,6 +355,7 @@ public struct AppRoot: View {
                 }
             }
             .task {
+                await PurchaseManager.shared.load()
                 relayApprovalIngest.start()
                 relayQuestionIngest.start()
                 relayArtifactIngest?.start()

@@ -1,5 +1,7 @@
 # Lancer status ledger
 
+> **Owner SSOT for ship plan, gates, and locked decisions: [`SHIP_PLAN.md`](SHIP_PLAN.md)** (2026-07-19).
+
 **Last updated:** 2026-07-17 ~14:30 ET.  
 **`origin/master`:** `8ed78d37` — App-Store push session: PR #164 (worktree-triage salvage), #165 (publish-checklist reconcile), #166 (App Store prep pack `docs/appstore/` + dead camera-permission removed), #167 (iOS deployment target 26→27, dual-SDK gates dropped), Release-config DEBUG-seam fixes, `scripts/release-ios-testflight.sh` (archive→export→upload chain).  
 **TestFlight:** ✅ build UPLOADED 15:06 ET (delivery `2c17f676`, tip `639ba8da`, Xcode `27A5218g`; the fresh beta needed `xcodebuild -downloadComponent MetalToolchain` first — SwiftTerm Shaders.metal fails without it). Next: ASC processing → owner installs via TestFlight → dogfood smoke + IAP sandbox.
@@ -96,7 +98,9 @@ build roadmap §1. Exit bar: owner completes the full loop on a physical phone 5
 Owner starts `docs/dogfood-log.md` (one line/day; every laptop-reach is a bug or scope insight).
 
 **September target (owner, 07-10): App Store launch at iOS 27 GA (~Sept 14)** — S27 + LAUNCH
-work packages in the build roadmap §3.1/§3.1b; billing + legal/review unfreeze early August.
+work packages in the build roadmap §3.1/§3.1b; monetization ladder locked in
+[`SHIP_PLAN.md`](SHIP_PLAN.md) decision 6 (billing execution still G4/G5); legal/review
+unfreeze early August.
 Dogfood log by mid-Aug is the go/no-go input (downgrade path: TestFlight-only).
 **Still frozen:** team tier, hosted-cloud **execution** (Fly/agent-runner), Away Launch Composer,
 StoreKit↔Stripe reconciliation. Watch: cut (owner, Jul 8).
@@ -129,7 +133,7 @@ Fable orchestrates via [`plans/orchestrator-state.md`](plans/orchestrator-state.
 | W0.A dirty tree + abandoned wipe worktree + stash | P0 | Phase 0 defuses |
 | Production burn list (GCS `lancerd` publish, VPS, CloudKit Production schema) | P1 | [`product/2026-07-09-production-readiness-gaps.md`](product/2026-07-09-production-readiness-gaps.md); owner-gated |
 | JWT HS256-only | P1 | Open |
-| StoreKit IAP dormant vs Stripe entitlement | P1 | Open — frozen until fork |
+| StoreKit IAP dormant vs Stripe entitlement | P1 | Decision locked — see [`SHIP_PLAN.md`](SHIP_PLAN.md) decision 6; execution G4/G5 |
 | Audit chain no external anchor | P1 | Open |
 | Daemon single relay pairing slot | P2 | Open by design |
 

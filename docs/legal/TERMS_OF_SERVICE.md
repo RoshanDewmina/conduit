@@ -83,7 +83,7 @@ You must not use Lancer to:
 device-to-device — you scan a QR code from your host to link your phone.
 There is no login, no profile, and no Lancer-hosted user database.
 
-If you purchase Lancer Pro via in-app purchase, Apple manages the
+If you purchase Founder's Edition via in-app purchase, Apple manages the
 transaction and receipt. Lancer does not create a separate account for this
 purpose.
 
@@ -91,16 +91,23 @@ purpose.
 
 ## 6. In-app purchases and Pro tier
 
-### 6.1 Current offering
+### 6.1 Current offering (GA)
 
-Lancer Pro is a one-time in-app purchase (non-consumable) that unlocks
-additional features (e.g., multi-host management, advanced surfaces). Price
-and feature set are displayed in the App. Apple processes all payments.
+**Founder's Edition** is a limited-time, one-time in-app purchase (non-consumable) for
+early adopters. Price is displayed in the App at **$89.99** (one-time, within the $79–99
+band). Founder's Edition unlocks convenience surfaces (e.g., multi-host management,
+advanced surfaces) and is **grandfathered into the future Pro subscription**. The core trust
+loop — approval inbox, policy, audit, emergency stop — is **free** and will not be paywalled.
+Apple processes all payments.
 
-### 6.2 Future subscription (planned — not yet available)
+**Lancer Cloud** (hosted execution billed via Stripe) is **not offered at GA** — backend
+code exists for V2 but no checkout is exposed in the shipping app.
 
-A subscription-based Pro tier is under development but is **not currently
-offered**. When and if it ships, the following will apply:
+### 6.2 Future subscription (post-G5 — not yet available)
+
+After retention proof (SHIP_PLAN G5), a standard Pro subscription (~$8–12/mo or ~$79/yr)
+is planned for multi-machine / unlimited runs / multi-device sync. Founder's Edition buyers
+are grandfathered. When and if it ships, the following will apply:
 
 - Auto-renewing subscription managed by Apple's StoreKit 2
 - Pricing and duration displayed before purchase
@@ -113,7 +120,7 @@ offered**. When and if it ships, the following will apply:
 
 - All purchases are final unless Apple's refund policy applies
 - Prices are as displayed in the App and may be updated for future purchases
-- Lancer Pro is a single-device purchase (Apple ID bound)
+- Founder's Edition is a single-device purchase (Apple ID bound)
 
 ---
 

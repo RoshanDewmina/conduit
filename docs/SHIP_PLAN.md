@@ -34,6 +34,25 @@ gates live here. Update this file when a gate is passed or a decision changes �
    Adversarial cross-vendor review, capability leases, canary tripwires: post-GA backlog
    (`product/FEATURE_BACKLOG.md`).
 5. **Standing invariant (unchanged):** no Siri/voice **Approve** — deny/stop/status/answer only.
+6. **Monetization ladder locked; billing execution gated on G4/G5.**
+   - **Principles:** charge recurring cost (hosted relay + APNs); never paywall safety
+     (emergency stop, policy, audit free forever); match buyer (indies → convenience; teams →
+     governance later).
+   - **GA:** free tier (hosted relay included, all safety) + existing StoreKit non-consumable
+     rebranded **Founder's Edition** — limited-time, **$79–99** (ASC pick in that band;
+     supersedes the old $14.99 "Lancer Pro" draft), grandfathered into future Pro. No new billing
+     products pre-GA. **ASC pick landed same day: $89.99** — wired into `Lancer.storekit`,
+     `PurchaseManager`, and the Profile buy/restore UI (see `docs/CHANGELOG.md` 2026-07-19 16:05);
+     ASC metadata, HUMAN_GATED_STEPS, and ToS aligned to $89.99.
+   - **After G5 retention proof:** standard subscription (~$8–12/mo or ~$79/yr) for
+     multi-machine / unlimited runs / multi-device sync; lifetime buyers grandfathered.
+   - **Later / on demand only:** V2 hosted-execution credits (existing Stripe spine); team
+     per-seat when a real team asks.
+   - **Pre-GA critical path:** zero new billing code. Launch-prep only: Founder's framing +
+     pricing page (Workstream E).
+7. **Open-core (companion).** `lancerd` + self-hostable relay may open; **hosted relay with
+   APNs** (owner signing keys) remains the non-hostile paid wedge (Tailscale/Bitwarden shape).
+   Does not change GA build scope.
 
 ## 2. Timeline and gates
 
@@ -56,12 +75,16 @@ gates live here. Update this file when a gate is passed or a decision changes �
 - **A2.** ~~Re-pair the owner's phone~~ **DONE 2026-07-19** — pair live: code `676174`,
   `confirmedAt 2026-07-19T14:26:47Z` in `~/.lancer/relay-pairing.json`; daemon log
   `connected to relay as daemon` 12:54:29 + `postRunStartPush … HTTP 204`.
-- **A3.** ~~Fix the daemon `status=failed exitCode=1, zero output` bug~~ **DONE 2026-07-19** (PR #179).
+- **A3.** ~~Fix the daemon `status=failed exitCode=1, zero output` bug~~ **DONE 2026-07-19** (PR #179 —
+  drain-before-failed-status + bounded-tail fallback; root cause `cmd.Wait()` closed pipes before
+  stderr drain).
 - **B1. Tier 0 re-proof on physical device** per `LIVE_LOOP_RUNBOOK.md`: pair → dispatch → approval
   (app closed, lock screen) → follow-up. Evidence bundle committed this time — the 07-15 "10/10 sim
   proof" was claimed without committed evidence; do not repeat that.
-- **B2. Emergency Stop atomic daemon-side primitive** — daemon side **DONE 2026-07-19** (PR #178:
-  persisted latch + fail-closed late gates + group kill, Go-proven). Device proof owner-gated (B1 row 7).
+- **B2.** ~~Emergency Stop atomic daemon-side primitive~~ **DONE 2026-07-19** (PR #178:
+  persisted latch + fail-closed late gates + group kill, Go-proven; denies new/late gates ahead
+  of policy eval; explicit `agent.emergencyStop.clear` sole un-latch; OS-level process-group kill
+  test). Device proof owner-gated (B1 row 7).
 
 **Exit bar:** G1 + G2 evidence links pasted into §7 below.
 
@@ -95,6 +118,22 @@ App Store metadata + screenshots (owner-only) · StoreKit sandbox proof · remot
 DNS/site · external cohort recruit (5–10 people comfortable on iOS 27 betas; source: X/Discord
 communities around Claude Code/Codex) · privacy/security page from
 `legal/SECURITY_ARCHITECTURE.md`.
+
+**Monetization launch-prep (decision 6 — no new billing products pre-GA):**
+- Founder's Edition IAP framing + public pricing page (free / Founder's / subscription later).
+- Rebrand local `Lancer.storekit` display strings → "Founder's Edition"; ASC price pick landed
+  at **$89.99** (within the $79–99 band); create ASC record for existing
+  `dev.lancer.mobile.pro` at that tier.
+- Wire minimal purchase surface: `PurchaseManager.load()` at launch; Profile/Settings status +
+  Buy + Restore (replace Profile placeholder). **Do not** hard-gate features behind `isPro`.
+  **DONE 2026-07-19:** `PurchaseManager` + Profile buy/restore UI wired (`docs/CHANGELOG.md`
+  2026-07-19 16:05).
+- Public pricing page (new `marketing/` or static site — not the `web/` fleet app). **DONE
+  2026-07-19:** `marketing/index.html`.
+
+**Explicitly out of pre-GA path (post-G5 / on demand only):** StoreKit subscription products;
+machine-cap billing gates (free=1 vs paid multi); Stripe credit top-ups; team seats; enabling
+`managedCloudEnabled` / hosted UI.
 
 ## 6. Kill / continue criteria (agreed 2026-07-19 — decide on evidence, not mood)
 
