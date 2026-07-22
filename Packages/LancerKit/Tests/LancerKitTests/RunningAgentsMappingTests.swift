@@ -136,6 +136,60 @@ struct RunningAgentsFreshnessTests {
         #expect(msg != "No agents running")
     }
 
+    @Test("connected host + refresh timeout ≠ Machine unreachable (P1.9 honesty)")
+    func connectedHostRefreshTimeoutIsNotUnreachable() {
+        var tracker = RunningAgentsFreshness.Tracker()
+        _ = RunningAgentsFreshness.recordFailure(&tracker)
+        _ = RunningAgentsFreshness.recordFailure(&tracker)
+        #expect(tracker.isDegraded)
+
+        let msg = RunningAgentsFreshness.statusMessage(
+            rowCount: 0,
+            tracker: tracker,
+            now: .now,
+            hostConnected: true
+        )
+        #expect(msg == "Couldn't refresh agents")
+        #expect(msg?.contains("Machine unreachable") != true)
+        #expect(msg != "No agents running")
+    }
+
+    @Test("connected host + stale refresh surfaces age without unreachable claim")
+    func connectedHostDegradedSurfacesDataAge() {
+        var tracker = RunningAgentsFreshness.Tracker()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        _ = RunningAgentsFreshness.recordSuccess(&tracker, at: t0)
+        _ = RunningAgentsFreshness.recordFailure(&tracker)
+        _ = RunningAgentsFreshness.recordFailure(&tracker)
+
+        #expect(tracker.isDegraded)
+        #expect(!RunningAgentsFreshness.mayClaimNoAgentsRunning(tracker: tracker))
+
+        let msg = RunningAgentsFreshness.statusMessage(
+            rowCount: 0,
+            tracker: tracker,
+            now: t0.addingTimeInterval(12),
+            hostConnected: true
+        )
+        #expect(msg == "Couldn't refresh agents — last update 12s ago")
+        #expect(msg?.contains("Machine unreachable") != true)
+    }
+
+    @Test("disconnected host keeps honest unreachable copy")
+    func disconnectedHostKeepsUnreachableCopy() {
+        var tracker = RunningAgentsFreshness.Tracker()
+        _ = RunningAgentsFreshness.recordFailure(&tracker)
+        _ = RunningAgentsFreshness.recordFailure(&tracker)
+
+        let msg = RunningAgentsFreshness.statusMessage(
+            rowCount: 0,
+            tracker: tracker,
+            now: .now,
+            hostConnected: false
+        )
+        #expect(msg == "Machine unreachable — no successful update yet")
+    }
+
     @Test("stale/unreachable surfaces data age — never all-clear")
     func degradedSurfacesDataAge() {
         var tracker = RunningAgentsFreshness.Tracker()

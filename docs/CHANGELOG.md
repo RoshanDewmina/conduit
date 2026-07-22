@@ -9,6 +9,10 @@ re-deriving it from git archaeology. Do not rewrite or delete old lines.
 
 Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
+## 2026-07-21
+
+- 20:07 Cursor Grok 4.5 — P1.9 Agents honesty: when fleet has a `.connected` machine, timed-out agents-list refresh shows "Couldn't refresh agents" (keeps last-known rows) instead of false "Machine unreachable" (G7 / dogfood trust); unit tests lock connected+timeout ≠ unreachable (`fix/agents-unreachable-honesty`)
+
 ## 2026-07-19
 
 - 14:45 Claude Fable (orchestrator) — APNs provider-JWT cache (~40 min reuse) in push-backend makeJWT: per-push re-minting tripped Apple's 429 TooManyProviderTokenUpdates on Live Activity push-to-start (live-hit during today's LA debugging); deployed to conduit-push (fix/apns-jwt-cache)

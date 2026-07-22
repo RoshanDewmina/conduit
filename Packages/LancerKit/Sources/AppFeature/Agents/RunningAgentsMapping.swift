@@ -202,13 +202,23 @@ public enum RunningAgentsFreshness: Sendable {
     /// Honest empty / degraded copy.
     /// "No agents running" only when we have a fresh successful fetch and zero rows.
     /// Pre-first-success stays neutral (`nil`) until `consecutiveFailureLimit` degrades.
+    ///
+    /// - Parameter hostConnected: when the fleet already has a `.connected` machine
+    ///   (relay live / dispatch path exists), a timed-out agents-list refresh must
+    ///   **not** claim "Machine unreachable" — that destroyed dogfood trust (G7 /
+    ///   P1.9). Use neutral "Couldn't refresh agents" instead.
     public static func statusMessage(
         rowCount: Int,
         tracker: Tracker,
-        now: Date
+        now: Date,
+        hostConnected: Bool = false
     ) -> String? {
         if tracker.isDegraded {
-            return degradedMessage(lastSuccessfulFetchAt: tracker.lastSuccessfulFetchAt, now: now)
+            return degradedMessage(
+                lastSuccessfulFetchAt: tracker.lastSuccessfulFetchAt,
+                now: now,
+                hostConnected: hostConnected
+            )
         }
         guard tracker.hasEverSucceeded else { return nil }
         if rowCount == 0 {
@@ -217,7 +227,18 @@ public enum RunningAgentsFreshness: Sendable {
         return nil
     }
 
-    public static func degradedMessage(lastSuccessfulFetchAt: Date?, now: Date) -> String {
+    public static func degradedMessage(
+        lastSuccessfulFetchAt: Date?,
+        now: Date,
+        hostConnected: Bool = false
+    ) -> String {
+        if hostConnected {
+            guard let lastSuccessfulFetchAt else {
+                return "Couldn't refresh agents"
+            }
+            let seconds = max(0, Int(now.timeIntervalSince(lastSuccessfulFetchAt).rounded(.down)))
+            return "Couldn't refresh agents — last update \(seconds)s ago"
+        }
         guard let lastSuccessfulFetchAt else {
             return "Machine unreachable — no successful update yet"
         }
