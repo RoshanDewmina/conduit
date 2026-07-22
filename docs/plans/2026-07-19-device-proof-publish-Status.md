@@ -1,50 +1,38 @@
 # Device-proof + publish — Status
-**Updated:** 2026-07-19 ~11:15 ET  
-**Plan / context:** `docs/plans/orchestrator-state.md` (2026-07-19 entry) + PR #176  
-**Prior Claude session:** `4a99e68d-58b0-4b43-89c5-ad22740e7475` (died on org subscription disable)  
+**Updated:** 2026-07-19 ~11:35 ET  
 **Branch:** `fix/apns-live-activity-device-proof-2026-07-18`  
 **Worktree:** `/Volumes/LancerDev/worktrees/lancer/device-build`  
-**HEAD:** `c1bfbe4e` (matches `origin`; clean)  
-**Do not use:** primary checkout is currently on unrelated `cursor/desktop-history-and-terminal-3510` @ `67fb18d9`
+**HEAD:** `64a0bb77` (ahead of origin; not pushed)  
+**PR:** #176 (draft)
 
-## Done
-- APNs app-closed push: root-caused (`requestAuthorization()` missing), fixed (`a848a6ba`), proven live on locked phone.
-- PR #176 rescued + reviewed (SAFE WITH NITS); App-Group DB migration data-loss risk fixed (`b861f0ec`).
-- Live Activity push-to-start plumbing: `postRunStartPush` helper + dispatch trigger + observed-session trigger merged into device-proof tip (`64762f96` / `29c58517` / `cb8fdccc` → merges `43e05c1b` / `c1bfbe4e`).
-- Goal 3 SET-failure alert: root-caused (embedded permission menu tears down before async error) + fix committed on **side branch** `test/goal3-set-alert-2026-07-19` @ `127d956f` — **not yet merged** into device-proof.
-- Publish checklist reconcile branch exists: `docs/publish-checklist-reconcile-2026-07-19` (WP-B).
+## Done this session
+- Edit-tool red/green diff sheet committed (`873f412c`)
+- Goal 3 SET-failure alert merged (`6fc095da`) + CHANGELOG conflict fixed (`64a0bb77`)
+- Device Debug build SUCCEEDED; installed + launched on Roshan's iPhone (`557A7877-…`) as `dev.lancer.mobile`
+
+## Owner live-test now
+1. Confirm phone still paired (Trusted Machines / Workspaces).
+2. Open a thread that already has an **Edit** tool chip (or send a prompt that edits a file).
+3. Tap the Edit chip to expand → **View diff** → confirm red/green sheet with filename + counts.
+4. Optional: + menu → change permission mode after making overrides file read-only on host (Goal 3) — expect "Couldn't change permission mode" alert.
 
 ## Remaining
-- **Next:** Restore the missing **Edit tool red/green diff sheet** (owner video evidence in Claude session). Regression from CursorStyle/`CursorWorkThreadView` deletion (`6b97da65`). DiffKit still exists (`Packages/LancerKit/Sources/DiffKit/UnifiedDiff.swift`). Archaeology was mid-flight when session died — recover deleted `CursorReviewDiffView` / `DiffView` from `6b97da65^`, port into Workspaces shell (not resurrect CursorStyle wholesale).
-- Merge Goal 3 fix `127d956f` into device-proof; live-verify permission-mode SET failure alert.
-- Diagnose why observed-session Live Activity auto-start did **not** appear on phone after local Claude session (owner confirmed no LA).
-- Un-draft / merge PR #176 after remaining gates.
-- Broader publish path: archive/TestFlight, App Store Connect (owner-only).
+- Live Activity observed-session auto-start miss (diagnose)
+- Push + refresh PR #176; un-draft after live proof
+- Publish / TestFlight (owner)
 
-## Commands run (session-verified)
+## Commands run
 ```bash
-# device-proof tip + clean
-git -C /Volumes/LancerDev/worktrees/lancer/device-build rev-parse --short HEAD  # c1bfbe4e
-git -C /Volumes/LancerDev/worktrees/lancer/device-build status -sb             # clean, tracking origin
-
-# Goal 3 NOT on tip yet
-git merge-base --is-ancestor 127d956f fix/apns-live-activity-device-proof-2026-07-18  # NO
+git commit 873f412c  # Edit sheet
+git merge 127d956f → 6fc095da + 64a0bb77
+xcodebuild -scheme Lancer -destination id=557A7877-… BUILD SUCCEEDED
+devicectl install + launch → OK
 ```
 
-## Dirty tree (primary checkout — unrelated)
-```text
-# /Volumes/LancerDev/lancer on cursor/desktop-history-and-terminal-3510 @ 67fb18d9
-# many unrelated dirty docs/test-runs — leave alone
-```
-
-## Blockers
-- **Claude Code org subscription disabled** — session `4a99e68d…` ends with: “Your organization has disabled Claude subscription access for Claude Code · Use an Anthropic API key instead…”. `--resume` will fail until API key / admin re-enable.
-- Live Activity auto-start for local observed sessions: code merged, **live proof FAIL** (no LA on phone).
-- Goal 3 fix committed but **unmerged**.
-- Single relay pairing slot — do not `lancerd pair` / orphan production phone while using Simurgh.
-
-## Next agent instruction
-Work in `/Volumes/LancerDev/worktrees/lancer/device-build` on `fix/apns-live-activity-device-proof-2026-07-18`.  
-Do **not** read prior chat transcripts as source of truth — use this Status + git.  
-**Next milestone only:** port the Edit-tool red/green diff sheet into the current Workspaces chat chrome (DiffKit + recovered pre-`6b97da65` UI patterns).  
-Done when: unit/build green for touched Swift; sim or device screenshot of Edit sheet; Status updated; STOP (do not start publish submission).
+## 2026-07-22 merge note
+Merged into master (`fix/apns-live-activity-device-proof-2026-07-18` → `master`) after review: clean
+code merge, only doc conflicts (this file + CHANGELOG.md), Go build/vet clean, Swift build clean
+zero new warnings, full LancerKit suite run (7 pre-existing failures, confirmed identical on
+unmerged master — not introduced by this branch). Edit-tool diff sheet and Goal 3 alert fix are now
+on master; still owed: physical-device live-test of both (per "Owner live-test now" above), and the
+Live Activity observed-session auto-start diagnosis.

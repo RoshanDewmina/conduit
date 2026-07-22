@@ -91,8 +91,8 @@ type runCompleteEvent struct {
 
 // runStartEvent is the body for POST /run-start — lancerd's integration point
 // for originating a Live Activity via push-to-start when a relay dispatch
-// starts a run and the phone has no locally-running Activity for the session
-// (see pushLiveActivityStart's no-op heuristic in liveactivity.go).
+// starts a run (or an observed local session becomes active) and the phone
+// has a push-to-start token registered (see takePushToStartToken).
 type runStartEvent struct {
 	SessionID       string  `json:"sessionId"`
 	HostID          string  `json:"hostId"`
@@ -350,9 +350,9 @@ func handleRunComplete(w http.ResponseWriter, r *http.Request) {
 
 // handleRunStart: POST /run-start. Guarded by the same Tier-1 control-plane
 // secret as /approval and /run-complete. Fires a Live Activity push-to-start
-// when a relay dispatch starts a run and the session has a push-to-start
-// token on file — see pushLiveActivityStart's no-op heuristic (missing token,
-// or an activity token already on file) for when this is skipped.
+// when a relay dispatch / observed session starts and the session has a
+// push-to-start token on file — skipped only when that token is missing
+// (see takePushToStartToken; stale activity update tokens no longer block).
 func handleRunStart(w http.ResponseWriter, r *http.Request) {
 	if !relayAuthorized(w, r) {
 		return

@@ -10,6 +10,7 @@ struct ToolCallChipView: View {
     let chips: [ToolChipItem]
 
     @State private var isExpanded = false
+    @State private var presentedDiff: EditToolDiffPresentation?
 
     init(chips: [ToolChipItem], turnIsTerminal: Bool = false) {
         self.chips = ToolChipGrouping.withTerminalTurnStatus(chips, turnIsTerminal: turnIsTerminal)
@@ -39,6 +40,9 @@ struct ToolCallChipView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .sheet(item: $presentedDiff) { presentation in
+            EditToolDiffSheet(presentation: presentation)
+        }
     }
 
     private var collapsedRow: some View {
@@ -94,7 +98,8 @@ struct ToolCallChipView: View {
     }
 
     private func expandedRow(_ chip: ToolChipItem) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let editDiff = EditToolDiffParser.parse(toolName: chip.name, inputJSON: chip.inputJSON)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: TurnTranscriptAssembler.chipIcon(name: chip.name))
                     .font(.system(size: 12, weight: .medium))
@@ -108,12 +113,42 @@ struct ToolCallChipView: View {
                     diffLabels(added: added, removed: chip.removed ?? 0)
                 } else if let removed = chip.removed {
                     diffLabels(added: chip.added ?? 0, removed: removed)
+                } else if let editDiff {
+                    diffLabels(added: editDiff.totalAdded, removed: editDiff.totalRemoved)
                 }
                 Spacer(minLength: 0)
                 statusBadge(chip)
             }
 
-            if let input = chip.inputJSON, !input.isEmpty {
+            if let editDiff {
+                Button {
+                    presentedDiff = editDiff
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus.forwardslash.minus")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("View diff")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(editDiff.countsLabel)
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(.quaternarySystemFill))
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("View \(editDiff.navigationTitle.lowercased()) diff for \(editDiff.fileName)"))
+                .accessibilityIdentifier("tool-chip-view-diff")
+            } else if let input = chip.inputJSON, !input.isEmpty {
                 detailSection(label: "Input", text: input)
             }
             if let result = chip.resultText, !result.isEmpty {

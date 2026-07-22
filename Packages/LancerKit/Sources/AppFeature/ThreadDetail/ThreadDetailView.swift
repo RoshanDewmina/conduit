@@ -356,7 +356,13 @@ struct ThreadDetailView: View {
                     onStop: {
                         Task { await bridge.stopCurrentRun() }
                     },
-                    permissionMenu: { ChatPermissionModePill(cwd: thread.cwd, embedded: true) }
+                    permissionMenu: { onApplyError in
+                        ChatPermissionModePill(
+                            cwd: thread.cwd,
+                            embedded: true,
+                            onApplyError: onApplyError
+                        )
+                    }
                 )
                 if !bridge.queuedFeedback.isEmpty {
                     Text("Will send when the agent finishes")
