@@ -4,7 +4,7 @@ import Foundation
 /// Never stores passwords or API keys — credential swap is Mac-side (future daemon RPC).
 public struct VendorAccount: Codable, Sendable, Identifiable, Equatable, Hashable {
     public let id: String
-    /// Daemon / wire vendor id (`claudeCode`, `codex`, `opencode`, `kimi`, `pi`).
+    /// Daemon / wire vendor id (`claudeCode`, `codex`, `opencode`, `kimi`, `pi`, `cursor`).
     public let vendor: String
     public var label: String
     /// Email or handle shown in the switcher — not a secret.
@@ -37,6 +37,7 @@ public enum VendorAccountVendor: String, CaseIterable, Sendable, Codable, Hashab
     case opencode
     case kimi
     case pi
+    case cursor
 
     public var displayName: String {
         switch self {
@@ -45,6 +46,7 @@ public enum VendorAccountVendor: String, CaseIterable, Sendable, Codable, Hashab
         case .opencode: "OpenCode"
         case .kimi: "Kimi"
         case .pi: "Pi"
+        case .cursor: "Cursor"
         }
     }
 
@@ -55,6 +57,7 @@ public enum VendorAccountVendor: String, CaseIterable, Sendable, Codable, Hashab
         case .opencode: "terminal"
         case .kimi: "moon.stars"
         case .pi: "circle.hexagongrid"
+        case .cursor: "hammer"
         }
     }
 }

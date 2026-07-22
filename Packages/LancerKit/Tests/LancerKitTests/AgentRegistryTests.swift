@@ -18,6 +18,20 @@ struct AgentRegistryTests {
         #expect(ids.contains(AgentKind.gemini.rawValue))
     }
 
+    @Test("Cursor registration resumes with --resume and print mode")
+    func cursorResumeCommand() {
+        let cursor = AgentRegistry.defaults.registration(id: AgentKind.cursor.rawValue)
+        #expect(cursor?.name == "Cursor")
+        #expect(cursor?.resumeCommand.contains("--resume {{sessionId}}") == true)
+        #expect(cursor?.resumeCommand.contains("-p") == true)
+        #expect(cursor?.resumeCommand.contains("--trust") == true)
+        if case .argvOption(let flag) = cursor?.sessionIdSource {
+            #expect(flag == "--resume")
+        } else {
+            Issue.record("expected argvOption --resume")
+        }
+    }
+
     @Test("OpenCode registration resumes with --session")
     func opencodeResumeCommand() {
         let opencode = AgentRegistry.defaults.registration(id: AgentKind.opencode.rawValue)

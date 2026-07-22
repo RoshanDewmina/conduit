@@ -11,6 +11,8 @@ Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
 ## 2026-07-19
 
+- 17:28 Cursor Grok 4.5 — PR #190 H1/M1: honest Cursor fail-closed (comments+doctor+hookWiredForAgent(agent) stay false — post-launch tools under `agent -p --trust` are ungated; omitting `--force` is NOT a tool gate); revert unrelated LancerKit Package.resolved sentry-cocoa churn (branch feat/cursor-cli-adapter)
+- 16:55 Cursor Grok 4.5 — Cursor Agent CLI as first-class vendor adapter: `agent -p --output-format stream-json --trust` argv (+ continue/resume), stream-json assistant/thinking/tool_call parsing, doctor + installedAgents detect `agent`, iOS DispatchVendorSelection/Accounts picker entry; `--force` opt-in via `LANCER_CURSOR_FORCE=1` (fail-closed default) (branch feat/cursor-cli-adapter)
 - 16:05 Cursor Composer — Workstream E monetization framing: rebranded `Lancer.storekit` to Founder's Edition $89.99, wired `PurchaseManager.load()` at launch + Profile buy/restore UI, added `marketing/` pricing page; aligned ASC/HUMAN_GATED/ToS to $89.99 pick (working tree, uncommitted)
 - 15:55 Cursor Composer — locked monetization ladder as [`SHIP_PLAN.md`](SHIP_PLAN.md) decisions 6–7 (GA free + Founder's Edition $79–99 IAP; post-G5 subscription; hosted credits + team on demand; zero billing code pre-GA); reconciled FEATURE_BACKLOG, STATUS_LEDGER, ASC metadata, ToS, HUMAN_GATED_STEPS, LIVE_LOOP_RUNBOOK, PUBLISH_READINESS (working tree, uncommitted)
 - 14:45 Claude Fable (orchestrator) — APNs provider-JWT cache (~40 min reuse) in push-backend makeJWT: per-push re-minting tripped Apple's 429 TooManyProviderTokenUpdates on Live Activity push-to-start (live-hit during today's LA debugging); deployed to conduit-push (fix/apns-jwt-cache)

@@ -144,3 +144,13 @@ func TestHookWiredForAgentUnknownVendorFailsClosed(t *testing.T) {
 		t.Fatal("hookWiredForAgent must default to false for an unrecognized vendor")
 	}
 }
+
+func TestHookWiredForAgentCursorStaysFailClosed(t *testing.T) {
+	home := t.TempDir()
+	wired := hookWiredForAgent(home)
+	for _, bin := range []string{"agent", "cursor-agent"} {
+		if wired(bin) {
+			t.Fatalf("hookWiredForAgent(%q) must stay false until a Cursor PreToolUse-equivalent exists", bin)
+		}
+	}
+}

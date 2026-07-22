@@ -20,13 +20,16 @@ struct DispatchVendorSelectionTests {
         #expect(DispatchVendorSelection.codex.wireID == "codex")
         #expect(DispatchVendorSelection.opencode.wireID == "opencode")
         #expect(DispatchVendorSelection.kimi.wireID == "kimi")
+        #expect(DispatchVendorSelection.cursor.wireID == "cursor")
         #expect(DispatchVendorSelection.claudeCode.displayName == "Claude Code")
         #expect(DispatchVendorSelection.codex.displayName == "Codex")
         #expect(DispatchVendorSelection.opencode.displayName == "OpenCode")
         #expect(DispatchVendorSelection.kimi.displayName == "Kimi")
+        #expect(DispatchVendorSelection.cursor.displayName == "Cursor")
         #expect(DispatchVendorSelection.claudeCode.usesClaudeModelPicker)
         #expect(!DispatchVendorSelection.codex.usesClaudeModelPicker)
         #expect(!DispatchVendorSelection.opencode.usesClaudeModelPicker)
+        #expect(!DispatchVendorSelection.cursor.usesClaudeModelPicker)
     }
 
     @Test("resolve + save round-trip")

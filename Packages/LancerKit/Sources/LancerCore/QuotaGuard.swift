@@ -63,6 +63,9 @@ public struct QuotaGuard: Sendable, Codable {
             case "claudeCode": return "Claude Code"
             case "codex": return "Codex"
             case "opencode": return "OpenCode"
+            case "cursor": return "Cursor"
+            case "kimi": return "Kimi"
+            case "pi": return "Pi"
             default: return id
             }
         }

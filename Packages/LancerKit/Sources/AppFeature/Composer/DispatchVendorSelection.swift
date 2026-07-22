@@ -2,12 +2,13 @@ import Foundation
 
 /// Vendor CLI the New Chat composer dispatches through.
 /// Wire ids match `normalizeAgentSource` / `installedAgents` / Siri
-/// `AgentVendorAppEnum` (`claudeCode`, `codex`, `opencode`, `kimi`).
+/// `AgentVendorAppEnum` (`claudeCode`, `codex`, `opencode`, `kimi`, `cursor`).
 public enum DispatchVendorSelection: String, CaseIterable, Sendable, Hashable {
     case claudeCode
     case codex
     case opencode
     case kimi
+    case cursor
 
     public static let storageKey = "lancer.dispatch.vendor"
     public static let `default`: DispatchVendorSelection = .claudeCode
@@ -20,6 +21,7 @@ public enum DispatchVendorSelection: String, CaseIterable, Sendable, Hashable {
         case .codex: "Codex"
         case .opencode: "OpenCode"
         case .kimi: "Kimi"
+        case .cursor: "Cursor"
         }
     }
 
@@ -29,6 +31,7 @@ public enum DispatchVendorSelection: String, CaseIterable, Sendable, Hashable {
         case .codex: "chevron.left.forwardslash.chevron.right"
         case .opencode: "terminal"
         case .kimi: "moon.stars"
+        case .cursor: "hammer"
         }
     }
 

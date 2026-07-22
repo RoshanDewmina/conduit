@@ -172,9 +172,9 @@ public struct AgentRegistration: Codable, Hashable, Sendable {
             id: AgentKind.cursor.rawValue,
             name: "Cursor",
             iconAssetName: "AgentIcons/Cursor",
-            detect: AgentDetectRule(processName: "cursor-agent", argvContains: ["cursor-agent"]),
+            detect: AgentDetectRule(processNames: ["agent", "cursor-agent"], argvContains: ["agent", "cursor-agent"]),
             sessionIdSource: .argvOption("--resume"),
-            resumeCommand: "{{executable}} --resume {{sessionId}}",
+            resumeCommand: "{{executable}} -p --resume {{sessionId}} --output-format stream-json --trust",
             cwd: .preserve,
             sessionDirectory: "~/.cursor/sessions"
         )
