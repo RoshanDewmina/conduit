@@ -10,6 +10,8 @@ struct ThreadListRow: View {
     var showDiffStats: Bool = true
     /// Customize → Agent Metadata: Last updated (defaults on).
     var showLastUpdated: Bool = true
+    /// Honest cwd-matched pending-approval signal from `RelayApprovalIngest`.
+    var needsYouAttention: Bool = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -51,6 +53,7 @@ struct ThreadListRow: View {
     }
 
     private var dotColor: Color {
+        if needsYouAttention { return .orange }
         if thread.unread { return .blue }
         switch thread.statusKind {
         case .working: return .orange
@@ -64,27 +67,36 @@ struct ThreadListRow: View {
     @ViewBuilder
     private var statusLine: some View {
         HStack(spacing: 4) {
-            switch thread.statusKind {
-            case .working:
-                Image(systemName: "ellipsis")
+            if needsYouAttention {
+                Image(systemName: "exclamationmark.circle")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.orange)
-            case .completed:
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            case .failed:
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.red)
-            case .archived, .idle:
-                EmptyView()
-            }
+                Text("Awaiting approval")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.orange)
+            } else {
+                switch thread.statusKind {
+                case .working:
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.orange)
+                case .completed:
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                case .failed:
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.red)
+                case .archived, .idle:
+                    EmptyView()
+                }
 
-            Text(thread.statusLabel)
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .italic(thread.statusKind == .idle)
+                Text(thread.statusLabel)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .italic(thread.statusKind == .idle)
+            }
 
             if showLastUpdated {
                 Text("· \(ThreadListMetadata.relativeActivity(thread.lastActivityAt))")
