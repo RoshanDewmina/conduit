@@ -9,6 +9,10 @@ re-deriving it from git archaeology. Do not rewrite or delete old lines.
 
 Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
+## 2026-07-21
+
+- 20:07 Cursor Grok 4.5 — P1.9 Agents honesty: when fleet has a `.connected` machine, timed-out agents-list refresh shows "Couldn't refresh agents" (keeps last-known rows) instead of false "Machine unreachable" (G7 / dogfood trust); unit tests lock connected+timeout ≠ unreachable (`fix/agents-unreachable-honesty`)
+
 ## 2026-07-19
 
 - 16:05 Cursor Composer — Workstream E monetization framing: rebranded `Lancer.storekit` to Founder's Edition $89.99, wired `PurchaseManager.load()` at launch + Profile buy/restore UI, added `marketing/` pricing page; aligned ASC/HUMAN_GATED/ToS to $89.99 pick (working tree, uncommitted)
