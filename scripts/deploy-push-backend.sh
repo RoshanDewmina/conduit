@@ -25,8 +25,8 @@ APNS_KEY_ID=PLACEHOLDER
 APNS_TEAM_ID=39HM2X8GS6
 APNS_KEY_PATH=/home/roshansilva/.lancer/push-backend/AuthKey.p8
 APNS_BUNDLE_ID=dev.lancer.mobile
-STRIPE_SECRET_KEY=sk_test_51TUqs1GoQwzlBwchpjBykaYsoBqmSGZkqzNG8gullH3vJzPsCBjq8HG2Lam8eXU9o7WXSFawdHrqzZVuAEevkv2G00Fx4hVCW8
-STRIPE_WEBHOOK_SECRET=whsec_bm7nIlGSgqFc3ZRGY06Qk8t6UOs1xtZf
+STRIPE_SECRET_KEY=PLACEHOLDER
+STRIPE_WEBHOOK_SECRET=PLACEHOLDER
 STRIPE_PRICE_MONTHLY=price_1TbMv4GoQwzlBwchI0SNIYoT
 STRIPE_PRICE_ANNUAL=price_1TbMv4GoQwzlBwch56tIuaOo
 # HTTPS is terminated by Caddy on the VM (auto Let's Encrypt cert for the sslip.io
