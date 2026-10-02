@@ -9,6 +9,10 @@ re-deriving it from git archaeology. Do not rewrite or delete old lines.
 
 Format: `- HH:MM <agent> — <what + why> (<branch or PR link>)`
 
+## 2026-07-21
+
+- 20:07 Cursor Grok 4.5 — P1.9 Agents honesty: when fleet has a `.connected` machine, timed-out agents-list refresh shows "Couldn't refresh agents" (keeps last-known rows) instead of false "Machine unreachable" (G7 / dogfood trust); unit tests lock connected+timeout ≠ unreachable (`fix/agents-unreachable-honesty`)
+
 ## 2026-07-19
 
 - 17:28 Cursor Grok 4.5 — PR #190 H1/M1: honest Cursor fail-closed (comments+doctor+hookWiredForAgent(agent) stay false — post-launch tools under `agent -p --trust` are ungated; omitting `--force` is NOT a tool gate); revert unrelated LancerKit Package.resolved sentry-cocoa churn (branch feat/cursor-cli-adapter)

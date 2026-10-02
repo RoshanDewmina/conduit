@@ -168,15 +168,18 @@ public struct RunningAgentsSection: View {
                 statusMessage = RunningAgentsFreshness.statusMessage(
                     rowCount: rows.count,
                     tracker: tracker,
-                    now: now
+                    now: now,
+                    hostConnected: false
                 )
                 return
             }
+            // No connected machine and not mid-reconnect — unreachable is honest.
             _ = RunningAgentsFreshness.recordFailure(&tracker)
             statusMessage = RunningAgentsFreshness.statusMessage(
                 rowCount: rows.count,
                 tracker: tracker,
-                now: now
+                now: now,
+                hostConnected: false
             )
             return
         }
@@ -193,14 +196,19 @@ public struct RunningAgentsSection: View {
             statusMessage = RunningAgentsFreshness.statusMessage(
                 rowCount: rows.count,
                 tracker: tracker,
-                now: now
+                now: now,
+                hostConnected: true
             )
         } catch {
+            // Relay/fleet is `.connected` (dispatch still works) — a timed-out
+            // agents-list refresh must not claim "Machine unreachable" (P1.9 / G7).
+            // Keep last-known rows; surface neutral refresh-failed copy.
             _ = RunningAgentsFreshness.recordFailure(&tracker)
             statusMessage = RunningAgentsFreshness.statusMessage(
                 rowCount: rows.count,
                 tracker: tracker,
-                now: now
+                now: now,
+                hostConnected: true
             )
         }
     }
