@@ -3,9 +3,9 @@ import SwiftUI
 import LancerCore
 import PersistenceKit
 
-/// Workspaces home affordance: "you have N pending approvals."
+/// Workspaces home Needs-You affordance (Away Mode P1.5).
 /// Hidden entirely when count is 0. Tap opens the relevant live thread via
-/// the caller's existing `liveThreadPresentation` push — no new nav stack.
+/// the caller's existing presentation — no new Settings cathedral.
 struct PendingApprovalsBanner: View {
     @Environment(RelayApprovalIngest.self) private var approvalIngest
     @Environment(RelayFleetStore.self) private var relayFleetStore
@@ -26,14 +26,14 @@ struct PendingApprovalsBanner: View {
                     onOpen(first.machineID, first.approval)
                 } label: {
                     HStack(spacing: 14) {
-                        Image(systemName: "checkmark.shield.fill")
+                        Image(systemName: "exclamationmark.circle.fill")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.orange)
                             .frame(width: 28, alignment: .center)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(title)
                                 .font(.body.weight(.semibold))
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(.orange)
                             Text(subtitle)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -68,7 +68,7 @@ struct PendingApprovalsBanner: View {
 
     private var title: String {
         let count = pending.count
-        return count == 1 ? "1 pending approval" : "\(count) pending approvals"
+        return count == 1 ? "1 needs you" : "\(count) need you"
     }
 
     private var subtitle: String {
@@ -77,7 +77,22 @@ struct PendingApprovalsBanner: View {
             ?? first.approval.patch
             ?? first.approval.question
             ?? first.approval.kind.rawValue
-        return detail
+        let risk = first.approval.risk.displayLabel
+        if detail.isEmpty {
+            return "Approval · \(risk) · Tap to review"
+        }
+        return "Approval · \(detail) · Tap to review"
+    }
+}
+
+private extension Approval.Risk {
+    var displayLabel: String {
+        switch self {
+        case .low: return "low risk"
+        case .medium: return "medium risk"
+        case .high: return "high risk"
+        case .critical: return "critical risk"
+        }
     }
 }
 #endif

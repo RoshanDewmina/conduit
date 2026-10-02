@@ -48,6 +48,13 @@ enum ThreadListRowKind: Identifiable {
         }
     }
 
+    var cwd: String {
+        switch self {
+        case .ledger(let t): return t.cwd
+        case .desktopSession(let s): return s.cwd
+        }
+    }
+
     /// Repo section title for Customize → Group by Repo.
     var repoGroupTitle: String {
         switch self {
@@ -65,6 +72,7 @@ public struct ThreadListView: View {
     @Environment(WorkspaceDataStore.self) private var workspaceData
     @Environment(RelayFleetStore.self) private var relayFleetStore
     @Environment(ShellLiveBridge.self) private var bridge
+    @Environment(RelayApprovalIngest.self) private var approvalIngest
     @State private var isSearchPresented = false
     @State private var isComposerPresented = false
     @State private var isCustomizePresented = false
@@ -105,6 +113,21 @@ public struct ThreadListView: View {
         }
     }
 
+    /// Honest attention cwds from fleet-wide pending ingest — empty cwd skipped
+    /// (cannot correlate machine-scoped approvals to a thread without a path).
+    private var pendingAttentionCwds: [String] {
+        approvalIngest.allPendingApprovals
+            .map(\.approval.cwd)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func rowNeedsYou(_ row: ThreadListRowKind) -> Bool {
+        NeedsYouOrdering.cwdNeedsAttention(
+            rowCwd: row.cwd,
+            pendingApprovalCwds: pendingAttentionCwds
+        )
+    }
+
     private var filteredRows: [ThreadListRowKind] {
         let ledger = threads
             .filter { ThreadListFilters.allowsLedger(filterPrefs, thread: $0) }
@@ -112,15 +135,24 @@ public struct ThreadListView: View {
         let desktop = scopedObservedSessions
             .filter { ThreadListFilters.allowsDesktop(filterPrefs, session: $0) }
             .map(ThreadListRowKind.desktopSession)
-        return (ledger + desktop).sorted { $0.sortDate > $1.sortDate }
+        return NeedsYouOrdering.sortedNeedsYouFirst(
+            ledger + desktop,
+            needsYou: rowNeedsYou,
+            sortDate: { $0.sortDate }
+        )
     }
 
     private var groups: [(title: String, items: [ThreadListRowKind])] {
         let rows = filteredRows
         switch filterPrefs.groupBy {
         case .recency:
-            return WorkspaceRepoCatalog.groupByRecency(rows, date: \.sortDate)
+            return NeedsYouOrdering.groupNeedsYouFirstThenRecency(
+                rows,
+                needsYou: rowNeedsYou,
+                date: \.sortDate
+            )
         case .repo:
+            // Still needs-you-first within each repo bucket (input already sorted).
             return WorkspaceRepoCatalog.groupByRepo(rows, title: \.repoGroupTitle)
         }
     }
@@ -245,7 +277,8 @@ public struct ThreadListView: View {
                                                 showsRepoName: workspace.isAllRepos
                                                     && filterPrefs.groupBy != .repo,
                                                 showDiffStats: filterPrefs.showDiffStats,
-                                                showLastUpdated: filterPrefs.showLastUpdated
+                                                showLastUpdated: filterPrefs.showLastUpdated,
+                                                needsYouAttention: rowNeedsYou(row)
                                             )
                                         }
                                         .buttonStyle(.plain)
@@ -267,7 +300,8 @@ public struct ThreadListView: View {
                                                 showsRepoName: workspace.isAllRepos
                                                     && filterPrefs.groupBy != .repo,
                                                 isHostConnected: relayFleetStore.firstConnectedMachine != nil,
-                                                showLastUpdated: filterPrefs.showLastUpdated
+                                                showLastUpdated: filterPrefs.showLastUpdated,
+                                                needsYouAttention: rowNeedsYou(row)
                                             )
                                         }
                                         .buttonStyle(.plain)
@@ -464,12 +498,13 @@ private struct DesktopSessionListRow: View {
     var showsRepoName: Bool = false
     var isHostConnected: Bool = false
     var showLastUpdated: Bool = true
+    var needsYouAttention: Bool = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "desktopcomputer")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(needsYouAttention ? .orange : .secondary)
                 .frame(width: 8, alignment: .center)
                 .padding(.top, 6)
 
@@ -489,9 +524,15 @@ private struct DesktopSessionListRow: View {
                 }
 
                 HStack(spacing: 4) {
-                    Text(isHostConnected ? "Connected" : "Disconnected")
-                        .font(.system(size: 14))
-                        .foregroundStyle(isHostConnected ? .green : .secondary)
+                    if needsYouAttention {
+                        Text("Awaiting approval")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text(isHostConnected ? "Connected" : "Disconnected")
+                            .font(.system(size: 14))
+                            .foregroundStyle(isHostConnected ? .green : .secondary)
+                    }
 
                     if showLastUpdated {
                         Text("· \(relativeActivity)")
@@ -527,5 +568,6 @@ private struct DesktopSessionListRow: View {
         ThreadListView(workspace: .allRepos)
     }
     .environment(WorkspaceDataStore(chatRepo: chatRepo))
+    .environment(RelayApprovalIngest(database: db))
 }
 #endif
